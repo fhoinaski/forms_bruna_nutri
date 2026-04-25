@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!-- Fundo creme -->
+  <rect width="1200" height="630" fill="#FAF7F2"/>
+
+  <!-- Faixa lateral esquerda -->
+  <rect x="0" y="0" width="8" height="630" fill="#7A9A74"/>
+
+  <!-- Elemento decorativo fundo (grande circulo suave) -->
+  <circle cx="900" cy="315" r="380" fill="#EAD8C2" opacity="0.25"/>
+  <circle cx="950" cy="315" r="280" fill="#F4C9C6" opacity="0.18"/>
+
+  <!-- LOGO ICON — lado esquerdo, centrado verticalmente -->
+  <!-- Arco externo -->
+  <path d="M170 370 Q142 260 248 210 Q338 168 370 258 Q390 318 352 378"
+        stroke="#B47F6A" stroke-width="9" fill="none" stroke-linecap="round"/>
+  <!-- Cabeça da mãe -->
+  <ellipse cx="240" cy="218" rx="28" ry="33" fill="none" stroke="#B47F6A" stroke-width="8" stroke-linecap="round"/>
+  <!-- Cabelo -->
+  <path d="M213 232 Q188 280 196 340 Q204 376 228 390"
+        stroke="#B47F6A" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <!-- Corpo bebê -->
+  <ellipse cx="300" cy="335" rx="38" ry="46" fill="none" stroke="#B47F6A" stroke-width="7" stroke-linecap="round"/>
+  <!-- Cabeça bebê -->
+  <circle cx="300" cy="288" r="25" fill="none" stroke="#B47F6A" stroke-width="7"/>
+  <!-- Bracinhos -->
+  <path d="M263 328 Q246 340 255 358" stroke="#B47F6A" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <!-- Folhas -->
+  <path d="M178 208 Q154 168 192 156 Q202 188 178 208Z" fill="#7A9A74"/>
+  <path d="M200 193 Q178 150 215 143 Q220 175 200 193Z" fill="#7A9A74" opacity="0.8"/>
+  <path d="M162 228 Q132 200 152 162 Q176 198 162 228Z" fill="#7A9A74" opacity="0.6"/>
+  <!-- Coração -->
+  <path d="M348 360 C348 351 338 344 333 351 C328 344 318 351 318 360 C318 372 333 382 333 382 C333 382 348 372 348 360Z"
+        fill="#F4C9C6"/>
+  <!-- Pontinhos -->
+  <circle cx="222" cy="168" r="6" fill="#F4C9C6"/>
+  <circle cx="378" cy="288" r="5" fill="#EAD8C2"/>
+
+  <!-- TEXTO — lado direito -->
+  <!-- "Bruna" -->
+  <text x="440" y="268"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="92"
+        font-weight="700"
+        fill="#6B3A2A"
+        letter-spacing="-1">Bruna</text>
+
+  <!-- "Flores" -->
+  <text x="440" y="362"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="92"
+        font-weight="700"
+        fill="#5C8A56"
+        letter-spacing="-1">Flores</text>
+
+  <!-- "· Nutri ·" -->
+  <text x="445" y="430"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="54"
+        font-style="italic"
+        fill="#B47F6A"
+        letter-spacing="2">· Nutri ·</text>
+
+  <!-- Linha separadora decorativa -->
+  <line x1="440" y1="448" x2="840" y2="448" stroke="#EAD8C2" stroke-width="1.5"/>
+
+  <!-- Subtítulo -->
+  <text x="440" y="488"
+        font-family="Arial, sans-serif"
+        font-size="22"
+        fill="#A8927D"
+        letter-spacing="3">NUTRIÇÃO MATERNA E INFANTIL</text>
+
+  <!-- Tagline -->
+  <text x="440" y="528"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="20"
+        font-style="italic"
+        fill="#B47F6A"
+        opacity="0.7">Formulário Pré-Consulta</text>
+</svg>

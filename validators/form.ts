@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const FormResponseSchema = z.object({
+  tipoAtendimento: z.string().optional(),
   nome: z.string().min(2, "Nome é obrigatório"),
   idade: z.string().optional(),
   nascimento: z.string().optional(),

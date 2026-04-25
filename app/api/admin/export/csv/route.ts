@@ -95,7 +95,12 @@ export async function GET(req: NextRequest) {
     s.form_type,
     s.status,
     s.notes || "",
-    ...answerKeys.map((k) => s.answers[k] || ""),
+    ...answerKeys.map((k) => {
+      const v = s.answers[k];
+      if (v === null || v === undefined) return "";
+      if (Array.isArray(v)) return v.join(", ");
+      return String(v);
+    }),
   ]);
 
   const csvLines = [

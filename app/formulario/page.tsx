@@ -16,6 +16,7 @@ export default function FormularioPage() {
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormResponseInput>({
     resolver: zodResolver(FormResponseSchema),
     defaultValues: {
+      tipoAtendimento: "",
       objetivo: "",
       sintomas: "",
       anticoncepcional: undefined,
@@ -108,7 +109,36 @@ export default function FormularioPage() {
 
       <div className="max-w-2xl mx-auto px-5 py-10 pb-24">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-          
+
+          {/* Tipo de atendimento */}
+          <Section number="0" title="Tipo de atendimento">
+            <Field label="Qual tipo de atendimento você procura?">
+              <div className="flex flex-wrap gap-2 mt-2">
+                {[
+                  "Gestação",
+                  "Pós-parto",
+                  "Introdução alimentar",
+                  "Infantil",
+                  "TEA",
+                  "Seletividade alimentar",
+                  "Emagrecimento",
+                  "Saúde intestinal",
+                  "Outro",
+                ].map((tag) => (
+                  <Tag
+                    key={tag}
+                    active={watchAllFields.tipoAtendimento === tag}
+                    onClick={() =>
+                      setValue("tipoAtendimento", tag, { shouldValidate: true })
+                    }
+                  >
+                    {tag}
+                  </Tag>
+                ))}
+              </div>
+            </Field>
+          </Section>
+
           {/* Seção 1 */}
           <Section number="1" title="Sobre você">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">

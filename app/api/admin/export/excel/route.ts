@@ -112,7 +112,12 @@ export async function GET(req: NextRequest) {
     s.id,
     s.patient_name,
     format(new Date(s.created_at), "dd/MM/yyyy HH:mm"),
-    ...answerKeys.map((k) => s.answers[k] || ""),
+    ...answerKeys.map((k) => {
+      const v = s.answers[k];
+      if (v === null || v === undefined) return "";
+      if (Array.isArray(v)) return v.join(", ");
+      return String(v);
+    }),
   ]);
   const wsAnswers = XLSX.utils.aoa_to_sheet([answersHeaders, ...answersRows]);
   XLSX.utils.book_append_sheet(wb, wsAnswers, "Respostas completas");

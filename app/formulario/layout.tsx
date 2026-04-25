@@ -16,8 +16,8 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: 'Formulário Pré-Consulta | Bruna Flores Nutri',
-  description: 'Formulário de avaliação pré-consulta nutricional.',
+  title: 'Formulário Pré-Consulta',
+  description: 'Preencha o formulário pré-consulta da Bruna Flores Nutri. Quanto mais você compartilhar, mais assertivo será seu plano alimentar.',
 };
 
 export default function FormularioLayout({ children }: { children: React.ReactNode }) {

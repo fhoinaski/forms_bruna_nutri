@@ -16,7 +16,7 @@ export interface Submission {
 }
 
 export interface SubmissionWithAnswers extends Omit<Submission, "answers_json"> {
-  answers: Record<string, string>;
+  answers: Record<string, unknown>;
 }
 
 export interface CreateSubmissionInput {
@@ -57,6 +57,7 @@ export interface SubmissionSummary {
   status: string;
   created_at: string;
   objetivo?: string;
+  tipoAtendimento?: string;
 }
 
 export interface DashboardMetrics {
@@ -162,9 +163,9 @@ export async function getSubmissions(
   );
 
   const items: SubmissionSummary[] = rows.map((row) => {
-    let answers: Record<string, string> = {};
+    let answers: Record<string, unknown> = {};
     try {
-      answers = JSON.parse(row.answers_json);
+      answers = JSON.parse(row.answers_json) as Record<string, unknown>;
     } catch {}
     return {
       id: row.id,
@@ -176,7 +177,8 @@ export async function getSubmissions(
       form_type: row.form_type,
       status: row.status,
       created_at: row.created_at,
-      objetivo: answers["objetivo"] || undefined,
+      objetivo: typeof answers["objetivo"] === "string" ? answers["objetivo"] : undefined,
+      tipoAtendimento: typeof answers["tipoAtendimento"] === "string" ? answers["tipoAtendimento"] : undefined,
     };
   });
 
@@ -279,9 +281,9 @@ export async function getSubmissionsForExport(
   );
 
   return rows.map((row) => {
-    let answers: Record<string, string> = {};
+    let answers: Record<string, unknown> = {};
     try {
-      answers = JSON.parse(row.answers_json);
+      answers = JSON.parse(row.answers_json) as Record<string, unknown>;
     } catch {}
     const { answers_json: _, ...rest } = row;
     return { ...rest, answers };
