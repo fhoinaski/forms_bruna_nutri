@@ -14,6 +14,7 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  BookOpen,
 } from "lucide-react";
 import type { ProtocolDraftOutput } from "@/lib/validators/ai-protocol";
 
@@ -100,6 +101,8 @@ export default function DraftReviewPage() {
   const [saved, setSaved] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
+  const [creatingProtocol, setCreatingProtocol] = useState(false);
+  const [createdProtocolId, setCreatedProtocolId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/admin/ai-protocol-drafts/${draftId}`)
@@ -172,6 +175,27 @@ export default function DraftReviewPage() {
       setError("Não foi possível atualizar o status. Tente novamente.");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleCreateProtocol = async () => {
+    setCreatingProtocol(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/ai-protocol-drafts/${draftId}/create-protocol`, {
+        method: "POST",
+      });
+      const json = await res.json() as { success: boolean; protocolId: string; message?: string };
+      if (!res.ok || !json.success) {
+        setError(json.message ?? "Erro ao criar protocolo.");
+        return;
+      }
+      setCreatedProtocolId(json.protocolId);
+      router.push(`/dashboard/protocols/${json.protocolId}`);
+    } catch {
+      setError("Erro de rede. Tente novamente.");
+    } finally {
+      setCreatingProtocol(false);
     }
   };
 
@@ -412,12 +436,37 @@ export default function DraftReviewPage() {
         )}
 
         {isLocked && (
-          <div className="flex items-center gap-2 text-sm text-[#8C6E52] bg-[#EAD8C2]/40 rounded-xl px-4 py-3">
-            <CheckCircle2 className="w-4 h-4 text-[#7A9A74]" />
-            <span>
-              Rascunho <strong>{statusCfg.label.toLowerCase()}</strong>.
-              Para editar, altere o status para &quot;Rascunho&quot; ou crie um novo.
-            </span>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-[#8C6E52] bg-[#EAD8C2]/40 rounded-xl px-4 py-3">
+              <CheckCircle2 className="w-4 h-4 text-[#7A9A74]" />
+              <span>
+                Rascunho <strong>{statusCfg.label.toLowerCase()}</strong>.
+                Para editar, altere o status para &quot;Rascunho&quot; ou crie um novo.
+              </span>
+            </div>
+            {draft.status === "approved" && (
+              <div className="flex items-center justify-between flex-wrap gap-3 bg-[#7A9A74]/8 border border-[#7A9A74]/20 rounded-xl px-5 py-4">
+                <div>
+                  <p className="font-semibold text-sm text-[#3A2B1F]">Rascunho aprovado</p>
+                  <p className="text-xs text-[#8C6E52] mt-0.5">
+                    Converta em protocolo oficial para aplicar a clientes.
+                  </p>
+                </div>
+                {createdProtocolId ? (
+                  <Link href={`/dashboard/protocols/${createdProtocolId}`}
+                    className="inline-flex items-center gap-2 bg-[#7A9A74] text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-[#688a62] transition-colors">
+                    <BookOpen className="w-4 h-4" />
+                    Ver protocolo criado
+                  </Link>
+                ) : (
+                  <button onClick={handleCreateProtocol} disabled={creatingProtocol}
+                    className="inline-flex items-center gap-2 bg-[#7A9A74] text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-[#688a62] transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                    <BookOpen className="w-4 h-4" />
+                    {creatingProtocol ? "Criando protocolo..." : "Criar protocolo oficial"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -13,6 +13,9 @@ import {
   X,
   FileSpreadsheet,
   Users,
+  BookOpen,
+  Sparkles,
+  FileBarChart,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -97,11 +100,11 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-5 space-y-1">
+      <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
         <NavLink
           href="/dashboard"
           icon={<LayoutDashboard className="w-4 h-4 shrink-0" />}
-          label="Formulários"
+          label="Dashboard"
           onClick={onClose}
         />
         <NavLink
@@ -110,6 +113,20 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           label="Clientes"
           onClick={onClose}
         />
+        <NavLink
+          href="/dashboard/protocols"
+          icon={<BookOpen className="w-4 h-4 shrink-0" />}
+          label="Protocolos"
+          onClick={onClose}
+        />
+
+        <div className="pt-2 pb-1">
+          <div className="h-px bg-[#EAD8C2]/60 mx-1" />
+        </div>
+
+        <p className="px-4 py-1 text-[9px] font-semibold tracking-[0.15em] text-[#A8927D] uppercase">
+          Formulários
+        </p>
         <NavLink
           href="/api/admin/export/csv"
           icon={<Download className="w-4 h-4 shrink-0" />}
@@ -122,6 +139,20 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           icon={<FileSpreadsheet className="w-4 h-4 shrink-0" />}
           label="Exportar Excel"
           external
+          onClick={onClose}
+        />
+
+        <div className="pt-2 pb-1">
+          <div className="h-px bg-[#EAD8C2]/60 mx-1" />
+        </div>
+
+        <p className="px-4 py-1 text-[9px] font-semibold tracking-[0.15em] text-[#A8927D] uppercase">
+          Sistema
+        </p>
+        <NavLink
+          href="/dashboard/clients"
+          icon={<FileBarChart className="w-4 h-4 shrink-0" />}
+          label="Relatórios"
           onClick={onClose}
         />
         <NavLink

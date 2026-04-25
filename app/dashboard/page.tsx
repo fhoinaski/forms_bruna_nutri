@@ -10,6 +10,9 @@ import {
   Search,
   Download,
   FileSpreadsheet,
+  BookOpen,
+  AlertCircle,
+  ClipboardList,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { BrandBadge } from "@/components/brand/BrandBadge";
@@ -54,6 +57,14 @@ interface ApiResponse {
   metrics: Metrics;
 }
 
+interface DashboardMetrics {
+  clientesAtivos: number;
+  protocolosAtivos: number;
+  tarefasVencidas: number;
+  protocolosAplicadosAtivos: number;
+  rascunhosPendentes: number;
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,6 +72,14 @@ export default function DashboardPage() {
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [searchTrigger, setSearchTrigger] = useState(0);
+  const [dashMetrics, setDashMetrics] = useState<DashboardMetrics | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/dashboard-metrics")
+      .then((r) => r.json())
+      .then((d: DashboardMetrics) => setDashMetrics(d))
+      .catch(() => null);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -107,7 +126,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto animate-fade-up">
-      {/* Métricas */}
+      {/* Métricas de formulários */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <BrandMetricCard
           label="Total"
@@ -131,6 +150,67 @@ export default function DashboardPage() {
           icon={<CheckCircle2 className="w-5 h-5 text-[#7A9A74]" />}
         />
       </div>
+
+      {/* Métricas do sistema clínico */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <BrandMetricCard
+          label="Clientes ativos"
+          value={dashMetrics?.clientesAtivos ?? "—"}
+          icon={<Users className="w-5 h-5 text-[#7A9A74]" />}
+        />
+        <BrandMetricCard
+          label="Protocolos ativos"
+          value={dashMetrics?.protocolosAtivos ?? "—"}
+          icon={<BookOpen className="w-5 h-5 text-[#7A9A74]" />}
+        />
+        <BrandMetricCard
+          label="Tarefas vencidas"
+          value={dashMetrics?.tarefasVencidas ?? "—"}
+          icon={<AlertCircle className="w-5 h-5 text-[#B47F6A]" />}
+          accent={!!dashMetrics?.tarefasVencidas}
+        />
+        <BrandMetricCard
+          label="Rascunhos IA pendentes"
+          value={dashMetrics?.rascunhosPendentes ?? "—"}
+          icon={<Sparkles className="w-5 h-5 text-[#B47F6A]" />}
+          accent={!!dashMetrics?.rascunhosPendentes}
+        />
+      </div>
+
+      {/* Pendências de hoje */}
+      {dashMetrics && (dashMetrics.tarefasVencidas > 0 || dashMetrics.rascunhosPendentes > 0) && (
+        <div className="brand-card p-5">
+          <h3 className="font-serif font-semibold text-[#B47F6A] mb-3 flex items-center gap-2">
+            <ClipboardList className="w-4 h-4" />
+            Pendências
+          </h3>
+          <div className="space-y-2">
+            {dashMetrics.tarefasVencidas > 0 && (
+              <div className="flex items-center justify-between p-3 bg-red-50 border border-red-100 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                  <span className="text-sm text-red-800">
+                    <strong>{dashMetrics.tarefasVencidas}</strong> tarefa{dashMetrics.tarefasVencidas !== 1 ? "s" : ""} com prazo vencido
+                  </span>
+                </div>
+                <Link href="/dashboard/clients" className="text-xs font-medium text-red-600 hover:underline">
+                  Ver clientes →
+                </Link>
+              </div>
+            )}
+            {dashMetrics.rascunhosPendentes > 0 && (
+              <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <span className="text-sm text-amber-800">
+                    <strong>{dashMetrics.rascunhosPendentes}</strong> rascunho{dashMetrics.rascunhosPendentes !== 1 ? "s" : ""} IA aguardando revisão
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="brand-card p-5">
