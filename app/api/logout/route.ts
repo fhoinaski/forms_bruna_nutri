@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// Legado: redireciona para a nova rota de logout
 export async function POST(req: NextRequest) {
-  const response = NextResponse.redirect(new URL("/login", req.url));
-  response.cookies.delete("admin_token");
-  return response;
+  return fetch(new URL("/api/auth/logout", req.url), { method: "POST" });
 }

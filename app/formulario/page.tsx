@@ -43,7 +43,7 @@ export default function FormularioPage() {
   const onSubmit = async (data: FormResponseInput) => {
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/respostas", {
+      const res = await fetch("/api/form-submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),

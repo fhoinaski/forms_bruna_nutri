@@ -1,6 +1,9 @@
+"use client";
+
 import { Jost, Cormorant_Garamond } from 'next/font/google';
 import '../globals.css';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { LayoutDashboard, Download, LogOut } from 'lucide-react';
 
 const jost = Jost({ 
@@ -14,6 +17,20 @@ const cormorant = Cormorant_Garamond({
   weight: ['300', '400', '500', '600', '700'],
   style: ['normal', 'italic'],
 });
+
+function LogoutButton() {
+  const router = useRouter();
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+  };
+  return (
+    <button onClick={handleLogout} className="w-full flex items-center px-4 py-3 text-[#B47F6A] hover:bg-[#FAF7F2]/50 rounded-xl transition-colors text-left">
+      <LogOut className="w-5 h-5 mr-3" />
+      <span>Sair</span>
+    </button>
+  );
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -32,16 +49,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <LayoutDashboard className="w-5 h-5 mr-3" />
             <span className="font-medium">Dashboard</span>
           </Link>
-          <a href="/api/respostas/export" className="flex items-center px-4 py-3 text-[#B47F6A] hover:bg-[#FAF7F2]/50 rounded-xl transition-colors">
+          <a href="/api/admin/export/csv" className="flex items-center px-4 py-3 text-[#B47F6A] hover:bg-[#FAF7F2]/50 rounded-xl transition-colors">
             <Download className="w-5 h-5 mr-3" />
             <span>Exportar CSV</span>
           </a>
-          <form action="/api/logout" method="POST" className="block">
-             <button className="w-full flex items-center px-4 py-3 text-[#B47F6A] hover:bg-[#FAF7F2]/50 rounded-xl transition-colors text-left">
-               <LogOut className="w-5 h-5 mr-3" />
-               <span>Sair</span>
-             </button>
-          </form>
+          <a href="/api/admin/export/excel" className="flex items-center px-4 py-3 text-[#B47F6A] hover:bg-[#FAF7F2]/50 rounded-xl transition-colors">
+            <Download className="w-5 h-5 mr-3" />
+            <span>Exportar Excel</span>
+          </a>
+          <LogoutButton />
         </nav>
 
         <div className="p-6">
