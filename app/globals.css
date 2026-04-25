@@ -12,10 +12,19 @@
   --muted: #8C6E52;
   --soft: #A8927D;
 
+  /* Design system tokens (aliases) */
+  --color-sage: #7A9A74;
+  --color-blush: #F4C9C6;
+  --color-sand: #EAD8C2;
+  --color-cream: #FAF7F2;
+  --color-terracotta: #B47F6A;
+  --color-brown: #3A2B1F;
+  --color-muted: #8C6E52;
   --radius-card: 1.5rem;
+  --radius-button: 999px;
   --radius-btn: 999px;
-  --shadow-soft: 0 18px 50px rgba(58, 43, 31, 0.07);
-  --shadow-card: 0 4px 20px rgba(122, 154, 116, 0.1);
+  --shadow-soft: 0 18px 50px rgba(58, 43, 31, 0.08);
+  --shadow-card: 0 10px 30px rgba(122, 154, 116, 0.12);
 }
 
 /* ── Scrollbar ── */

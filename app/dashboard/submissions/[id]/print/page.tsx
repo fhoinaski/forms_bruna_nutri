@@ -7,6 +7,12 @@ export const dynamic = "force-dynamic";
 
 const ANSWER_SECTIONS = [
   {
+    title: "Atendimento",
+    fields: [
+      { key: "tipoAtendimento", label: "Tipo de atendimento" },
+    ],
+  },
+  {
     title: "Dados Pessoais",
     fields: [
       { key: "idade", label: "Idade" },
@@ -121,8 +127,6 @@ export default async function PrintPage({
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Jost:wght@300;400;500&display=swap');
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {

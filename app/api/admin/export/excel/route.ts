@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ANSWER_LABELS: Record<string, string> = {
+  tipoAtendimento: "Tipo de atendimento",
   idade: "Idade",
   nascimento: "Nascimento",
   profissao: "Profissão",

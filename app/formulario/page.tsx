@@ -52,7 +52,7 @@ export default function FormularioPage() {
       if (!res.ok) throw new Error("Erro ao enviar resposta");
       setIsSuccess(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (error) {
+    } catch {
       alert("Ocorreu um erro ao enviar. Tente novamente.");
     } finally {
       setIsSubmitting(false);

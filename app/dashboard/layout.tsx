@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   FileSpreadsheet,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -37,7 +38,11 @@ function NavLink({
   onClick?: () => void;
 }) {
   const pathname = usePathname();
-  const active = !external && pathname === href;
+  const active = !external && (
+    href === "/dashboard"
+      ? pathname === "/dashboard"
+      : pathname === href || pathname.startsWith(href + "/")
+  );
 
   const cls = `flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all ${
     active
@@ -96,7 +101,13 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         <NavLink
           href="/dashboard"
           icon={<LayoutDashboard className="w-4 h-4 shrink-0" />}
-          label="Dashboard"
+          label="Formulários"
+          onClick={onClose}
+        />
+        <NavLink
+          href="/dashboard/clients"
+          icon={<Users className="w-4 h-4 shrink-0" />}
+          label="Clientes"
           onClick={onClose}
         />
         <NavLink

@@ -24,6 +24,7 @@ export const LegacyFormSchema = z.object({
   nome: z.string().min(2, "Nome é obrigatório").max(200),
   whatsapp: z.string().min(8, "WhatsApp é obrigatório").max(30),
   email: z.string().email("E-mail inválido").max(200),
+  tipoAtendimento: z.string().max(100).optional().or(z.literal("")),
   idade: z.string().max(10).optional().or(z.literal("")),
   nascimento: z.string().max(20).optional().or(z.literal("")),
   profissao: z.string().max(200).optional().or(z.literal("")),
