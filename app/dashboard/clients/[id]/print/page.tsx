@@ -1,30 +1,14 @@
 import { notFound } from "next/navigation";
-import { cookies } from "next/headers";
+import { getSessionFromCookies } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
 import { getClientProtocols } from "@/lib/repositories/client-protocols";
 import { getClientTasks } from "@/lib/repositories/client-tasks";
 import { getClientEvolutions } from "@/lib/repositories/client-evolutions";
 import { getClientTimeline } from "@/lib/repositories/client-timeline";
 import { getSubmissionById } from "@/lib/repositories/submissions";
-import { jwtVerify } from "jose";
 import { PrintButton } from "./PrintButton";
 
 export const dynamic = "force-dynamic";
-
-const COOKIE_NAME = "admin_session";
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET ?? "fallback-secret");
-
-async function getAdminFromCookies() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
-  if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    return payload;
-  } catch {
-    return null;
-  }
-}
 
 function formatDate(value: string | null, fmt = "dd/MM/yyyy"): string {
   if (!value) return "—";
@@ -60,7 +44,7 @@ export default async function ClientPrintPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const admin = await getAdminFromCookies();
+  const admin = await getSessionFromCookies();
   if (!admin) notFound();
 
   const { id } = await params;

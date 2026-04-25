@@ -180,6 +180,75 @@ export async function archiveProtocol(id: string): Promise<void> {
   );
 }
 
+export interface CreateProtocolInput {
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  created_by?: string | null;
+  phases?: Array<{
+    title: string;
+    days?: string | null;
+    objective?: string | null;
+    actions: string[];
+    notes?: string | null;
+  }>;
+}
+
+export async function createProtocol(input: CreateProtocolInput): Promise<string> {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  await d1Execute(
+    `INSERT INTO protocols (id, title, description, category, source_draft_id, created_by, is_active, created_at, updated_at)
+     VALUES (?1, ?2, ?3, ?4, NULL, ?5, 1, ?6, ?7)`,
+    [id, input.title, input.description ?? null, input.category ?? null, input.created_by ?? null, now, now]
+  );
+
+  const phases = input.phases ?? [];
+  for (let i = 0; i < phases.length; i++) {
+    const phase = phases[i];
+    await d1Execute(
+      `INSERT INTO protocol_phases (id, protocol_id, title, days, objective, actions_json, notes, phase_order, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+      [
+        crypto.randomUUID(), id,
+        phase.title, phase.days ?? null, phase.objective ?? null,
+        JSON.stringify(phase.actions ?? []), phase.notes ?? null,
+        i, now, now,
+      ]
+    );
+  }
+
+  return id;
+}
+
+export async function replaceProtocolPhases(
+  protocolId: string,
+  phases: Array<{
+    title: string;
+    days?: string | null;
+    objective?: string | null;
+    actions: string[];
+    notes?: string | null;
+  }>
+): Promise<void> {
+  const now = new Date().toISOString();
+  await d1Execute(`DELETE FROM protocol_phases WHERE protocol_id = ?1`, [protocolId]);
+  for (let i = 0; i < phases.length; i++) {
+    const phase = phases[i];
+    await d1Execute(
+      `INSERT INTO protocol_phases (id, protocol_id, title, days, objective, actions_json, notes, phase_order, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+      [
+        crypto.randomUUID(), protocolId,
+        phase.title, phase.days ?? null, phase.objective ?? null,
+        JSON.stringify(phase.actions ?? []), phase.notes ?? null,
+        i, now, now,
+      ]
+    );
+  }
+}
+
 export async function getProtocolMetrics(): Promise<{ total: number; ativos: number }> {
   const [total, ativos] = await Promise.all([
     d1Query<{ c: number }>("SELECT COUNT(*) as c FROM protocols", []),
