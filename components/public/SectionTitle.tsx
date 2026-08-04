@@ -14,11 +14,11 @@ export function SectionTitle({
       {kicker && (
         <p className="brand-kicker mb-3">{kicker}</p>
       )}
-      <h2 className="font-serif text-3xl md:text-4xl font-semibold text-[#3A2B1F] leading-tight">
+      <h2 className="font-serif text-3xl font-semibold leading-tight text-[#3A3028] md:text-5xl">
         {title}
       </h2>
       {subtitle && (
-        <p className="mt-4 text-[#8C6E52] leading-relaxed text-base max-w-2xl">
+        <p className={`mt-5 max-w-2xl text-base leading-relaxed text-[#75675E] ${center ? "mx-auto" : ""}`}>
           {subtitle}
         </p>
       )}

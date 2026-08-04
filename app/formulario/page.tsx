@@ -72,12 +72,12 @@ export default function FormularioPage() {
 
   if (isSuccess) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center bg-[#FAF7F2]">
-        <div className="w-16 h-16 rounded-full bg-[#EAD8C2] flex items-center justify-center text-[#7A9A74] mb-6 shadow-sm">
+      <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center bg-[#FBF7F1]">
+        <div className="w-16 h-16 rounded-full bg-[#EDE1D6] flex items-center justify-center text-[#607A56] mb-6 shadow-sm">
           <CheckCircle2 className="w-8 h-8" />
         </div>
-        <h2 className="font-serif text-4xl mb-4 text-[#B47F6A] font-light">Obrigada por compartilhar!</h2>
-        <p className="text-[#8C6E52] max-w-md mx-auto text-lg leading-relaxed">
+        <h2 className="font-serif text-4xl mb-4 text-[#8C5B70] font-light">Obrigada por compartilhar!</h2>
+        <p className="text-[#75675E] max-w-md mx-auto text-lg leading-relaxed">
           Suas respostas foram enviadas com sucesso. Em breve entrarei em contato para confirmar sua consulta.
         </p>
       </div>
@@ -86,25 +86,25 @@ export default function FormularioPage() {
 
   return (
     <>
-      <div className="sticky top-0 z-50 h-[4px] bg-[#EAD8C2]">
+      <div className="sticky top-0 z-50 h-[4px] bg-[#EDE1D6]">
         <div 
-          className="h-full bg-gradient-to-r from-[#B47F6A] to-[#F4C9C6] transition-all duration-500 ease-out"
+          className="h-full bg-gradient-to-r from-[#C9937B] to-[#E8C5BD] transition-all duration-500 ease-out"
           style={{ width: `${progress}%` }}
         />
       </div>
 
-      <div className="bg-[#7A9A74] px-6 pt-16 pb-14 text-center relative overflow-hidden">
+      <div className="bg-[#7F9A74] px-6 pt-16 pb-14 text-center relative overflow-hidden">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-white via-transparent to-transparent" />
-        <div className="text-[#F4C9C6] text-xs font-semibold tracking-widest uppercase mb-4 relative z-10">
+        <div className="text-[#F0D6D0] text-xs font-semibold tracking-widest uppercase mb-4 relative z-10">
           Nutrição Personalizada
         </div>
-        <h1 className="font-serif text-5xl md:text-6xl text-[#FAF7F2] font-light leading-tight relative z-10">
-          Formulário<br/><em className="text-[#EAD8C2] italic">Pré-Consulta</em>
+        <h1 className="font-serif text-5xl md:text-6xl text-[#FFFDFC] font-light leading-tight relative z-10">
+          Formulário<br/><em className="text-[#F2E8DF] italic">Pré-Consulta</em>
         </h1>
-        <p className="text-[#FAF7F2]/80 mt-5 max-w-md mx-auto text-sm leading-relaxed relative z-10">
+        <p className="text-[#F2E8DF] mt-5 max-w-md mx-auto text-sm leading-relaxed relative z-10">
           Quanto mais você compartilhar, mais assertivo será seu plano alimentar. Leva cerca de 10 minutos.
         </p>
-        <div className="w-10 h-[1px] bg-[#EAD8C2]/50 mx-auto mt-8 relative z-10" />
+        <div className="w-10 h-[1px] bg-[#F2E8DF]/60 mx-auto mt-8 relative z-10" />
       </div>
 
       <div className="max-w-2xl mx-auto px-5 py-10 pb-24">
@@ -325,7 +325,7 @@ export default function FormularioPage() {
           {/* Seção 9 */}
           <Section number="9" title="Sua rotina essencial">
             <Field label="Descreva um dia alimentar típico">
-              <p className="text-xs text-[#A8927D] mb-2">Inclua horários e quantidades. Quanto mais detalhes, melhor.</p>
+              <p className="text-xs text-[#A9978A] mb-2">Inclua horários e quantidades. Quanto mais detalhes, melhor.</p>
               <Textarea {...register("diaAlimentar")} className="min-h-[120px]" placeholder="Comece pelo café da manhã..." />
             </Field>
           </Section>
@@ -337,15 +337,15 @@ export default function FormularioPage() {
             </Field>
             <Field label="De 0 a 10, disposta a mudar?">
               <div className="flex items-center gap-4 mt-2">
-                <span className="text-xs text-[#A8927D]">0</span>
+                <span className="text-xs text-[#A9978A]">0</span>
                 <input 
                   type="range" 
                   min="0" max="10" 
-                  className="flex-1 accent-[#B47F6A] h-1.5 bg-[#EAD8C2] rounded-lg appearance-none cursor-pointer"
+                  className="flex-1 accent-[#C9937B] h-1.5 bg-[#EDE1D6] rounded-lg appearance-none cursor-pointer"
                   {...register("disposicao")} 
                 />
-                <span className="text-xs text-[#A8927D]">10</span>
-                <span className="font-serif text-2xl text-[#8C6E52] w-8 text-center">{watchAllFields.disposicao}</span>
+                <span className="text-xs text-[#A9978A]">10</span>
+                <span className="font-serif text-2xl text-[#75675E] w-8 text-center">{watchAllFields.disposicao}</span>
               </div>
             </Field>
           </Section>
@@ -361,14 +361,14 @@ export default function FormularioPage() {
             <button 
               type="submit" 
               disabled={isSubmitting}
-              className="font-sans font-medium text-sm tracking-[0.12em] uppercase text-white bg-[#B47F6A] hover:bg-[#8C6E52] transition-colors rounded-full px-12 py-4 disabled:opacity-70 disabled:cursor-not-allowed shadow-md shadow-[#B47F6A]/20"
+            className="font-sans font-medium text-sm tracking-[0.12em] uppercase text-white bg-[#7F9A74] hover:bg-[#607A56] transition-colors rounded-full px-12 py-4 disabled:opacity-70 disabled:cursor-not-allowed shadow-md shadow-[#7F9A74]/20"
             >
               {isSubmitting ? "Enviando..." : "Enviar formulário"}
             </button>
           </div>
 
-          <div className="text-center pt-10 border-t border-[#EAD8C2] mt-10">
-            <p className="font-serif italic text-lg text-[#8C6E52]/80 leading-relaxed max-w-md mx-auto">
+          <div className="text-center pt-10 border-t border-[#EDE1D6] mt-10">
+            <p className="font-serif italic text-lg text-[#75675E]/80 leading-relaxed max-w-md mx-auto">
               Meu objetivo é te ajudar de forma realista, respeitando sua rotina — sem radicalismos.<br/>
               Vamos construir juntas um plano possível e sustentável.
             </p>
@@ -385,12 +385,12 @@ export default function FormularioPage() {
 
 function Section({ number, title, children }: { number: string, title: string, children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-[#E8D9C8] rounded-2xl p-6 md:p-8 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#F2EBE0]">
-        <div className="w-8 h-8 rounded-full bg-[#7A9A74] text-white font-serif flex items-center justify-center text-sm">
+    <div className="bg-[#FFFDFC] border border-[#EDE1D6] rounded-2xl p-6 md:p-8 shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#F5ECE4]">
+        <div className="w-8 h-8 rounded-full bg-[#7F9A74] text-white font-serif flex items-center justify-center text-sm">
           {number}
         </div>
-        <h2 className="font-serif text-2xl text-[#8C6E52]">{title}</h2>
+        <h2 className="font-serif text-2xl text-[#75675E]">{title}</h2>
       </div>
       <div>{children}</div>
     </div>
@@ -400,8 +400,8 @@ function Section({ number, title, children }: { number: string, title: string, c
 function Field({ label, required, error, className, children }: { label: string, required?: boolean, error?: string, className?: string, children: React.ReactNode }) {
   return (
     <div className={className}>
-      <label className="block text-[0.8rem] tracking-wider uppercase text-[#7A6050] mb-2 font-medium">
-        {label} {required && <span className="text-[#B47F6A] ml-1">*</span>}
+      <label className="block text-[0.8rem] tracking-wider uppercase text-[#75675E] mb-2 font-medium">
+        {label} {required && <span className="text-[#8C5B70] ml-1">*</span>}
       </label>
       {children}
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
@@ -412,7 +412,7 @@ function Field({ label, required, error, className, children }: { label: string,
 const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => (
   <input 
     ref={ref}
-    className="w-full bg-[#FAF6F1] border border-[#E8D9C8] rounded-xl px-4 py-3 text-[#3A2B1F] placeholder-[#A8927D] focus:outline-none focus:border-[#B47F6A] focus:ring-1 focus:ring-[#B47F6A] transition-all"
+    className="w-full bg-[#FBF7F1] border border-[#EDE1D6] rounded-xl px-4 py-3 text-[#3A3028] placeholder-[#A9978A] focus:outline-none focus:border-[#C9937B] focus:ring-1 focus:ring-[#C9937B] transition-all"
     {...props}
   />
 ));
@@ -421,7 +421,7 @@ Input.displayName = "Input";
 const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>((props, ref) => (
   <textarea 
     ref={ref}
-    className="w-full bg-[#FAF6F1] border border-[#E8D9C8] rounded-xl px-4 py-3 text-[#3A2B1F] placeholder-[#A8927D] focus:outline-none focus:border-[#B47F6A] focus:ring-1 focus:ring-[#B47F6A] transition-all min-h-[90px] resize-y"
+    className="w-full bg-[#FBF7F1] border border-[#EDE1D6] rounded-xl px-4 py-3 text-[#3A3028] placeholder-[#A9978A] focus:outline-none focus:border-[#C9937B] focus:ring-1 focus:ring-[#C9937B] transition-all min-h-[90px] resize-y"
     {...props}
   />
 ));
@@ -434,8 +434,8 @@ function Tag({ active, onClick, children }: { active: boolean, onClick: () => vo
       onClick={onClick}
       className={`text-sm px-4 py-2 rounded-full border transition-all ${
         active 
-          ? 'bg-[#7A9A74] border-[#7A9A74] text-white shadow-sm' 
-          : 'bg-[#F2EBE0] border-[#E8D9C8] text-[#7A6050] hover:border-[#8C6E52]'
+          ? 'bg-[#7F9A74] border-[#7F9A74] text-white shadow-sm' 
+          : 'bg-[#F5ECE4] border-[#EDE1D6] text-[#75675E] hover:border-[#C9937B]'
       }`}
     >
       {children}

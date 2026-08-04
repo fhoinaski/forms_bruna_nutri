@@ -1,48 +1,64 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 
 export function PublicFooter() {
   return (
-    <footer className="bg-[#3A2B1F] text-[#EAD8C2]">
-      <div className="max-w-6xl mx-auto px-5 lg:px-8 py-12">
-        <div className="flex flex-col md:flex-row justify-between gap-8">
-          {/* Brand */}
+    <footer className="relative overflow-hidden border-t border-[#EDE1D6] bg-[#F6ECE4] text-[#3A3028]">
+      <div className="absolute inset-0 brand-texture opacity-30" />
+      <div className="relative z-10 mx-auto max-w-7xl px-5 py-14 lg:px-8">
+        <div className="grid gap-10 md:grid-cols-[1.2fr_0.8fr] md:items-end">
           <div>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 bg-[#7A9A74] rounded-full flex items-center justify-center">
-                <span className="font-serif italic text-sm text-white leading-none">BF</span>
+            <div className="mb-5 flex items-center gap-3">
+              <img
+                src="/brand/bruna-flores-nutri-simbolo.svg"
+                alt=""
+                className="h-12 w-10 object-contain"
+              />
+              <div>
+                <p className="font-serif text-xl font-semibold text-[#3A3028]">
+                  Bruna Flores Nutri
+                </p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[#607A56]">
+                  Nutrição Materno-Infantil
+                </p>
               </div>
-              <p className="font-serif text-white font-semibold">Bruna Flores Nutri</p>
             </div>
-            <p className="text-[10px] tracking-[0.2em] text-[#8C6E52] uppercase">
-              Nutrição Materno-Infantil
-            </p>
-            <p className="text-sm text-[#A8927D] mt-4 max-w-xs leading-relaxed">
+            <p className="max-w-xl text-sm leading-7 text-[#75675E]">
               Atendimento nutricional acolhedor e individualizado para gestantes,
-              mães e crianças.
+              mães, bebês e crianças, com ciência aplicada à vida real.
             </p>
           </div>
 
-          {/* Links */}
-          <div className="flex gap-12">
+          <div className="grid grid-cols-2 gap-8 sm:flex sm:justify-end">
             <div>
-              <p className="text-[10px] tracking-widest uppercase text-[#8C6E52] mb-3">
+              <p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-[#8C5F50]">
                 Navegação
               </p>
-              <ul className="space-y-2 text-sm text-[#A8927D]">
-                <li><Link href="/" className="hover:text-white transition-colors">Início</Link></li>
-                <li><Link href="/servicos" className="hover:text-white transition-colors">Serviços</Link></li>
-                <li><Link href="/como-funciona" className="hover:text-white transition-colors">Como funciona</Link></li>
-                <li><Link href="/formulario" className="hover:text-white transition-colors">Pré-consulta</Link></li>
+              <ul className="space-y-2 text-sm text-[#75675E]">
+                <li><Link href="/" className="transition-colors hover:text-[#607A56]">Início</Link></li>
+                <li><Link href="/servicos" className="transition-colors hover:text-[#607A56]">Serviços</Link></li>
+                <li><Link href="/como-funciona" className="transition-colors hover:text-[#607A56]">Como funciona</Link></li>
+                <li><Link href="/login" className="transition-colors hover:text-[#607A56]">Área restrita</Link></li>
               </ul>
+            </div>
+            <div>
+              <p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-[#8C5F50]">
+                Começar
+              </p>
+              <Link
+                href="/formulario"
+                className="inline-flex items-center gap-2 rounded-full bg-[#7F9A74] px-5 py-3 text-xs font-bold uppercase tracking-[0.14em] text-white shadow-[0_14px_30px_rgba(127,154,116,0.2)] transition hover:bg-[#607A56]"
+              >
+                Pré-consulta
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
           </div>
         </div>
 
-        <div className="mt-10 pt-6 border-t border-[#5A4030]/60 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-[#6B5040]">
+        <div className="mt-12 flex flex-col justify-between gap-3 border-t border-[#E2D2C5] pt-6 text-xs text-[#9A8B80] sm:flex-row">
           <p>© {new Date().getFullYear()} Bruna Flores Nutri. Todos os direitos reservados.</p>
-          <Link href="/login" className="hover:text-[#A8927D] transition-colors">
-            Área restrita
-          </Link>
+          <p>Cuidado com escuta, evidência e rotina possível.</p>
         </div>
       </div>
     </footer>

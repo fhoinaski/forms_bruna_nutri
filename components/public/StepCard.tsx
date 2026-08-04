@@ -12,18 +12,18 @@ export function StepCard({
   return (
     <div className="flex gap-5">
       <div className="flex flex-col items-center shrink-0">
-        <div className="w-10 h-10 rounded-full bg-[#7A9A74] flex items-center justify-center text-white font-serif font-bold text-sm shadow-sm">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#7F9A74] text-sm font-semibold text-white shadow-[0_12px_26px_rgba(127,154,116,0.22)]">
           {number}
         </div>
         {!last && (
-          <div className="w-px flex-1 mt-3 bg-[#EAD8C2]" style={{ minHeight: "3rem" }} />
+          <div className="mt-3 w-px flex-1 bg-[#E0D1C4]" style={{ minHeight: "3rem" }} />
         )}
       </div>
       <div className="pb-8">
-        <h3 className="font-serif text-xl font-semibold text-[#3A2B1F] mb-2 leading-tight">
+        <h3 className="mb-2 font-serif text-xl font-semibold leading-tight text-[#3A3028]">
           {title}
         </h3>
-        <p className="text-sm text-[#8C6E52] leading-relaxed">{description}</p>
+        <p className="text-sm leading-relaxed text-[#75675E]">{description}</p>
       </div>
     </div>
   );

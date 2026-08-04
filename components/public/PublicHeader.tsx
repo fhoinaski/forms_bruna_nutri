@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { ArrowRight, Menu, X } from "lucide-react";
 
 const NAV_LINKS = [
   { href: "/", label: "Início" },
-  { href: "/#sobre", label: "Sobre" },
+  { href: "/#experiencia", label: "Experiência" },
   { href: "/servicos", label: "Serviços" },
   { href: "/como-funciona", label: "Como funciona" },
   { href: "/formulario", label: "Pré-consulta" },
@@ -25,110 +25,108 @@ export function PublicHeader() {
   return (
     <>
       <header
-        className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
+        className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
           scrolled
-            ? "bg-white/95 backdrop-blur shadow-sm border-b border-[#EAD8C2]"
+            ? "border-b border-[#EDE1D6]/80 bg-[#FFFDFC]/[0.92] shadow-sm backdrop-blur-xl"
             : "bg-transparent"
         }`}
       >
-        <div className="max-w-6xl mx-auto px-5 lg:px-8 h-16 flex items-center justify-between">
-          {/* Brand */}
-          <Link href="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="w-8 h-8 bg-[#7A9A74] rounded-full flex items-center justify-center">
-              <span className="font-serif italic text-sm text-white leading-none">BF</span>
-            </div>
+        <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-5 lg:px-8">
+          <Link href="/" className="flex shrink-0 items-center gap-3">
+            <img
+              src="/brand/bruna-flores-nutri-simbolo.svg"
+              alt=""
+              className="h-11 w-10 object-contain drop-shadow-[0_10px_18px_rgba(58,48,40,0.1)]"
+            />
             <div className="hidden sm:block">
-              <p className="font-serif text-[#3A2B1F] font-semibold text-sm leading-tight">
+              <p className="font-serif text-sm font-semibold leading-tight text-[#3A3028]">
                 Bruna Flores Nutri
               </p>
-              <p className="text-[9px] tracking-[0.18em] text-[#8C6E52] uppercase leading-none">
-                Nutrição Materna
+              <p className="text-[9px] uppercase leading-none tracking-[0.2em] text-[#75675E]">
+                Nutrição Materno-Infantil
               </p>
             </div>
           </Link>
 
-          {/* Desktop nav */}
-          <nav className="hidden lg:flex items-center gap-1">
-            {NAV_LINKS.map((l) => (
+          <nav className="hidden items-center gap-1 lg:flex">
+            {NAV_LINKS.map((link) => (
               <Link
-                key={l.href}
-                href={l.href}
-                className="px-3.5 py-2 text-sm text-[#8C6E52] hover:text-[#3A2B1F] transition-colors rounded-lg hover:bg-[#FAF7F2]"
+                key={link.href}
+                href={link.href}
+                className="rounded-full px-3.5 py-2 text-sm text-[#75675E] transition-colors hover:bg-[#FBF7F1] hover:text-[#3A3028]"
               >
-                {l.label}
+                {link.label}
               </Link>
             ))}
           </nav>
 
-          {/* Right actions */}
           <div className="flex items-center gap-2">
             <Link
               href="/dashboard"
-              className="hidden sm:inline-flex items-center text-xs font-medium text-[#7A9A74] border border-[#7A9A74]/50 rounded-full px-4 py-1.5 hover:bg-[#7A9A74]/10 transition-colors"
+              className="hidden items-center rounded-full border border-[#7F9A74]/35 px-4 py-2 text-xs font-semibold text-[#607A56] transition-colors hover:bg-[#EAF0E4] sm:inline-flex"
             >
               Acessar painel
             </Link>
             <Link
               href="/formulario"
-              className="brand-btn-primary text-xs px-4 py-2 hidden lg:inline-flex"
+              className="brand-btn-primary hidden px-4 py-2 text-xs lg:inline-flex"
             >
               Pré-consulta
+              <ArrowRight className="h-3.5 w-3.5" />
             </Link>
             <button
               onClick={() => setOpen(true)}
-              className="lg:hidden p-2 rounded-lg hover:bg-[#FAF7F2] text-[#8C6E52]"
+              className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1] lg:hidden"
               aria-label="Abrir menu"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="h-5 w-5" />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Mobile overlay */}
       {open && (
         <div
-          className="fixed inset-0 bg-black/30 z-50 lg:hidden"
+          className="fixed inset-0 z-50 bg-black/30 lg:hidden"
           onClick={() => setOpen(false)}
         />
       )}
 
-      {/* Mobile drawer */}
       <div
-        className={`fixed top-0 right-0 bottom-0 w-72 bg-white z-[60] lg:hidden transition-transform duration-300 shadow-xl ${
+        className={`fixed bottom-0 right-0 top-0 z-[60] w-72 bg-[#FFFDFC] shadow-xl transition-transform duration-300 lg:hidden ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between p-5 border-b border-[#EAD8C2]">
-          <p className="font-serif text-[#B47F6A] font-semibold">Bruna Flores Nutri</p>
+        <div className="flex items-center justify-between border-b border-[#EDE1D6] p-5">
+          <p className="font-serif font-semibold text-[#3A3028]">Bruna Flores Nutri</p>
           <button
             onClick={() => setOpen(false)}
-            className="p-1.5 rounded-lg hover:bg-[#FAF7F2] text-[#8C6E52]"
+            className="rounded-lg p-1.5 text-[#75675E] hover:bg-[#FBF7F1]"
             aria-label="Fechar menu"
           >
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
-        <nav className="p-5 space-y-1">
-          {NAV_LINKS.map((l) => (
+        <nav className="space-y-1 p-5">
+          {NAV_LINKS.map((link) => (
             <Link
-              key={l.href}
-              href={l.href}
+              key={link.href}
+              href={link.href}
               onClick={() => setOpen(false)}
-              className="block px-4 py-3 text-sm text-[#3A2B1F] hover:bg-[#FAF7F2] rounded-xl transition-colors"
+              className="block rounded-xl px-4 py-3 text-sm text-[#3A3028] transition-colors hover:bg-[#FBF7F1]"
             >
-              {l.label}
+              {link.label}
             </Link>
           ))}
           <Link
             href="/dashboard"
             onClick={() => setOpen(false)}
-            className="block px-4 py-3 text-sm text-[#7A9A74] hover:bg-[#FAF7F2] rounded-xl transition-colors"
+            className="block rounded-xl px-4 py-3 text-sm text-[#607A56] transition-colors hover:bg-[#FBF7F1]"
           >
             Acessar painel
           </Link>
         </nav>
-        <div className="absolute bottom-8 inset-x-5">
+        <div className="absolute inset-x-5 bottom-8">
           <Link
             href="/formulario"
             onClick={() => setOpen(false)}

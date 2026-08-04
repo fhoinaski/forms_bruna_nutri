@@ -1,30 +1,42 @@
 @import "tailwindcss";
 
 :root {
-  --sage: #7A9A74;
-  --sage-dark: #688a62;
-  --blush: #F4C9C6;
-  --sand: #EAD8C2;
-  --sand-dark: #d9c4ab;
-  --cream: #FAF7F2;
-  --terracotta: #B47F6A;
-  --brown: #3A2B1F;
-  --muted: #8C6E52;
-  --soft: #A8927D;
+  --sage: #7F9A74;
+  --sage-dark: #607A56;
+  --fig: #8C5F50;
+  --rose: #E8C5BD;
+  --clay: #C9937B;
+  --sand: #EDE1D6;
+  --sand-dark: #DDCDBF;
+  --cream: #FBF7F1;
+  --paper: #FFFDFC;
+  --brown: #3A3028;
+  --muted: #75675E;
+  --soft: #A9978A;
 
   /* Design system tokens (aliases) */
-  --color-sage: #7A9A74;
-  --color-blush: #F4C9C6;
-  --color-sand: #EAD8C2;
-  --color-cream: #FAF7F2;
-  --color-terracotta: #B47F6A;
-  --color-brown: #3A2B1F;
-  --color-muted: #8C6E52;
-  --radius-card: 1.5rem;
+  --color-sage: #7F9A74;
+  --color-blush: #E8C5BD;
+  --color-sand: #EDE1D6;
+  --color-cream: #FBF7F1;
+  --color-terracotta: #C9937B;
+  --color-brown: #3A3028;
+  --color-muted: #75675E;
+  --radius-card: 1.35rem;
   --radius-button: 999px;
   --radius-btn: 999px;
-  --shadow-soft: 0 18px 50px rgba(58, 43, 31, 0.08);
-  --shadow-card: 0 10px 30px rgba(122, 154, 116, 0.12);
+  --shadow-soft: 0 22px 70px rgba(58, 48, 40, 0.09);
+  --shadow-card: 0 18px 55px rgba(58, 48, 40, 0.07);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(232, 197, 189, 0.22), transparent 24rem),
+    linear-gradient(180deg, #fffdf9 0%, #fbf7f1 100%);
 }
 
 /* ── Scrollbar ── */
@@ -36,7 +48,7 @@
 /* ── Brand utility classes ── */
 
 .brand-card {
-  background: #fff;
+  background: var(--paper);
   border: 1px solid var(--sand);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
@@ -82,11 +94,15 @@
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  transition: background 0.2s, transform 0.15s;
+  box-shadow: 0 14px 34px rgba(127, 154, 116, 0.2);
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
   cursor: pointer;
   border: none;
 }
-.brand-btn-primary:hover { background: var(--sage-dark); }
+.brand-btn-primary:hover {
+  background: var(--sage-dark);
+  box-shadow: 0 18px 42px rgba(127, 154, 116, 0.28);
+}
 .brand-btn-primary:active { transform: scale(0.98); }
 .brand-btn-primary:disabled { opacity: 0.65; cursor: not-allowed; }
 
@@ -142,9 +158,40 @@
 .brand-kicker {
   font-size: 0.625rem;
   font-weight: 700;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--terracotta);
+  color: var(--fig);
+}
+
+.brand-glass {
+  background: rgba(255, 253, 252, 0.78);
+  border: 1px solid rgba(237, 225, 214, 0.76);
+  box-shadow: 0 22px 70px rgba(58, 48, 40, 0.1);
+  backdrop-filter: blur(18px);
+}
+
+.brand-texture {
+  background-image:
+    linear-gradient(rgba(58, 48, 40, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(58, 48, 40, 0.03) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.brand-script-line {
+  position: relative;
+}
+
+.brand-script-line::after {
+  background: linear-gradient(90deg, #7f9a74, #8c5b70, #c9937b);
+  border-radius: 999px;
+  bottom: 0.06em;
+  content: "";
+  height: 0.14em;
+  left: -0.02em;
+  opacity: 0.28;
+  position: absolute;
+  right: -0.02em;
+  z-index: -1;
 }
 
 /* ── Animations ── */

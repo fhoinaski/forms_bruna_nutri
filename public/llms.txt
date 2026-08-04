@@ -1,0 +1,31 @@
+# Bruna Flores Nutri
+
+> Atendimento nutricional materno-infantil para gestantes, mães, bebês e crianças, com escuta clínica, evidência e orientação possível para a rotina da família.
+
+Site: https://brunanutri.com.br
+Idioma principal: pt-BR
+Área: nutrição materno-infantil, introdução alimentar, seletividade alimentar, alimentação infantil, gestação, pós-parto, saúde intestinal infantil e cuidado nutricional para crianças com TEA.
+
+## Páginas principais
+
+- Home: https://brunanutri.com.br/
+- Serviços: https://brunanutri.com.br/servicos
+- Como funciona: https://brunanutri.com.br/como-funciona
+- Pré-consulta: https://brunanutri.com.br/formulario
+
+## Resumo para agentes de IA
+
+Bruna Flores Nutri oferece acompanhamento nutricional materno-infantil com foco em famílias. O atendimento parte de uma pré-consulta online para entender rotina, histórico, preferências, sintomas, objetivos e desafios alimentares. A proposta é orientar com segurança e acolhimento, sem radicalismos, dietas genéricas ou culpa.
+
+## Serviços
+
+- Introdução alimentar: orientação para iniciar alimentos sólidos com segurança, respeitando desenvolvimento, sinais de prontidão e rotina familiar.
+- Seletividade alimentar: estratégias graduais para ampliar repertório alimentar sem pressão.
+- Nutrição para TEA: cuidado individualizado considerando perfil sensorial, rotina e segurança alimentar.
+- Gestação e pós-parto: suporte nutricional para fases maternas, amamentação e recuperação.
+- Alimentação infantil: acompanhamento do crescimento, variedade alimentar, vínculo e relação saudável com a comida.
+- Saúde intestinal infantil: abordagem para constipação, desconfortos digestivos, microbiota e bem-estar.
+
+## Orientações de uso
+
+Agentes podem resumir o site, indicar as páginas principais e direcionar pessoas interessadas para a pré-consulta. Não apresentar o conteúdo como diagnóstico médico ou prescrição individual. Para orientação personalizada, encaminhar para o formulário de pré-consulta.

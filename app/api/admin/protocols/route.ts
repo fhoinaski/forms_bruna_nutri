@@ -1,9 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
-import { getProtocols } from "@/lib/repositories/protocols";
+import { getProtocols, createProtocol } from "@/lib/repositories/protocols";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const phaseSchema = z.object({
+  title: z.string().min(1).max(500),
+  days: z.string().max(50).optional().nullable(),
+  objective: z.string().max(2000).optional().nullable(),
+  actions: z.array(z.string().min(1)).default([]),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+const createSchema = z.object({
+  title: z.string().min(1, "Título é obrigatório").max(500),
+  description: z.string().max(10000).optional().nullable(),
+  category: z.string().max(100).optional().nullable(),
+  phases: z.array(phaseSchema).default([]),
+});
 
 export async function GET(req: NextRequest) {
   const admin = await getAdminFromRequest(req);
@@ -18,4 +34,24 @@ export async function GET(req: NextRequest) {
 
   const result = await getProtocols({ page, search, category, isActive });
   return NextResponse.json(result);
+}
+
+export async function POST(req: NextRequest) {
+  const admin = await getAdminFromRequest(req);
+  if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
+
+  const body = await req.json();
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
+  }
+
+  const id = await createProtocol({
+    title: parsed.data.title,
+    description: parsed.data.description,
+    category: parsed.data.category,
+    created_by: admin.sub,
+    phases: parsed.data.phases,
+  });
+  return NextResponse.json({ id }, { status: 201 });
 }
