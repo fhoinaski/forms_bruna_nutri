@@ -38,6 +38,7 @@ export function PublicFooter() {
                 <li><Link href="/" className="transition-colors hover:text-[#607A56]">Início</Link></li>
                 <li><Link href="/servicos" className="transition-colors hover:text-[#607A56]">Serviços</Link></li>
                 <li><Link href="/como-funciona" className="transition-colors hover:text-[#607A56]">Como funciona</Link></li>
+                <li><Link href="/blog" className="transition-colors hover:text-[#607A56]">Blog</Link></li>
                 <li><Link href="/login" className="transition-colors hover:text-[#607A56]">Área restrita</Link></li>
               </ul>
             </div>

@@ -15,7 +15,9 @@ import {
   Users,
   CalendarDays,
   WalletCards,
+  ClipboardList,
   BookOpen,
+  Newspaper,
   FileBarChart,
   ExternalLink,
 } from "lucide-react";
@@ -124,6 +126,12 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           onClick={onClose}
         />
         <NavLink
+          href="/dashboard/tarefas"
+          icon={<ClipboardList className="w-4 h-4 shrink-0" />}
+          label="Tarefas"
+          onClick={onClose}
+        />
+        <NavLink
           href="/dashboard/clients"
           icon={<Users className="w-4 h-4 shrink-0" />}
           label="Clientes"
@@ -133,6 +141,12 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           href="/dashboard/protocols"
           icon={<BookOpen className="w-4 h-4 shrink-0" />}
           label="Protocolos"
+          onClick={onClose}
+        />
+        <NavLink
+          href="/dashboard/blog"
+          icon={<Newspaper className="w-4 h-4 shrink-0" />}
+          label="Blog"
           onClick={onClose}
         />
 

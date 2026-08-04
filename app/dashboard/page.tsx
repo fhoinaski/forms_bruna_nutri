@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Clock,
   WalletCards,
+  Newspaper,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { BrandBadge } from "@/components/brand/BrandBadge";
@@ -81,6 +82,19 @@ interface DashboardMetrics {
     receivedCount: number;
     openCount: number;
     overdueCount: number;
+  };
+  proximasTarefas: Array<{
+    id: string;
+    client_id: string;
+    client_name: string | null;
+    title: string;
+    due_date: string | null;
+    status: string;
+  }>;
+  blog: {
+    published: number;
+    drafts: number;
+    aiGenerated: number;
   };
 }
 
@@ -181,6 +195,20 @@ export default function DashboardPage() {
               Financeiro
             </Link>
             <Link
+              href="/dashboard/tarefas"
+              className="inline-flex items-center gap-2 rounded-full border border-[#7F9A74]/35 px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#607A56] transition hover:bg-[#EAF0E4]"
+            >
+              <ClipboardList className="h-4 w-4" />
+              Tarefas
+            </Link>
+            <Link
+              href="/dashboard/blog"
+              className="inline-flex items-center gap-2 rounded-full border border-[#7F9A74]/35 px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#607A56] transition hover:bg-[#EAF0E4]"
+            >
+              <Newspaper className="h-4 w-4" />
+              Blog
+            </Link>
+            <Link
               href="/dashboard/clients"
               className="inline-flex items-center gap-2 rounded-full border border-[#7F9A74]/35 px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#607A56] transition hover:bg-[#EAF0E4]"
             >
@@ -278,6 +306,26 @@ export default function DashboardPage() {
         />
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <BrandMetricCard
+          label="Posts publicados"
+          value={dashMetrics?.blog.published ?? "â€”"}
+          icon={<Newspaper className="w-5 h-5" />}
+        />
+        <BrandMetricCard
+          label="Rascunhos do blog"
+          value={dashMetrics?.blog.drafts ?? "â€”"}
+          icon={<FileSpreadsheet className="w-5 h-5" />}
+          accent={!!dashMetrics?.blog.drafts}
+        />
+        <BrandMetricCard
+          label="Conteudos por IA"
+          value={dashMetrics?.blog.aiGenerated ?? "â€”"}
+          icon={<Sparkles className="w-5 h-5" />}
+          accent={!!dashMetrics?.blog.aiGenerated}
+        />
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="rounded-[1.35rem] border border-[#EDE1D6] bg-[#FFFDFC] p-5 shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
           <div className="mb-4 flex items-start justify-between gap-4">
@@ -361,12 +409,32 @@ export default function DashboardPage() {
               <span className="text-[#607A56]">Ver</span>
             </Link>
             <Link
+              href="/dashboard/tarefas"
+              className="flex items-center justify-between rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] px-4 py-3 text-sm font-semibold text-[#3A3028] transition hover:border-[#7F9A74]/40 hover:bg-[#EAF0E4]"
+            >
+              <span className="inline-flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-[#607A56]" />
+                Organizar tarefas
+              </span>
+              <span className="text-[#607A56]">Abrir</span>
+            </Link>
+            <Link
               href="/dashboard/financeiro"
               className="flex items-center justify-between rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] px-4 py-3 text-sm font-semibold text-[#3A3028] transition hover:border-[#7F9A74]/40 hover:bg-[#EAF0E4]"
             >
               <span className="inline-flex items-center gap-2">
                 <WalletCards className="h-4 w-4 text-[#607A56]" />
                 Registrar cobranca
+              </span>
+              <span className="text-[#607A56]">Abrir</span>
+            </Link>
+            <Link
+              href="/dashboard/blog"
+              className="flex items-center justify-between rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] px-4 py-3 text-sm font-semibold text-[#3A3028] transition hover:border-[#7F9A74]/40 hover:bg-[#EAF0E4]"
+            >
+              <span className="inline-flex items-center gap-2">
+                <Newspaper className="h-4 w-4 text-[#607A56]" />
+                Revisar blog
               </span>
               <span className="text-[#607A56]">Abrir</span>
             </Link>
@@ -385,6 +453,55 @@ export default function DashboardPage() {
       </div>
 
       {/* Pendências de hoje */}
+      <div className="rounded-[1.35rem] border border-[#EDE1D6] bg-[#FFFDFC] p-5 shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <p className="brand-kicker mb-2">Tarefas</p>
+            <h3 className="font-serif text-2xl font-semibold text-[#3A3028]">
+              Proximas pendencias clinicas
+            </h3>
+          </div>
+          <Link
+            href="/dashboard/tarefas"
+            className="rounded-full border border-[#7F9A74]/35 px-4 py-2 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]"
+          >
+            Abrir tarefas
+          </Link>
+        </div>
+
+        {!dashMetrics ? (
+          <p className="py-8 text-center text-sm text-[#A9978A]">Carregando tarefas...</p>
+        ) : dashMetrics.proximasTarefas.length === 0 ? (
+          <p className="rounded-xl bg-[#FBF7F1] px-4 py-5 text-sm text-[#75675E]">
+            Nenhuma tarefa pendente no momento. Quando houver acompanhamentos,
+            ajustes ou retornos, eles aparecem aqui.
+          </p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {dashMetrics.proximasTarefas.map((task) => (
+              <Link
+                key={task.id}
+                href={`/dashboard/clients/${task.client_id}`}
+                className="rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] p-4 transition hover:border-[#7F9A74]/40 hover:bg-[#EAF0E4]"
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <p className="line-clamp-2 text-sm font-semibold text-[#3A3028]">
+                    {task.title}
+                  </p>
+                  <ClipboardList className="h-4 w-4 shrink-0 text-[#607A56]" />
+                </div>
+                <p className="truncate text-xs text-[#75675E]">
+                  {task.client_name || "Paciente sem nome"}
+                </p>
+                <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#A9978A]">
+                  {task.due_date ? `Prazo ${task.due_date}` : "Sem prazo definido"}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
       {dashMetrics && (dashMetrics.tarefasVencidas > 0 || dashMetrics.rascunhosPendentes > 0) && (
         <div className="rounded-[1.35rem] border border-[#EDE1D6] bg-[#FFFDFC] p-5 shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
           <h3 className="font-serif font-semibold text-[#3A3028] mb-3 flex items-center gap-2">
@@ -400,8 +517,8 @@ export default function DashboardPage() {
                     <strong>{dashMetrics.tarefasVencidas}</strong> tarefa{dashMetrics.tarefasVencidas !== 1 ? "s" : ""} com prazo vencido
                   </span>
                 </div>
-                <Link href="/dashboard/clients" className="text-xs font-medium text-[#8C5F50] hover:underline">
-                  Ver clientes →
+                <Link href="/dashboard/tarefas" className="text-xs font-medium text-[#8C5F50] hover:underline">
+                  Ver tarefas →
                 </Link>
               </div>
             )}

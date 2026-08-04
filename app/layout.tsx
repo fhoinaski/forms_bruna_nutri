@@ -37,6 +37,8 @@ export const metadata: Metadata = {
     'nutrição pós-parto',
     'alimentação infantil',
     'saúde intestinal infantil',
+    'blog nutrição infantil',
+    'conteúdos nutrição materno-infantil',
     'Bruna Flores Nutri',
   ],
   creator: 'Bruna Flores Nutri',
@@ -62,6 +64,8 @@ export const metadata: Metadata = {
   other: {
     'ai-content-declaration':
       'Informações institucionais sobre atendimento nutricional materno-infantil; não substitui consulta individual.',
+    'content-policy':
+      'Conteúdos educativos revisáveis para SEO e descoberta por agentes de IA; recomendações individuais exigem consulta profissional.',
   },
   openGraph: {
     type: 'website',

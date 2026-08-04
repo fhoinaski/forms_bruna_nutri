@@ -13,6 +13,19 @@ export interface ClientTask {
   updated_at: string;
 }
 
+export interface ClientTaskWithClient extends ClientTask {
+  client_name: string | null;
+  client_phone: string | null;
+}
+
+export interface CreateClientTaskInput {
+  client_id: string;
+  title: string;
+  description?: string | null;
+  due_date?: string | null;
+  status?: string;
+}
+
 interface DraftTask {
   title: string;
   description?: string;
@@ -52,6 +65,30 @@ export async function createTasksFromDraft(
 export interface TaskFilters {
   status?: string;
   clientProtocolId?: string;
+  search?: string;
+}
+
+export async function createClientTask(input: CreateClientTaskInput): Promise<string> {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  await d1Execute(
+    `INSERT INTO client_tasks
+       (id, client_id, client_protocol_id, title, description, due_date, status, created_at, updated_at)
+     VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8)`,
+    [
+      id,
+      input.client_id,
+      input.title,
+      input.description ?? null,
+      input.due_date ?? null,
+      input.status ?? "pendente",
+      now,
+      now,
+    ]
+  );
+
+  return id;
 }
 
 export async function getClientTasks(
@@ -74,6 +111,51 @@ export async function getClientTasks(
   return d1Query<ClientTask>(
     `SELECT * FROM client_tasks WHERE ${conditions.join(" AND ")} ORDER BY due_date ASC, created_at ASC`,
     params
+  );
+}
+
+export async function getAllClientTasks(
+  filters: TaskFilters = {}
+): Promise<ClientTaskWithClient[]> {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let idx = 1;
+
+  if (filters.status) {
+    conditions.push(`t.status = ?${idx++}`);
+    params.push(filters.status);
+  }
+  if (filters.search) {
+    conditions.push(`(t.title LIKE ?${idx} OR c.name LIKE ?${idx} OR c.phone LIKE ?${idx})`);
+    params.push(`%${filters.search}%`);
+    idx++;
+  }
+
+  const clause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  return d1Query<ClientTaskWithClient>(
+    `SELECT t.*, c.name as client_name, c.phone as client_phone
+     FROM client_tasks t
+     LEFT JOIN clients c ON c.id = t.client_id
+     ${clause}
+     ORDER BY
+       CASE WHEN t.status = 'pendente' AND t.due_date < date('now') THEN 0
+            WHEN t.status = 'pendente' THEN 1
+            ELSE 2 END,
+       COALESCE(t.due_date, t.created_at) ASC`,
+    params
+  );
+}
+
+export async function getUpcomingClientTasks(limit = 5): Promise<ClientTaskWithClient[]> {
+  return d1Query<ClientTaskWithClient>(
+    `SELECT t.*, c.name as client_name, c.phone as client_phone
+     FROM client_tasks t
+     LEFT JOIN clients c ON c.id = t.client_id
+     WHERE t.status = 'pendente'
+     ORDER BY COALESCE(t.due_date, t.created_at) ASC
+     LIMIT ?1`,
+    [limit]
   );
 }
 

@@ -1,3 +1,6 @@
+-- Migration: 2026-08-04 0002 - Init schema (remote D1 compatible)
+-- Generated from db/schema.sql
+-- No BEGIN/COMMIT statements because wrangler d1 execute remote rejects SQL transaction statements.
 CREATE TABLE IF NOT EXISTS form_submissions (
   id TEXT PRIMARY KEY,
   patient_name TEXT NOT NULL,
@@ -293,3 +296,4 @@ CREATE TABLE IF NOT EXISTS blog_posts (
 CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status);
 CREATE INDEX IF NOT EXISTS idx_blog_posts_published_at ON blog_posts(published_at);
 CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
+

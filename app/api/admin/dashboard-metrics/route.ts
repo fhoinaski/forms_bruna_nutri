@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientMetrics } from "@/lib/repositories/clients";
 import { getProtocolMetrics } from "@/lib/repositories/protocols";
-import { getOverdueTasksCount } from "@/lib/repositories/client-tasks";
+import {
+  getOverdueTasksCount,
+  getUpcomingClientTasks,
+} from "@/lib/repositories/client-tasks";
 import { getActiveProtocolsCount } from "@/lib/repositories/client-protocols";
 import {
   getTodayAppointmentsCount,
   getUpcomingAppointments,
 } from "@/lib/repositories/appointments";
 import { getPaymentMetrics } from "@/lib/repositories/payments";
+import { getBlogMetrics } from "@/lib/repositories/blog-posts";
 import { d1Query } from "@/lib/d1/client";
 
 export const runtime = "nodejs";
@@ -27,6 +31,8 @@ export async function GET(req: NextRequest) {
     todayAppointments,
     upcomingAppointments,
     paymentMetrics,
+    upcomingTasks,
+    blogMetrics,
   ] =
     await Promise.all([
       getClientMetrics(),
@@ -40,6 +46,8 @@ export async function GET(req: NextRequest) {
       getTodayAppointmentsCount(),
       getUpcomingAppointments(5),
       getPaymentMetrics(),
+      getUpcomingClientTasks(5),
+      getBlogMetrics(),
     ]);
 
   return NextResponse.json({
@@ -51,5 +59,7 @@ export async function GET(req: NextRequest) {
     consultasHoje: todayAppointments,
     proximasConsultas: upcomingAppointments,
     financeiro: paymentMetrics,
+    proximasTarefas: upcomingTasks,
+    blog: blogMetrics,
   });
 }

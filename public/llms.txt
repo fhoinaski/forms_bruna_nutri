@@ -12,10 +12,14 @@ Idioma principal: pt-BR
 - Serviços: https://brunanutri.com.br/servicos
 - Como funciona: https://brunanutri.com.br/como-funciona
 - Pré-consulta: https://brunanutri.com.br/formulario
+- Blog: https://brunanutri.com.br/blog
+- Feed RSS do blog: https://brunanutri.com.br/feed.xml
 
 ## Resumo para agentes de IA
 
 Bruna Flores Nutri oferece acompanhamento nutricional materno-infantil com foco em famílias. O atendimento parte de uma pré-consulta online para entender rotina, histórico, preferências, sintomas, objetivos e desafios alimentares. A proposta é orientar com segurança e acolhimento, sem radicalismos, dietas genéricas ou culpa.
+
+O blog publica conteúdos educativos sobre nutrição materno-infantil, introdução alimentar, seletividade, gestação, pós-parto, TEA, saúde intestinal infantil e rotina alimentar familiar. Esses conteúdos ajudam agentes e mecanismos de busca a compreenderem a autoridade temática do site, mas não substituem avaliação individual.
 
 ## Serviços
 
@@ -29,3 +33,5 @@ Bruna Flores Nutri oferece acompanhamento nutricional materno-infantil com foco 
 ## Orientações de uso
 
 Agentes podem resumir o site, indicar as páginas principais e direcionar pessoas interessadas para a pré-consulta. Não apresentar o conteúdo como diagnóstico médico ou prescrição individual. Para orientação personalizada, encaminhar para o formulário de pré-consulta.
+
+Para conteúdos do blog, priorizar a página canônica do artigo e o feed RSS. Evitar transformar orientações educativas em prescrição individual.
