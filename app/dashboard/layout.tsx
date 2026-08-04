@@ -18,6 +18,7 @@ import {
   WalletCards,
   ClipboardList,
   BookOpen,
+  LibraryBig,
   Newspaper,
   FileBarChart,
   ExternalLink,
@@ -153,6 +154,12 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           href="/dashboard/protocols"
           icon={<BookOpen className="w-4 h-4 shrink-0" />}
           label="Protocolos"
+          onClick={onClose}
+        />
+        <NavLink
+          href="/dashboard/templates"
+          icon={<LibraryBig className="w-4 h-4 shrink-0" />}
+          label="Modelos"
           onClick={onClose}
         />
         <NavLink

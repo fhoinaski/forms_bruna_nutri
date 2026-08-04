@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, BookOpen, Plus, Archive } from "lucide-react";
+import { Search, BookOpen, Plus, Archive, LibraryBig } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 
 function formatDateSafe(value: string): string {
@@ -74,10 +74,16 @@ export default function ProtocolsPage() {
             Modelos reutilizáveis para iniciar o cuidado com consistência. Na ficha da cliente, aplique como está ou crie uma cópia personalizada.
           </p>
         </div>
-        <Link href="/dashboard/protocols/novo" className="brand-btn-primary">
-          <Plus className="h-4 w-4" />
-          Novo protocolo padrão
-        </Link>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link href="/dashboard/templates" className="brand-btn-secondary">
+            <LibraryBig className="h-4 w-4" />
+            Modelos predefinidos
+          </Link>
+          <Link href="/dashboard/protocols/novo" className="brand-btn-primary">
+            <Plus className="h-4 w-4" />
+            Novo protocolo padrão
+          </Link>
+        </div>
       </div>
 
       {/* Filtros */}

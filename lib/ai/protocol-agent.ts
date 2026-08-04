@@ -1,5 +1,10 @@
 import type { SubmissionWithAnswers } from "@/lib/repositories/submissions";
 import type { PreAnalysis } from "@/lib/repositories/pre-analyses";
+import {
+  getTemplatesByGroup,
+  type ProtocolTemplate,
+  type ProtocolTemplateTargetGroup,
+} from "@/lib/repositories/protocol-templates";
 import type { ProtocolDraftOutput } from "@/lib/validators/ai-protocol";
 
 export const PROMPT_VERSION = "v1.0.0";
@@ -22,6 +27,67 @@ function getStr(answers: Record<string, unknown>, key: string): string {
   const v = answers[key];
   if (!v) return "";
   return String(v);
+}
+
+function normalizeText(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function inferTargetGroup(input: GenerateProtocolInput): ProtocolTemplateTargetGroup {
+  const a = input.submission.answers;
+  const haystack = normalizeText([
+    input.submission.form_type,
+    input.submission.child_name,
+    input.preAnalysis?.main_goal,
+    input.preAnalysis?.summary,
+    input.preAnalysis?.attention_points,
+    input.preAnalysis?.restrictions,
+    getStr(a, "tipoAtendimento"),
+    getStr(a, "objetivo"),
+    getStr(a, "diagnostico"),
+    getStr(a, "gestante"),
+    getStr(a, "child_age"),
+  ].filter(Boolean).join(" "));
+
+  if (haystack.includes("tea") || haystack.includes("autismo") || haystack.includes("espectro")) return "TEA";
+  if (haystack.includes("sop") || haystack.includes("ovario policistico") || haystack.includes("policistico")) return "SOP";
+  if (haystack.includes("vegano") || haystack.includes("vegetariano estrito") || haystack.includes("vegetarianismo estrito")) return "VEGETARIANO_ESTRITO";
+  if (haystack.includes("endurance") || haystack.includes("corrida") || haystack.includes("ciclismo") || haystack.includes("triathlon")) return "ENDURANCE";
+  if (haystack.includes("resistencia insulin") || haystack.includes("controle glicem") || haystack.includes("pre diabetes") || haystack.includes("prediabetes")) return "RESISTENCIA_INSULINA";
+  if (haystack.includes("gestante") || haystack.includes("gravidez") || haystack.includes("gestacao")) return "GESTANTE";
+  if (haystack.includes("idoso") || haystack.includes("60+") || haystack.includes("terceira idade")) return "IDOSO";
+  if (haystack.includes("crianca") || haystack.includes("infantil") || input.submission.child_name) return "CRIANCA";
+  if (haystack.includes("hipertrofia") || haystack.includes("ganho de massa") || haystack.includes("massa muscular")) return "HIPERTROFIA";
+  if (haystack.includes("emagrec") || haystack.includes("perda de peso") || haystack.includes("deficit")) return "EMAGRECIMENTO";
+  return "ADULTO_SAUDAVEL";
+}
+
+async function getRestrictiveTemplates(input: GenerateProtocolInput): Promise<{
+  targetGroup: ProtocolTemplateTargetGroup;
+  templates: ProtocolTemplate[];
+}> {
+  const targetGroup = inferTargetGroup(input);
+  try {
+    return { targetGroup, templates: await getTemplatesByGroup(targetGroup) };
+  } catch (error) {
+    console.warn("[protocol-agent] Nao foi possivel carregar modelos de protocolo:", error);
+    return { targetGroup, templates: [] };
+  }
+}
+
+function buildTemplateKnowledgeBase(targetGroup: ProtocolTemplateTargetGroup, templates: ProtocolTemplate[]): string {
+  if (!templates.length) {
+    return `Grupo alvo inferido: ${targetGroup}. Nenhum modelo ativo encontrado no banco; use apenas regras gerais conservadoras e sinalize necessidade de revisao profissional.`;
+  }
+
+  return [
+    `Grupo alvo inferido: ${targetGroup}.`,
+    "Modelos ativos retornados do banco D1:",
+    ...templates.map((template) => [
+      `## ${template.type} | ${template.title}`,
+      template.content,
+    ].join("\n")),
+  ].join("\n\n");
 }
 
 // ── Gerador sem IA externa (fallback) ────────────────────────────────────
@@ -200,7 +266,8 @@ function generateRuleBasedDraft(input: GenerateProtocolInput): ProtocolDraftOutp
 async function generateWithAnthropicAi(
   input: GenerateProtocolInput,
   apiKey: string,
-  model: string
+  model: string,
+  templateKnowledgeBase: string
 ): Promise<ProtocolDraftOutput> {
   const { submission, preAnalysis, extraInstructions } = input;
   const a = submission.answers;
@@ -229,6 +296,14 @@ REGRAS ABSOLUTAS:
 - Use sempre linguagem de sugestão: "pontos de atenção", "hipóteses de organização", "rascunho de conduta"
 - Deixe claro que tudo precisa de revisão profissional
 - Não substitua a avaliação clínica real
+- Quando houver modelos ativos abaixo, siga ESTRITAMENTE a base retornada do banco
+- Use a estrutura da DIETA como guia principal; não invente outra estrutura se houver dieta base
+- Suplementação só pode usar nutrientes, categorias, faixas e alertas presentes nos modelos de SUPLEMENTACAO retornados
+- Substituições só podem usar alimentos e grupos presentes nos modelos de SUBSTITUICAO retornados
+- Se o caso exigir algo fora da base, registre como ponto de revisão profissional em safetyNotes, sem prescrever
+
+BASE RESTRITIVA DE MODELOS:
+${templateKnowledgeBase}
 
 Gere um rascunho de conduta nutricional em JSON com exatamente esta estrutura:
 {
@@ -301,9 +376,16 @@ export async function generateProtocolDraft(
   const apiKey = process.env.AI_API_KEY;
   const provider = process.env.AI_PROVIDER ?? "anthropic";
   const model = process.env.AI_MODEL ?? "claude-haiku-4-5-20251001";
+  const { targetGroup, templates } = await getRestrictiveTemplates(input);
+  const templateKnowledgeBase = buildTemplateKnowledgeBase(targetGroup, templates);
 
   if (!apiKey) {
     const output = generateRuleBasedDraft(input);
+    output.safetyNotes = [
+      ...output.safetyNotes,
+      `Grupo alvo inferido para modelos: ${targetGroup}. ${templates.length} modelo(s) ativo(s) disponível(is) para revisão manual.`,
+      "Fallback sem IA externa: importe modelos manualmente no construtor quando precisar usar a base restritiva.",
+    ];
     return {
       output,
       aiModel: "rule-based-fallback",
@@ -315,7 +397,7 @@ export async function generateProtocolDraft(
     let output: ProtocolDraftOutput;
 
     if (provider === "anthropic") {
-      output = await generateWithAnthropicAi(input, apiKey, model);
+      output = await generateWithAnthropicAi(input, apiKey, model, templateKnowledgeBase);
     } else {
       // Outros provedores: fallback por segurança
       console.warn(`[protocol-agent] Provider "${provider}" não suportado — usando fallback`);

@@ -11,6 +11,7 @@
     "init-d1": "node scripts/init-d1.mjs",
     "migrate:d1": "node scripts/migrate-d1.mjs",
     "migrate:d1:check": "node scripts/migrate-d1.mjs --check",
+    "seed:templates": "tsx db/seed-templates.ts",
     "create-admin": "node scripts/create-admin.mjs",
     "backup:d1": "node scripts/backup-d1.mjs",
     "restore:d1": "node scripts/restore-d1.mjs",
@@ -52,6 +53,7 @@
     "eslint": "9.39.1",
     "eslint-config-next": "^16.3.0",
     "tailwindcss": "4.1.11",
+    "tsx": "^4.23.5",
     "tw-animate-css": "^1.4.0",
     "typescript": "5.9.3",
     "vitest": "^4.1.10"

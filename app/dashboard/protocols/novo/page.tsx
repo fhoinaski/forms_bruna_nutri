@@ -14,6 +14,7 @@ const initialValue: ProtocolFormValue = {
   title: "",
   description: "",
   category: "",
+  targetGroup: "",
   phases: [emptyProtocolPhase()],
 };
 
@@ -31,7 +32,7 @@ export default function NewProtocolPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...value,
+          title: value.title,
           kind: "standard",
           description: value.description || null,
           category: value.category || null,

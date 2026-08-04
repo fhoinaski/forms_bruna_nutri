@@ -54,7 +54,7 @@ export default function ProtocolDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [data, setData] = useState<Protocol | null>(null);
-  const [value, setValue] = useState<ProtocolFormValue>({ title: "", description: "", category: "", phases: [] });
+  const [value, setValue] = useState<ProtocolFormValue>({ title: "", description: "", category: "", targetGroup: "", phases: [] });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
