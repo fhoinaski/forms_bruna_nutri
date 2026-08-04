@@ -7,6 +7,7 @@ import {
   ArrowLeft, Save, Phone, Mail, FileText, Printer,
   User, BookOpen, CheckSquare, TrendingUp, Clock,
   BarChart2, Plus, Check, X, Trash2, ChevronRight,
+  CalendarDays, WalletCards,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 
@@ -44,6 +45,14 @@ interface ClientEvolution {
 interface TimelineEvent {
   id: string; type: string; title: string; description: string | null; created_at: string;
 }
+interface ClientAppointment {
+  id: string; title: string; appointment_type: string; starts_at: string;
+  ends_at: string | null; status: string; location: string | null; notes: string | null;
+}
+interface ClientPayment {
+  id: string; description: string; amount_cents: number; due_date: string | null;
+  paid_at: string | null; status: string; payment_method: string | null; notes: string | null;
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -67,6 +76,12 @@ const TASK_STATUS_COLORS: Record<string, string> = {
 const TASK_STATUS_LABELS: Record<string, string> = {
   pendente: "Pendente", concluida: "Concluída", cancelada: "Cancelada",
 };
+const APPOINTMENT_STATUS_LABELS: Record<string, string> = {
+  agendado: "Agendado", confirmado: "Confirmado", realizado: "Realizado", cancelado: "Cancelado",
+};
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pendente: "Pendente", pago: "Pago", vencido: "Vencido", cancelado: "Cancelado",
+};
 const PROTOCOL_STATUS_COLORS: Record<string, string> = {
   ativo: "brand-badge brand-badge-finalizado",
   concluido: "brand-badge brand-badge-andamento",
@@ -82,13 +97,22 @@ const TIMELINE_ICONS: Record<string, string> = {
 const TABS = [
   { id: "resumo", label: "Resumo", icon: User },
   { id: "protocolos", label: "Protocolos", icon: BookOpen },
+  { id: "agenda", label: "Agenda", icon: CalendarDays },
   { id: "tarefas", label: "Tarefas", icon: CheckSquare },
   { id: "evolucoes", label: "Evoluções", icon: TrendingUp },
+  { id: "financeiro", label: "Financeiro", icon: WalletCards },
   { id: "timeline", label: "Timeline", icon: Clock },
   { id: "relatorios", label: "Relatórios", icon: BarChart2 },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
+
+function formatMoney(cents: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(cents / 100);
+}
 
 // ── Evolution form ─────────────────────────────────────────────────────────
 
@@ -225,6 +249,12 @@ export default function ClientDetailPage() {
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
 
+  // Agenda and finance
+  const [appointments, setAppointments] = useState<ClientAppointment[]>([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false);
+  const [payments, setPayments] = useState<ClientPayment[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+
   useEffect(() => {
     fetch(`/api/admin/clients/${id}`)
       .then((res) => {
@@ -248,12 +278,24 @@ export default function ClientDetailPage() {
         .then((r) => r.json()).then((d: ClientProtocol[]) => setProtocols(d ?? []))
         .catch(() => null).finally(() => setProtocolsLoading(false));
     }
+    if (activeTab === "agenda" && appointments.length === 0) {
+      setAppointmentsLoading(true);
+      fetch(`/api/admin/appointments?clientId=${id}`)
+        .then((r) => r.json()).then((d: { items: ClientAppointment[] }) => setAppointments(d.items ?? []))
+        .catch(() => null).finally(() => setAppointmentsLoading(false));
+    }
     if (activeTab === "tarefas") {
       setTasksLoading(true);
       const params = new URLSearchParams(taskStatusFilter ? { status: taskStatusFilter } : {});
       fetch(`/api/admin/clients/${id}/tasks?${params}`)
         .then((r) => r.json()).then((d: ClientTask[]) => setTasks(d ?? []))
         .catch(() => null).finally(() => setTasksLoading(false));
+    }
+    if (activeTab === "financeiro" && payments.length === 0) {
+      setPaymentsLoading(true);
+      fetch(`/api/admin/payments?clientId=${id}`)
+        .then((r) => r.json()).then((d: { items: ClientPayment[] }) => setPayments(d.items ?? []))
+        .catch(() => null).finally(() => setPaymentsLoading(false));
     }
     if (activeTab === "evolucoes" && evolutions.length === 0) {
       setEvolutionsLoading(true);
@@ -504,6 +546,52 @@ export default function ClientDetailPage() {
           )}
 
           {/* ── Tarefas ────────────────────────────────────────── */}
+          {activeTab === "agenda" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Agenda do paciente</h2>
+                <Link href="/dashboard/agenda"
+                  className="text-xs font-medium text-[#7A9A74] hover:text-[#B47F6A] transition-colors flex items-center gap-1">
+                  Abrir agenda
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+              {appointmentsLoading ? (
+                <p className="text-sm text-[#A8927D]">Carregando...</p>
+              ) : appointments.length === 0 ? (
+                <div className="text-center py-10">
+                  <CalendarDays className="w-10 h-10 text-[#EAD8C2] mx-auto mb-3" />
+                  <p className="text-[#A8927D] text-sm">Nenhum atendimento vinculado ainda.</p>
+                  <p className="text-[#A8927D] text-xs mt-1">
+                    Cadastre uma consulta na agenda e vincule a este paciente.
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {appointments.map((appointment) => (
+                    <li key={appointment.id} className="border border-[#EAD8C2] rounded-xl p-4 bg-[#FAF7F2]/60">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-[#3A2B1F] text-sm">{appointment.title}</p>
+                          <p className="text-xs text-[#8C6E52] mt-1">
+                            {formatDateSafe(appointment.starts_at, "dd/MM/yyyy 'as' HH:mm")}
+                            {appointment.ends_at ? ` ate ${formatDateSafe(appointment.ends_at, "HH:mm")}` : ""}
+                          </p>
+                          {appointment.location && (
+                            <p className="text-xs text-[#A8927D] mt-1">{appointment.location}</p>
+                          )}
+                        </div>
+                        <span className="brand-badge brand-badge-andamento">
+                          {APPOINTMENT_STATUS_LABELS[appointment.status] ?? appointment.status}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {activeTab === "tarefas" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-3">
@@ -648,6 +736,57 @@ export default function ClientDetailPage() {
           )}
 
           {/* ── Timeline ───────────────────────────────────────── */}
+          {activeTab === "financeiro" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Financeiro do paciente</h2>
+                <Link href="/dashboard/financeiro"
+                  className="text-xs font-medium text-[#7A9A74] hover:text-[#B47F6A] transition-colors flex items-center gap-1">
+                  Abrir financeiro
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+              {paymentsLoading ? (
+                <p className="text-sm text-[#A8927D]">Carregando...</p>
+              ) : payments.length === 0 ? (
+                <div className="text-center py-10">
+                  <WalletCards className="w-10 h-10 text-[#EAD8C2] mx-auto mb-3" />
+                  <p className="text-[#A8927D] text-sm">Nenhuma cobranca vinculada ainda.</p>
+                  <p className="text-[#A8927D] text-xs mt-1">
+                    Registre consultas, retornos ou pacotes no financeiro.
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {payments.map((payment) => (
+                    <li key={payment.id} className="border border-[#EAD8C2] rounded-xl p-4 bg-[#FAF7F2]/60">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-[#3A2B1F] text-sm">{payment.description}</p>
+                          <p className="text-xs text-[#8C6E52] mt-1">
+                            {payment.due_date ? `Vence em ${formatDateSafe(payment.due_date + "T00:00:00")}` : "Sem vencimento"}
+                            {payment.payment_method ? ` · ${payment.payment_method}` : ""}
+                          </p>
+                          {payment.notes && (
+                            <p className="text-xs text-[#A8927D] mt-1">{payment.notes}</p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-serif font-semibold text-lg text-[#3A2B1F]">
+                            {formatMoney(payment.amount_cents)}
+                          </p>
+                          <span className="brand-badge brand-badge-andamento">
+                            {PAYMENT_STATUS_LABELS[payment.status] ?? payment.status}
+                          </span>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {activeTab === "timeline" && (
             <div className="space-y-4">
               <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Timeline do paciente</h2>

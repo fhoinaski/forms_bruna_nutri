@@ -14,6 +14,7 @@ import {
   AlertCircle,
   ClipboardList,
   Clock,
+  WalletCards,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { BrandBadge } from "@/components/brand/BrandBadge";
@@ -73,6 +74,22 @@ interface DashboardMetrics {
     status: string;
     appointment_type: string;
   }>;
+  financeiro: {
+    receivedMonthCents: number;
+    openCents: number;
+    overdueCents: number;
+    receivedCount: number;
+    openCount: number;
+    overdueCount: number;
+  };
+}
+
+function formatMoney(cents: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  }).format(cents / 100);
 }
 
 export default function DashboardPage() {
@@ -157,6 +174,13 @@ export default function DashboardPage() {
               Agenda
             </Link>
             <Link
+              href="/dashboard/financeiro"
+              className="inline-flex items-center gap-2 rounded-full border border-[#7F9A74]/35 px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#607A56] transition hover:bg-[#EAF0E4]"
+            >
+              <WalletCards className="h-4 w-4" />
+              Financeiro
+            </Link>
+            <Link
               href="/dashboard/clients"
               className="inline-flex items-center gap-2 rounded-full border border-[#7F9A74]/35 px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#607A56] transition hover:bg-[#EAF0E4]"
             >
@@ -228,6 +252,29 @@ export default function DashboardPage() {
           value={dashMetrics?.rascunhosPendentes ?? "—"}
           icon={<Sparkles className="w-5 h-5" />}
           accent={!!dashMetrics?.rascunhosPendentes}
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <BrandMetricCard
+          label="Recebido no mes"
+          value={
+            dashMetrics ? formatMoney(dashMetrics.financeiro.receivedMonthCents) : "—"
+          }
+          icon={<WalletCards className="w-5 h-5" />}
+          accent={!!dashMetrics?.financeiro.receivedMonthCents}
+        />
+        <BrandMetricCard
+          label="Financeiro em aberto"
+          value={dashMetrics ? formatMoney(dashMetrics.financeiro.openCents) : "—"}
+          icon={<Clock className="w-5 h-5" />}
+          accent={!!dashMetrics?.financeiro.openCents}
+        />
+        <BrandMetricCard
+          label="Valores vencidos"
+          value={dashMetrics ? formatMoney(dashMetrics.financeiro.overdueCents) : "—"}
+          icon={<AlertCircle className="w-5 h-5" />}
+          accent={!!dashMetrics?.financeiro.overdueCents}
         />
       </div>
 
@@ -312,6 +359,16 @@ export default function DashboardPage() {
                 Acompanhar clientes
               </span>
               <span className="text-[#607A56]">Ver</span>
+            </Link>
+            <Link
+              href="/dashboard/financeiro"
+              className="flex items-center justify-between rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] px-4 py-3 text-sm font-semibold text-[#3A3028] transition hover:border-[#7F9A74]/40 hover:bg-[#EAF0E4]"
+            >
+              <span className="inline-flex items-center gap-2">
+                <WalletCards className="h-4 w-4 text-[#607A56]" />
+                Registrar cobranca
+              </span>
+              <span className="text-[#607A56]">Abrir</span>
             </Link>
             <Link
               href="/dashboard/protocols"
