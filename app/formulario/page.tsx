@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FormResponseSchema, FormResponseInput } from "@/validators/form";
 import { useState, useEffect } from "react";
 import React from "react";
-import { CheckCircle2, ChevronRight } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock3, HeartHandshake, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 export default function FormularioPage() {
@@ -72,42 +72,92 @@ export default function FormularioPage() {
 
   if (isSuccess) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center bg-[#FBF7F1]">
-        <div className="w-16 h-16 rounded-full bg-[#EDE1D6] flex items-center justify-center text-[#607A56] mb-6 shadow-sm">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#FBF7F1] p-8 text-center">
+        <img
+          src="/brand/bruna-flores-nutri-simbolo.svg"
+          alt=""
+          className="mb-6 h-24 w-20 object-contain"
+        />
+        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-[#EAF0E4] text-[#607A56] shadow-sm">
           <CheckCircle2 className="w-8 h-8" />
         </div>
-        <h2 className="font-serif text-4xl mb-4 text-[#8C5B70] font-light">Obrigada por compartilhar!</h2>
-        <p className="text-[#75675E] max-w-md mx-auto text-lg leading-relaxed">
-          Suas respostas foram enviadas com sucesso. Em breve entrarei em contato para confirmar sua consulta.
+        <h2 className="mb-4 font-serif text-4xl font-semibold text-[#3A3028]">
+          Obrigada por compartilhar.
+        </h2>
+        <p className="mx-auto max-w-md text-lg leading-relaxed text-[#75675E]">
+          Suas respostas foram enviadas com segurança. A Bruna vai analisar seu
+          momento com cuidado antes do próximo contato.
         </p>
+        <Link
+          href="/"
+          className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-[#607A56] transition hover:text-[#8C5F50]"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Voltar para o site
+        </Link>
       </div>
     );
   }
 
   return (
-    <>
+    <div className="min-h-screen bg-[#FBF7F1] text-[#3A3028]">
       <div className="sticky top-0 z-50 h-[4px] bg-[#EDE1D6]">
         <div 
-          className="h-full bg-gradient-to-r from-[#C9937B] to-[#E8C5BD] transition-all duration-500 ease-out"
+          className="h-full bg-gradient-to-r from-[#7F9A74] via-[#BFD1B7] to-[#E8C5BD] transition-all duration-500 ease-out"
           style={{ width: `${progress}%` }}
         />
       </div>
 
-      <div className="bg-[#7F9A74] px-6 pt-16 pb-14 text-center relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-white via-transparent to-transparent" />
-        <div className="text-[#F0D6D0] text-xs font-semibold tracking-widest uppercase mb-4 relative z-10">
-          Nutrição Personalizada
+      <header className="relative overflow-hidden border-b border-[#EDE1D6] bg-[#FFFDFC] px-5 py-8 lg:px-8">
+        <div className="absolute inset-0 brand-texture opacity-35" />
+        <div className="relative z-10 mx-auto max-w-5xl">
+          <Link
+            href="/"
+            className="mb-10 inline-flex items-center gap-2 text-sm font-semibold text-[#607A56] transition hover:text-[#8C5F50]"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Voltar para o site
+          </Link>
+          <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <p className="brand-kicker mb-4">Pré-consulta</p>
+              <h1 className="max-w-3xl font-serif text-5xl font-semibold leading-tight text-[#3A3028] md:text-6xl">
+                Conte seu momento com calma.
+              </h1>
+              <p className="mt-5 max-w-2xl text-base leading-8 text-[#75675E]">
+                Este formulário ajuda a Bruna a entender sua rotina, suas
+                dúvidas e o que está difícil agora. Não precisa responder
+                perfeito: responda como for possível.
+              </p>
+            </div>
+            <div className="rounded-[1.35rem] border border-[#EDE1D6] bg-[#FBF7F1] p-5 shadow-[0_18px_45px_rgba(58,48,40,0.055)] lg:w-72">
+              <div className="flex items-center gap-3 text-sm text-[#75675E]">
+                <Clock3 className="h-5 w-5 text-[#7F9A74]" />
+                Leva cerca de 10 minutos
+              </div>
+              <div className="mt-3 flex items-center gap-3 text-sm text-[#75675E]">
+                <ShieldCheck className="h-5 w-5 text-[#7F9A74]" />
+                Informações analisadas com cuidado
+              </div>
+              <div className="mt-3 flex items-center gap-3 text-sm text-[#75675E]">
+                <HeartHandshake className="h-5 w-5 text-[#7F9A74]" />
+                Sem julgamento, sem radicalismos
+              </div>
+              <div className="mt-5 h-2 overflow-hidden rounded-full bg-[#EDE1D6]">
+                <div
+                  className="h-full rounded-full bg-[#7F9A74] transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="mt-2 text-right text-xs font-semibold text-[#607A56]">
+                {progress}% preenchido
+              </p>
+            </div>
+          </div>
         </div>
-        <h1 className="font-serif text-5xl md:text-6xl text-[#FFFDFC] font-light leading-tight relative z-10">
-          Formulário<br/><em className="text-[#F2E8DF] italic">Pré-Consulta</em>
-        </h1>
-        <p className="text-[#F2E8DF] mt-5 max-w-md mx-auto text-sm leading-relaxed relative z-10">
-          Quanto mais você compartilhar, mais assertivo será seu plano alimentar. Leva cerca de 10 minutos.
-        </p>
-        <div className="w-10 h-[1px] bg-[#F2E8DF]/60 mx-auto mt-8 relative z-10" />
-      </div>
+      </header>
 
-      <div className="max-w-2xl mx-auto px-5 py-10 pb-24">
+      <div className="mx-auto max-w-3xl px-5 py-12 pb-24">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
 
           {/* Tipo de atendimento */}
@@ -177,7 +227,15 @@ export default function FormularioPage() {
             </Field>
             <Field label="Qual seu principal objetivo?" className="mb-5">
               <div className="flex flex-wrap gap-2 mt-2">
-                {["Emagrecimento", "Ganho muscular", "Saúde intestinal", "Gestação/pós-parto", "Saúde capilar", "Outro"].map((tag) => (
+                {[
+                  "Mais segurança na alimentação",
+                  "Introdução alimentar",
+                  "Seletividade alimentar",
+                  "Gestação/pós-parto",
+                  "Saúde intestinal",
+                  "Rotina mais leve",
+                  "Outro",
+                ].map((tag) => (
                   <Tag 
                     key={tag} 
                     active={watchAllFields.objetivo === tag}
@@ -361,23 +419,23 @@ export default function FormularioPage() {
             <button 
               type="submit" 
               disabled={isSubmitting}
-            className="font-sans font-medium text-sm tracking-[0.12em] uppercase text-white bg-[#7F9A74] hover:bg-[#607A56] transition-colors rounded-full px-12 py-4 disabled:opacity-70 disabled:cursor-not-allowed shadow-md shadow-[#7F9A74]/20"
+              className="rounded-full bg-[#7F9A74] px-12 py-4 font-sans text-sm font-bold uppercase tracking-[0.12em] text-white shadow-[0_18px_42px_rgba(127,154,116,0.22)] transition hover:bg-[#607A56] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isSubmitting ? "Enviando..." : "Enviar formulário"}
+              {isSubmitting ? "Enviando..." : "Enviar pré-consulta"}
             </button>
           </div>
 
           <div className="text-center pt-10 border-t border-[#EDE1D6] mt-10">
             <p className="font-serif italic text-lg text-[#75675E]/80 leading-relaxed max-w-md mx-auto">
-              Meu objetivo é te ajudar de forma realista, respeitando sua rotina — sem radicalismos.<br/>
-              Vamos construir juntas um plano possível e sustentável.
+              A ideia é começar entendendo sua história para construir um plano
+              possível, respeitoso e sustentável.
             </p>
           </div>
 
         </form>
       </div>
 
-    </>
+    </div>
   );
 }
 
@@ -385,12 +443,12 @@ export default function FormularioPage() {
 
 function Section({ number, title, children }: { number: string, title: string, children: React.ReactNode }) {
   return (
-    <div className="bg-[#FFFDFC] border border-[#EDE1D6] rounded-2xl p-6 md:p-8 shadow-sm hover:shadow-md transition-shadow">
+    <div className="rounded-[1.35rem] border border-[#EDE1D6] bg-[#FFFDFC] p-6 shadow-[0_18px_45px_rgba(58,48,40,0.055)] transition-shadow hover:shadow-[0_24px_58px_rgba(58,48,40,0.08)] md:p-8">
       <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#F5ECE4]">
-        <div className="w-8 h-8 rounded-full bg-[#7F9A74] text-white font-serif flex items-center justify-center text-sm">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EAF0E4] font-serif text-sm font-semibold text-[#607A56]">
           {number}
         </div>
-        <h2 className="font-serif text-2xl text-[#75675E]">{title}</h2>
+        <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">{title}</h2>
       </div>
       <div>{children}</div>
     </div>
@@ -400,7 +458,7 @@ function Section({ number, title, children }: { number: string, title: string, c
 function Field({ label, required, error, className, children }: { label: string, required?: boolean, error?: string, className?: string, children: React.ReactNode }) {
   return (
     <div className={className}>
-      <label className="block text-[0.8rem] tracking-wider uppercase text-[#75675E] mb-2 font-medium">
+      <label className="mb-2 block text-[0.78rem] font-semibold uppercase tracking-[0.12em] text-[#75675E]">
         {label} {required && <span className="text-[#8C5B70] ml-1">*</span>}
       </label>
       {children}
@@ -412,7 +470,7 @@ function Field({ label, required, error, className, children }: { label: string,
 const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => (
   <input 
     ref={ref}
-    className="w-full bg-[#FBF7F1] border border-[#EDE1D6] rounded-xl px-4 py-3 text-[#3A3028] placeholder-[#A9978A] focus:outline-none focus:border-[#C9937B] focus:ring-1 focus:ring-[#C9937B] transition-all"
+    className="w-full rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] px-4 py-3 text-[#3A3028] placeholder-[#A9978A] transition-all focus:border-[#7F9A74] focus:outline-none focus:ring-4 focus:ring-[#7F9A74]/12"
     {...props}
   />
 ));
@@ -421,7 +479,7 @@ Input.displayName = "Input";
 const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>((props, ref) => (
   <textarea 
     ref={ref}
-    className="w-full bg-[#FBF7F1] border border-[#EDE1D6] rounded-xl px-4 py-3 text-[#3A3028] placeholder-[#A9978A] focus:outline-none focus:border-[#C9937B] focus:ring-1 focus:ring-[#C9937B] transition-all min-h-[90px] resize-y"
+    className="min-h-[90px] w-full resize-y rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] px-4 py-3 text-[#3A3028] placeholder-[#A9978A] transition-all focus:border-[#7F9A74] focus:outline-none focus:ring-4 focus:ring-[#7F9A74]/12"
     {...props}
   />
 ));
@@ -432,10 +490,10 @@ function Tag({ active, onClick, children }: { active: boolean, onClick: () => vo
     <button
       type="button"
       onClick={onClick}
-      className={`text-sm px-4 py-2 rounded-full border transition-all ${
+      className={`rounded-full border px-4 py-2 text-sm transition-all ${
         active 
-          ? 'bg-[#7F9A74] border-[#7F9A74] text-white shadow-sm' 
-          : 'bg-[#F5ECE4] border-[#EDE1D6] text-[#75675E] hover:border-[#C9937B]'
+          ? 'border-[#7F9A74] bg-[#7F9A74] text-white shadow-sm shadow-[#7F9A74]/15' 
+          : 'border-[#EDE1D6] bg-[#F8F1EA] text-[#75675E] hover:border-[#7F9A74]/50 hover:bg-[#EAF0E4]'
       }`}
     >
       {children}
