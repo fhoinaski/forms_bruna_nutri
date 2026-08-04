@@ -11,7 +11,6 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [{ protocol: "https", hostname: "picsum.photos", port: "", pathname: "/**" }],
   },
-  output: "standalone",
   transpilePackages: ["motion"],
   turbopack: {},
   async headers() {
