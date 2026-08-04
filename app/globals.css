@@ -101,6 +101,10 @@ body {
   padding-right: 2.25rem;
 }
 
+.dashboard-shell .brand-input.brand-input-with-icon {
+  padding-left: 2.625rem;
+}
+
 .dashboard-shell .brand-input:hover:not(:disabled) {
   border-color: #cdbdad;
 }
@@ -127,6 +131,14 @@ body {
   gap: 0.75rem;
 }
 
+.dashboard-filter-field {
+  min-width: 0;
+}
+
+.dashboard-filter-field .brand-label {
+  margin-bottom: 0.5rem;
+}
+
 .dashboard-filter-form .brand-btn-primary {
   min-height: 2.75rem;
   min-width: 6.5rem;
@@ -149,6 +161,10 @@ body {
 @media (min-width: 640px) {
   .dashboard-filter-form {
     grid-template-columns: minmax(180px, 1fr) minmax(135px, auto) minmax(6.5rem, auto);
+  }
+
+  .opportunities-filter-form {
+    grid-template-columns: minmax(16rem, 1fr) 12rem max-content;
   }
 
   .dashboard-filter-form .brand-btn-primary {

@@ -219,16 +219,16 @@ export default function OpportunitiesPage() {
             event.preventDefault();
             void load();
           }}
-          className="dashboard-filter-form"
+          className="dashboard-filter-form opportunities-filter-form"
         >
-          <div>
+          <div className="dashboard-filter-field">
             <label className="brand-label">Busca</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A9978A]" />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} className="brand-input pl-9" placeholder="Nome, telefone, objetivo..." />
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[#A9978A]" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} className="brand-input brand-input-with-icon" placeholder="Nome, telefone, objetivo..." />
             </div>
           </div>
-          <div>
+          <div className="dashboard-filter-field">
             <label className="brand-label">Temperatura</label>
             <select value={temperature} onChange={(event) => setTemperature(event.target.value)} className="brand-input">
               <option value="">Todas</option>
