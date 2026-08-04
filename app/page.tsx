@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   Baby,
+  CheckCircle2,
   ClipboardCheck,
   HeartHandshake,
   Microscope,
@@ -34,44 +35,51 @@ const SERVICES = [
     icon: <Sprout className="h-6 w-6" />,
     title: "Introdução alimentar",
     description:
-      "Um início seguro e leve, com textura, sinais de prontidão, rotina e autonomia organizados de forma prática para a família.",
+      "Para famílias que querem começar com segurança, sem medo de errar. Texturas, sinais de prontidão e rotina são organizados de um jeito simples de aplicar.",
     accent: "sage" as const,
   },
   {
     icon: <Utensils className="h-6 w-6" />,
     title: "Seletividade alimentar",
     description:
-      "Estratégias graduais para ampliar repertório, sem pressão na mesa e com respeito ao perfil sensorial da criança.",
+      "Quando a criança aceita poucos alimentos, recusa novidades ou a mesa virou tensão. O cuidado busca ampliar repertório sem pressão.",
     accent: "rose" as const,
   },
   {
     icon: <Puzzle className="h-6 w-6" />,
     title: "TEA",
     description:
-      "Cuidado nutricional individualizado para crianças no espectro, considerando sensibilidade, rotina e segurança alimentar.",
+      "Para crianças no espectro que precisam de um plano respeitoso com sensibilidade, preferências, previsibilidade e segurança alimentar.",
     accent: "fig" as const,
   },
   {
     icon: <Baby className="h-6 w-6" />,
     title: "Gestação e pós-parto",
     description:
-      "Suporte para cada fase materna, com plano alimentar, suplementação quando necessária e adaptação à vida real.",
+      "Para atravessar gestação, amamentação e pós-parto com orientações claras, possíveis e ajustadas ao momento da mãe e do bebê.",
     accent: "rose" as const,
   },
   {
     icon: <Salad className="h-6 w-6" />,
     title: "Alimentação infantil",
     description:
-      "Acompanhamento do crescimento com foco em vínculo, variedade, nutrientes e uma relação saudável com a comida.",
+      "Para acompanhar crescimento, rotina escolar, preferências e variedade alimentar sem transformar comida em cobrança diária.",
     accent: "sage" as const,
   },
   {
     icon: <Microscope className="h-6 w-6" />,
     title: "Saúde intestinal",
     description:
-      "Olhar funcional para constipação, desconfortos, microbiota e sinais digestivos que impactam o bem-estar infantil.",
+      "Quando constipação, dor, gases ou desconfortos atrapalham o bem-estar. A avaliação conecta sinais digestivos, hábitos e alimentação.",
     accent: "fig" as const,
   },
+];
+
+const ABOUT_POINTS = [
+  "Atuação voltada ao cuidado materno-infantil",
+  "Orientações baseadas em evidências e explicadas com clareza",
+  "Planos construídos a partir da rotina real da família",
+  "Acolhimento para dúvidas, inseguranças e tentativas anteriores",
 ];
 
 const SIGNATURES = [
@@ -89,6 +97,25 @@ const SIGNATURES = [
     icon: <ClipboardCheck className="h-5 w-5" />,
     title: "Plano possível para a rotina",
     text: "O plano respeita tempo, orçamento, preferências e fase da criança, com próximos passos objetivos e sustentáveis.",
+  },
+];
+
+const FAMILY_MOMENTS = [
+  {
+    title: "Tenho medo de errar na introdução alimentar",
+    text: "Você recebe orientação para entender sinais de prontidão, textura, rotina e segurança sem transformar esse início em pressão.",
+  },
+  {
+    title: "Meu filho come sempre as mesmas coisas",
+    text: "A seletividade é acolhida com estratégia, paciência e metas graduais, respeitando o tempo da criança e da família.",
+  },
+  {
+    title: "A alimentação virou um ponto de tensão em casa",
+    text: "O objetivo é devolver leveza às refeições, com combinados possíveis e menos culpa para quem cuida.",
+  },
+  {
+    title: "Quero cuidar melhor, mas minha rotina é corrida",
+    text: "O plano considera compras, preparo, escola, trabalho, sono e rede de apoio para funcionar fora do papel.",
   },
 ];
 
@@ -207,14 +234,14 @@ export default function HomePage() {
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link href="/formulario" className="brand-btn-primary px-7 py-4">
-                Iniciar pré-consulta
+                Preencher pré-consulta
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="#experiencia"
+                href="#como-funciona"
                 className="inline-flex items-center justify-center rounded-full border border-[#3A3028]/15 bg-white/55 px-7 py-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#3A3028] backdrop-blur transition hover:bg-white"
               >
-                Ver experiência
+                Entender o processo
               </Link>
             </div>
           </div>
@@ -232,6 +259,55 @@ export default function HomePage() {
                 <p className="mt-1 text-xs leading-5 text-[#75675E]">{text}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="sobre" className="bg-[#FBF7F1] px-5 py-24 lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+          <div className="relative overflow-hidden rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] p-8 shadow-[0_22px_58px_rgba(58,48,40,0.07)]">
+            <div className="absolute right-0 top-0 h-32 w-32 rounded-bl-full bg-[#EAF0E4]" />
+            <img
+              src="/brand/bruna-flores-nutri-simbolo.svg"
+              alt=""
+              className="relative z-10 h-28 w-24 object-contain"
+            />
+            <p className="brand-kicker relative z-10 mt-8">Sobre a Bruna</p>
+            <h2 className="relative z-10 mt-3 font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">
+              Um cuidado técnico, mas com conversa de gente.
+            </h2>
+            <p className="relative z-10 mt-5 text-base leading-8 text-[#75675E]">
+              A Bruna acompanha famílias que buscam mais segurança na alimentação
+              de gestantes, bebês e crianças. O atendimento parte da escuta:
+              antes de falar sobre cardápio, é preciso entender a casa, a rotina,
+              as tentativas anteriores e o que está difícil agora.
+            </p>
+          </div>
+
+          <div>
+            <SectionTitle
+              kicker="Confiança"
+              title="Clareza para decidir, acolhimento para continuar."
+              subtitle="O acompanhamento não promete uma rotina perfeita. Ele organiza prioridades e orienta escolhas mais tranquilas, com técnica, respeito e consistência."
+            />
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              {ABOUT_POINTS.map((point) => (
+                <div
+                  key={point}
+                  className="flex items-start gap-3 rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-4"
+                >
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#7F9A74]" />
+                  <p className="text-sm leading-6 text-[#75675E]">{point}</p>
+                </div>
+              ))}
+            </div>
+            <Link
+              href="/como-funciona"
+              className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-[#607A56] transition hover:text-[#8C5F50]"
+            >
+              Ver como o atendimento acontece
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
         </div>
       </section>
@@ -288,6 +364,33 @@ export default function HomePage() {
                 consulta seja mais objetiva, personalizada e acolhedora desde o início.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[#FBF7F1] px-5 py-24 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-12 max-w-3xl">
+            <SectionTitle
+              kicker="Quando procurar"
+              title="Se a alimentação virou dúvida, você não precisa resolver tudo sozinha."
+              subtitle="Muitas famílias chegam com insegurança, cansaço ou excesso de informação. O atendimento ajuda a transformar esse cenário em próximos passos possíveis."
+            />
+          </div>
+          <div className="grid gap-5 md:grid-cols-2">
+            {FAMILY_MOMENTS.map((item) => (
+              <div
+                key={item.title}
+                className="rounded-[1.35rem] border border-[#EDE1D6] bg-[#FFFDFC] p-6 shadow-[0_18px_45px_rgba(58,48,40,0.055)]"
+              >
+                <h3 className="font-serif text-2xl font-semibold leading-tight text-[#3A3028]">
+                  {item.title}
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-[#75675E]">
+                  {item.text}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -373,7 +476,7 @@ export default function HomePage() {
             href="/formulario"
             className="mt-9 inline-flex items-center justify-center gap-2 rounded-full bg-[#7F9A74] px-8 py-4 text-xs font-bold uppercase tracking-[0.14em] text-white shadow-[0_18px_42px_rgba(127,154,116,0.22)] transition hover:bg-[#607A56]"
           >
-            Preencher pré-consulta
+            Quero contar meu momento
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
