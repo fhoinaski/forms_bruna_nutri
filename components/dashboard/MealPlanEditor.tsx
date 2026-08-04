@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Plus, Save, Trash2, Utensils } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Beef, CheckCircle2, Flame, Plus, Save, Trash2, Utensils, Wheat } from "lucide-react";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
   PROTOCOL_TEMPLATE_TARGET_GROUPS,
   type ProtocolTemplateTargetGroup,
 } from "@/lib/protocol-templates/constants";
+import { estimateFoodMacros, roundedMacros, sumMacros } from "@/lib/nutrition/macros";
 
 type MealPlanStatus = "draft" | "active" | "archived";
 type MealItem = { food: string; quantity?: string | null; unit?: string | null; notes?: string | null };
@@ -130,6 +131,12 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     });
   };
 
+  const mealMacros = useMemo(() => plan?.meals.map((meal) => roundedMacros(sumMacros(
+    meal.items.filter((item) => item.food.trim()).map((item) => estimateFoodMacros(item.food, item.quantity, item.unit))
+  ))) ?? [], [plan]);
+
+  const planMacros = useMemo(() => roundedMacros(sumMacros(mealMacros)), [mealMacros]);
+
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/70 p-5">
@@ -203,13 +210,20 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               </button>
             </div>
             {plan.meals.map((meal, mealIndex) => (
-              <article key={mealIndex} className="rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-4">
-                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_130px_auto]">
-                  <input value={meal.name} onChange={(event) => updateMeal(mealIndex, { name: event.target.value })} className="brand-input" placeholder="Nome da refeição" />
-                  <input value={meal.suggested_time ?? ""} onChange={(event) => updateMeal(mealIndex, { suggested_time: event.target.value })} className="brand-input" placeholder="Horário" />
-                  <button type="button" onClick={() => setPlan({ ...plan, meals: plan.meals.filter((_, index) => index !== mealIndex) })} className="rounded-xl px-3 text-red-600 hover:bg-red-50">
+              <article key={mealIndex} className="overflow-hidden rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_8px_28px_rgba(58,48,40,0.04)]">
+                <div className="flex flex-col gap-3 border-b border-[#EDE1D6] bg-[#FBF7F1] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#EAF0E4] text-[#607A56]"><Utensils className="h-4 w-4" /></div>
+                    <div className="min-w-0"><p className="text-sm font-semibold text-[#3A3028]">{meal.name || `Refeição ${mealIndex + 1}`}</p><p className="text-xs text-[#75675E]">{meal.items.filter((item) => item.food.trim()).length} alimento(s) · {mealMacros[mealIndex]?.kcal ?? 0} kcal estimadas</p></div>
+                  </div>
+                  <button type="button" onClick={() => setPlan({ ...plan, meals: plan.meals.filter((_, index) => index !== mealIndex) })} className="inline-flex h-9 w-9 items-center justify-center self-end rounded-lg text-red-600 hover:bg-red-50 sm:self-auto" aria-label={`Remover ${meal.name || "refeição"}`} title="Remover refeição">
                     <Trash2 className="h-4 w-4" />
                   </button>
+                </div>
+                <div className="p-4">
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_130px]">
+                  <input value={meal.name} onChange={(event) => updateMeal(mealIndex, { name: event.target.value })} className="brand-input" placeholder="Nome da refeição" />
+                  <input value={meal.suggested_time ?? ""} onChange={(event) => updateMeal(mealIndex, { suggested_time: event.target.value })} className="brand-input" placeholder="Horário" />
                 </div>
                 <div className="mt-3 space-y-2">
                   {meal.items.map((item, itemIndex) => (
@@ -225,6 +239,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                   <button type="button" onClick={() => updateMeal(mealIndex, { items: [...meal.items, { food: "", quantity: "", unit: "", notes: "" }] })} className="text-xs font-semibold text-[#607A56]">
                     + adicionar alimento
                   </button>
+                </div>
                 </div>
               </article>
             ))}
@@ -258,8 +273,33 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               Ativar no portal
             </button>
           </div>
+
+          <div className="sticky bottom-4 z-10 rounded-lg border border-[#D9C4B2] bg-[#FFFDFC]/95 p-3 shadow-[0_16px_42px_rgba(58,48,40,0.14)] backdrop-blur-xl">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#607A56]">Macros em tempo real</p>
+                <p className="mt-0.5 text-[11px] text-[#75675E]">Estimativa automática por alimento e porção. Confirme os valores antes de prescrever.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <MacroMetric icon={<Flame className="h-4 w-4" />} label="Energia" value={`${planMacros.kcal} kcal`} />
+                <MacroMetric icon={<Beef className="h-4 w-4" />} label="Proteínas" value={`${planMacros.protein} g`} />
+                <MacroMetric icon={<Wheat className="h-4 w-4" />} label="Carboidratos" value={`${planMacros.carbs} g`} />
+                <MacroMetric icon={<span className="text-xs font-bold">G</span>} label="Gorduras" value={`${planMacros.fat} g`} />
+              </div>
+            </div>
+            {planMacros.totalItems > 0 && planMacros.recognizedItems < planMacros.totalItems && <p className="mt-2 text-[10px] text-[#8C5F50]">{planMacros.totalItems - planMacros.recognizedItems} alimento(s) ainda não reconhecido(s) pelo cálculo automático.</p>}
+          </div>
         </section>
       )}
+    </div>
+  );
+}
+
+function MacroMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex min-w-[8.25rem] items-center gap-2 rounded-lg bg-[#FBF7F1] px-3 py-2">
+      <span className="text-[#C9937B]">{icon}</span>
+      <span><span className="block text-[9px] font-semibold uppercase text-[#75675E]">{label}</span><strong className="block text-sm text-[#3A3028]">{value}</strong></span>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, Plus, Save, Trash2 } from "lucide-react";
+import { Beef, Download, Flame, Plus, Save, Trash2, Wheat } from "lucide-react";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
   PROTOCOL_TEMPLATE_TARGET_GROUPS,
@@ -9,6 +9,7 @@ import {
   type ProtocolTemplateTargetGroup,
   type ProtocolTemplateType,
 } from "@/lib/protocol-templates/constants";
+import { estimateMacrosFromLine, roundedMacros, sumMacros } from "@/lib/nutrition/macros";
 
 export interface ProtocolPhaseForm {
   title: string;
@@ -267,6 +268,11 @@ export function ProtocolBuilder({
     onChange({ ...value, phases: value.phases.filter((_, phaseIndex) => phaseIndex !== index) });
   };
 
+  const phaseMacros = useMemo(() => value.phases.map((phase) => roundedMacros(sumMacros(
+    phase.actions.filter((action) => action.trim()).map(estimateMacrosFromLine)
+  ))), [value.phases]);
+  const protocolMacros = useMemo(() => roundedMacros(sumMacros(phaseMacros)), [phaseMacros]);
+
   return (
     <div className="space-y-6">
       <section className="brand-card p-5 sm:p-6">
@@ -366,11 +372,12 @@ export function ProtocolBuilder({
           </div>
         ) : (
           value.phases.map((phase, index) => (
-            <article key={index} className="brand-card overflow-hidden">
+            <article key={index} className="brand-card overflow-hidden rounded-lg">
               <div className="flex items-center justify-between border-b border-[#EDE1D6] bg-[#FBF7F1] px-5 py-4">
                 <div>
                   <p className="brand-kicker">Fase {index + 1}</p>
                   <p className="mt-1 text-sm font-semibold text-[#3A3028]">{phase.title || "Sem título"}</p>
+                  {phaseMacros[index].kcal > 0 && <p className="mt-1 text-[11px] text-[#607A56]">{phaseMacros[index].kcal} kcal · P {phaseMacros[index].protein} g · C {phaseMacros[index].carbs} g · G {phaseMacros[index].fat} g</p>}
                 </div>
                 <button
                   type="button"
@@ -415,6 +422,22 @@ export function ProtocolBuilder({
       </section>
 
       {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {protocolMacros.recognizedItems > 0 && (
+        <section className="sticky bottom-4 z-10 rounded-lg border border-[#D9C4B2] bg-[#FFFDFC]/95 p-3 shadow-[0_16px_42px_rgba(58,48,40,0.14)] backdrop-blur-xl">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#607A56]">Estimativa do modelo alimentar</p>
+              <p className="mt-0.5 text-[11px] text-[#75675E]">Calculada a partir das ações no formato “alimento - quantidade unidade”.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <ProtocolMacro icon={<Flame className="h-4 w-4" />} label="Energia" value={`${protocolMacros.kcal} kcal`} />
+              <ProtocolMacro icon={<Beef className="h-4 w-4" />} label="Proteínas" value={`${protocolMacros.protein} g`} />
+              <ProtocolMacro icon={<Wheat className="h-4 w-4" />} label="Carboidratos" value={`${protocolMacros.carbs} g`} />
+              <ProtocolMacro icon={<span className="text-xs font-bold">G</span>} label="Gorduras" value={`${protocolMacros.fat} g`} />
+            </div>
+          </div>
+        </section>
+      )}
       <div className="flex justify-end">
         <button type="button" onClick={onSubmit} disabled={saving || !value.title.trim()} className="brand-btn-primary">
           <Save className="h-4 w-4" />
@@ -423,4 +446,8 @@ export function ProtocolBuilder({
       </div>
     </div>
   );
+}
+
+function ProtocolMacro({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return <div className="flex min-w-[8rem] items-center gap-2 rounded-lg bg-[#FBF7F1] px-3 py-2"><span className="text-[#C9937B]">{icon}</span><span><span className="block text-[9px] font-semibold uppercase text-[#75675E]">{label}</span><strong className="block text-sm text-[#3A3028]">{value}</strong></span></div>;
 }

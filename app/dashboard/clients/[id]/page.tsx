@@ -6,13 +6,15 @@ import Link from "next/link";
 import {
   ArrowLeft, Save, Phone, Mail, FileText, Printer,
   User, BookOpen, CheckSquare, TrendingUp, Clock,
-  BarChart2, Plus, Check, X, Trash2, ChevronRight,
+  Plus, Check, X, Trash2, ChevronRight,
   CalendarDays, WalletCards, KeyRound, ShieldCheck, RefreshCw, ExternalLink,
   Copy, Play,
-  Utensils,
+  Utensils, AlertTriangle, Activity,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { MealPlanEditor } from "@/components/dashboard/MealPlanEditor";
+import { EvolutionChart } from "@/components/dashboard/EvolutionChart";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 function formatDateSafe(value: string | null, fmt = "dd/MM/yyyy"): string {
   if (!value) return "—";
@@ -138,16 +140,10 @@ const TIMELINE_ICONS: Record<string, string> = {
 
 const TABS = [
   { id: "resumo", label: "Resumo", icon: User },
-  { id: "prontuario", label: "Prontuario", icon: FileText },
+  { id: "anamnese", label: "Anamnese", icon: FileText },
+  { id: "antropometria", label: "Antropometria", icon: Activity },
   { id: "plano-alimentar", label: "Plano alimentar", icon: Utensils },
-  { id: "portal", label: "Portal", icon: KeyRound },
-  { id: "protocolos", label: "Protocolos", icon: BookOpen },
-  { id: "agenda", label: "Agenda", icon: CalendarDays },
-  { id: "tarefas", label: "Tarefas", icon: CheckSquare },
-  { id: "evolucoes", label: "Evoluções", icon: TrendingUp },
-  { id: "financeiro", label: "Financeiro", icon: WalletCards },
-  { id: "timeline", label: "Timeline", icon: Clock },
-  { id: "relatorios", label: "Relatórios", icon: BarChart2 },
+  { id: "evolucao", label: "Evolução", icon: TrendingUp },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -157,6 +153,16 @@ function formatMoney(cents: number): string {
     style: "currency",
     currency: "BRL",
   }).format(cents / 100);
+}
+
+function calculateAge(birthDate: string | null): string {
+  if (!birthDate) return "Idade não informada";
+  const date = parseISO(birthDate);
+  if (!isValid(date)) return "Idade não informada";
+  const today = new Date();
+  let age = today.getFullYear() - date.getFullYear();
+  if (today.getMonth() < date.getMonth() || (today.getMonth() === date.getMonth() && today.getDate() < date.getDate())) age--;
+  return `${age} anos`;
 }
 
 // ── Evolution form ─────────────────────────────────────────────────────────
@@ -604,12 +610,34 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
   );
 }
 
+function SecondaryNavigation({ items, value, onChange }: {
+  items: Array<{ id: string; label: string }>;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="mb-6 overflow-x-auto">
+      <div className="flex min-w-max gap-1 rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-1">
+        {items.map((item) => (
+          <button key={item.id} type="button" onClick={() => onChange(item.id)} className={`h-9 rounded-md px-3 text-xs font-semibold transition-colors ${value === item.id ? "bg-[#FFFDFC] text-[#607A56] shadow-sm" : "text-[#75675E] hover:text-[#3A3028]"}`}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<TabId>("resumo");
+  const [summaryView, setSummaryView] = useState<"dados" | "portal">("dados");
+  const [planView, setPlanView] = useState<"dieta" | "protocolos">("dieta");
+  const [evolutionView, setEvolutionView] = useState<"timeline" | "agenda" | "tarefas" | "financeiro" | "relatorios">("timeline");
   const [data, setData] = useState<ClientDetail | null>(null);
+  const [clinicalSummary, setClinicalSummary] = useState<Pick<NutritionRecord, "goals" | "risk_flags" | "diagnoses" | "allergies"> | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Resumo edit state
@@ -678,7 +706,14 @@ export default function ClientDetailPage() {
   }, [id, router]);
 
   useEffect(() => {
-    if (activeTab === "protocolos" && protocols.length === 0) {
+    fetch(`/api/admin/clients/${id}/nutrition-record`)
+      .then((response) => response.ok ? response.json() as Promise<NutritionRecord> : null)
+      .then((record) => record && setClinicalSummary({ goals: record.goals, risk_flags: record.risk_flags, diagnoses: record.diagnoses, allergies: record.allergies }))
+      .catch(() => null);
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === "plano-alimentar" && planView === "protocolos" && protocols.length === 0) {
       setProtocolsLoading(true);
       Promise.all([
         fetch(`/api/admin/clients/${id}/protocols`).then((r) => r.json() as Promise<ClientProtocol[]>),
@@ -690,53 +725,52 @@ export default function ClientDetailPage() {
         })
         .catch(() => null).finally(() => setProtocolsLoading(false));
     }
-    if (activeTab === "portal" && !portalAccess) {
+    if (activeTab === "resumo" && summaryView === "portal" && !portalAccess) {
       reloadPortalAccess();
     }
-    if (activeTab === "agenda" && appointments.length === 0) {
+    if (activeTab === "evolucao" && evolutionView === "agenda" && appointments.length === 0) {
       setAppointmentsLoading(true);
       fetch(`/api/admin/appointments?clientId=${id}`)
         .then((r) => r.json()).then((d: { items: ClientAppointment[] }) => setAppointments(d.items ?? []))
         .catch(() => null).finally(() => setAppointmentsLoading(false));
     }
-    if (activeTab === "tarefas") {
+    if (activeTab === "evolucao" && evolutionView === "tarefas") {
       setTasksLoading(true);
       const params = new URLSearchParams(taskStatusFilter ? { status: taskStatusFilter } : {});
       fetch(`/api/admin/clients/${id}/tasks?${params}`)
         .then((r) => r.json()).then((d: ClientTask[]) => setTasks(d ?? []))
         .catch(() => null).finally(() => setTasksLoading(false));
     }
-    if (activeTab === "financeiro" && payments.length === 0) {
+    if (activeTab === "evolucao" && evolutionView === "financeiro" && payments.length === 0) {
       setPaymentsLoading(true);
       fetch(`/api/admin/payments?clientId=${id}`)
         .then((r) => r.json()).then((d: { items: ClientPayment[] }) => setPayments(d.items ?? []))
         .catch(() => null).finally(() => setPaymentsLoading(false));
     }
-    if (activeTab === "evolucoes" && evolutions.length === 0) {
+    if ((activeTab === "antropometria" || activeTab === "evolucao") && evolutions.length === 0) {
       setEvolutionsLoading(true);
       fetch(`/api/admin/clients/${id}/evolutions`)
         .then((r) => r.json()).then((d: ClientEvolution[]) => setEvolutions(d ?? []))
         .catch(() => null).finally(() => setEvolutionsLoading(false));
     }
-    if (activeTab === "timeline" && timeline.length === 0) {
+    if (activeTab === "evolucao" && evolutionView === "timeline" && timeline.length === 0) {
       setTimelineLoading(true);
       fetch(`/api/admin/clients/${id}/timeline`)
         .then((r) => r.json()).then((d: TimelineEvent[]) => setTimeline(d ?? []))
         .catch(() => null).finally(() => setTimelineLoading(false));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, id]);
+  }, [activeTab, id, summaryView, planView, evolutionView]);
 
   useEffect(() => {
-    if (activeTab === "tarefas") {
+    if (activeTab === "evolucao" && evolutionView === "tarefas") {
       setTasksLoading(true);
       const params = new URLSearchParams(taskStatusFilter ? { status: taskStatusFilter } : {});
       fetch(`/api/admin/clients/${id}/tasks?${params}`)
         .then((r) => r.json()).then((d: ClientTask[]) => setTasks(d ?? []))
         .catch(() => null).finally(() => setTasksLoading(false));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskStatusFilter]);
+  }, [taskStatusFilter, activeTab, evolutionView, id]);
 
   const reloadClientProtocols = async () => {
     const response = await fetch(`/api/admin/clients/${id}/protocols`);
@@ -907,7 +941,7 @@ export default function ClientDetailPage() {
   if (!data) return null;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-16 animate-fade-up">
+    <div className="mx-auto max-w-7xl space-y-6 pb-16 animate-fade-up">
       {/* Top bar */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <Link href="/dashboard/clients"
@@ -922,66 +956,47 @@ export default function ClientDetailPage() {
         </Link>
       </div>
 
-      {/* Patient header card */}
+      {/* Patient workspace */}
       <div className="brand-card overflow-hidden">
-        <div className="p-8 border-b border-[#EAD8C2] bg-gradient-to-br from-[#FAF7F2] to-[#EAD8C2]/30 text-center relative overflow-hidden">
-          <div className="absolute right-[-30px] top-[-30px] opacity-10 pointer-events-none">
-            <svg width="180" height="180" viewBox="0 0 100 100" fill="none">
-              <circle cx="50" cy="50" r="45" stroke="#7A9A74" strokeWidth="0.5" />
-              <circle cx="50" cy="50" r="30" stroke="#B47F6A" strokeWidth="0.5" />
-            </svg>
-          </div>
-          <div className="w-16 h-16 bg-[#EAD8C2] rounded-full flex items-center justify-center mx-auto mb-4">
-            <User className="w-8 h-8 text-[#8C6E52]" />
-          </div>
-          <p className="brand-kicker mb-2">Ficha do cliente</p>
-          <h1 className="font-serif font-bold text-2xl text-[#3A2B1F] mb-3">{data.name}</h1>
-          <div className="flex flex-wrap justify-center gap-4 text-sm text-[#8C6E52] mb-4">
-            {data.phone && <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />{data.phone}</span>}
-            {data.email && <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />{data.email}</span>}
-          </div>
-          <div className="flex items-center justify-center gap-3">
-            <span className={STATUS_BADGE[data.status] ?? "brand-badge brand-badge-arquivado"}>
-              {STATUS_LABEL[data.status] ?? data.status}
-            </span>
-            <span className="text-xs text-[#A8927D]">Cadastrado em {formatDateSafe(data.created_at)}</span>
-          </div>
-          {data.source_submission_id && (
-            <div className="mt-4">
-              <Link href={`/dashboard/submissions/${data.source_submission_id}`}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#7A9A74] border border-[#7A9A74]/30 rounded-full px-4 py-1.5 hover:bg-[#7A9A74]/10 transition-colors">
-                <FileText className="w-3.5 h-3.5" />
-                Ver formulário original
-              </Link>
+        <div className="flex flex-col gap-5 border-b border-[#EAD8C2] bg-[#FAF7F2] p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-[#EAD8C2] text-[#8C6E52]"><User className="h-7 w-7" /></div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2"><h1 className="truncate font-serif text-2xl font-semibold text-[#3A2B1F]">{data.name}</h1><span className={STATUS_BADGE[data.status] ?? "brand-badge brand-badge-arquivado"}>{STATUS_LABEL[data.status] ?? data.status}</span></div>
+              <p className="mt-1 text-sm text-[#75675E]">{calculateAge(data.birth_date)} · Paciente desde {formatDateSafe(data.created_at)}</p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#8C6E52]">{data.phone && <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{data.phone}</span>}{data.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{data.email}</span>}</div>
             </div>
-          )}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:w-[34rem]">
+            <div className="rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] p-3"><p className="text-[9px] font-bold uppercase tracking-[0.1em] text-[#607A56]">Objetivo principal</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-[#3A3028]">{clinicalSummary?.goals || "Defina o objetivo clínico na anamnese."}</p></div>
+            <div className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-3"><p className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[#8C5F50]"><AlertTriangle className="h-3 w-3" />Alertas de saúde</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-[#3A3028]">{clinicalSummary?.risk_flags || clinicalSummary?.allergies || clinicalSummary?.diagnoses || "Nenhum alerta registrado."}</p></div>
+          </div>
         </div>
 
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)}>
         {/* Tabs */}
         <div className="border-b border-[#EAD8C2] overflow-x-auto">
-          <div className="flex min-w-max">
+          <TabsList className="w-full justify-start rounded-none border-0 bg-[#FFFDFC] p-2">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               return (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                    activeTab === tab.id
-                      ? "border-[#7A9A74] text-[#7A9A74]"
-                      : "border-transparent text-[#A8927D] hover:text-[#8C6E52]"
-                  }`}>
+                <TabsTrigger key={tab.id} value={tab.id}>
                   <Icon className="w-4 h-4" />
                   {tab.label}
-                </button>
+                </TabsTrigger>
               );
             })}
-          </div>
+          </TabsList>
         </div>
 
         {/* Tab content */}
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
+          {activeTab === "resumo" && <SecondaryNavigation items={[{ id: "dados", label: "Dados principais" }, { id: "portal", label: "Portal do cliente" }]} value={summaryView} onChange={(value) => setSummaryView(value as typeof summaryView)} />}
+          {activeTab === "plano-alimentar" && <SecondaryNavigation items={[{ id: "dieta", label: "Plano alimentar" }, { id: "protocolos", label: "Protocolos de cuidado" }]} value={planView} onChange={(value) => setPlanView(value as typeof planView)} />}
+          {activeTab === "evolucao" && <SecondaryNavigation items={[{ id: "timeline", label: "Linha do tempo" }, { id: "agenda", label: "Consultas" }, { id: "tarefas", label: "Tarefas" }, { id: "financeiro", label: "Financeiro" }, { id: "relatorios", label: "Relatórios" }]} value={evolutionView} onChange={(value) => setEvolutionView(value as typeof evolutionView)} />}
 
           {/* ── Resumo ─────────────────────────────────────────── */}
-          {activeTab === "resumo" && (
+          {activeTab === "resumo" && summaryView === "dados" && (
             <div className="space-y-6">
               <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Dados do paciente</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1026,15 +1041,15 @@ export default function ClientDetailPage() {
           )}
 
           {/* ── Protocolos ─────────────────────────────────────── */}
-          {activeTab === "prontuario" && (
+          {activeTab === "anamnese" && (
             <NutritionRecordEditor clientId={id} onSaved={reloadTimeline} />
           )}
 
-          {activeTab === "plano-alimentar" && (
+          {activeTab === "plano-alimentar" && planView === "dieta" && (
             <MealPlanEditor clientId={id} onSaved={reloadTimeline} />
           )}
 
-          {activeTab === "portal" && (
+          {activeTab === "resumo" && summaryView === "portal" && (
             <div className="space-y-6">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -1124,7 +1139,7 @@ export default function ClientDetailPage() {
             </div>
           )}
 
-          {activeTab === "protocolos" && (
+          {activeTab === "plano-alimentar" && planView === "protocolos" && (
             <div className="space-y-7">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -1255,7 +1270,7 @@ export default function ClientDetailPage() {
           )}
 
           {/* ── Tarefas ────────────────────────────────────────── */}
-          {activeTab === "agenda" && (
+          {activeTab === "evolucao" && evolutionView === "agenda" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Agenda do paciente</h2>
@@ -1301,7 +1316,7 @@ export default function ClientDetailPage() {
             </div>
           )}
 
-          {activeTab === "tarefas" && (
+          {activeTab === "evolucao" && evolutionView === "tarefas" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Tarefas</h2>
@@ -1376,7 +1391,7 @@ export default function ClientDetailPage() {
           )}
 
           {/* ── Evoluções ──────────────────────────────────────── */}
-          {activeTab === "evolucoes" && (
+          {activeTab === "antropometria" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Evoluções clínicas</h2>
@@ -1386,6 +1401,11 @@ export default function ClientDetailPage() {
                   Nova evolução
                 </button>
               </div>
+
+              <section className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-4 sm:p-5">
+                <div className="mb-4"><p className="brand-kicker">Histórico antropométrico</p><h3 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">Curva de evolução corporal</h3></div>
+                <EvolutionChart history={evolutions} />
+              </section>
 
               {showEvolutionForm && (
                 <ClinicalEvolutionForm clientId={id} onSuccess={() => { reloadEvolutions(); reloadTimeline(); }} />
@@ -1445,7 +1465,7 @@ export default function ClientDetailPage() {
           )}
 
           {/* ── Timeline ───────────────────────────────────────── */}
-          {activeTab === "financeiro" && (
+          {activeTab === "evolucao" && evolutionView === "financeiro" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Financeiro do paciente</h2>
@@ -1496,7 +1516,7 @@ export default function ClientDetailPage() {
             </div>
           )}
 
-          {activeTab === "timeline" && (
+          {activeTab === "evolucao" && evolutionView === "timeline" && (
             <div className="space-y-4">
               <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Timeline do paciente</h2>
               {timelineLoading ? (
@@ -1533,7 +1553,7 @@ export default function ClientDetailPage() {
           )}
 
           {/* ── Relatórios ─────────────────────────────────────── */}
-          {activeTab === "relatorios" && (
+          {activeTab === "evolucao" && evolutionView === "relatorios" && (
             <div className="space-y-4">
               <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Relatórios</h2>
               <div className="border border-[#EAD8C2] rounded-2xl p-6 bg-[#FAF7F2]/60 flex items-center justify-between">
@@ -1553,6 +1573,7 @@ export default function ClientDetailPage() {
           )}
 
         </div>
+        </Tabs>
       </div>
     </div>
   );
