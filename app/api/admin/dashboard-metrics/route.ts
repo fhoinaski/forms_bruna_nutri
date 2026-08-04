@@ -4,6 +4,11 @@ import { getClientMetrics } from "@/lib/repositories/clients";
 import { getProtocolMetrics } from "@/lib/repositories/protocols";
 import { getOverdueTasksCount } from "@/lib/repositories/client-tasks";
 import { getActiveProtocolsCount } from "@/lib/repositories/client-protocols";
+import {
+  getTodayAppointmentsCount,
+  getUpcomingAppointments,
+} from "@/lib/repositories/appointments";
+import { getPaymentMetrics } from "@/lib/repositories/payments";
 import { d1Query } from "@/lib/d1/client";
 
 export const runtime = "nodejs";
@@ -13,7 +18,16 @@ export async function GET(req: NextRequest) {
   const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
 
-  const [clientMetrics, protocolMetrics, overdueCount, activeProtocolsCount, pendingDrafts] =
+  const [
+    clientMetrics,
+    protocolMetrics,
+    overdueCount,
+    activeProtocolsCount,
+    pendingDrafts,
+    todayAppointments,
+    upcomingAppointments,
+    paymentMetrics,
+  ] =
     await Promise.all([
       getClientMetrics(),
       getProtocolMetrics(),
@@ -23,6 +37,9 @@ export async function GET(req: NextRequest) {
         `SELECT COUNT(*) as c FROM ai_protocol_drafts WHERE status IN ('draft', 'reviewed')`,
         []
       ),
+      getTodayAppointmentsCount(),
+      getUpcomingAppointments(5),
+      getPaymentMetrics(),
     ]);
 
   return NextResponse.json({
@@ -31,5 +48,8 @@ export async function GET(req: NextRequest) {
     tarefasVencidas: overdueCount,
     protocolosAplicadosAtivos: activeProtocolsCount,
     rascunhosPendentes: pendingDrafts[0]?.c ?? 0,
+    consultasHoje: todayAppointments,
+    proximasConsultas: upcomingAppointments,
+    financeiro: paymentMetrics,
   });
 }

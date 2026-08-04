@@ -1,3 +1,8 @@
+-- Migration: 2026-08-04 0001 - Init schema
+-- Generated from db/schema.sql
+-- Run with Cloudflare D1: npx wrangler d1 execute forms_bruna_nutri --file=./db/20260804_0001_init_schema.sql --remote
+BEGIN TRANSACTION;
+
 CREATE TABLE IF NOT EXISTS form_submissions (
   id TEXT PRIMARY KEY,
   patient_name TEXT NOT NULL,
@@ -247,23 +252,4 @@ CREATE INDEX IF NOT EXISTS idx_appointments_starts_at ON appointments(starts_at)
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
 CREATE INDEX IF NOT EXISTS idx_appointments_client_id ON appointments(client_id);
 
--- Financeiro clinico
-
-CREATE TABLE IF NOT EXISTS payments (
-  id TEXT PRIMARY KEY,
-  client_id TEXT,
-  description TEXT NOT NULL,
-  amount_cents INTEGER NOT NULL,
-  due_date TEXT,
-  paid_at TEXT,
-  status TEXT NOT NULL DEFAULT 'pendente',
-  payment_method TEXT,
-  notes TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY (client_id) REFERENCES clients(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
-CREATE INDEX IF NOT EXISTS idx_payments_due_date ON payments(due_date);
-CREATE INDEX IF NOT EXISTS idx_payments_client_id ON payments(client_id);
+COMMIT;

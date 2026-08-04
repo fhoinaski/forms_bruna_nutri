@@ -57,7 +57,7 @@ body {
 .brand-input {
   width: 100%;
   background: var(--cream);
-  border: 1px solid #E8D9C8;
+  border: 1px solid var(--sand);
   border-radius: 0.75rem;
   padding: 0.75rem 1rem;
   color: var(--brown);
@@ -68,7 +68,7 @@ body {
 .brand-input::placeholder { color: var(--soft); }
 .brand-input:focus {
   border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(122, 154, 116, 0.12);
+  box-shadow: 0 0 0 4px rgba(127, 154, 116, 0.12);
 }
 
 .brand-label {
@@ -77,7 +77,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: var(--terracotta);
+  color: var(--fig);
   margin-bottom: 0.375rem;
 }
 
@@ -134,10 +134,10 @@ body {
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
-.brand-badge-novo    { background: #EFF6FF; color: #2563EB; }
-.brand-badge-andamento { background: #FEF9C3; color: #B45309; }
-.brand-badge-finalizado { background: #DCFCE7; color: #15803D; }
-.brand-badge-arquivado  { background: #F3F4F6; color: #6B7280; }
+.brand-badge-novo { background: #EAF0E4; color: #607A56; }
+.brand-badge-andamento { background: #FFF3D8; color: #9A6B20; }
+.brand-badge-finalizado { background: #E7F7EA; color: #2F7A45; }
+.brand-badge-arquivado { background: #F1ECE7; color: #75675E; }
 
 /* ── Page shell ── */
 .brand-page { padding: 2rem 1.5rem; max-width: 72rem; margin: 0 auto; }

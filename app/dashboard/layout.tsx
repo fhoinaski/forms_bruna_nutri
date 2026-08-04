@@ -13,9 +13,11 @@ import {
   X,
   FileSpreadsheet,
   Users,
+  CalendarDays,
+  WalletCards,
   BookOpen,
-  Sparkles,
   FileBarChart,
+  ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -49,8 +51,8 @@ function NavLink({
 
   const cls = `flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all ${
     active
-      ? "bg-[#7A9A74] text-white shadow-sm"
-      : "text-[#8C6E52] hover:bg-[#FAF7F2] hover:text-[#3A2B1F]"
+      ? "bg-[#7F9A74] text-white shadow-[0_14px_30px_rgba(127,154,116,0.2)]"
+      : "text-[#75675E] hover:bg-[#FBF7F1] hover:text-[#3A3028]"
   }`;
 
   if (external) {
@@ -79,7 +81,7 @@ function LogoutButton({ onAfterClick }: { onAfterClick?: () => void }) {
   return (
     <button
       onClick={handleLogout}
-      className="w-full flex items-center gap-3 px-4 py-3 text-[#8C6E52] hover:bg-[#FAF7F2] hover:text-[#3A2B1F] rounded-xl text-sm transition-all"
+      className="w-full flex items-center gap-3 px-4 py-3 text-[#75675E] hover:bg-[#FBF7F1] hover:text-[#3A3028] rounded-xl text-sm transition-all"
     >
       <LogOut className="w-4 h-4 shrink-0" />
       <span>Sair</span>
@@ -91,12 +93,14 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   return (
     <div className="flex flex-col h-full">
       {/* Brand */}
-      <div className="px-6 py-8 flex flex-col items-center text-center border-b border-[#EAD8C2]">
-        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm border-2 border-[#7A9A74]/40">
-          <span className="font-serif italic text-xl text-[#7A9A74]">BF</span>
-        </div>
-        <p className="font-serif font-semibold text-[#B47F6A] leading-tight">Bruna Flores</p>
-        <p className="text-[10px] tracking-[0.2em] text-[#7A9A74] uppercase mt-0.5">Nutrição Materna</p>
+      <div className="px-6 py-8 flex flex-col items-center text-center border-b border-[#EDE1D6]">
+        <img
+          src="/brand/bruna-flores-nutri-simbolo.svg"
+          alt=""
+          className="mb-3 h-20 w-16 object-contain drop-shadow-[0_10px_18px_rgba(58,48,40,0.08)]"
+        />
+        <p className="font-serif font-semibold text-[#3A3028] leading-tight">Bruna Flores</p>
+        <p className="text-[10px] tracking-[0.2em] text-[#607A56] uppercase mt-0.5">Painel clínico</p>
       </div>
 
       {/* Nav */}
@@ -105,6 +109,18 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           href="/dashboard"
           icon={<LayoutDashboard className="w-4 h-4 shrink-0" />}
           label="Dashboard"
+          onClick={onClose}
+        />
+        <NavLink
+          href="/dashboard/agenda"
+          icon={<CalendarDays className="w-4 h-4 shrink-0" />}
+          label="Agenda"
+          onClick={onClose}
+        />
+        <NavLink
+          href="/dashboard/financeiro"
+          icon={<WalletCards className="w-4 h-4 shrink-0" />}
+          label="Financeiro"
           onClick={onClose}
         />
         <NavLink
@@ -121,10 +137,10 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         />
 
         <div className="pt-2 pb-1">
-          <div className="h-px bg-[#EAD8C2]/60 mx-1" />
+          <div className="h-px bg-[#EDE1D6]/80 mx-1" />
         </div>
 
-        <p className="px-4 py-1 text-[9px] font-semibold tracking-[0.15em] text-[#A8927D] uppercase">
+        <p className="px-4 py-1 text-[9px] font-semibold tracking-[0.15em] text-[#A9978A] uppercase">
           Formulários
         </p>
         <NavLink
@@ -143,10 +159,10 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         />
 
         <div className="pt-2 pb-1">
-          <div className="h-px bg-[#EAD8C2]/60 mx-1" />
+          <div className="h-px bg-[#EDE1D6]/80 mx-1" />
         </div>
 
-        <p className="px-4 py-1 text-[9px] font-semibold tracking-[0.15em] text-[#A8927D] uppercase">
+        <p className="px-4 py-1 text-[9px] font-semibold tracking-[0.15em] text-[#A9978A] uppercase">
           Sistema
         </p>
         <NavLink
@@ -164,12 +180,12 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       </nav>
 
       {/* Bottom */}
-      <div className="px-3 pb-5 space-y-1 border-t border-[#EAD8C2] pt-4">
+      <div className="px-3 pb-5 space-y-1 border-t border-[#EDE1D6] pt-4">
         <LogoutButton onAfterClick={onClose} />
         <div className="mt-3 px-4">
-          <div className="flex items-center gap-2 text-[10px] text-[#A8927D]">
-            <span className="w-1.5 h-1.5 bg-[#7A9A74] rounded-full" />
-            Sistema operacional
+          <div className="flex items-center gap-2 text-[10px] text-[#A9978A]">
+            <span className="w-1.5 h-1.5 bg-[#7F9A74] rounded-full" />
+            Sistema ativo
           </div>
         </div>
       </div>
@@ -182,10 +198,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div
-      className={`${jost.variable} ${cormorant.variable} font-sans min-h-screen bg-[#FAF7F2] text-[#3A2B1F]`}
+      className={`${jost.variable} ${cormorant.variable} font-sans min-h-screen bg-[#FBF7F1] text-[#3A3028]`}
     >
       {/* Desktop sidebar */}
-      <aside className="fixed top-0 left-0 bottom-0 w-60 bg-[#EAD8C2]/60 backdrop-blur-sm border-r border-[#EAD8C2] hidden lg:block z-30">
+      <aside className="fixed top-0 left-0 bottom-0 w-64 bg-[#FFFDFC]/90 backdrop-blur-xl border-r border-[#EDE1D6] hidden lg:block z-30">
         <Sidebar />
       </aside>
 
@@ -199,13 +215,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Mobile drawer */}
       <aside
-        className={`fixed top-0 left-0 bottom-0 w-64 bg-[#EAD8C2]/95 backdrop-blur border-r border-[#EAD8C2] z-50 transition-transform duration-300 lg:hidden ${
+        className={`fixed top-0 left-0 bottom-0 w-72 bg-[#FFFDFC] backdrop-blur border-r border-[#EDE1D6] z-50 transition-transform duration-300 lg:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <button
           onClick={() => setMobileOpen(false)}
-          className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-[#FAF7F2] text-[#8C6E52]"
+          className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-[#FBF7F1] text-[#75675E]"
           aria-label="Fechar menu"
         >
           <X className="w-5 h-5" />
@@ -214,31 +230,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main */}
-      <div className="lg:pl-60 min-h-screen flex flex-col">
+      <div className="lg:pl-64 min-h-screen flex flex-col">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 h-16 bg-white/80 backdrop-blur border-b border-[#EAD8C2] flex items-center justify-between px-5 lg:px-8">
+        <header className="sticky top-0 z-20 h-16 bg-[#FFFDFC]/86 backdrop-blur-xl border-b border-[#EDE1D6] flex items-center justify-between px-5 lg:px-8">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden p-2 rounded-lg hover:bg-[#FAF7F2] text-[#8C6E52]"
+              className="lg:hidden p-2 rounded-lg hover:bg-[#FBF7F1] text-[#75675E]"
               aria-label="Abrir menu"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h2 className="font-serif font-semibold text-[#7A9A74] text-lg hidden sm:block">
+            <h2 className="font-serif font-semibold text-[#3A3028] text-lg hidden sm:block">
               Painel Administrativo
             </h2>
           </div>
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="hidden sm:inline-flex items-center text-xs font-medium text-[#7A9A74] border border-[#7A9A74]/40 rounded-full px-4 py-1.5 hover:bg-[#7A9A74]/10 transition-colors"
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-[#607A56] border border-[#7F9A74]/35 rounded-full px-4 py-2 hover:bg-[#EAF0E4] transition-colors"
             >
-              Ver formulário
+              Ver site
+              <ExternalLink className="h-3.5 w-3.5" />
             </Link>
-            <div className="w-8 h-8 bg-[#F4C9C6] rounded-full flex items-center justify-center">
-              <span className="text-[#B47F6A] font-bold text-[10px]">BF</span>
-            </div>
+            <img src="/favicon-512.png" alt="" className="h-9 w-9 rounded-full object-contain" />
           </div>
         </header>
 
@@ -247,10 +262,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
 
-        <footer className="px-8 py-3 border-t border-[#EAD8C2] bg-white/60 flex items-center justify-between text-[10px] text-[#A8927D] uppercase tracking-widest">
+        <footer className="px-8 py-3 border-t border-[#EDE1D6] bg-[#FFFDFC]/70 flex items-center justify-between text-[10px] text-[#A9978A] uppercase tracking-widest">
           <span>© {new Date().getFullYear()} Bruna Flores Nutri</span>
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-[#7A9A74] rounded-full" />
+            <span className="w-1.5 h-1.5 bg-[#7F9A74] rounded-full" />
             Operacional
           </div>
         </footer>
