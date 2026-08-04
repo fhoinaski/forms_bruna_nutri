@@ -10,6 +10,7 @@ import {
   Download,
   LogOut,
   ShieldCheck,
+  Bot,
   Menu,
   X,
   FileSpreadsheet,
@@ -208,6 +209,12 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           href="/dashboard/settings/security"
           icon={<ShieldCheck className="w-4 h-4 shrink-0" />}
           label="Segurança"
+          onClick={onClose}
+        />
+        <NavLink
+          href="/dashboard/settings/ai"
+          icon={<Bot className="w-4 h-4 shrink-0" />}
+          label="IA"
           onClick={onClose}
         />
         <NavLink

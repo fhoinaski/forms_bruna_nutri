@@ -1,13 +1,22 @@
 import type { SubmissionWithAnswers } from "@/lib/repositories/submissions";
 import type { PreAnalysis } from "@/lib/repositories/pre-analyses";
+import { generateText, type LanguageModel } from "ai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogle } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import {
   getTemplatesByGroup,
   type ProtocolTemplate,
   type ProtocolTemplateTargetGroup,
 } from "@/lib/repositories/protocol-templates";
+import {
+  DEFAULT_PROTOCOL_SYSTEM_PROMPT,
+  getAISettings,
+  type AISettings,
+} from "@/lib/repositories/ai-settings";
 import type { ProtocolDraftOutput } from "@/lib/validators/ai-protocol";
 
-export const PROMPT_VERSION = "v1.0.0";
+export const PROMPT_VERSION = "v1.1.0";
 
 export interface GenerateProtocolInput {
   submission: SubmissionWithAnswers;
@@ -263,10 +272,25 @@ function generateRuleBasedDraft(input: GenerateProtocolInput): ProtocolDraftOutp
 
 // ── Gerador com IA externa (Anthropic Claude) ─────────────────────────────
 
-async function generateWithAnthropicAi(
+function createConfiguredModel(settings: AISettings): LanguageModel {
+  if (!settings.api_key) {
+    throw new Error("API Key de IA nao configurada. Acesse Dashboard > Sistema > IA e salve uma chave valida.");
+  }
+
+  if (settings.provider === "openai") {
+    return createOpenAI({ apiKey: settings.api_key })(settings.model);
+  }
+
+  if (settings.provider === "anthropic") {
+    return createAnthropic({ apiKey: settings.api_key })(settings.model);
+  }
+
+  return createGoogle({ apiKey: settings.api_key })(settings.model);
+}
+
+async function generateWithConfiguredAi(
   input: GenerateProtocolInput,
-  apiKey: string,
-  model: string,
+  settings: AISettings,
   templateKnowledgeBase: string
 ): Promise<ProtocolDraftOutput> {
   const { submission, preAnalysis, extraInstructions } = input;
@@ -288,7 +312,9 @@ async function generateWithAnthropicAi(
       ].filter(Boolean).join("\n")
     : "Nenhuma pré-análise registrada.";
 
-  const systemPrompt = `Você é um assistente de apoio a nutricionistas. Seu papel é gerar rascunhos de conduta nutricional para revisão profissional.
+  const baseSystemPrompt = settings.protocol_system_prompt?.trim() || DEFAULT_PROTOCOL_SYSTEM_PROMPT;
+
+  const systemPrompt = `${baseSystemPrompt}
 
 REGRAS ABSOLUTAS:
 - Nunca gere diagnósticos fechados
@@ -334,31 +360,12 @@ ${extraInstructions ? `INSTRUÇÕES EXTRAS DA PROFISSIONAL:\n${extraInstructions
 
 Gere o rascunho de conduta nutricional em JSON conforme estrutura especificada.`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    }),
+  const { text } = await generateText({
+    model: createConfiguredModel(settings),
+    system: systemPrompt,
+    prompt: userMessage,
+    maxOutputTokens: 4096,
   });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Anthropic API error: ${response.status} — ${err.slice(0, 200)}`);
-  }
-
-  const data = await response.json() as {
-    content: Array<{ type: string; text: string }>;
-  };
-
-  const text = data.content.find((c) => c.type === "text")?.text ?? "";
 
   // Extrai o JSON da resposta (pode vir com markdown code fence)
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);
@@ -373,39 +380,22 @@ Gere o rascunho de conduta nutricional em JSON conforme estrutura especificada.`
 export async function generateProtocolDraft(
   input: GenerateProtocolInput
 ): Promise<GenerateProtocolResult> {
-  const apiKey = process.env.AI_API_KEY;
-  const provider = process.env.AI_PROVIDER ?? "anthropic";
-  const model = process.env.AI_MODEL ?? "claude-haiku-4-5-20251001";
+  const settings = await getAISettings();
   const { targetGroup, templates } = await getRestrictiveTemplates(input);
   const templateKnowledgeBase = buildTemplateKnowledgeBase(targetGroup, templates);
 
-  if (!apiKey) {
-    const output = generateRuleBasedDraft(input);
-    output.safetyNotes = [
-      ...output.safetyNotes,
-      `Grupo alvo inferido para modelos: ${targetGroup}. ${templates.length} modelo(s) ativo(s) disponível(is) para revisão manual.`,
-      "Fallback sem IA externa: importe modelos manualmente no construtor quando precisar usar a base restritiva.",
-    ];
-    return {
-      output,
-      aiModel: "rule-based-fallback",
-      promptVersion: PROMPT_VERSION,
-    };
+  if (!settings.api_key) {
+    throw new Error("API Key de IA nao configurada. Acesse Dashboard > Sistema > IA e salve uma chave valida antes de gerar protocolos.");
   }
 
   try {
-    let output: ProtocolDraftOutput;
+    const output = await generateWithConfiguredAi(input, settings, templateKnowledgeBase);
 
-    if (provider === "anthropic") {
-      output = await generateWithAnthropicAi(input, apiKey, model, templateKnowledgeBase);
-    } else {
-      // Outros provedores: fallback por segurança
-      console.warn(`[protocol-agent] Provider "${provider}" não suportado — usando fallback`);
-      output = generateRuleBasedDraft(input);
-      output.generatedWithoutExternalAi = true;
-    }
-
-    return { output, aiModel: model, promptVersion: PROMPT_VERSION };
+    return {
+      output,
+      aiModel: `${settings.provider}:${settings.model}`,
+      promptVersion: PROMPT_VERSION,
+    };
   } catch (err) {
     // Se a IA falhar, não bloquear o fluxo — usar fallback
     console.error("[protocol-agent] IA externa falhou, usando fallback:", err);

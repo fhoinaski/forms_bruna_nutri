@@ -23,3 +23,6 @@ export const PROTOCOL_TEMPLATE_TARGET_GROUPS = [
 
 export type ProtocolTemplateType = typeof PROTOCOL_TEMPLATE_TYPES[number];
 export type ProtocolTemplateTargetGroup = typeof PROTOCOL_TEMPLATE_TARGET_GROUPS[number];
+
+export const AI_PROVIDERS = ["openai", "anthropic", "google"] as const;
+export type AIProvider = typeof AI_PROVIDERS[number];
