@@ -2,6 +2,8 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import type { AdminUser } from "@/lib/repositories/admin-users";
+import { d1Query } from "@/lib/d1/client";
+import { ensureSecuritySchema } from "@/lib/security/schema";
 
 const COOKIE_NAME = "bruna_nutri_admin_session";
 const MAX_AGE = 60 * 60 * 8; // 8 hours
@@ -17,16 +19,18 @@ export interface SessionPayload {
   email: string;
   name: string;
   mustChangePassword: boolean;
+  sessionVersion: number;
 }
 
 export async function createSessionToken(
-  admin: Pick<AdminUser, "id" | "email" | "name" | "must_change_password">
+  admin: Pick<AdminUser, "id" | "email" | "name" | "must_change_password" | "session_version">
 ): Promise<string> {
   const payload: SessionPayload = {
     sub: admin.id,
     email: admin.email,
     name: admin.name,
     mustChangePassword: admin.must_change_password === 1,
+    sessionVersion: admin.session_version,
   };
   return await new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
@@ -45,15 +49,23 @@ export async function verifySessionToken(
       typeof p.sub !== "string" ||
       typeof p.email !== "string" ||
       typeof p.name !== "string" ||
-      typeof p.mustChangePassword !== "boolean"
+      typeof p.mustChangePassword !== "boolean" ||
+      typeof p.sessionVersion !== "number"
     ) {
       return null;
     }
+    await ensureSecuritySchema();
+    const current = (await d1Query<{ session_version: number }>(
+      "SELECT session_version FROM admin_users WHERE id = ?1 LIMIT 1",
+      [p.sub]
+    ))[0];
+    if (!current || current.session_version !== p.sessionVersion) return null;
     return {
       sub: p.sub,
       email: p.email,
       name: p.name,
       mustChangePassword: p.mustChangePassword,
+      sessionVersion: p.sessionVersion,
     };
   } catch {
     return null;

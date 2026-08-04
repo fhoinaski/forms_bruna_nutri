@@ -2,6 +2,7 @@
 
 import { Jost, Cormorant_Garamond } from "next/font/google";
 import "../globals.css";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import {
@@ -20,6 +21,9 @@ import {
   Newspaper,
   FileBarChart,
   ExternalLink,
+  Fingerprint,
+  HeartHandshake,
+  HelpCircle,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -96,9 +100,11 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
     <div className="flex flex-col h-full">
       {/* Brand */}
       <div className="px-6 py-8 flex flex-col items-center text-center border-b border-[#EDE1D6]">
-        <img
+        <Image
           src="/brand/bruna-flores-nutri-simbolo.svg"
           alt=""
+          width={64}
+          height={80}
           className="mb-3 h-20 w-16 object-contain drop-shadow-[0_10px_18px_rgba(58,48,40,0.08)]"
         />
         <p className="font-serif font-semibold text-[#3A3028] leading-tight">Bruna Flores</p>
@@ -117,6 +123,12 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           href="/dashboard/agenda"
           icon={<CalendarDays className="w-4 h-4 shrink-0" />}
           label="Agenda"
+          onClick={onClose}
+        />
+        <NavLink
+          href="/dashboard/oportunidades"
+          icon={<HeartHandshake className="w-4 h-4 shrink-0" />}
+          label="Oportunidades"
           onClick={onClose}
         />
         <NavLink
@@ -191,6 +203,18 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           label="Segurança"
           onClick={onClose}
         />
+        <NavLink
+          href="/dashboard/privacidade"
+          icon={<Fingerprint className="w-4 h-4 shrink-0" />}
+          label="Privacidade"
+          onClick={onClose}
+        />
+        <NavLink
+          href="/dashboard/ajuda"
+          icon={<HelpCircle className="w-4 h-4 shrink-0" />}
+          label="Ajuda"
+          onClick={onClose}
+        />
       </nav>
 
       {/* Bottom */}
@@ -261,13 +285,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <div className="flex items-center gap-3">
             <Link
+              href="/dashboard/ajuda"
+              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-[#8C6E52] border border-[#D9C4B2] rounded-full px-4 py-2 hover:bg-[#FBF7F1] transition-colors"
+            >
+              Ajuda
+              <HelpCircle className="h-3.5 w-3.5" />
+            </Link>
+            <Link
               href="/"
               className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-[#607A56] border border-[#7F9A74]/35 rounded-full px-4 py-2 hover:bg-[#EAF0E4] transition-colors"
             >
               Ver site
               <ExternalLink className="h-3.5 w-3.5" />
             </Link>
-            <img src="/favicon-512.png" alt="" className="h-9 w-9 rounded-full object-contain" />
+            <Image src="/favicon-512.png" alt="" width={36} height={36} className="h-9 w-9 rounded-full object-contain" />
           </div>
         </header>
 

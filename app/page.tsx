@@ -267,9 +267,11 @@ export default function HomePage() {
         <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div className="relative overflow-hidden rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] p-8 shadow-[0_22px_58px_rgba(58,48,40,0.07)]">
             <div className="absolute right-0 top-0 h-32 w-32 rounded-bl-full bg-[#EAF0E4]" />
-            <img
+            <Image
               src="/brand/bruna-flores-nutri-simbolo.svg"
               alt=""
+              width={96}
+              height={112}
               className="relative z-10 h-28 w-24 object-contain"
             />
             <p className="brand-kicker relative z-10 mt-8">Sobre a Bruna</p>

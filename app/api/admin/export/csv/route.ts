@@ -3,6 +3,8 @@ import { getAdminFromRequest } from "@/lib/auth/session";
 import { getSubmissionsForExport } from "@/lib/repositories/submissions";
 import { ExportFiltersSchema } from "@/lib/validators/admin";
 import { format } from "date-fns";
+import { writeAuditLog } from "@/lib/security/audit";
+import { getRequestFingerprint } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -112,12 +114,14 @@ export async function GET(req: NextRequest) {
   const BOM = "﻿";
   const csvContent = BOM + csvLines.join("\n");
   const dateStr = format(new Date(), "yyyy-MM-dd");
+  await writeAuditLog({ action: "sensitive_data_exported", adminId: admin.sub, entityType: "form_submissions", ipHash: getRequestFingerprint(req).ipHash, metadata: { format: "csv", records: submissions.length } });
 
   return new NextResponse(csvContent, {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="bruna-nutri-formularios-${dateStr}.csv"`,
+      "Cache-Control": "no-store",
     },
   });
 }

@@ -6,6 +6,7 @@ import { getClientTasks } from "@/lib/repositories/client-tasks";
 import { getClientEvolutions } from "@/lib/repositories/client-evolutions";
 import { getClientTimeline } from "@/lib/repositories/client-timeline";
 import { getSubmissionById } from "@/lib/repositories/submissions";
+import { getExistingNutritionRecord } from "@/lib/repositories/nutrition-records";
 import { PrintButton } from "./PrintButton";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,39 @@ const TASK_STATUS_LABELS: Record<string, string> = {
   cancelada: "Cancelada",
 };
 
+function hasNutritionRecordContent(record: Awaited<ReturnType<typeof getExistingNutritionRecord>>): boolean {
+  if (!record) return false;
+  return [
+    record.chief_complaint,
+    record.clinical_history,
+    record.diagnoses,
+    record.medications,
+    record.supplements,
+    record.allergies,
+    record.restrictions,
+    record.food_preferences,
+    record.food_aversions,
+    record.eating_routine,
+    record.intestinal_health,
+    record.sleep_routine,
+    record.stress_context,
+    record.physical_activity,
+    record.hydration,
+    record.current_weight_kg,
+    record.height_cm,
+    record.bmi,
+    record.waist_cm,
+    record.anthropometry_notes,
+    record.exams,
+    record.assessment,
+    record.goals,
+    record.care_plan,
+    record.risk_flags,
+    record.family_context,
+    record.private_notes,
+  ].some((value) => typeof value === "string" && value.trim().length > 0);
+}
+
 export default async function ClientPrintPage({
   params,
 }: {
@@ -49,12 +83,13 @@ export default async function ClientPrintPage({
 
   const { id } = await params;
 
-  const [client, protocols, tasks, evolutions, timeline] = await Promise.all([
+  const [client, protocols, tasks, evolutions, timeline, nutritionRecord] = await Promise.all([
     getClientById(id),
     getClientProtocols(id),
     getClientTasks(id),
     getClientEvolutions(id),
     getClientTimeline(id),
+    getExistingNutritionRecord(id),
   ]);
 
   if (!client) notFound();
@@ -150,6 +185,42 @@ export default async function ClientPrintPage({
         )}
 
         {/* Última evolução */}
+        {hasNutritionRecordContent(nutritionRecord) && nutritionRecord && (
+          <div className="section">
+            <p className="section-title">Prontuario nutricional</p>
+            <div className="kv">
+              {nutritionRecord.current_weight_kg && <div className="kv-item"><label>Peso atual</label><span>{nutritionRecord.current_weight_kg} kg</span></div>}
+              {nutritionRecord.height_cm && <div className="kv-item"><label>Altura</label><span>{nutritionRecord.height_cm} cm</span></div>}
+              {nutritionRecord.bmi && <div className="kv-item"><label>IMC</label><span>{nutritionRecord.bmi}</span></div>}
+              {nutritionRecord.waist_cm && <div className="kv-item"><label>Cintura</label><span>{nutritionRecord.waist_cm} cm</span></div>}
+            </div>
+            {[
+              ["Motivo do acompanhamento", nutritionRecord.chief_complaint],
+              ["Historico clinico", nutritionRecord.clinical_history],
+              ["Diagnosticos e antecedentes", nutritionRecord.diagnoses],
+              ["Medicamentos", nutritionRecord.medications],
+              ["Suplementos", nutritionRecord.supplements],
+              ["Alergias e restricoes", [nutritionRecord.allergies, nutritionRecord.restrictions].filter(Boolean).join("\n")],
+              ["Rotina alimentar", nutritionRecord.eating_routine],
+              ["Sinais gastrointestinais", nutritionRecord.intestinal_health],
+              ["Sono, estresse e suporte", [nutritionRecord.sleep_routine, nutritionRecord.stress_context].filter(Boolean).join("\n")],
+              ["Exames", nutritionRecord.exams],
+              ["Avaliacao nutricional", nutritionRecord.assessment],
+              ["Objetivos", nutritionRecord.goals],
+              ["Plano de cuidado", nutritionRecord.care_plan],
+              ["Sinais de atencao", nutritionRecord.risk_flags],
+            ].map(([label, value]) => {
+              if (!value) return null;
+              return (
+                <div key={String(label)} className="card" style={{ marginTop: "10px" }}>
+                  <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: ".08em", color: "#A8927D", marginBottom: "4px" }}>{label}</p>
+                  <p style={{ whiteSpace: "pre-wrap" }}>{value}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {lastEvolution && (
           <div className="section">
             <p className="section-title">Última evolução registrada</p>

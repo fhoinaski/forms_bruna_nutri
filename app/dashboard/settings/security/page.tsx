@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Eye, EyeOff, AlertTriangle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { MfaPanel } from "@/components/security/MfaPanel";
 
 function PasswordInput({
   label,
@@ -103,7 +104,7 @@ export default function SecurityPage() {
   };
 
   return (
-    <div className="max-w-lg mx-auto animate-fade-up">
+    <div className="max-w-3xl mx-auto animate-fade-up">
       <div className="mb-6">
         <Link
           href="/dashboard"
@@ -189,6 +190,7 @@ export default function SecurityPage() {
           </button>
         </form>
       </div>
+      <MfaPanel />
     </div>
   );
 }

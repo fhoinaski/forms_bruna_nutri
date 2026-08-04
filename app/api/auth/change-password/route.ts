@@ -3,7 +3,8 @@ import bcrypt from "bcryptjs";
 import { changePasswordSchema } from "@/lib/validators/auth";
 import { getAdminFromRequest, createSessionToken, setAuthCookie } from "@/lib/auth/session";
 import { getAdminById, updateAdminPassword, setMustChangePassword } from "@/lib/repositories/admin-users";
-import { d1Execute } from "@/lib/d1/client";
+import { writeAuditLog } from "@/lib/security/audit";
+import { getRequestFingerprint } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,19 +47,10 @@ export async function POST(req: NextRequest) {
     await updateAdminPassword(admin.id, newHash);
     await setMustChangePassword(admin.id, false);
 
-    // Audit log
-    await d1Execute(
-      `INSERT INTO admin_audit_logs (id, action, metadata_json, created_at)
-       VALUES (?1, 'password_changed', ?2, ?3)`,
-      [
-        crypto.randomUUID(),
-        JSON.stringify({ adminId: admin.id, email: admin.email }),
-        new Date().toISOString(),
-      ]
-    );
+    await writeAuditLog({ action: "password_changed", adminId: admin.id, ipHash: getRequestFingerprint(req).ipHash });
 
     // Issue new token with mustChangePassword = false
-    const updatedAdmin = { ...admin, must_change_password: 0 };
+    const updatedAdmin = { ...admin, must_change_password: 0, session_version: admin.session_version + 1 };
     const token = await createSessionToken(updatedAdmin);
     const response = NextResponse.json({ success: true });
     setAuthCookie(response, token);

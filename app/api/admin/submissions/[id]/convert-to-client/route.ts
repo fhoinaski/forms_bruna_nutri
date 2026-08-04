@@ -5,6 +5,7 @@ import {
   createClient,
   getClientBySubmissionId,
 } from "@/lib/repositories/clients";
+import { markOpportunityConvertedBySubmissionId } from "@/lib/repositories/lead-opportunities";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export async function POST(
   // Idempotente: retorna o cliente existente se já foi convertido
   const existing = await getClientBySubmissionId(id);
   if (existing) {
+    await markOpportunityConvertedBySubmissionId(id);
     return NextResponse.json({ success: true, clientId: existing.id, alreadyExisted: true });
   }
 
@@ -46,6 +48,7 @@ export async function POST(
     source_submission_id: id,
     notes,
   });
+  await markOpportunityConvertedBySubmissionId(id);
 
   return NextResponse.json({ success: true, clientId, alreadyExisted: false }, { status: 201 });
 }

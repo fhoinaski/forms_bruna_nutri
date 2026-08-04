@@ -7,7 +7,7 @@ import {
   ArrowLeft, Save, Phone, Mail, FileText, Printer,
   User, BookOpen, CheckSquare, TrendingUp, Clock,
   BarChart2, Plus, Check, X, Trash2, ChevronRight,
-  CalendarDays, WalletCards,
+  CalendarDays, WalletCards, KeyRound, ShieldCheck, RefreshCw, ExternalLink,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 
@@ -53,6 +53,26 @@ interface ClientPayment {
   id: string; description: string; amount_cents: number; due_date: string | null;
   paid_at: string | null; status: string; payment_method: string | null; notes: string | null;
 }
+interface ClientPortalAccessState {
+  exists: boolean;
+  is_active: boolean;
+  last_used_at: string | null;
+  updated_at: string | null;
+  login_url: string;
+}
+interface NutritionRecord {
+  id: string; client_id: string;
+  chief_complaint: string | null; clinical_history: string | null; diagnoses: string | null;
+  medications: string | null; supplements: string | null; allergies: string | null;
+  restrictions: string | null; food_preferences: string | null; food_aversions: string | null;
+  eating_routine: string | null; intestinal_health: string | null; sleep_routine: string | null;
+  stress_context: string | null; physical_activity: string | null; hydration: string | null;
+  current_weight_kg: string | null; height_cm: string | null; bmi: string | null; waist_cm: string | null;
+  anthropometry_notes: string | null; exams: string | null; assessment: string | null;
+  goals: string | null; care_plan: string | null; risk_flags: string | null;
+  family_context: string | null; private_notes: string | null;
+  created_at: string; updated_at: string;
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -96,6 +116,8 @@ const TIMELINE_ICONS: Record<string, string> = {
 
 const TABS = [
   { id: "resumo", label: "Resumo", icon: User },
+  { id: "prontuario", label: "Prontuario", icon: FileText },
+  { id: "portal", label: "Portal", icon: KeyRound },
   { id: "protocolos", label: "Protocolos", icon: BookOpen },
   { id: "agenda", label: "Agenda", icon: CalendarDays },
   { id: "tarefas", label: "Tarefas", icon: CheckSquare },
@@ -212,6 +234,184 @@ function EvolutionForm({ clientId, onSuccess }: { clientId: string; onSuccess: (
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
+const NUTRITION_TEXT_FIELDS: { key: keyof NutritionRecord; label: string; placeholder: string; rows?: number }[] = [
+  { key: "chief_complaint", label: "Motivo principal do acompanhamento", placeholder: "O que trouxe a paciente ao atendimento, prioridade do momento e expectativa central.", rows: 3 },
+  { key: "clinical_history", label: "Historico clinico e contexto atual", placeholder: "Historico de saude, gestacao/pos-parto, amamentacao, rotina familiar e pontos relevantes.", rows: 4 },
+  { key: "diagnoses", label: "Diagnosticos, condicoes e antecedentes", placeholder: "Condicoes clinicas, antecedentes familiares, queixas recorrentes e observacoes de risco.", rows: 3 },
+  { key: "medications", label: "Medicamentos em uso", placeholder: "Medicamentos, dose quando relevante, tempo de uso e prescritor.", rows: 2 },
+  { key: "supplements", label: "Suplementos em uso", placeholder: "Suplementos, dose, frequencia, adesao e tolerancia.", rows: 2 },
+  { key: "allergies", label: "Alergias e reacoes", placeholder: "Alergias alimentares, medicamentosas, reacoes ja observadas e condutas necessarias.", rows: 2 },
+  { key: "restrictions", label: "Restricoes e cuidados alimentares", placeholder: "Restricoes clinicas, culturais, familiares ou preferencias que precisam ser respeitadas.", rows: 2 },
+  { key: "food_preferences", label: "Preferencias alimentares", placeholder: "Alimentos aceitos, refeicoes favoritas, padroes familiares e pontos que favorecem adesao.", rows: 2 },
+  { key: "food_aversions", label: "Aversoes e dificuldades alimentares", placeholder: "Alimentos recusados, gatilhos, dificuldades sensoriais, enjoo, medo alimentar ou barreiras.", rows: 2 },
+  { key: "eating_routine", label: "Rotina alimentar", placeholder: "Horarios, refeicoes, lanches, fome/saciedade, compras, preparo e padrao dos fins de semana.", rows: 4 },
+  { key: "intestinal_health", label: "Sinais gastrointestinais", placeholder: "Intestino, refluxo, gases, distensao, dor, nauseas, evacuacoes e relacao com alimentos.", rows: 3 },
+  { key: "sleep_routine", label: "Sono e descanso", placeholder: "Quantidade, qualidade, despertares, rotina noturna, cansaco e impacto no cuidado alimentar.", rows: 2 },
+  { key: "stress_context", label: "Estresse, emocoes e suporte", placeholder: "Carga mental, ansiedade, rede de apoio, relacao emocional com comida e fatores de adesao.", rows: 3 },
+  { key: "physical_activity", label: "Atividade fisica e movimento", placeholder: "Tipo, frequencia, limitacoes, preferencias e rotina possivel.", rows: 2 },
+  { key: "hydration", label: "Hidratacao", placeholder: "Consumo de agua, aceitacao, sinais de baixa ingestao e estrategias possiveis.", rows: 2 },
+  { key: "exams", label: "Exames e indicadores laboratoriais", placeholder: "Exames recentes, datas, marcadores alterados e pontos para acompanhar.", rows: 4 },
+  { key: "assessment", label: "Avaliacao nutricional", placeholder: "Leitura profissional do caso, prioridades clinicas e hipoteses de trabalho.", rows: 4 },
+  { key: "goals", label: "Objetivos combinados", placeholder: "Objetivos terapeuticos, metas realistas, sinais de evolucao e combinados com a paciente.", rows: 3 },
+  { key: "care_plan", label: "Plano de cuidado e conduta", placeholder: "Conduta nutricional, orientacoes, ajustes, materiais enviados e proximos passos.", rows: 5 },
+  { key: "risk_flags", label: "Sinais de atencao", placeholder: "Alertas clinicos, sintomas que exigem encaminhamento, cuidados e pontos para monitorar.", rows: 3 },
+  { key: "family_context", label: "Contexto familiar e rotina da casa", placeholder: "Participacao da familia, cuidadoras, escola, rede de apoio e acordos praticos.", rows: 3 },
+  { key: "private_notes", label: "Notas privadas do atendimento", placeholder: "Observacoes sensiveis para uso interno profissional.", rows: 3 },
+];
+
+const ANTHROPOMETRY_FIELDS: { key: keyof NutritionRecord; label: string; placeholder: string }[] = [
+  { key: "current_weight_kg", label: "Peso atual (kg)", placeholder: "Ex: 68,5" },
+  { key: "height_cm", label: "Altura (cm)", placeholder: "Ex: 165" },
+  { key: "bmi", label: "IMC", placeholder: "Ex: 25,2" },
+  { key: "waist_cm", label: "Cintura (cm)", placeholder: "Ex: 82" },
+];
+
+function parseDecimalInput(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value.replace(",", ".").replace(/[^\d.]/g, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function calculateBmi(weightValue: string | null, heightValue: string | null): string | null {
+  const weight = parseDecimalInput(weightValue);
+  const heightCm = parseDecimalInput(heightValue);
+  if (!weight || !heightCm) return null;
+  const heightM = heightCm / 100;
+  return (weight / (heightM * heightM)).toFixed(1).replace(".", ",");
+}
+
+function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSaved: () => void }) {
+  const [record, setRecord] = useState<NutritionRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/admin/clients/${clientId}/nutrition-record`)
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        return res.json() as Promise<NutritionRecord>;
+      })
+      .then(setRecord)
+      .catch(() => setError("Nao foi possivel carregar o prontuario."))
+      .finally(() => setLoading(false));
+  }, [clientId]);
+
+  const setField = (key: keyof NutritionRecord, value: string) => {
+    setRecord((prev) => prev ? { ...prev, [key]: value } : prev);
+  };
+
+  const handleSave = async () => {
+    if (!record) return;
+    setSaving(true); setSaved(false); setError("");
+    const recordFields: (keyof NutritionRecord)[] = [
+      ...NUTRITION_TEXT_FIELDS.map((field) => field.key),
+      ...ANTHROPOMETRY_FIELDS.map((field) => field.key),
+      "anthropometry_notes",
+    ];
+    const computedBmi = calculateBmi(record.current_weight_kg, record.height_cm);
+    const payload = Object.fromEntries(
+      recordFields.map((key) => {
+        const value = key === "bmi" && !record.bmi ? computedBmi : record[key];
+        return [key, String(value ?? "").trim() || null];
+      })
+    );
+    try {
+      const res = await fetch(`/api/admin/clients/${clientId}/nutrition-record`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
+      setRecord(await res.json());
+      setSaved(true);
+      onSaved();
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      setError("Nao foi possivel salvar o prontuario.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <p className="text-sm text-[#A8927D]">Carregando prontuario...</p>;
+  if (!record) return <p className="text-sm text-red-600">{error || "Prontuario indisponivel."}</p>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Prontuario nutricional completo</h2>
+          <p className="mt-1 max-w-2xl text-sm text-[#8C6E52]">
+            Ficha clinica viva do atendimento, com dados essenciais para anamnese, acompanhamento e plano de cuidado.
+          </p>
+        </div>
+        <div className="text-xs text-[#A8927D] md:text-right">
+          <p>Atualizado em {formatDateSafe(record.updated_at, "dd/MM/yyyy HH:mm")}</p>
+          <p>Registro unico do paciente</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/70 p-5">
+        <h3 className="font-serif text-base font-semibold text-[#7A9A74]">Antropometria e medidas</h3>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
+          {ANTHROPOMETRY_FIELDS.map((field) => (
+            <div key={field.key}>
+              <label className="brand-label">{field.label}</label>
+              <input
+                value={String(record[field.key] ?? "")}
+                onChange={(e) => setField(field.key, e.target.value)}
+                className="brand-input"
+                placeholder={field.placeholder}
+              />
+            </div>
+          ))}
+        </div>
+        {!record.bmi && calculateBmi(record.current_weight_kg, record.height_cm) && (
+          <p className="mt-3 text-xs font-medium text-[#7A9A74]">
+            IMC calculado ao salvar: {calculateBmi(record.current_weight_kg, record.height_cm)}
+          </p>
+        )}
+        <div className="mt-4">
+          <label className="brand-label">Observacoes antropometricas</label>
+          <textarea
+            value={record.anthropometry_notes ?? ""}
+            onChange={(e) => setField("anthropometry_notes", e.target.value)}
+            rows={3}
+            className="brand-input resize-y"
+            placeholder="Composicao corporal, curvas, variacoes relevantes, medidas adicionais e interpretacao profissional."
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {NUTRITION_TEXT_FIELDS.map((field) => (
+          <div key={field.key} className={["clinical_history", "eating_routine", "exams", "assessment", "care_plan"].includes(String(field.key)) ? "lg:col-span-2" : undefined}>
+            <label className="brand-label">{field.label}</label>
+            <textarea
+              value={String(record[field.key] ?? "")}
+              onChange={(e) => setField(field.key, e.target.value)}
+              rows={field.rows ?? 2}
+              className="brand-input resize-y"
+              placeholder={field.placeholder}
+            />
+          </div>
+        ))}
+      </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex justify-end">
+        <button onClick={handleSave} disabled={saving} className="brand-btn-primary">
+          <Save className="w-4 h-4" />
+          {saving ? "Salvando..." : saved ? "Prontuario salvo" : "Salvar prontuario"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -254,6 +454,10 @@ export default function ClientDetailPage() {
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [payments, setPayments] = useState<ClientPayment[]>([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [portalAccess, setPortalAccess] = useState<ClientPortalAccessState | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalCode, setPortalCode] = useState("");
+  const [portalError, setPortalError] = useState("");
 
   useEffect(() => {
     fetch(`/api/admin/clients/${id}`)
@@ -277,6 +481,9 @@ export default function ClientDetailPage() {
       fetch(`/api/admin/clients/${id}/protocols`)
         .then((r) => r.json()).then((d: ClientProtocol[]) => setProtocols(d ?? []))
         .catch(() => null).finally(() => setProtocolsLoading(false));
+    }
+    if (activeTab === "portal" && !portalAccess) {
+      reloadPortalAccess();
     }
     if (activeTab === "agenda" && appointments.length === 0) {
       setAppointmentsLoading(true);
@@ -366,6 +573,51 @@ export default function ClientDetailPage() {
     fetch(`/api/admin/clients/${id}/timeline`)
       .then((r) => r.json()).then((d: TimelineEvent[]) => setTimeline(d ?? []))
       .catch(() => null);
+  };
+
+  async function reloadPortalAccess() {
+    setPortalLoading(true); setPortalError("");
+    try {
+      const response = await fetch(`/api/admin/clients/${id}/portal-access`, { cache: "no-store" });
+      if (!response.ok) throw new Error();
+      setPortalAccess(await response.json());
+    } catch {
+      setPortalError("Nao foi possivel carregar o acesso ao portal.");
+    } finally {
+      setPortalLoading(false);
+    }
+  }
+
+  const generatePortalCode = async () => {
+    setPortalLoading(true); setPortalError(""); setPortalCode("");
+    try {
+      const response = await fetch(`/api/admin/clients/${id}/portal-access`, { method: "POST" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message);
+      setPortalCode(result.code);
+      await reloadPortalAccess();
+    } catch (err) {
+      setPortalError(err instanceof Error ? err.message : "Nao foi possivel gerar o codigo do portal.");
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const togglePortalAccess = async (active: boolean) => {
+    setPortalLoading(true); setPortalError("");
+    try {
+      const response = await fetch(`/api/admin/clients/${id}/portal-access`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active }),
+      });
+      if (!response.ok) throw new Error();
+      await reloadPortalAccess();
+    } catch {
+      setPortalError("Nao foi possivel atualizar o acesso ao portal.");
+    } finally {
+      setPortalLoading(false);
+    }
   };
 
   if (loading) return <div className="text-center py-20 text-[#A8927D] text-sm">Carregando...</div>;
@@ -491,6 +743,100 @@ export default function ClientDetailPage() {
           )}
 
           {/* ── Protocolos ─────────────────────────────────────── */}
+          {activeTab === "prontuario" && (
+            <NutritionRecordEditor clientId={id} onSaved={reloadTimeline} />
+          )}
+
+          {activeTab === "portal" && (
+            <div className="space-y-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Portal do cliente</h2>
+                  <p className="mt-1 max-w-2xl text-sm text-[#8C6E52]">
+                    Libere um acesso individual para a paciente acompanhar consultas, tarefas, protocolos e combinados principais.
+                  </p>
+                </div>
+                <Link href="/portal" target="_blank" className="inline-flex items-center gap-2 text-sm font-semibold text-[#7A9A74] hover:text-[#B47F6A]">
+                  Abrir portal
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/70 p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-[#7A9A74]" />
+                    <h3 className="font-serif text-base font-semibold text-[#3A2B1F]">Status do acesso</h3>
+                  </div>
+                  {portalLoading && !portalAccess ? (
+                    <p className="text-sm text-[#A8927D]">Carregando acesso...</p>
+                  ) : (
+                    <div className="space-y-3 text-sm">
+                      <p className="flex items-center justify-between gap-3">
+                        <span className="text-[#8C6E52]">Acesso criado</span>
+                        <span className="font-semibold text-[#3A2B1F]">{portalAccess?.exists ? "Sim" : "Nao"}</span>
+                      </p>
+                      <p className="flex items-center justify-between gap-3">
+                        <span className="text-[#8C6E52]">Status</span>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${portalAccess?.is_active ? "bg-[#D4EDDA] text-[#4A7C59]" : "bg-[#EAD8C2] text-[#8C6E52]"}`}>
+                          {portalAccess?.is_active ? "Ativo" : "Inativo"}
+                        </span>
+                      </p>
+                      <p className="flex items-center justify-between gap-3">
+                        <span className="text-[#8C6E52]">Ultimo acesso</span>
+                        <span className="font-semibold text-[#3A2B1F]">{formatDateSafe(portalAccess?.last_used_at ?? null, "dd/MM/yyyy HH:mm")}</span>
+                      </p>
+                    </div>
+                  )}
+                  {portalError && <p className="mt-4 text-sm text-red-600">{portalError}</p>}
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button onClick={generatePortalCode} disabled={portalLoading} className="brand-btn-primary">
+                      <RefreshCw className="h-4 w-4" />
+                      {portalAccess?.exists ? "Gerar novo codigo" : "Liberar portal"}
+                    </button>
+                    {portalAccess?.exists && (
+                      <button
+                        onClick={() => togglePortalAccess(!portalAccess.is_active)}
+                        disabled={portalLoading}
+                        className="inline-flex items-center gap-2 rounded-full border border-[#EAD8C2] bg-white px-5 py-2 text-sm font-semibold text-[#8C6E52] hover:bg-[#FAF7F2]"
+                      >
+                        {portalAccess.is_active ? "Desativar" : "Ativar"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#EAD8C2] bg-white p-5">
+                  <div className="mb-4 flex items-center gap-2">
+                    <KeyRound className="h-5 w-5 text-[#B47F6A]" />
+                    <h3 className="font-serif text-base font-semibold text-[#3A2B1F]">Dados para enviar a paciente</h3>
+                  </div>
+                  {portalCode ? (
+                    <div className="space-y-4">
+                      <div className="rounded-xl bg-[#FAF7F2] p-4">
+                        <p className="brand-label">Codigo de acesso</p>
+                        <p className="mt-1 font-mono text-2xl font-semibold tracking-[0.16em] text-[#3A2B1F]">{portalCode}</p>
+                      </div>
+                      <div className="rounded-xl border border-[#EAD8C2] p-4 text-sm leading-6 text-[#75675E]">
+                        <p className="font-semibold text-[#3A2B1F]">Mensagem sugerida</p>
+                        <p className="mt-2">
+                          Ola, {name || "tudo bem"}! Seu portal de acompanhamento esta liberado. Acesse {portalAccess?.login_url ?? "https://brunanutri.com.br/portal"} usando seu e-mail cadastrado e o codigo {portalCode}.
+                        </p>
+                      </div>
+                      <p className="text-xs text-[#A8927D]">O codigo aparece apenas agora. Ao gerar um novo, o anterior deixa de funcionar.</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl bg-[#FAF7F2] p-5 text-sm leading-6 text-[#75675E]">
+                      <p>Gere um codigo para liberar o primeiro acesso. Por seguranca, o codigo nao fica visivel depois que voce sair desta tela.</p>
+                      <p className="mt-2">Login da paciente: <strong>{email || "cadastre o e-mail no cliente"}</strong></p>
+                      <p>Endereco: <strong>{portalAccess?.login_url ?? "https://brunanutri.com.br/portal"}</strong></p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === "protocolos" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">

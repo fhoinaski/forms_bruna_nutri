@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -9,9 +10,11 @@ export function PublicFooter() {
         <div className="grid gap-10 md:grid-cols-[1.2fr_0.8fr] md:items-end">
           <div>
             <div className="mb-5 flex items-center gap-3">
-              <img
+              <Image
                 src="/brand/bruna-flores-nutri-simbolo.svg"
                 alt=""
+                width={40}
+                height={48}
                 className="h-12 w-10 object-contain"
               />
               <div>
@@ -59,7 +62,10 @@ export function PublicFooter() {
 
         <div className="mt-12 flex flex-col justify-between gap-3 border-t border-[#E2D2C5] pt-6 text-xs text-[#9A8B80] sm:flex-row">
           <p>© {new Date().getFullYear()} Bruna Flores Nutri. Todos os direitos reservados.</p>
-          <p>Cuidado com escuta, evidência e rotina possível.</p>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link href="/privacidade" className="transition hover:text-[#607A56]">Privacidade</Link>
+            <Link href="/termos" className="transition hover:text-[#607A56]">Termos de uso</Link>
+          </div>
         </div>
       </div>
     </footer>

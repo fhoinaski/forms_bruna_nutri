@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -10,6 +10,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
+  const [code, setCode] = useState("");
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -21,12 +23,15 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, code: requiresTwoFactor ? code : undefined }),
       });
 
       const data = await res.json();
 
-      if (res.ok && data.success) {
+      if (data.requiresTwoFactor && !data.success) {
+        setRequiresTwoFactor(true);
+        setError(data.message || "Informe o código de segurança.");
+      } else if (res.ok && data.success) {
         if (data.mustChangePassword) {
           router.push("/dashboard/settings/security");
         } else {
@@ -150,6 +155,26 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {requiresTwoFactor && (
+              <div>
+                <label className="brand-label">Código de segurança</label>
+                <div className="relative">
+                  <input
+                    value={code}
+                    onChange={(event) => setCode(event.target.value.toUpperCase())}
+                    placeholder="6 dígitos ou código de recuperação"
+                    required
+                    autoFocus
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    className="brand-input pl-11 font-mono tracking-widest"
+                  />
+                  <KeyRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7A9A74]" />
+                </div>
+                <p className="mt-2 text-xs leading-5 text-[#A8927D]">Abra seu aplicativo autenticador ou use um código de recuperação.</p>
+              </div>
+            )}
+
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
                 <p className="text-red-600 text-sm">{error}</p>
@@ -161,7 +186,7 @@ export default function LoginPage() {
               disabled={loading}
               className="brand-btn-primary w-full mt-2"
             >
-              {loading ? "Entrando..." : "Entrar"}
+              {loading ? "Verificando..." : requiresTwoFactor ? "Confirmar acesso" : "Entrar"}
             </button>
           </form>
 

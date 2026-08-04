@@ -13,6 +13,7 @@ import {
 } from "@/lib/repositories/appointments";
 import { getPaymentMetrics } from "@/lib/repositories/payments";
 import { getBlogMetrics } from "@/lib/repositories/blog-posts";
+import { getLeadOpportunityMetrics } from "@/lib/repositories/lead-opportunities";
 import { d1Query } from "@/lib/d1/client";
 
 export const runtime = "nodejs";
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
     paymentMetrics,
     upcomingTasks,
     blogMetrics,
+    opportunityMetrics,
   ] =
     await Promise.all([
       getClientMetrics(),
@@ -48,6 +50,7 @@ export async function GET(req: NextRequest) {
       getPaymentMetrics(),
       getUpcomingClientTasks(5),
       getBlogMetrics(),
+      getLeadOpportunityMetrics(),
     ]);
 
   return NextResponse.json({
@@ -61,5 +64,6 @@ export async function GET(req: NextRequest) {
     financeiro: paymentMetrics,
     proximasTarefas: upcomingTasks,
     blog: blogMetrics,
+    oportunidades: opportunityMetrics,
   });
 }

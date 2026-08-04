@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS export_logs (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id TEXT PRIMARY KEY,
+  checksum TEXT NOT NULL,
+  applied_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS admin_audit_logs (
   id TEXT PRIMARY KEY,
   action TEXT NOT NULL,
@@ -42,6 +48,11 @@ CREATE TABLE IF NOT EXISTS admin_users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   must_change_password INTEGER NOT NULL DEFAULT 1,
+  mfa_enabled INTEGER NOT NULL DEFAULT 0,
+  mfa_secret_encrypted TEXT,
+  mfa_pending_secret_encrypted TEXT,
+  recovery_codes_json TEXT,
+  session_version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -211,6 +222,66 @@ CREATE TABLE IF NOT EXISTS client_evolutions (
 
 CREATE INDEX IF NOT EXISTS idx_client_evolutions_client_id ON client_evolutions(client_id);
 
+-- Prontuario nutricional completo
+
+CREATE TABLE IF NOT EXISTS nutrition_records (
+  id TEXT PRIMARY KEY,
+  client_id TEXT NOT NULL UNIQUE,
+  chief_complaint TEXT,
+  clinical_history TEXT,
+  diagnoses TEXT,
+  medications TEXT,
+  supplements TEXT,
+  allergies TEXT,
+  restrictions TEXT,
+  food_preferences TEXT,
+  food_aversions TEXT,
+  eating_routine TEXT,
+  intestinal_health TEXT,
+  sleep_routine TEXT,
+  stress_context TEXT,
+  physical_activity TEXT,
+  hydration TEXT,
+  current_weight_kg TEXT,
+  height_cm TEXT,
+  bmi TEXT,
+  waist_cm TEXT,
+  anthropometry_notes TEXT,
+  exams TEXT,
+  assessment TEXT,
+  goals TEXT,
+  care_plan TEXT,
+  risk_flags TEXT,
+  family_context TEXT,
+  private_notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (client_id) REFERENCES clients(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_nutrition_records_client_id
+ON nutrition_records(client_id);
+
+-- Portal do cliente
+
+CREATE TABLE IF NOT EXISTS client_portal_access (
+  id TEXT PRIMARY KEY,
+  client_id TEXT NOT NULL UNIQUE,
+  code_hash TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  session_version INTEGER NOT NULL DEFAULT 1,
+  last_used_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (client_id) REFERENCES clients(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_portal_access_client_id
+ON client_portal_access(client_id);
+
+CREATE INDEX IF NOT EXISTS idx_client_portal_access_active
+ON client_portal_access(is_active);
+
 -- ── Timeline do cliente ───────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS client_timeline_events (
@@ -246,6 +317,56 @@ CREATE TABLE IF NOT EXISTS appointments (
 CREATE INDEX IF NOT EXISTS idx_appointments_starts_at ON appointments(starts_at);
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
 CREATE INDEX IF NOT EXISTS idx_appointments_client_id ON appointments(client_id);
+
+CREATE TABLE IF NOT EXISTS appointment_workflow_items (
+  id TEXT PRIMARY KEY,
+  appointment_id TEXT NOT NULL,
+  step_type TEXT NOT NULL,
+  channel TEXT NOT NULL DEFAULT 'whatsapp',
+  due_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pendente',
+  message TEXT NOT NULL,
+  completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (appointment_id) REFERENCES appointments(id),
+  UNIQUE (appointment_id, step_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_appointment_workflows_due_at
+ON appointment_workflow_items(due_at);
+
+CREATE INDEX IF NOT EXISTS idx_appointment_workflows_status
+ON appointment_workflow_items(status);
+
+CREATE INDEX IF NOT EXISTS idx_appointment_workflows_appointment_id
+ON appointment_workflow_items(appointment_id);
+
+CREATE TABLE IF NOT EXISTS lead_opportunities (
+  id TEXT PRIMARY KEY,
+  submission_id TEXT NOT NULL UNIQUE,
+  stage TEXT NOT NULL DEFAULT 'novo',
+  temperature TEXT NOT NULL DEFAULT 'morno',
+  source TEXT NOT NULL DEFAULT 'pre_consulta',
+  objective TEXT,
+  service_interest TEXT,
+  next_action_at TEXT,
+  last_contacted_at TEXT,
+  contact_attempts INTEGER NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (submission_id) REFERENCES form_submissions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lead_opportunities_stage
+ON lead_opportunities(stage);
+
+CREATE INDEX IF NOT EXISTS idx_lead_opportunities_temperature
+ON lead_opportunities(temperature);
+
+CREATE INDEX IF NOT EXISTS idx_lead_opportunities_next_action
+ON lead_opportunities(next_action_at);
 
 -- Financeiro clinico
 
@@ -293,3 +414,69 @@ CREATE TABLE IF NOT EXISTS blog_posts (
 CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status);
 CREATE INDEX IF NOT EXISTS idx_blog_posts_published_at ON blog_posts(published_at);
 CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
+
+-- Privacidade, consentimento e seguranca
+
+CREATE TABLE IF NOT EXISTS consent_records (
+  id TEXT PRIMARY KEY,
+  submission_id TEXT NOT NULL,
+  form_version TEXT NOT NULL,
+  policy_version TEXT NOT NULL,
+  consent_scope TEXT NOT NULL,
+  accepted_at TEXT NOT NULL,
+  ip_hash TEXT,
+  user_agent_hash TEXT,
+  FOREIGN KEY (submission_id) REFERENCES form_submissions(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_consent_records_submission_id
+ON consent_records(submission_id);
+
+CREATE TABLE IF NOT EXISTS privacy_requests (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  request_type TEXT NOT NULL,
+  details TEXT,
+  status TEXT NOT NULL DEFAULT 'recebida',
+  verification_status TEXT NOT NULL DEFAULT 'pendente',
+  admin_notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  completed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_privacy_requests_status
+ON privacy_requests(status);
+
+CREATE INDEX IF NOT EXISTS idx_privacy_requests_email
+ON privacy_requests(email);
+
+CREATE TABLE IF NOT EXISTS privacy_settings (
+  id TEXT PRIMARY KEY,
+  retention_months INTEGER NOT NULL DEFAULT 60,
+  updated_by TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS security_rate_limits (
+  rate_key TEXT PRIMARY KEY,
+  window_started_at TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  blocked_until TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_security_rate_limits_updated_at
+ON security_rate_limits(updated_at);
+
+CREATE TABLE IF NOT EXISTS backup_audit_logs (
+  id TEXT PRIMARY KEY,
+  action TEXT NOT NULL,
+  filename TEXT,
+  checksum TEXT,
+  status TEXT NOT NULL,
+  details TEXT,
+  created_at TEXT NOT NULL
+);

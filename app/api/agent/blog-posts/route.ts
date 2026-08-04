@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createBlogPost } from "@/lib/repositories/blog-posts";
+import { timingSafeEqual } from "node:crypto";
+import { consumeRateLimit } from "@/lib/security/rate-limit";
+import { writeAuditLog } from "@/lib/security/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,13 +29,17 @@ function isAuthorized(req: NextRequest): boolean {
   const token = process.env.BLOG_AGENT_TOKEN;
   if (!token) return false;
   const header = req.headers.get("authorization") ?? "";
-  return header === `Bearer ${token}`;
+  const expected = Buffer.from(`Bearer ${token}`);
+  const received = Buffer.from(header);
+  return expected.length === received.length && timingSafeEqual(expected, received);
 }
 
 export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ message: "Nao autorizado." }, { status: 401 });
   }
+  const limit = await consumeRateLimit(req, { scope: "blog-agent", limit: 30, windowMs: 60 * 60 * 1000, blockMs: 60 * 60 * 1000 });
+  if (!limit.allowed) return NextResponse.json({ message: "Limite temporário atingido." }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
 
   const parsed = AgentPostSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
@@ -51,6 +58,7 @@ export async function POST(req: NextRequest) {
     ai_generated: true,
     published_at: parsed.data.status === "published" ? new Date().toISOString() : null,
   });
+  await writeAuditLog({ action: "agent_blog_post_created", entityType: "blog_post", entityId: id, ipHash: limit.ipHash, metadata: { status: parsed.data.status } });
 
   return NextResponse.json({ id }, { status: 201 });
 }

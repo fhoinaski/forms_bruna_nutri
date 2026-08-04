@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Menu, X } from "lucide-react";
 
@@ -34,9 +35,11 @@ export function PublicHeader() {
       >
         <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-5 lg:px-8">
           <Link href="/" className="flex shrink-0 items-center gap-3">
-            <img
+            <Image
               src="/brand/bruna-flores-nutri-simbolo.svg"
               alt=""
+              width={40}
+              height={44}
               className="h-11 w-10 object-contain drop-shadow-[0_10px_18px_rgba(58,48,40,0.1)]"
             />
             <div className="hidden sm:block">

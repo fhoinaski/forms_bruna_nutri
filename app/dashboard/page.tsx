@@ -16,6 +16,8 @@ import {
   Clock,
   WalletCards,
   Newspaper,
+  HeartHandshake,
+  HelpCircle,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { BrandBadge } from "@/components/brand/BrandBadge";
@@ -95,6 +97,13 @@ interface DashboardMetrics {
     published: number;
     drafts: number;
     aiGenerated: number;
+  };
+  oportunidades: {
+    total: number;
+    novos: number;
+    quentes: number;
+    atrasadas: number;
+    convertidas: number;
   };
 }
 
@@ -202,6 +211,13 @@ export default function DashboardPage() {
               Tarefas
             </Link>
             <Link
+              href="/dashboard/oportunidades"
+              className="inline-flex items-center gap-2 rounded-full border border-[#7F9A74]/35 px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#607A56] transition hover:bg-[#EAF0E4]"
+            >
+              <HeartHandshake className="h-4 w-4" />
+              Oportunidades
+            </Link>
+            <Link
               href="/dashboard/blog"
               className="inline-flex items-center gap-2 rounded-full border border-[#7F9A74]/35 px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#607A56] transition hover:bg-[#EAF0E4]"
             >
@@ -214,6 +230,13 @@ export default function DashboardPage() {
             >
               <Users className="h-4 w-4" />
               Clientes
+            </Link>
+            <Link
+              href="/dashboard/ajuda"
+              className="inline-flex items-center gap-2 rounded-full border border-[#D9C4B2] px-5 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#8C6E52] transition hover:bg-[#FBF7F1]"
+            >
+              <HelpCircle className="h-4 w-4" />
+              Ajuda
             </Link>
             <Link
               href="/dashboard/protocols"
@@ -303,6 +326,26 @@ export default function DashboardPage() {
           value={dashMetrics ? formatMoney(dashMetrics.financeiro.overdueCents) : "—"}
           icon={<AlertCircle className="w-5 h-5" />}
           accent={!!dashMetrics?.financeiro.overdueCents}
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <BrandMetricCard
+          label="Oportunidades quentes"
+          value={dashMetrics?.oportunidades.quentes ?? "—"}
+          icon={<HeartHandshake className="w-5 h-5" />}
+          accent={!!dashMetrics?.oportunidades.quentes}
+        />
+        <BrandMetricCard
+          label="Follow-ups atrasados"
+          value={dashMetrics?.oportunidades.atrasadas ?? "—"}
+          icon={<AlertCircle className="w-5 h-5" />}
+          accent={!!dashMetrics?.oportunidades.atrasadas}
+        />
+        <BrandMetricCard
+          label="Convertidas"
+          value={dashMetrics?.oportunidades.convertidas ?? "—"}
+          icon={<CheckCircle2 className="w-5 h-5" />}
         />
       </div>
 

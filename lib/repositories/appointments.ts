@@ -1,9 +1,16 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
+import {
+  createStandardWorkflowForAppointment,
+  ensureAppointmentWorkflowTable,
+  refreshWorkflowForAppointment,
+} from "@/lib/repositories/appointment-workflows";
 
 export interface Appointment {
   id: string;
   client_id: string | null;
   client_name: string | null;
+  client_phone: string | null;
+  client_email: string | null;
   title: string;
   appointment_type: string;
   starts_at: string;
@@ -59,6 +66,7 @@ export async function ensureAppointmentsTable(): Promise<void> {
   await d1Execute(
     `CREATE INDEX IF NOT EXISTS idx_appointments_client_id ON appointments(client_id)`
   );
+  await ensureAppointmentWorkflowTable();
 }
 
 function buildWhere(filters: AppointmentFilters): { clause: string; params: unknown[] } {
@@ -96,7 +104,7 @@ export async function getAppointments(
   const { clause, params } = buildWhere(filters);
 
   return d1Query<Appointment>(
-    `SELECT a.*, c.name as client_name
+    `SELECT a.*, c.name as client_name, c.phone as client_phone, c.email as client_email
      FROM appointments a
      LEFT JOIN clients c ON c.id = a.client_id
      ${clause}
@@ -131,6 +139,7 @@ export async function createAppointment(
     ]
   );
 
+  await createStandardWorkflowForAppointment(id);
   return id;
 }
 
@@ -156,10 +165,19 @@ export async function updateAppointment(
   params.push(id);
 
   await d1Execute(`UPDATE appointments SET ${updates.join(", ")} WHERE id = ?${idx}`, params);
+  if (
+    data.starts_at !== undefined ||
+    data.ends_at !== undefined ||
+    data.location !== undefined ||
+    data.title !== undefined
+  ) {
+    await refreshWorkflowForAppointment(id);
+  }
 }
 
 export async function deleteAppointment(id: string): Promise<void> {
   await ensureAppointmentsTable();
+  await d1Execute(`DELETE FROM appointment_workflow_items WHERE appointment_id = ?1`, [id]);
   await d1Execute(`DELETE FROM appointments WHERE id = ?1`, [id]);
 }
 
@@ -181,7 +199,7 @@ export async function getTodayAppointmentsCount(): Promise<number> {
 export async function getUpcomingAppointments(limit = 5): Promise<Appointment[]> {
   await ensureAppointmentsTable();
   return d1Query<Appointment>(
-    `SELECT a.*, c.name as client_name
+    `SELECT a.*, c.name as client_name, c.phone as client_phone, c.email as client_email
      FROM appointments a
      LEFT JOIN clients c ON c.id = a.client_id
      WHERE a.starts_at >= ?1 AND a.status != 'cancelado'

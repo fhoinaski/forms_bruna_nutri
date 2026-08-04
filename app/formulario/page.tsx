@@ -1,10 +1,12 @@
 "use client";
 
 import { useForm } from "react-hook-form";
+import { useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormResponseSchema, FormResponseInput } from "@/validators/form";
 import { useState, useEffect } from "react";
 import React from "react";
+import Image from "next/image";
 import { ArrowLeft, CheckCircle2, Clock3, HeartHandshake, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
@@ -13,7 +15,7 @@ export default function FormularioPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormResponseInput>({
+  const { control, register, handleSubmit, setValue, formState: { errors } } = useForm<FormResponseInput>({
     resolver: zodResolver(FormResponseSchema),
     defaultValues: {
       tipoAtendimento: "",
@@ -28,10 +30,12 @@ export default function FormularioPage() {
       intestinoFreq: undefined,
       desconforto: undefined,
       disposicao: "5",
+      privacyAccepted: false as true,
+      companyWebsite: "",
     }
   });
 
-  const watchAllFields = watch();
+  const watchAllFields = useWatch({ control }) as FormResponseInput;
 
   useEffect(() => {
     // Calculando progresso simples baseado no total de campos (aprox. 30 chaves)
@@ -73,9 +77,11 @@ export default function FormularioPage() {
   if (isSuccess) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#FBF7F1] p-8 text-center">
-        <img
+        <Image
           src="/brand/bruna-flores-nutri-simbolo.svg"
           alt=""
+          width={80}
+          height={96}
           className="mb-6 h-24 w-20 object-contain"
         />
         <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-[#EAF0E4] text-[#607A56] shadow-sm">
@@ -414,6 +420,28 @@ export default function FormularioPage() {
               <Textarea {...register("espacoLivre")} placeholder="Espaço livre para compartilhar o que quiser..." />
             </Field>
           </Section>
+
+          <div className="rounded-[1.35rem] border border-[#D9E4D3] bg-[#F4F8F1] p-6 md:p-7">
+            <div className="flex items-start gap-3">
+              <input
+                id="privacyAccepted"
+                type="checkbox"
+                {...register("privacyAccepted")}
+                className="mt-1 h-5 w-5 shrink-0 rounded border-[#BFD1B7] accent-[#607A56]"
+              />
+              <label htmlFor="privacyAccepted" className="text-sm leading-6 text-[#5F554D]">
+                Li a <Link href="/privacidade" target="_blank" className="font-semibold text-[#607A56] underline underline-offset-4">Política de Privacidade</Link> e autorizo o uso dos dados informados para análise da pré-consulta, contato e atendimento nutricional. Sei que informações de saúde recebem proteção reforçada e que posso solicitar acesso, correção ou exclusão pelos canais indicados na política.
+              </label>
+            </div>
+            {errors.privacyAccepted && (
+              <p className="mt-3 text-sm text-red-600">{errors.privacyAccepted.message}</p>
+            )}
+          </div>
+
+          <div aria-hidden="true" className="absolute -left-[10000px] h-px w-px overflow-hidden">
+            <label htmlFor="companyWebsite">Site da empresa</label>
+            <input id="companyWebsite" tabIndex={-1} autoComplete="off" {...register("companyWebsite")} />
+          </div>
 
           <div className="text-center pt-8">
             <button 

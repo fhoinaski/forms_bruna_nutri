@@ -55,6 +55,8 @@ export const LegacyFormSchema = z.object({
   expectativas: z.string().max(5000).optional().or(z.literal("")),
   disposicao: z.string().max(10).optional().or(z.literal("")),
   espacoLivre: z.string().max(5000).optional().or(z.literal("")),
+  privacyAccepted: z.literal(true),
+  companyWebsite: z.string().max(0).optional().or(z.literal("")),
 });
 
 export type LegacyFormInput = z.infer<typeof LegacyFormSchema>;

@@ -43,6 +43,10 @@ export const FormResponseSchema = z.object({
   expectativas: z.string().optional(),
   disposicao: z.string().optional(),
   espacoLivre: z.string().optional(),
+  privacyAccepted: z.literal(true, {
+    error: "Confirme que leu a Política de Privacidade para continuar",
+  }),
+  companyWebsite: z.string().max(0).optional(),
 });
 
 export type FormResponseInput = z.infer<typeof FormResponseSchema>;
