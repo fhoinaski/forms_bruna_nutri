@@ -134,6 +134,9 @@ CREATE TABLE IF NOT EXISTS protocols (
   title TEXT NOT NULL,
   description TEXT,
   category TEXT,
+  kind TEXT NOT NULL DEFAULT 'standard',
+  client_id TEXT,
+  copied_from_protocol_id TEXT,
   source_draft_id TEXT,
   created_by TEXT,
   is_active INTEGER NOT NULL DEFAULT 1,
@@ -143,6 +146,8 @@ CREATE TABLE IF NOT EXISTS protocols (
 
 CREATE INDEX IF NOT EXISTS idx_protocols_category ON protocols(category);
 CREATE INDEX IF NOT EXISTS idx_protocols_source_draft_id ON protocols(source_draft_id);
+CREATE INDEX IF NOT EXISTS idx_protocols_kind_active ON protocols(kind, is_active);
+CREATE INDEX IF NOT EXISTS idx_protocols_client_id ON protocols(client_id);
 
 CREATE TABLE IF NOT EXISTS protocol_phases (
   id TEXT PRIMARY KEY,
@@ -169,6 +174,8 @@ CREATE TABLE IF NOT EXISTS client_protocols (
   source_draft_id TEXT,
   status TEXT NOT NULL DEFAULT 'ativo',
   started_at TEXT NOT NULL,
+  review_date TEXT,
+  professional_notes TEXT,
   completed_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,

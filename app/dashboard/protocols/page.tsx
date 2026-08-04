@@ -19,6 +19,7 @@ interface Protocol {
   title: string;
   description: string | null;
   category: string | null;
+  kind: "standard" | "personalized";
   source_draft_id: string | null;
   is_active: number;
   created_at: string;
@@ -45,6 +46,7 @@ export default function ProtocolsPage() {
       try {
         const params = new URLSearchParams({
           page: String(page),
+          kind: "standard",
           ...(search ? { search } : {}),
           ...(showInactive ? {} : { isActive: "true" }),
         });
@@ -64,14 +66,18 @@ export default function ProtocolsPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-fade-up">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="brand-kicker">Biblioteca</p>
-          <h1 className="font-serif font-bold text-2xl text-[#3A2B1F]">Protocolos oficiais</h1>
+          <h1 className="font-serif text-3xl font-semibold text-[#3A2B1F]">Protocolos padrão</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#75675E]">
+            Modelos reutilizáveis para iniciar o cuidado com consistência. Na ficha da cliente, aplique como está ou crie uma cópia personalizada.
+          </p>
         </div>
-        <p className="text-sm text-[#A8927D]">
-          Protocolos criados a partir de rascunhos IA aprovados.
-        </p>
+        <Link href="/dashboard/protocols/novo" className="brand-btn-primary">
+          <Plus className="h-4 w-4" />
+          Novo protocolo padrão
+        </Link>
       </div>
 
       {/* Filtros */}
@@ -135,9 +141,9 @@ export default function ProtocolsPage() {
                 <tr>
                   <td colSpan={6} className="py-14 text-center">
                     <BookOpen className="w-10 h-10 text-[#EAD8C2] mx-auto mb-3" />
-                    <p className="text-[#A8927D] text-sm">Nenhum protocolo encontrado.</p>
+                    <p className="text-[#A8927D] text-sm">Nenhum protocolo padrão encontrado.</p>
                     <p className="text-[#A8927D] text-xs mt-1">
-                      Aprove um rascunho IA e crie seu primeiro protocolo oficial.
+                      Crie manualmente ou transforme um rascunho de IA revisado em modelo.
                     </p>
                   </td>
                 </tr>
@@ -159,7 +165,7 @@ export default function ProtocolsPage() {
                           href={`/dashboard/ai-protocol-drafts/${row.source_draft_id}`}
                           className="text-xs text-[#7A9A74] hover:underline"
                         >
-                          Ver rascunho IA
+                          IA revisada
                         </Link>
                       ) : (
                         <span className="text-xs text-[#A8927D]">Manual</span>
@@ -210,12 +216,10 @@ export default function ProtocolsPage() {
         )}
       </div>
 
-      {/* Tip */}
-      <div className="flex items-start gap-3 bg-[#FAF7F2] border border-[#EAD8C2] rounded-2xl p-4">
+      <div className="flex items-start gap-3 bg-[#FAF7F2] border border-[#EAD8C2] rounded-xl p-4">
         <Plus className="w-5 h-5 text-[#7A9A74] shrink-0 mt-0.5" />
         <p className="text-sm text-[#8C6E52]">
-          Protocolos são criados automaticamente ao aprovar um rascunho IA e clicar em{" "}
-          <strong className="text-[#B47F6A]">Criar protocolo oficial</strong>.
+          Um protocolo padrão nunca deve substituir a avaliação clínica. Use-o como ponto de partida e crie uma cópia personalizada sempre que objetivos, contexto familiar, restrições ou ritmo de adesão exigirem adaptação.
         </p>
       </div>
     </div>

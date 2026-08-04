@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getProtocols, createProtocol } from "@/lib/repositories/protocols";
 import { z } from "zod";
+import { writeAuditLog } from "@/lib/security/audit";
+import { getRequestFingerprint } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +21,9 @@ const createSchema = z.object({
   description: z.string().max(10000).optional().nullable(),
   category: z.string().max(100).optional().nullable(),
   phases: z.array(phaseSchema).default([]),
-});
+  kind: z.enum(["standard", "personalized"]).default("standard"),
+  clientId: z.string().uuid().optional().nullable(),
+}).strict();
 
 export async function GET(req: NextRequest) {
   const admin = await getAdminFromRequest(req);
@@ -27,12 +31,16 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const page = Number(url.searchParams.get("page") ?? "1");
+  const pageSize = Number(url.searchParams.get("pageSize") ?? "20");
   const search = url.searchParams.get("search") ?? undefined;
   const category = url.searchParams.get("category") ?? undefined;
   const activeParam = url.searchParams.get("isActive");
   const isActive = activeParam === null ? undefined : activeParam !== "false";
+  const kindParam = url.searchParams.get("kind");
+  const kind = kindParam === "personalized" ? "personalized" : kindParam === "standard" ? "standard" : undefined;
+  const clientId = url.searchParams.get("clientId") ?? undefined;
 
-  const result = await getProtocols({ page, search, category, isActive });
+  const result = await getProtocols({ page, pageSize, search, category, isActive, kind, clientId });
   return NextResponse.json(result);
 }
 
@@ -51,7 +59,17 @@ export async function POST(req: NextRequest) {
     description: parsed.data.description,
     category: parsed.data.category,
     created_by: admin.sub,
+    kind: parsed.data.kind,
+    client_id: parsed.data.clientId,
     phases: parsed.data.phases,
+  });
+  await writeAuditLog({
+    action: "protocol_created",
+    adminId: admin.sub,
+    entityType: "protocol",
+    entityId: id,
+    ipHash: getRequestFingerprint(req).ipHash,
+    metadata: { kind: parsed.data.kind, clientId: parsed.data.clientId ?? null },
   });
   return NextResponse.json({ id }, { status: 201 });
 }

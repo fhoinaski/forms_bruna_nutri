@@ -1,11 +1,15 @@
 import { d1Query, d1Execute } from "@/lib/d1/client";
 import type { ProtocolDraftOutput } from "@/lib/validators/ai-protocol";
+import { parseProtocolActions } from "@/lib/protocols/helpers";
 
 export interface Protocol {
   id: string;
   title: string;
   description: string | null;
   category: string | null;
+  kind: "standard" | "personalized";
+  client_id: string | null;
+  copied_from_protocol_id: string | null;
   source_draft_id: string | null;
   created_by: string | null;
   is_active: number;
@@ -34,6 +38,8 @@ export interface ProtocolFilters {
   search?: string;
   category?: string;
   isActive?: boolean;
+  kind?: "standard" | "personalized";
+  clientId?: string;
   page?: number;
   pageSize?: number;
 }
@@ -113,9 +119,18 @@ export async function getProtocols(
     conditions.push(`category = ?${idx++}`);
     params.push(filters.category);
   }
+  if (filters.kind) {
+    conditions.push(`kind = ?${idx++}`);
+    params.push(filters.kind);
+  }
+  if (filters.clientId) {
+    conditions.push(`client_id = ?${idx++}`);
+    params.push(filters.clientId);
+  }
   if (filters.search) {
-    conditions.push(`title LIKE ?${idx++}`);
+    conditions.push(`(title LIKE ?${idx} OR description LIKE ?${idx} OR category LIKE ?${idx})`);
     params.push(`%${filters.search}%`);
+    idx++;
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -185,6 +200,9 @@ export interface CreateProtocolInput {
   description?: string | null;
   category?: string | null;
   created_by?: string | null;
+  kind?: "standard" | "personalized";
+  client_id?: string | null;
+  copied_from_protocol_id?: string | null;
   phases?: Array<{
     title: string;
     days?: string | null;
@@ -199,9 +217,21 @@ export async function createProtocol(input: CreateProtocolInput): Promise<string
   const now = new Date().toISOString();
 
   await d1Execute(
-    `INSERT INTO protocols (id, title, description, category, source_draft_id, created_by, is_active, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, NULL, ?5, 1, ?6, ?7)`,
-    [id, input.title, input.description ?? null, input.category ?? null, input.created_by ?? null, now, now]
+    `INSERT INTO protocols
+       (id, title, description, category, kind, client_id, copied_from_protocol_id, source_draft_id, created_by, is_active, created_at, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8, 1, ?9, ?10)`,
+    [
+      id,
+      input.title,
+      input.description ?? null,
+      input.category ?? null,
+      input.kind ?? "standard",
+      input.client_id ?? null,
+      input.copied_from_protocol_id ?? null,
+      input.created_by ?? null,
+      now,
+      now,
+    ]
   );
 
   const phases = input.phases ?? [];
@@ -247,7 +277,38 @@ export async function replaceProtocolPhases(
       ]
     );
   }
+  await d1Execute(`UPDATE protocols SET updated_at = ?1 WHERE id = ?2`, [now, protocolId]);
 }
+
+export async function cloneProtocolForClient(input: {
+  sourceProtocolId: string;
+  clientId: string;
+  createdBy: string;
+  title?: string;
+  description?: string | null;
+  category?: string | null;
+}): Promise<string> {
+  const source = await getProtocolById(input.sourceProtocolId);
+  if (!source) throw new Error("Protocolo de origem não encontrado.");
+
+  return createProtocol({
+    title: input.title?.trim() || `${source.title} - personalizado`,
+    description: input.description === undefined ? source.description : input.description,
+    category: input.category === undefined ? source.category : input.category,
+    created_by: input.createdBy,
+    kind: "personalized",
+    client_id: input.clientId,
+    copied_from_protocol_id: source.id,
+    phases: source.phases.map((phase) => ({
+      title: phase.title,
+      days: phase.days,
+      objective: phase.objective,
+      actions: parseProtocolActions(phase.actions_json),
+      notes: phase.notes,
+    })),
+  });
+}
+
 
 export async function getProtocolMetrics(): Promise<{ total: number; ativos: number }> {
   const [total, ativos] = await Promise.all([

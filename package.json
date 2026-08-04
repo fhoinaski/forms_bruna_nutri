@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "clean": "next clean",
     "init-d1": "node scripts/init-d1.mjs",
+    "migrate:d1": "node scripts/migrate-d1.mjs",
     "create-admin": "node scripts/create-admin.mjs",
     "backup:d1": "node scripts/backup-d1.mjs",
     "restore:d1": "node scripts/restore-d1.mjs",

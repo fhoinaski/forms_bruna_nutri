@@ -132,6 +132,8 @@ export async function anonymizePrivacyRequestData(request: PrivacyRequest) {
     await d1Execute("DELETE FROM nutrition_records WHERE client_id = ?1", [client.id]);
     await d1Execute("DELETE FROM client_timeline_events WHERE client_id = ?1", [client.id]);
     await d1Execute("DELETE FROM client_protocols WHERE client_id = ?1", [client.id]);
+    await d1Execute("DELETE FROM protocol_phases WHERE protocol_id IN (SELECT id FROM protocols WHERE client_id = ?1)", [client.id]);
+    await d1Execute("DELETE FROM protocols WHERE client_id = ?1", [client.id]);
     await d1Execute("DELETE FROM appointment_workflow_items WHERE appointment_id IN (SELECT id FROM appointments WHERE client_id = ?1)", [client.id]);
     await d1Execute("UPDATE appointments SET client_id = NULL, title = 'Horario reservado', notes = NULL WHERE client_id = ?1", [client.id]);
     await d1Execute("UPDATE payments SET client_id = NULL, notes = NULL WHERE client_id = ?1", [client.id]);
@@ -169,7 +171,7 @@ export async function exportPrivacyRequestData(request: PrivacyRequest) {
   const clinicalRecords = [];
   for (const client of clients) {
     const clientId = String(client.id);
-    const [appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecords, protocols, timeline] = await Promise.all([
+    const [appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecords, protocols, personalizedProtocols, timeline] = await Promise.all([
       d1Query<Record<string, unknown>>("SELECT * FROM appointments WHERE client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>("SELECT w.* FROM appointment_workflow_items w INNER JOIN appointments a ON a.id = w.appointment_id WHERE a.client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>("SELECT * FROM payments WHERE client_id = ?1", [clientId]),
@@ -178,9 +180,14 @@ export async function exportPrivacyRequestData(request: PrivacyRequest) {
       d1Query<Record<string, unknown>>("SELECT * FROM client_evolutions WHERE client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>("SELECT * FROM nutrition_records WHERE client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>("SELECT * FROM client_protocols WHERE client_id = ?1", [clientId]),
+      d1Query<Record<string, unknown>>(
+        `SELECT p.*, (SELECT json_group_array(json_object('title', pp.title, 'days', pp.days, 'objective', pp.objective, 'actions', pp.actions_json, 'notes', pp.notes)) FROM protocol_phases pp WHERE pp.protocol_id = p.id) as phases
+         FROM protocols p WHERE p.client_id = ?1`,
+        [clientId]
+      ),
       d1Query<Record<string, unknown>>("SELECT * FROM client_timeline_events WHERE client_id = ?1", [clientId]),
     ]);
-    clinicalRecords.push({ clientId, appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecords, protocols, timeline });
+    clinicalRecords.push({ clientId, appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecords, protocols, personalizedProtocols, timeline });
   }
   return { generatedAt: new Date().toISOString(), requestId: request.id, clients, submissions, opportunities, clinicalRecords };
 }

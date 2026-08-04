@@ -1,4 +1,5 @@
 import { d1Query, d1Execute } from "@/lib/d1/client";
+import { getPhaseDueInDays } from "@/lib/protocols/helpers";
 
 export interface ClientTask {
   id: string;
@@ -32,6 +33,13 @@ interface DraftTask {
   dueInDays?: number;
 }
 
+interface ProtocolPhaseTaskSource {
+  title: string;
+  days: string | null;
+  objective: string | null;
+  actions_json: string;
+}
+
 export async function createTasksFromDraft(
   clientId: string,
   clientProtocolId: string,
@@ -60,6 +68,54 @@ export async function createTasksFromDraft(
       ]
     );
   }
+}
+
+export async function createTasksFromProtocolPhases(
+  clientId: string,
+  clientProtocolId: string,
+  phases: ProtocolPhaseTaskSource[],
+  startedAt: string
+): Promise<number> {
+  const now = new Date().toISOString();
+  const baseDate = new Date(`${startedAt.slice(0, 10)}T12:00:00`);
+  let created = 0;
+
+  for (let phaseIndex = 0; phaseIndex < phases.length; phaseIndex++) {
+    const phase = phases[phaseIndex];
+    let actions: string[] = [];
+    try {
+      const parsed = JSON.parse(phase.actions_json) as unknown;
+      actions = Array.isArray(parsed)
+        ? parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        : [];
+    } catch {
+      actions = [];
+    }
+
+    const dueInDays = getPhaseDueInDays(phase.days, phaseIndex);
+    const dueDate = new Date(baseDate.getTime() + dueInDays * 86400000).toISOString().slice(0, 10);
+
+    for (const action of actions) {
+      await d1Execute(
+        `INSERT INTO client_tasks
+           (id, client_id, client_protocol_id, title, description, due_date, status, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pendente', ?7, ?8)`,
+        [
+          crypto.randomUUID(),
+          clientId,
+          clientProtocolId,
+          action,
+          phase.objective ? `${phase.title}: ${phase.objective}` : phase.title,
+          dueDate,
+          now,
+          now,
+        ]
+      );
+      created++;
+    }
+  }
+
+  return created;
 }
 
 export interface TaskFilters {
@@ -169,6 +225,16 @@ export async function updateClientTaskStatus(
   await d1Execute(
     `UPDATE client_tasks SET status = ?1, completed_at = ?2, updated_at = ?3 WHERE id = ?4`,
     [status, completedAt, now, id]
+  );
+}
+
+export async function cancelPendingTasksForProtocol(clientProtocolId: string): Promise<void> {
+  const now = new Date().toISOString();
+  await d1Execute(
+    `UPDATE client_tasks
+     SET status = 'cancelada', completed_at = NULL, updated_at = ?1
+     WHERE client_protocol_id = ?2 AND status = 'pendente'`,
+    [now, clientProtocolId]
   );
 }
 

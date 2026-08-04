@@ -71,6 +71,101 @@ body {
   box-shadow: 0 0 0 4px rgba(127, 154, 116, 0.12);
 }
 
+/* Consistent controls and field alignment inside the clinical dashboard. */
+.dashboard-shell main {
+  min-width: 0;
+}
+
+.dashboard-shell main form,
+.dashboard-shell main form > *,
+.dashboard-shell main label {
+  min-width: 0;
+}
+
+.dashboard-shell .brand-input {
+  min-height: 2.75rem;
+  border-color: #ded2c7;
+  border-radius: 0.625rem;
+  background: #fffdfc;
+  padding: 0.6875rem 0.875rem;
+  line-height: 1.35;
+  box-shadow: 0 1px 0 rgba(58, 48, 40, 0.025);
+}
+
+.dashboard-shell textarea.brand-input {
+  height: auto;
+  line-height: 1.55;
+}
+
+.dashboard-shell select.brand-input {
+  padding-right: 2.25rem;
+}
+
+.dashboard-shell .brand-input:hover:not(:disabled) {
+  border-color: #cdbdad;
+}
+
+.dashboard-shell .brand-input:disabled {
+  cursor: not-allowed;
+  background: #f5f0eb;
+  color: #8a7b70;
+}
+
+.dashboard-shell .brand-label {
+  margin-bottom: 0.5rem;
+  color: #765548;
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-filter-form {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.dashboard-filter-form .brand-btn-primary {
+  min-height: 2.75rem;
+  min-width: 6.5rem;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.dashboard-action-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.dashboard-action-field > .brand-btn-primary,
+.dashboard-action-field > .brand-btn-secondary {
+  flex: none;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .dashboard-filter-form {
+    grid-template-columns: minmax(180px, 1fr) minmax(135px, auto) minmax(6.5rem, auto);
+  }
+
+  .dashboard-filter-form .brand-btn-primary {
+    width: auto;
+  }
+
+  .dashboard-action-field {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .dashboard-action-field > .brand-btn-primary,
+  .dashboard-action-field > .brand-btn-secondary {
+    width: auto;
+  }
+}
+
 .brand-label {
   display: block;
   font-size: 0.625rem;
@@ -144,6 +239,17 @@ body {
 
 @media (min-width: 1024px) {
   .brand-page { padding: 2.5rem 2.5rem; }
+}
+
+@media (max-width: 639px) {
+  .dashboard-shell main {
+    padding: 1rem;
+  }
+
+  .dashboard-shell main .brand-btn-primary,
+  .dashboard-shell main .brand-btn-secondary {
+    min-height: 2.75rem;
+  }
 }
 
 /* ── Section title ── */

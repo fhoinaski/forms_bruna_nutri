@@ -135,8 +135,8 @@ export default function ClientsPage() {
 
       {/* Filtros */}
       <div className="brand-card p-5">
-        <form onSubmit={handleSearch} className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[180px]">
+        <form onSubmit={handleSearch} className="dashboard-filter-form">
+          <div>
             <label className="brand-label">Busca</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A8927D]" />
@@ -149,7 +149,7 @@ export default function ClientsPage() {
             </div>
           </div>
 
-          <div className="min-w-[150px]">
+          <div>
             <label className="brand-label">Status</label>
             <select
               value={status}

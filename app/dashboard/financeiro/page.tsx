@@ -300,7 +300,7 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
         <section className="rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
           <div className="border-b border-[#EDE1D6] px-6 py-5">
             <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">

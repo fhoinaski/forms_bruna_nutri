@@ -460,13 +460,13 @@ export default function SubmissionDetailPage() {
 
         {/* Management panel */}
         <div className="p-6 bg-[#FAF7F2]/60 border-b border-[#EAD8C2]">
-          <div className="flex flex-wrap gap-4 items-end">
+          <div className="grid items-end gap-4 sm:grid-cols-[minmax(150px,auto)_minmax(200px,1fr)_auto]">
             <div>
               <label className="brand-label">Status</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="brand-input w-auto"
+                className="brand-input"
               >
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -475,7 +475,7 @@ export default function SubmissionDetailPage() {
                 ))}
               </select>
             </div>
-            <div className="flex-1 min-w-[200px]">
+            <div>
               <label className="brand-label">Notas internas</label>
               <input
                 value={notes}
@@ -487,7 +487,7 @@ export default function SubmissionDetailPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="brand-btn-primary"
+              className="brand-btn-primary w-full sm:w-auto"
             >
               <Save className="w-4 h-4" />
               {saving ? "Salvando..." : saved ? "Salvo!" : "Salvar"}

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
-import { getProtocolById, updateProtocol, archiveProtocol } from "@/lib/repositories/protocols";
+import { getProtocolById, updateProtocol, archiveProtocol, replaceProtocolPhases } from "@/lib/repositories/protocols";
 import { z } from "zod";
+import { writeAuditLog } from "@/lib/security/audit";
+import { getRequestFingerprint } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +13,14 @@ const patchSchema = z.object({
   description: z.string().max(10000).optional().nullable(),
   category: z.string().max(100).optional().nullable(),
   archive: z.boolean().optional(),
-});
+  phases: z.array(z.object({
+    title: z.string().min(1).max(500),
+    days: z.string().max(50).optional().nullable(),
+    objective: z.string().max(2000).optional().nullable(),
+    actions: z.array(z.string().min(1).max(1000)).max(50),
+    notes: z.string().max(2000).optional().nullable(),
+  })).max(30).optional(),
+}).strict();
 
 export async function GET(
   req: NextRequest,
@@ -52,7 +61,17 @@ export async function PATCH(
       description: parsed.data.description ?? undefined,
       category: parsed.data.category ?? undefined,
     });
+    if (parsed.data.phases) await replaceProtocolPhases(id, parsed.data.phases);
   }
+
+  await writeAuditLog({
+    action: parsed.data.archive ? "protocol_archived" : "protocol_updated",
+    adminId: admin.sub,
+    entityType: "protocol",
+    entityId: id,
+    ipHash: getRequestFingerprint(req).ipHash,
+    metadata: { changedFields: Object.keys(parsed.data) },
+  });
 
   return NextResponse.json({ success: true });
 }

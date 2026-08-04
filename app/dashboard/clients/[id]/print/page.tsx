@@ -244,13 +244,16 @@ export default async function ClientPrintPage({
                   <div>
                     <p style={{ fontWeight: 600 }}>{p.protocol_title ?? "Protocolo sem título"}</p>
                     {p.protocol_category && <p style={{ color: "#8C6E52", fontSize: "11px" }}>{p.protocol_category}</p>}
+                    <p style={{ color: "#A8927D", fontSize: "10px", marginTop: "2px" }}>{p.protocol_kind === "personalized" ? "Personalizado" : "Padrão"}</p>
                   </div>
                   <span className={`badge ${p.status === "ativo" ? "badge-green" : "badge-sand"}`}>{p.status}</span>
                 </div>
                 <p style={{ color: "#A8927D", fontSize: "10px", marginTop: "4px" }}>
                   Iniciado em {formatDate(p.started_at)}
                   {p.completed_at ? ` · Concluído em ${formatDate(p.completed_at)}` : ""}
+                  {p.review_date ? ` · Revisão em ${formatDate(p.review_date)}` : ""}
                 </p>
+                {p.professional_notes && <p style={{ marginTop: "6px", fontSize: "11px" }}><strong>Notas do acompanhamento:</strong> {p.professional_notes}</p>}
               </div>
             ))}
           </div>

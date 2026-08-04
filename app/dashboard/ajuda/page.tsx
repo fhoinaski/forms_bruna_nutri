@@ -14,6 +14,7 @@ import {
   Sparkles,
   Users,
   WalletCards,
+  Copy,
 } from "lucide-react";
 
 const flow = [
@@ -71,6 +72,24 @@ const warnings = [
   "Antes de publicar em producao, aplique todas as migracoes D1 novas.",
 ];
 
+const protocolPaths = [
+  {
+    icon: BookOpen,
+    title: "Aplicar um protocolo padrão",
+    text: "Use quando o modelo da biblioteca já atende ao objetivo da cliente. Na ficha, abra Protocolos, selecione o padrão, defina início e revisão e clique em Aplicar protocolo padrão.",
+  },
+  {
+    icon: Copy,
+    title: "Criar uma versão personalizada",
+    text: "Escolha um padrão como referência ou deixe a seleção vazia para começar do zero. Dê um nome individual, inicie o protocolo e depois abra a cópia para editar fases, ações e observações sem alterar a biblioteca.",
+  },
+  {
+    icon: Sparkles,
+    title: "Partir de uma sugestão de IA",
+    text: "Gere o rascunho a partir da pré-consulta, revise tecnicamente, aprove e transforme em protocolo padrão. A IA organiza uma proposta; a decisão clínica e a publicação continuam sendo da nutricionista.",
+  },
+];
+
 export default function HelpDashboardPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-7 animate-fade-up">
@@ -122,6 +141,56 @@ export default function HelpDashboardPage() {
             );
             return item.href ? <Link href={item.href} key={item.title}>{content}</Link> : <div key={item.title}>{content}</div>;
           })}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-[#D9E4D3] bg-[#F7FAF5] p-6">
+        <div className="max-w-3xl">
+          <p className="brand-kicker mb-2">Guia de protocolos</p>
+          <h2 className="font-serif text-3xl font-semibold">Como organizar e usar protocolos clínicos</h2>
+          <p className="mt-3 text-sm leading-7 text-[#75675E]">
+            Um protocolo é um plano de cuidado dividido em fases. Cada fase reúne período, objetivo, ações práticas e notas profissionais. Ao iniciar um protocolo para uma cliente, as ações podem virar tarefas com prazo e aparecer no portal.
+          </p>
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          {protocolPaths.map((item) => {
+            const Icon = item.icon;
+            return (
+              <article key={item.title} className="rounded-xl border border-[#D9E4D3] bg-white p-5">
+                <Icon className="h-5 w-5 text-[#607A56]" />
+                <h3 className="mt-4 font-serif text-xl font-semibold">{item.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-[#75675E]">{item.text}</p>
+              </article>
+            );
+          })}
+        </div>
+
+        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <div className="rounded-xl bg-white p-5">
+            <h3 className="font-serif text-xl font-semibold">Fluxo recomendado</h3>
+            <ol className="mt-4 space-y-3 text-sm leading-6 text-[#75675E]">
+              <li><strong className="text-[#3A3028]">1. Avalie:</strong> revise prontuário, objetivos, restrições, rotina e contexto familiar.</li>
+              <li><strong className="text-[#3A3028]">2. Escolha:</strong> aplique um padrão somente quando ele se encaixar; caso contrário, personalize.</li>
+              <li><strong className="text-[#3A3028]">3. Planeje:</strong> defina início, primeira revisão e se as ações devem gerar tarefas.</li>
+              <li><strong className="text-[#3A3028]">4. Acompanhe:</strong> registre notas, evolução das tarefas e ajuste o status para ativo, pausado, concluído ou cancelado.</li>
+              <li><strong className="text-[#3A3028]">5. Revise:</strong> adapte a cópia individual conforme adesão e evolução, sem modificar o padrão original.</li>
+            </ol>
+          </div>
+          <div className="rounded-xl bg-white p-5">
+            <h3 className="font-serif text-xl font-semibold">O que cada opção preserva</h3>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-[#75675E]">
+              <p><strong className="text-[#3A3028]">Padrão:</strong> modelo reutilizável e mantido na Biblioteca de Protocolos.</p>
+              <p><strong className="text-[#3A3028]">Personalizado:</strong> cópia exclusiva da cliente; alterações não afetam outras pessoas.</p>
+              <p><strong className="text-[#3A3028]">Aplicação:</strong> registro do acompanhamento com datas, notas, tarefas, progresso e status.</p>
+              <p><strong className="text-[#3A3028]">Arquivamento:</strong> retira um modelo de novos usos sem apagar o histórico clínico já registrado.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link href="/dashboard/protocols" className="brand-btn-primary">Abrir biblioteca</Link>
+          <Link href="/dashboard/protocols/novo" className="brand-btn-secondary">Criar protocolo padrão</Link>
         </div>
       </section>
 

@@ -287,7 +287,7 @@ export default function DashboardBlogPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(380px,0.65fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(380px,0.65fr)]">
         <section className="rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
           <div className="border-b border-[#EDE1D6] px-6 py-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -299,20 +299,20 @@ export default function DashboardBlogPage() {
                   Conteudos publicados, rascunhos e posts criados pelo agente.
                 </p>
               </div>
-              <form onSubmit={handleSearch} className="flex flex-wrap gap-2">
+              <form onSubmit={handleSearch} className="dashboard-filter-form lg:max-w-xl">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A9978A]" />
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    className="brand-input h-10 min-w-[210px] pl-9"
+                    className="brand-input pl-9"
                     placeholder="Buscar artigo..."
                   />
                 </div>
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value)}
-                  className="brand-input h-10 min-w-[145px]"
+                  className="brand-input"
                 >
                   <option value="">Todos</option>
                   {Object.entries(statusLabels).map(([value, label]) => (
@@ -321,7 +321,7 @@ export default function DashboardBlogPage() {
                     </option>
                   ))}
                 </select>
-                <button type="submit" className="brand-btn-primary h-10 py-0">
+                <button type="submit" className="brand-btn-primary py-0">
                   Buscar
                 </button>
               </form>

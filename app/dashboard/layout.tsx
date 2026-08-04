@@ -236,7 +236,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div
-      className={`${jost.variable} ${cormorant.variable} font-sans min-h-screen bg-[#FBF7F1] text-[#3A3028]`}
+      className={`${jost.variable} ${cormorant.variable} dashboard-shell font-sans min-h-screen bg-[#FBF7F1] text-[#3A3028]`}
     >
       {/* Desktop sidebar */}
       <aside className="fixed top-0 left-0 bottom-0 w-64 bg-[#FFFDFC]/90 backdrop-blur-xl border-r border-[#EDE1D6] hidden lg:block z-30">

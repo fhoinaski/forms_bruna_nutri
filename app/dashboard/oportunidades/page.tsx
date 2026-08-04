@@ -219,16 +219,16 @@ export default function OpportunitiesPage() {
             event.preventDefault();
             void load();
           }}
-          className="flex flex-wrap items-end gap-3"
+          className="dashboard-filter-form"
         >
-          <div className="min-w-[220px] flex-1">
+          <div>
             <label className="brand-label">Busca</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A9978A]" />
               <input value={search} onChange={(event) => setSearch(event.target.value)} className="brand-input pl-9" placeholder="Nome, telefone, objetivo..." />
             </div>
           </div>
-          <div className="min-w-[170px]">
+          <div>
             <label className="brand-label">Temperatura</label>
             <select value={temperature} onChange={(event) => setTemperature(event.target.value)} className="brand-input">
               <option value="">Todas</option>

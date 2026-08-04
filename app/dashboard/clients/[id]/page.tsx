@@ -8,6 +8,7 @@ import {
   User, BookOpen, CheckSquare, TrendingUp, Clock,
   BarChart2, Plus, Check, X, Trash2, ChevronRight,
   CalendarDays, WalletCards, KeyRound, ShieldCheck, RefreshCw, ExternalLink,
+  Copy, Play,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 
@@ -29,7 +30,14 @@ interface ClientDetail {
 interface ClientProtocol {
   id: string; protocol_id: string; source_draft_id: string | null;
   status: string; started_at: string; completed_at: string | null;
+  review_date: string | null; professional_notes: string | null;
   protocol_title: string | null; protocol_category: string | null;
+  protocol_kind: "standard" | "personalized"; protocol_description: string | null;
+  phase_count: number; task_count: number; completed_task_count: number;
+}
+interface ProtocolLibraryItem {
+  id: string; title: string; description: string | null; category: string | null;
+  source_draft_id: string | null; is_active: number;
 }
 interface ClientTask {
   id: string; client_protocol_id: string | null; title: string;
@@ -104,8 +112,12 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
 };
 const PROTOCOL_STATUS_COLORS: Record<string, string> = {
   ativo: "brand-badge brand-badge-finalizado",
+  pausado: "brand-badge brand-badge-andamento",
   concluido: "brand-badge brand-badge-andamento",
   cancelado: "brand-badge brand-badge-arquivado",
+};
+const PROTOCOL_STATUS_LABELS: Record<string, string> = {
+  ativo: "Ativo", pausado: "Pausado", concluido: "Concluído", cancelado: "Cancelado",
 };
 
 const TIMELINE_ICONS: Record<string, string> = {
@@ -180,7 +192,7 @@ function EvolutionForm({ clientId, onSuccess }: { clientId: string; onSuccess: (
   return (
     <form onSubmit={handleSubmit} className="space-y-4 border border-[#EAD8C2] rounded-2xl p-5 bg-[#FAF7F2]/60">
       <h3 className="font-serif font-semibold text-[#B47F6A]">Nova evolução</h3>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className="brand-label">Peso (kg)</label>
           <input type="number" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)}
@@ -434,6 +446,16 @@ export default function ClientDetailPage() {
   // Protocols
   const [protocols, setProtocols] = useState<ClientProtocol[]>([]);
   const [protocolsLoading, setProtocolsLoading] = useState(false);
+  const [protocolLibrary, setProtocolLibrary] = useState<ProtocolLibraryItem[]>([]);
+  const [selectedProtocolId, setSelectedProtocolId] = useState("");
+  const [protocolStartDate, setProtocolStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [protocolReviewDate, setProtocolReviewDate] = useState("");
+  const [protocolProfessionalNotes, setProtocolProfessionalNotes] = useState("");
+  const [personalizedTitle, setPersonalizedTitle] = useState("");
+  const [createProtocolTasks, setCreateProtocolTasks] = useState(true);
+  const [protocolActionLoading, setProtocolActionLoading] = useState(false);
+  const [protocolMessage, setProtocolMessage] = useState("");
+  const [createdPersonalizedProtocolId, setCreatedPersonalizedProtocolId] = useState("");
 
   // Tasks
   const [tasks, setTasks] = useState<ClientTask[]>([]);
@@ -478,8 +500,14 @@ export default function ClientDetailPage() {
   useEffect(() => {
     if (activeTab === "protocolos" && protocols.length === 0) {
       setProtocolsLoading(true);
-      fetch(`/api/admin/clients/${id}/protocols`)
-        .then((r) => r.json()).then((d: ClientProtocol[]) => setProtocols(d ?? []))
+      Promise.all([
+        fetch(`/api/admin/clients/${id}/protocols`).then((r) => r.json() as Promise<ClientProtocol[]>),
+        fetch("/api/admin/protocols?kind=standard&isActive=true&pageSize=100").then((r) => r.json() as Promise<{ items: ProtocolLibraryItem[] }>),
+      ])
+        .then(([assigned, library]) => {
+          setProtocols(assigned ?? []);
+          setProtocolLibrary(library.items ?? []);
+        })
         .catch(() => null).finally(() => setProtocolsLoading(false));
     }
     if (activeTab === "portal" && !portalAccess) {
@@ -529,6 +557,81 @@ export default function ClientDetailPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskStatusFilter]);
+
+  const reloadClientProtocols = async () => {
+    const response = await fetch(`/api/admin/clients/${id}/protocols`);
+    if (response.ok) setProtocols(await response.json() as ClientProtocol[]);
+  };
+
+  const startProtocol = async (personalized: boolean) => {
+    if (!personalized && !selectedProtocolId) {
+      setProtocolMessage("Selecione um protocolo padrão.");
+      return;
+    }
+    if (personalized && !personalizedTitle.trim()) {
+      setProtocolMessage("Dê um nome ao protocolo personalizado.");
+      return;
+    }
+
+    setProtocolActionLoading(true);
+    setProtocolMessage("");
+    setCreatedPersonalizedProtocolId("");
+    try {
+      const body = personalized
+        ? {
+            mode: "create_personalized",
+            baseProtocolId: selectedProtocolId || null,
+            title: personalizedTitle.trim(),
+            startedAt: protocolStartDate,
+            reviewDate: protocolReviewDate || null,
+            professionalNotes: protocolProfessionalNotes || null,
+            createTasks: createProtocolTasks,
+          }
+        : {
+            mode: "apply",
+            protocolId: selectedProtocolId,
+            startedAt: protocolStartDate,
+            reviewDate: protocolReviewDate || null,
+            professionalNotes: protocolProfessionalNotes || null,
+            createTasks: createProtocolTasks,
+          };
+      const response = await fetch(`/api/admin/clients/${id}/protocols`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Não foi possível iniciar o protocolo.");
+      await reloadClientProtocols();
+      setProtocolMessage(`Protocolo iniciado. ${result.tasksCreated ?? 0} tarefa(s) criada(s).`);
+      if (personalized) setCreatedPersonalizedProtocolId(result.protocolId);
+      setPersonalizedTitle("");
+      setProtocolProfessionalNotes("");
+    } catch (cause) {
+      setProtocolMessage(cause instanceof Error ? cause.message : "Não foi possível iniciar o protocolo.");
+    } finally {
+      setProtocolActionLoading(false);
+    }
+  };
+
+  const updateAssignedProtocol = async (
+    clientProtocolId: string,
+    patch: { status?: string; reviewDate?: string | null; professionalNotes?: string | null }
+  ) => {
+    setProtocolMessage("");
+    const response = await fetch(`/api/admin/clients/${id}/protocols/${clientProtocolId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      setProtocolMessage(result.message || "Não foi possível atualizar o protocolo.");
+      return;
+    }
+    await reloadClientProtocols();
+    setProtocolMessage("Acompanhamento do protocolo atualizado.");
+  };
 
   const handleSave = async () => {
     setSaving(true); setSaved(false); setSaveError("");
@@ -838,56 +941,132 @@ export default function ClientDetailPage() {
           )}
 
           {activeTab === "protocolos" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Protocolos aplicados</h2>
-                <Link href="/dashboard/protocols"
-                  className="text-xs font-medium text-[#7A9A74] hover:text-[#B47F6A] transition-colors flex items-center gap-1">
-                  Ver biblioteca
-                  <ChevronRight className="w-3.5 h-3.5" />
+            <div className="space-y-7">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="brand-kicker mb-1">Plano de cuidado</p>
+                  <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Protocolos da cliente</h2>
+                  <p className="mt-1 text-sm leading-6 text-[#75675E]">Inicie um modelo padrão ou crie uma cópia individual sem alterar a biblioteca.</p>
+                </div>
+                <Link href="/dashboard/protocols" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#607A56] hover:text-[#B47F6A]">
+                  Ver biblioteca <ChevronRight className="h-4 w-4" />
                 </Link>
               </div>
-              {protocolsLoading ? (
-                <p className="text-sm text-[#A8927D]">Carregando...</p>
-              ) : protocols.length === 0 ? (
-                <div className="text-center py-10">
-                  <BookOpen className="w-10 h-10 text-[#EAD8C2] mx-auto mb-3" />
-                  <p className="text-[#A8927D] text-sm">Nenhum protocolo aplicado ainda.</p>
-                  <p className="text-[#A8927D] text-xs mt-1">
-                    Aplique um protocolo a partir da tela de formulário ou rascunho IA aprovado.
-                  </p>
-                </div>
-              ) : (
-                <ul className="space-y-3">
-                  {protocols.map((p) => (
-                    <li key={p.id} className="border border-[#EAD8C2] rounded-xl p-4 bg-[#FAF7F2]/60">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-medium text-[#3A2B1F] text-sm">
-                            {p.protocol_title ?? "Protocolo sem título"}
-                          </p>
-                          {p.protocol_category && (
-                            <span className="text-xs text-[#8C6E52]">{p.protocol_category}</span>
-                          )}
-                          <p className="text-xs text-[#A8927D] mt-1">
-                            Iniciado em {formatDateSafe(p.started_at)}
-                            {p.completed_at ? ` · Concluído em ${formatDateSafe(p.completed_at)}` : ""}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={PROTOCOL_STATUS_COLORS[p.status] ?? "brand-badge brand-badge-andamento"}>
-                            {p.status}
-                          </span>
-                          <Link href={`/dashboard/protocols/${p.protocol_id}`}
-                            className="text-xs text-[#7A9A74] hover:underline">
-                            Ver
-                          </Link>
-                        </div>
+
+              <section className="rounded-xl border border-[#E6D5C5] bg-[#FBF7F1] p-5">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="brand-label">Protocolo padrão de referência</label>
+                      <select value={selectedProtocolId} onChange={(event) => {
+                        setSelectedProtocolId(event.target.value);
+                        const selected = protocolLibrary.find((item) => item.id === event.target.value);
+                        if (selected) setPersonalizedTitle(`${selected.title} - ${data.name}`);
+                      }} className="brand-input">
+                        <option value="">Selecione um modelo ou deixe vazio para criar do zero</option>
+                        {protocolLibrary.map((protocol) => (
+                          <option key={protocol.id} value={protocol.id}>{protocol.title}{protocol.category ? ` · ${protocol.category}` : ""}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="brand-label">Nome da versão personalizada</label>
+                      <input value={personalizedTitle} onChange={(event) => setPersonalizedTitle(event.target.value)} className="brand-input" placeholder={`Ex: Plano individual - ${data.name}`} />
+                    </div>
+                    <div>
+                      <label className="brand-label">Notas profissionais desta aplicação</label>
+                      <textarea value={protocolProfessionalNotes} onChange={(event) => setProtocolProfessionalNotes(event.target.value)} className="brand-input min-h-24 resize-y" placeholder="Objetivo inicial, adaptações previstas, contexto familiar e pontos para revisar." />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                      <div>
+                        <label className="brand-label">Data de início</label>
+                        <input type="date" value={protocolStartDate} onChange={(event) => setProtocolStartDate(event.target.value)} className="brand-input" />
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                      <div>
+                        <label className="brand-label">Primeira revisão</label>
+                        <input type="date" value={protocolReviewDate} onChange={(event) => setProtocolReviewDate(event.target.value)} className="brand-input" />
+                      </div>
+                    </div>
+                    <label className="flex items-start gap-3 rounded-xl border border-[#D9E4D3] bg-white p-4 text-sm leading-5 text-[#5F554D]">
+                      <input type="checkbox" checked={createProtocolTasks} onChange={(event) => setCreateProtocolTasks(event.target.checked)} className="mt-1 h-4 w-4 accent-[#607A56]" />
+                      <span><strong className="block text-[#3A3028]">Criar tarefas das fases</strong>As ações do protocolo entram na rotina e no portal com prazos calculados pelo período de cada fase.</span>
+                    </label>
+                    <div className="grid gap-2">
+                      <button onClick={() => void startProtocol(false)} disabled={protocolActionLoading || !selectedProtocolId} className="brand-btn-primary w-full">
+                        <Play className="h-4 w-4" />Aplicar protocolo padrão
+                      </button>
+                      <button onClick={() => void startProtocol(true)} disabled={protocolActionLoading || !personalizedTitle.trim()} className="brand-btn-secondary w-full">
+                        <Copy className="h-4 w-4" />Criar e iniciar personalizado
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {protocolMessage && <p className="mt-4 rounded-xl border border-[#D9E4D3] bg-white px-4 py-3 text-sm text-[#5F554D]">{protocolMessage}</p>}
+                {createdPersonalizedProtocolId && (
+                  <Link href={`/dashboard/protocols/${createdPersonalizedProtocolId}`} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#607A56] hover:text-[#B47F6A]">
+                    Editar fases da cópia personalizada <ChevronRight className="h-4 w-4" />
+                  </Link>
+                )}
+              </section>
+
+              <section>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Acompanhamentos registrados</h3>
+                  <span className="rounded-full bg-[#EAF0E4] px-3 py-1 text-xs font-semibold text-[#607A56]">{protocols.length}</span>
+                </div>
+                {protocolsLoading ? (
+                  <p className="py-8 text-center text-sm text-[#A8927D]">Carregando...</p>
+                ) : protocols.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-[#D9C4B2] py-10 text-center">
+                    <BookOpen className="mx-auto mb-3 h-9 w-9 text-[#D9C4B2]" />
+                    <p className="text-sm font-semibold text-[#3A3028]">Nenhum protocolo iniciado</p>
+                    <p className="mt-1 text-xs text-[#75675E]">Use o painel acima para começar o plano de cuidado.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {protocols.map((protocol) => {
+                      const progress = protocol.task_count > 0 ? Math.round((protocol.completed_task_count / protocol.task_count) * 100) : 0;
+                      return (
+                        <article key={protocol.id} className="rounded-xl border border-[#E6D5C5] bg-white p-5">
+                          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-serif text-lg font-semibold text-[#3A3028]">{protocol.protocol_title ?? "Protocolo sem título"}</h4>
+                                <span className={PROTOCOL_STATUS_COLORS[protocol.status] ?? "brand-badge brand-badge-andamento"}>{PROTOCOL_STATUS_LABELS[protocol.status] ?? protocol.status}</span>
+                                <span className="rounded-full bg-[#FBF7F1] px-2.5 py-1 text-[10px] font-semibold uppercase text-[#765548]">{protocol.protocol_kind === "personalized" ? "Personalizado" : "Padrão"}</span>
+                              </div>
+                              <p className="mt-2 text-xs text-[#75675E]">Início: {formatDateSafe(protocol.started_at)}{protocol.review_date ? ` · Revisão: ${formatDateSafe(protocol.review_date)}` : " · Revisão não definida"}</p>
+                              <p className="mt-1 text-xs text-[#8A7B70]">{protocol.phase_count} fase(s) · {protocol.completed_task_count}/{protocol.task_count} tarefas concluídas</p>
+                            </div>
+                            <Link href={`/dashboard/protocols/${protocol.protocol_id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-[#607A56] hover:text-[#B47F6A]">Abrir plano <ChevronRight className="h-4 w-4" /></Link>
+                          </div>
+
+                          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#F1ECE7]"><div className="h-full rounded-full bg-[#7F9A74]" style={{ width: `${progress}%` }} /></div>
+
+                          <div className="mt-5 grid gap-4 md:grid-cols-[170px_170px_minmax(0,1fr)]">
+                            <div>
+                              <label className="brand-label">Status</label>
+                              <select value={protocol.status} onChange={(event) => void updateAssignedProtocol(protocol.id, { status: event.target.value })} className="brand-input">
+                                <option value="ativo">Ativo</option><option value="pausado">Pausado</option><option value="concluido">Concluído</option><option value="cancelado">Cancelado</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="brand-label">Próxima revisão</label>
+                              <input type="date" defaultValue={protocol.review_date ?? ""} onBlur={(event) => void updateAssignedProtocol(protocol.id, { reviewDate: event.target.value || null })} className="brand-input" />
+                            </div>
+                            <div>
+                              <label className="brand-label">Notas do acompanhamento</label>
+                              <input defaultValue={protocol.professional_notes ?? ""} onBlur={(event) => void updateAssignedProtocol(protocol.id, { professionalNotes: event.target.value || null })} className="brand-input" placeholder="Registre ajustes e pontos para a próxima revisão" />
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
             </div>
           )}
 
