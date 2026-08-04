@@ -8,6 +8,7 @@ import type { NutritionRecord } from "@/lib/repositories/nutrition-records";
 import { ensureNutritionRecordsTable } from "@/lib/repositories/nutrition-records";
 import type { Payment } from "@/lib/repositories/payments";
 import { ensurePaymentsTable } from "@/lib/repositories/payments";
+import { getActiveMealPlan, type MealPlanPayload } from "@/lib/repositories/meal-plans";
 
 export interface ClientPortalAccess {
   id: string;
@@ -47,6 +48,7 @@ export interface ClientPortalSummary {
   tasks: ClientTask[];
   protocols: PortalProtocol[];
   carePlan: Pick<NutritionRecord, "goals" | "care_plan" | "hydration" | "physical_activity" | "sleep_routine"> | null;
+  mealPlan: MealPlanPayload | null;
   payments: Pick<Payment, "id" | "description" | "amount_cents" | "due_date" | "status" | "payment_link" | "receipt_url" | "installment_number" | "installment_total">[];
 }
 
@@ -195,7 +197,7 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
   const client = clients[0];
   if (!client) return null;
 
-  const [appointments, tasks, protocols, carePlan, payments] = await Promise.all([
+  const [appointments, tasks, protocols, carePlan, mealPlan, payments] = await Promise.all([
     d1Query<Appointment>(
       `SELECT a.*, c.name as client_name, c.phone as client_phone, c.email as client_email
        FROM appointments a
@@ -217,6 +219,7 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
       "SELECT goals, care_plan, hydration, physical_activity, sleep_routine FROM nutrition_records WHERE client_id = ?1 LIMIT 1",
       [clientId]
     ),
+    getActiveMealPlan(clientId),
     d1Query<Pick<Payment, "id" | "description" | "amount_cents" | "due_date" | "status" | "payment_link" | "receipt_url" | "installment_number" | "installment_total">>(
       `SELECT id, description, amount_cents, due_date, status, payment_link, receipt_url, installment_number, installment_total
        FROM payments
@@ -233,6 +236,7 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
     tasks,
     protocols,
     carePlan: carePlan[0] ?? null,
+    mealPlan,
     payments,
   };
 }

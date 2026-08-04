@@ -12,6 +12,7 @@ import {
   Mail,
   MapPin,
   Sparkles,
+  Utensils,
 } from "lucide-react";
 
 type Appointment = {
@@ -71,6 +72,20 @@ type PortalSummary = {
     physical_activity: string | null;
     sleep_routine: string | null;
   } | null;
+  mealPlan: {
+    id: string;
+    title: string;
+    notes: string | null;
+    version: number;
+    meals: Array<{
+      name: string;
+      suggested_time: string | null;
+      notes: string | null;
+      items: Array<{ food: string; quantity: string | null; unit: string | null; notes: string | null }>;
+    }>;
+    substitutions: Array<{ base_food: string; option_food: string; quantity: string | null; unit: string | null; notes: string | null }>;
+    supplements: Array<{ name: string; dosage: string | null; unit: string | null; instructions: string | null; notes: string | null }>;
+  } | null;
 };
 
 function formatDateTime(value: string) {
@@ -127,6 +142,7 @@ export default function ClientPortalPage() {
   );
   const nextAppointment = data?.appointments.find((appointment) => new Date(appointment.starts_at) >= new Date());
   const activeProtocol = data?.protocols.find((protocol) => protocol.status === "ativo");
+  const mealPlan = data?.mealPlan;
 
   async function handleLogin(event: React.FormEvent) {
     event.preventDefault();
@@ -276,6 +292,67 @@ export default function ClientPortalPage() {
             </div>
           </div>
         </section>
+
+        {mealPlan && (
+          <section className="mb-5 rounded-2xl border border-[#E6D5C5] bg-white/80 p-5">
+            <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="mb-2 flex items-center gap-2">
+                  <Utensils className="h-5 w-5 text-[#607A56]" />
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#607A56]">Plano alimentar</p>
+                </div>
+                <h2 className="font-serif text-2xl font-semibold">{mealPlan.title}</h2>
+                {mealPlan.notes && <p className="mt-2 max-w-3xl text-sm leading-6 text-[#75675E]">{mealPlan.notes}</p>}
+              </div>
+              <span className="rounded-full bg-[#EEF3EA] px-3 py-1 text-xs font-semibold text-[#607A56]">v{mealPlan.version}</span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {mealPlan.meals.map((meal) => (
+                <article key={meal.name} className="rounded-xl border border-[#EFE2D6] bg-[#FBF7F1] p-4">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <h3 className="font-serif text-xl font-semibold">{meal.name}</h3>
+                    {meal.suggested_time && <span className="rounded-full bg-white px-2.5 py-1 text-xs text-[#607A56]">{meal.suggested_time}</span>}
+                  </div>
+                  <ul className="space-y-2 text-sm text-[#75675E]">
+                    {meal.items.map((item, index) => (
+                      <li key={`${meal.name}-${item.food}-${index}`} className="flex justify-between gap-3 border-b border-[#EFE2D6] pb-2 last:border-b-0 last:pb-0">
+                        <span>{item.food}</span>
+                        <span className="shrink-0 font-semibold text-[#3A3028]">{[item.quantity, item.unit].filter(Boolean).join(" ")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {meal.notes && <p className="mt-3 text-xs leading-5 text-[#9A8B80]">{meal.notes}</p>}
+                </article>
+              ))}
+            </div>
+            {(mealPlan.supplements.length > 0 || mealPlan.substitutions.length > 0) && (
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                {mealPlan.supplements.length > 0 && (
+                  <div className="rounded-xl bg-[#EEF3EA] p-4">
+                    <h3 className="font-serif text-lg font-semibold">Suplementos</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-[#607066]">
+                      {mealPlan.supplements.map((item, index) => (
+                        <li key={`${item.name}-${index}`}>{item.name} {[item.dosage, item.unit].filter(Boolean).join(" ")} {item.instructions ? `- ${item.instructions}` : ""}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {mealPlan.substitutions.length > 0 && (
+                  <div className="rounded-xl bg-[#F7F0E8] p-4">
+                    <h3 className="font-serif text-lg font-semibold">Substituições</h3>
+                    <ul className="mt-3 space-y-2 text-sm text-[#75675E]">
+                      {mealPlan.substitutions.slice(0, 12).map((item, index) => (
+                        <li key={`${item.base_food}-${item.option_food}-${index}`}>
+                          {item.base_food}: pode trocar por {item.option_food} {[item.quantity, item.unit].filter(Boolean).join(" ")}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
           <div className="space-y-5">

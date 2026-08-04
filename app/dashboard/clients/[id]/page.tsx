@@ -9,8 +9,10 @@ import {
   BarChart2, Plus, Check, X, Trash2, ChevronRight,
   CalendarDays, WalletCards, KeyRound, ShieldCheck, RefreshCw, ExternalLink,
   Copy, Play,
+  Utensils,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
+import { MealPlanEditor } from "@/components/dashboard/MealPlanEditor";
 
 function formatDateSafe(value: string | null, fmt = "dd/MM/yyyy"): string {
   if (!value) return "—";
@@ -137,6 +139,7 @@ const TIMELINE_ICONS: Record<string, string> = {
 const TABS = [
   { id: "resumo", label: "Resumo", icon: User },
   { id: "prontuario", label: "Prontuario", icon: FileText },
+  { id: "plano-alimentar", label: "Plano alimentar", icon: Utensils },
   { id: "portal", label: "Portal", icon: KeyRound },
   { id: "protocolos", label: "Protocolos", icon: BookOpen },
   { id: "agenda", label: "Agenda", icon: CalendarDays },
@@ -1025,6 +1028,10 @@ export default function ClientDetailPage() {
           {/* ── Protocolos ─────────────────────────────────────── */}
           {activeTab === "prontuario" && (
             <NutritionRecordEditor clientId={id} onSaved={reloadTimeline} />
+          )}
+
+          {activeTab === "plano-alimentar" && (
+            <MealPlanEditor clientId={id} onSaved={reloadTimeline} />
           )}
 
           {activeTab === "portal" && (
