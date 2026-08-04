@@ -31,6 +31,12 @@ interface Payment {
   paid_at: string | null;
   status: PaymentStatus;
   payment_method: PaymentMethod | null;
+  invoice_number: string | null;
+  payment_link: string | null;
+  receipt_url: string | null;
+  installment_number: number | null;
+  installment_total: number | null;
+  category: string | null;
   notes: string | null;
 }
 
@@ -41,6 +47,12 @@ interface FormState {
   due_date: string;
   status: PaymentStatus;
   payment_method: PaymentMethod | "";
+  invoice_number: string;
+  payment_link: string;
+  receipt_url: string;
+  installment_number: string;
+  installment_total: string;
+  category: string;
   notes: string;
 }
 
@@ -94,6 +106,12 @@ export default function FinanceiroPage() {
     due_date: "",
     status: "pendente",
     payment_method: "pix",
+    invoice_number: "",
+    payment_link: "",
+    receipt_url: "",
+    installment_number: "",
+    installment_total: "",
+    category: "consulta",
     notes: "",
   });
 
@@ -166,6 +184,12 @@ export default function FinanceiroPage() {
           paid_at: status === "pago" ? new Date().toISOString() : null,
           status,
           payment_method: form.payment_method || null,
+          invoice_number: form.invoice_number || null,
+          payment_link: form.payment_link || null,
+          receipt_url: form.receipt_url || null,
+          installment_number: form.installment_number ? Number(form.installment_number) : null,
+          installment_total: form.installment_total ? Number(form.installment_total) : null,
+          category: form.category || null,
           notes: form.notes || null,
         }),
       });
@@ -176,6 +200,11 @@ export default function FinanceiroPage() {
         description: "",
         amount: "",
         due_date: "",
+        invoice_number: "",
+        payment_link: "",
+        receipt_url: "",
+        installment_number: "",
+        installment_total: "",
         notes: "",
       }));
       setMessage("Cobranca registrada.");
@@ -342,7 +371,16 @@ export default function FinanceiroPage() {
                     <p className="mt-2 text-xs text-[#75675E]">
                       {payment.client_name || "Paciente sem vinculo"}
                       {payment.due_date ? ` - vence em ${payment.due_date}` : ""}
+                      {payment.category ? ` - ${payment.category}` : ""}
+                      {payment.installment_number && payment.installment_total ? ` - parcela ${payment.installment_number}/${payment.installment_total}` : ""}
                     </p>
+                    {(payment.invoice_number || payment.payment_link || payment.receipt_url) && (
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                        {payment.invoice_number && <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#8C5F50]">NF {payment.invoice_number}</span>}
+                        {payment.payment_link && <a href={payment.payment_link} target="_blank" rel="noreferrer" className="rounded-full bg-[#607A56] px-3 py-1 font-semibold text-white">Link de pagamento</a>}
+                        {payment.receipt_url && <a href={payment.receipt_url} target="_blank" rel="noreferrer" className="rounded-full border border-[#D9E4D3] bg-white px-3 py-1 font-semibold text-[#607A56]">Recibo</a>}
+                      </div>
+                    )}
                     {payment.notes && (
                       <p className="mt-3 rounded-xl bg-[#FBF7F1] px-3 py-2 text-xs leading-5 text-[#75675E]">
                         {payment.notes}
@@ -482,6 +520,43 @@ export default function FinanceiroPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="brand-label">Categoria</label>
+                <select value={form.category} onChange={(event) => updateForm("category", event.target.value)} className="brand-input">
+                  <option value="consulta">Consulta</option>
+                  <option value="retorno">Retorno</option>
+                  <option value="pacote">Pacote</option>
+                  <option value="material">Material</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+              <div>
+                <label className="brand-label">Parcela</label>
+                <input value={form.installment_number} onChange={(event) => updateForm("installment_number", event.target.value)} className="brand-input" placeholder="Ex: 1" inputMode="numeric" />
+              </div>
+              <div>
+                <label className="brand-label">Total parcelas</label>
+                <input value={form.installment_total} onChange={(event) => updateForm("installment_total", event.target.value)} className="brand-input" placeholder="Ex: 3" inputMode="numeric" />
+              </div>
+            </div>
+
+            <div>
+              <label className="brand-label">Nota fiscal / recibo interno</label>
+              <input value={form.invoice_number} onChange={(event) => updateForm("invoice_number", event.target.value)} className="brand-input" placeholder="Ex: NF-2026-001" />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="brand-label">Link de pagamento</label>
+                <input value={form.payment_link} onChange={(event) => updateForm("payment_link", event.target.value)} className="brand-input" placeholder="https://..." />
+              </div>
+              <div>
+                <label className="brand-label">URL do recibo</label>
+                <input value={form.receipt_url} onChange={(event) => updateForm("receipt_url", event.target.value)} className="brand-input" placeholder="https://..." />
               </div>
             </div>
 

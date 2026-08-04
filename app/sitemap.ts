@@ -37,7 +37,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${baseUrl}/blog`,
       lastModified: now,
       changeFrequency: "daily",
-      priority: 0.85,
+      priority: 0.9,
     },
     {
       url: `${baseUrl}/privacidade`,
@@ -56,6 +56,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "daily",
       priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/llms.txt`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.4,
     },
     ...posts.map((post) => ({
       url: `${baseUrl}/blog/${post.slug}`,

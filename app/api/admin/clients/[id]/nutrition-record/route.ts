@@ -18,6 +18,10 @@ const shortField = z.string().max(120).nullable().optional();
 
 const UpdateSchema = z.object({
   chief_complaint: textField,
+  life_stage: shortField,
+  biological_sex: shortField,
+  gestational_weeks: shortField,
+  breastfeeding_context: textField,
   clinical_history: textField,
   diagnoses: textField,
   medications: textField,
@@ -37,6 +41,9 @@ const UpdateSchema = z.object({
   bmi: shortField,
   waist_cm: shortField,
   anthropometry_notes: textField,
+  pediatric_growth_notes: textField,
+  target_weight_kg: shortField,
+  target_notes: textField,
   exams: textField,
   assessment: textField,
   goals: textField,

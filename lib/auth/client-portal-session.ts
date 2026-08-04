@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getClientPortalAccess } from "@/lib/repositories/client-portal";
 
 const COOKIE_NAME = "bruna_nutri_client_portal";
-const MAX_AGE = 60 * 60 * 24 * 30;
+const MAX_AGE = 60 * 60 * 24 * 7;
 
 function getSecret(): Uint8Array {
   const secret = process.env.AUTH_SECRET;
@@ -22,7 +22,7 @@ export async function createClientPortalToken(clientId: string, sessionVersion: 
   return new SignJWT({ sub: clientId, type: "client_portal", sessionVersion })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("30d")
+    .setExpirationTime("7d")
     .sign(getSecret());
 }
 

@@ -44,6 +44,10 @@ function hasNutritionRecordContent(record: Awaited<ReturnType<typeof getExisting
   if (!record) return false;
   return [
     record.chief_complaint,
+    record.life_stage,
+    record.biological_sex,
+    record.gestational_weeks,
+    record.breastfeeding_context,
     record.clinical_history,
     record.diagnoses,
     record.medications,
@@ -63,6 +67,9 @@ function hasNutritionRecordContent(record: Awaited<ReturnType<typeof getExisting
     record.bmi,
     record.waist_cm,
     record.anthropometry_notes,
+    record.pediatric_growth_notes,
+    record.target_weight_kg,
+    record.target_notes,
     record.exams,
     record.assessment,
     record.goals,
@@ -189,13 +196,18 @@ export default async function ClientPrintPage({
           <div className="section">
             <p className="section-title">Prontuario nutricional</p>
             <div className="kv">
+              {nutritionRecord.life_stage && <div className="kv-item"><label>Fase do cuidado</label><span>{nutritionRecord.life_stage}</span></div>}
+              {nutritionRecord.biological_sex && <div className="kv-item"><label>Sexo biologico</label><span>{nutritionRecord.biological_sex}</span></div>}
+              {nutritionRecord.gestational_weeks && <div className="kv-item"><label>Gestacao</label><span>{nutritionRecord.gestational_weeks}</span></div>}
               {nutritionRecord.current_weight_kg && <div className="kv-item"><label>Peso atual</label><span>{nutritionRecord.current_weight_kg} kg</span></div>}
               {nutritionRecord.height_cm && <div className="kv-item"><label>Altura</label><span>{nutritionRecord.height_cm} cm</span></div>}
               {nutritionRecord.bmi && <div className="kv-item"><label>IMC</label><span>{nutritionRecord.bmi}</span></div>}
               {nutritionRecord.waist_cm && <div className="kv-item"><label>Cintura</label><span>{nutritionRecord.waist_cm} cm</span></div>}
+              {nutritionRecord.target_weight_kg && <div className="kv-item"><label>Meta clinica</label><span>{nutritionRecord.target_weight_kg}</span></div>}
             </div>
             {[
               ["Motivo do acompanhamento", nutritionRecord.chief_complaint],
+              ["Amamentacao e contexto lactante", nutritionRecord.breastfeeding_context],
               ["Historico clinico", nutritionRecord.clinical_history],
               ["Diagnosticos e antecedentes", nutritionRecord.diagnoses],
               ["Medicamentos", nutritionRecord.medications],
@@ -204,9 +216,11 @@ export default async function ClientPrintPage({
               ["Rotina alimentar", nutritionRecord.eating_routine],
               ["Sinais gastrointestinais", nutritionRecord.intestinal_health],
               ["Sono, estresse e suporte", [nutritionRecord.sleep_routine, nutritionRecord.stress_context].filter(Boolean).join("\n")],
+              ["Crescimento pediatrico", nutritionRecord.pediatric_growth_notes],
               ["Exames", nutritionRecord.exams],
               ["Avaliacao nutricional", nutritionRecord.assessment],
               ["Objetivos", nutritionRecord.goals],
+              ["Metas antropometricas e clinicas", nutritionRecord.target_notes],
               ["Plano de cuidado", nutritionRecord.care_plan],
               ["Sinais de atencao", nutritionRecord.risk_flags],
             ].map(([label, value]) => {

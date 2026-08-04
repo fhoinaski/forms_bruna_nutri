@@ -45,6 +45,9 @@ interface Appointment {
   status: AppointmentStatus;
   location: string | null;
   notes: string | null;
+  portal_visible: number;
+  client_confirmed_at: string | null;
+  cancellation_reason: string | null;
 }
 
 interface WorkflowItem {
@@ -69,6 +72,8 @@ interface FormState {
   status: AppointmentStatus;
   location: string;
   notes: string;
+  portal_visible: boolean;
+  cancellation_reason: string;
 }
 
 const statusLabels: Record<AppointmentStatus, string> = {
@@ -181,6 +186,8 @@ export default function AgendaPage() {
     status: "agendado",
     location: "",
     notes: "",
+    portal_visible: true,
+    cancellation_reason: "",
   });
 
   const visibleAppointments = useMemo(
@@ -260,6 +267,8 @@ export default function AgendaPage() {
         status: form.status,
         location: form.location || null,
         notes: form.notes || null,
+        portal_visible: form.portal_visible ? 1 : 0,
+        cancellation_reason: form.cancellation_reason || null,
       };
 
       const response = await fetch("/api/admin/appointments", {
@@ -276,6 +285,8 @@ export default function AgendaPage() {
         ends_at: "",
         location: "",
         notes: "",
+        portal_visible: true,
+        cancellation_reason: "",
       }));
       setMessage("Consulta adicionada à agenda com roteiro de acompanhamento.");
       await loadAgenda();
@@ -775,6 +786,31 @@ function NewAppointmentForm({
             placeholder="Consultório, videochamada ou endereço"
           />
         </div>
+
+        <label className="flex items-start gap-3 rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] p-4 text-sm text-[#75675E]">
+          <input
+            type="checkbox"
+            checked={form.portal_visible}
+            onChange={(event) => onChange("portal_visible", event.target.checked)}
+            className="mt-1 h-4 w-4 accent-[#7F9A74]"
+          />
+          <span>
+            <strong className="block text-[#3A3028]">Mostrar no portal do cliente</strong>
+            A cliente podera ver e confirmar esta consulta dentro do portal.
+          </span>
+        </label>
+
+        {form.status === "cancelado" && (
+          <div>
+            <label className="brand-label">Motivo do cancelamento</label>
+            <input
+              value={form.cancellation_reason}
+              onChange={(event) => onChange("cancellation_reason", event.target.value)}
+              className="brand-input"
+              placeholder="Ex: remarcado pela familia, conflito de agenda..."
+            />
+          </div>
+        )}
 
         <div>
           <label className="brand-label">Observações internas</label>

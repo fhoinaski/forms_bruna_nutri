@@ -4,6 +4,7 @@ import { createBlogPost } from "@/lib/repositories/blog-posts";
 import { timingSafeEqual } from "node:crypto";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { writeAuditLog } from "@/lib/security/audit";
+import { logger } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
 
   const parsed = AgentPostSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
+    logger.warn("agent_blog_post_invalid_payload", { issues: parsed.error.issues });
     return NextResponse.json(
       {
         message: "Conteudo invalido.",
@@ -55,10 +57,18 @@ export async function POST(req: NextRequest) {
 
   const id = await createBlogPost({
     ...parsed.data,
+    status: "draft",
     ai_generated: true,
-    published_at: parsed.data.status === "published" ? new Date().toISOString() : null,
+    published_at: null,
   });
-  await writeAuditLog({ action: "agent_blog_post_created", entityType: "blog_post", entityId: id, ipHash: limit.ipHash, metadata: { status: parsed.data.status } });
+  await writeAuditLog({
+    action: "agent_blog_post_created",
+    entityType: "blog_post",
+    entityId: id,
+    ipHash: limit.ipHash,
+    metadata: { requested_status: parsed.data.status, effective_status: "draft", review_required: true },
+  });
+  logger.info("agent_blog_post_created_as_draft", { id, requested_status: parsed.data.status });
 
-  return NextResponse.json({ id }, { status: 201 });
+  return NextResponse.json({ id, status: "draft", review_required: true }, { status: 201 });
 }

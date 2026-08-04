@@ -1,0 +1,42 @@
+export function parseMeasurement(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : null;
+  const normalized = value.replace(",", ".").replace(/[^\d.]/g, "");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function calculateBmiValue(
+  weightKg: string | number | null | undefined,
+  heightCm: string | number | null | undefined
+): number | null {
+  const weight = parseMeasurement(weightKg);
+  const height = parseMeasurement(heightCm);
+  if (!weight || !height) return null;
+  const heightM = height > 10 ? height / 100 : height;
+  return Math.round((weight / (heightM * heightM)) * 10) / 10;
+}
+
+export function formatClinicalNumber(value: number | null): string | null {
+  if (value === null) return null;
+  return value.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 0 });
+}
+
+export function classifyAdultBmi(bmi: number | string | null | undefined): string | null {
+  const value = parseMeasurement(bmi);
+  if (!value) return null;
+  if (value < 18.5) return "Baixo peso";
+  if (value < 25) return "Eutrofia";
+  if (value < 30) return "Sobrepeso";
+  if (value < 35) return "Obesidade grau I";
+  if (value < 40) return "Obesidade grau II";
+  return "Obesidade grau III";
+}
+
+export function calculateWeightDelta(
+  currentWeight: number | null | undefined,
+  previousWeight: number | null | undefined
+): number | null {
+  if (!currentWeight || !previousWeight) return null;
+  return Math.round((currentWeight - previousWeight) * 10) / 10;
+}

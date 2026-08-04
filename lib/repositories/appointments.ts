@@ -18,6 +18,9 @@ export interface Appointment {
   status: string;
   location: string | null;
   notes: string | null;
+  portal_visible: number;
+  client_confirmed_at: string | null;
+  cancellation_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +41,9 @@ export interface CreateAppointmentInput {
   status?: string;
   location?: string | null;
   notes?: string | null;
+  portal_visible?: number | null;
+  client_confirmed_at?: string | null;
+  cancellation_reason?: string | null;
 }
 
 export async function ensureAppointmentsTable(): Promise<void> {
@@ -52,6 +58,9 @@ export async function ensureAppointmentsTable(): Promise<void> {
       status TEXT NOT NULL DEFAULT 'agendado',
       location TEXT,
       notes TEXT,
+      portal_visible INTEGER NOT NULL DEFAULT 1,
+      client_confirmed_at TEXT,
+      cancellation_reason TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (client_id) REFERENCES clients(id)
@@ -67,6 +76,15 @@ export async function ensureAppointmentsTable(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_appointments_client_id ON appointments(client_id)`
   );
   await ensureAppointmentWorkflowTable();
+  for (const [column, definition] of [
+    ["portal_visible", "INTEGER NOT NULL DEFAULT 1"],
+    ["client_confirmed_at", "TEXT"],
+    ["cancellation_reason", "TEXT"],
+  ] as const) {
+    try {
+      await d1Execute(`ALTER TABLE appointments ADD COLUMN ${column} ${definition}`);
+    } catch {}
+  }
 }
 
 function buildWhere(filters: AppointmentFilters): { clause: string; params: unknown[] } {
@@ -122,8 +140,8 @@ export async function createAppointment(
 
   await d1Execute(
     `INSERT INTO appointments
-       (id, client_id, title, appointment_type, starts_at, ends_at, status, location, notes, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+       (id, client_id, title, appointment_type, starts_at, ends_at, status, location, notes, portal_visible, client_confirmed_at, cancellation_reason, created_at, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`,
     [
       id,
       input.client_id ?? null,
@@ -134,6 +152,9 @@ export async function createAppointment(
       input.status ?? "agendado",
       input.location ?? null,
       input.notes ?? null,
+      input.portal_visible ?? 1,
+      input.client_confirmed_at ?? null,
+      input.cancellation_reason ?? null,
       now,
       now,
     ]

@@ -283,7 +283,7 @@ export default function DashboardBlogPage() {
         <p className="text-sm leading-7 text-[#75675E]">
           O agente deve enviar posts para <span className="font-semibold text-[#3A3028]">POST /api/agent/blog-posts</span> com
           <span className="font-semibold text-[#3A3028]"> Authorization: Bearer BLOG_AGENT_TOKEN</span>.
-          Recomendo manter <span className="font-semibold text-[#3A3028]">status: draft</span> para revisão humana antes de publicar.
+          Todo conteúdo recebido entra como <span className="font-semibold text-[#3A3028]">rascunho</span> para revisão humana antes de publicar.
         </p>
       </div>
 

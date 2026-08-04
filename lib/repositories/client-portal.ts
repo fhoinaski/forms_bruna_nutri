@@ -6,6 +6,8 @@ import { ensureAppointmentsTable } from "@/lib/repositories/appointments";
 import type { ClientTask } from "@/lib/repositories/client-tasks";
 import type { NutritionRecord } from "@/lib/repositories/nutrition-records";
 import { ensureNutritionRecordsTable } from "@/lib/repositories/nutrition-records";
+import type { Payment } from "@/lib/repositories/payments";
+import { ensurePaymentsTable } from "@/lib/repositories/payments";
 
 export interface ClientPortalAccess {
   id: string;
@@ -14,6 +16,9 @@ export interface ClientPortalAccess {
   is_active: number;
   session_version: number;
   last_used_at: string | null;
+  code_expires_at: string | null;
+  invited_at: string | null;
+  revoked_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +47,7 @@ export interface ClientPortalSummary {
   tasks: ClientTask[];
   protocols: PortalProtocol[];
   carePlan: Pick<NutritionRecord, "goals" | "care_plan" | "hydration" | "physical_activity" | "sleep_routine"> | null;
+  payments: Pick<Payment, "id" | "description" | "amount_cents" | "due_date" | "status" | "payment_link" | "receipt_url" | "installment_number" | "installment_total">[];
 }
 
 export async function ensureClientPortalTables() {
@@ -64,9 +70,20 @@ export async function ensureClientPortalTables() {
   await d1Execute(
     "CREATE INDEX IF NOT EXISTS idx_client_portal_access_active ON client_portal_access(is_active)"
   );
-  try {
-    await d1Execute("ALTER TABLE client_portal_access ADD COLUMN session_version INTEGER NOT NULL DEFAULT 1");
-  } catch {}
+  const columns = [
+    ["session_version", "INTEGER NOT NULL DEFAULT 1"],
+    ["code_expires_at", "TEXT"],
+    ["invited_at", "TEXT"],
+    ["revoked_at", "TEXT"],
+  ] as const;
+  for (const [column, definition] of columns) {
+    try {
+      await d1Execute(`ALTER TABLE client_portal_access ADD COLUMN ${column} ${definition}`);
+    } catch {}
+  }
+  await d1Execute(
+    "CREATE INDEX IF NOT EXISTS idx_client_portal_access_expires ON client_portal_access(code_expires_at)"
+  );
 }
 
 export function normalizePortalCode(code: string): string {
@@ -107,15 +124,16 @@ export async function createOrRotateClientPortalCode(clientId: string) {
   await ensureClientPortalTables();
   const code = generatePortalCode();
   const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const existing = await getClientPortalAccess(clientId);
 
   if (existing) {
     await d1Execute(
       `UPDATE client_portal_access
        SET code_hash = ?1, is_active = 1, updated_at = ?2
-           , session_version = session_version + 1
-       WHERE client_id = ?3`,
-      [hashPortalCode(code), now, clientId]
+           , session_version = session_version + 1, code_expires_at = ?3, invited_at = ?2, revoked_at = NULL
+       WHERE client_id = ?4`,
+      [hashPortalCode(code), now, expiresAt, clientId]
     );
     return { code, accessId: existing.id };
   }
@@ -127,14 +145,18 @@ export async function createOrRotateClientPortalCode(clientId: string) {
      VALUES (?1, ?2, ?3, 1, 1, ?4, ?5)`,
     [id, clientId, hashPortalCode(code), now, now]
   );
+  await d1Execute(
+    "UPDATE client_portal_access SET code_expires_at = ?1, invited_at = ?2 WHERE id = ?3",
+    [expiresAt, now, id]
+  );
   return { code, accessId: id };
 }
 
 export async function setClientPortalAccessActive(clientId: string, active: boolean) {
   await ensureClientPortalTables();
   await d1Execute(
-    "UPDATE client_portal_access SET is_active = ?1, session_version = session_version + 1, updated_at = ?2 WHERE client_id = ?3",
-    [active ? 1 : 0, new Date().toISOString(), clientId]
+    "UPDATE client_portal_access SET is_active = ?1, session_version = session_version + 1, revoked_at = ?2, updated_at = ?3 WHERE client_id = ?4",
+    [active ? 1 : 0, active ? null : new Date().toISOString(), new Date().toISOString(), clientId]
   );
 }
 
@@ -150,6 +172,8 @@ export async function verifyClientPortalLogin(email: string, code: string): Prom
   );
   const client = rows[0];
   if (!client || client.portal_active !== 1) return null;
+  const access = await getClientPortalAccess(client.id);
+  if (access?.code_expires_at && Date.parse(access.code_expires_at) < Date.now()) return null;
   if (!verifyPortalCodeHash(code, client.code_hash)) return null;
 
   await d1Execute(
@@ -163,6 +187,7 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
   await ensureClientPortalTables();
   await ensureAppointmentsTable();
   await ensureNutritionRecordsTable();
+  await ensurePaymentsTable();
   const clients = await d1Query<Client>(
     "SELECT id, name, email, phone, birth_date, source_submission_id, status, notes, created_at, updated_at FROM clients WHERE id = ?1 AND status != 'arquivado' LIMIT 1",
     [clientId]
@@ -170,12 +195,12 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
   const client = clients[0];
   if (!client) return null;
 
-  const [appointments, tasks, protocols, carePlan] = await Promise.all([
+  const [appointments, tasks, protocols, carePlan, payments] = await Promise.all([
     d1Query<Appointment>(
       `SELECT a.*, c.name as client_name, c.phone as client_phone, c.email as client_email
        FROM appointments a
        LEFT JOIN clients c ON c.id = a.client_id
-       WHERE a.client_id = ?1 AND a.status != 'cancelado'
+       WHERE a.client_id = ?1 AND a.status != 'cancelado' AND COALESCE(a.portal_visible, 1) = 1
        ORDER BY a.starts_at ASC
        LIMIT 12`,
       [clientId]
@@ -192,6 +217,14 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
       "SELECT goals, care_plan, hydration, physical_activity, sleep_routine FROM nutrition_records WHERE client_id = ?1 LIMIT 1",
       [clientId]
     ),
+    d1Query<Pick<Payment, "id" | "description" | "amount_cents" | "due_date" | "status" | "payment_link" | "receipt_url" | "installment_number" | "installment_total">>(
+      `SELECT id, description, amount_cents, due_date, status, payment_link, receipt_url, installment_number, installment_total
+       FROM payments
+       WHERE client_id = ?1 AND status != 'cancelado'
+       ORDER BY CASE WHEN status IN ('pendente', 'vencido') THEN 0 ELSE 1 END, COALESCE(due_date, created_at) ASC
+       LIMIT 12`,
+      [clientId]
+    ),
   ]);
 
   return {
@@ -200,6 +233,7 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
     tasks,
     protocols,
     carePlan: carePlan[0] ?? null,
+    payments,
   };
 }
 

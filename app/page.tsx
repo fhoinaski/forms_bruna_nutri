@@ -20,6 +20,7 @@ import { PublicFooter } from "@/components/public/PublicFooter";
 import { SectionTitle } from "@/components/public/SectionTitle";
 import { ServiceCard } from "@/components/public/ServiceCard";
 import { StepCard } from "@/components/public/StepCard";
+import { EDITORIAL_PILLARS, PROFESSIONAL_PROFILE } from "@/lib/seo/site";
 
 export const metadata: Metadata = {
   title: "Bruna Flores Nutri | Nutrição Materno-Infantil",
@@ -119,6 +120,12 @@ const FAMILY_MOMENTS = [
   },
 ];
 
+const TRUST_POINTS = [
+  ["Método clínico", "Anamnese, rotina, sinais de saúde, contexto familiar e objetivos são organizados antes da conduta."],
+  ["Sem promessas rápidas", "O cuidado evita terrorismo nutricional, culpa e planos genéricos que não cabem na rotina."],
+  ["Conteúdo revisado", "Materiais e artigos educativos são apoio de clareza, não prescrição individual."],
+];
+
 const structuredData = {
   "@context": "https://schema.org",
   "@graph": [
@@ -192,6 +199,18 @@ const structuredData = {
         name: "Preencher pré-consulta",
         target: `${baseUrl}/formulario`,
       },
+      slogan: "Nutrição para famílias que querem leveza à mesa",
+      publishingPrinciples: `${baseUrl}/blog`,
+    },
+    {
+      "@type": "Person",
+      "@id": `${baseUrl}/#bruna-flores`,
+      name: PROFESSIONAL_PROFILE.professionalName,
+      jobTitle: "Nutricionista materno-infantil",
+      worksFor: {
+        "@id": `${baseUrl}/#business`,
+      },
+      knowsAbout: EDITORIAL_PILLARS,
     },
   ],
 };
@@ -310,6 +329,30 @@ export default function HomePage() {
               Ver como o atendimento acontece
               <ArrowRight className="h-4 w-4" />
             </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[#FFFDFC] px-5 py-20 lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+          <div>
+            <p className="brand-kicker mb-3">Autoridade com cuidado</p>
+            <h2 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">
+              Informação profissional, decisão compartilhada e orientação possível.
+            </h2>
+            <p className="mt-5 text-base leading-8 text-[#75675E]">
+              O site foi pensado para acolher famílias que chegam com dúvidas reais.
+              O conteúdo ajuda a entender caminhos, mas a conduta nutricional nasce
+              da avaliação individual, da fase de vida e da rotina da casa.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {TRUST_POINTS.map(([title, text]) => (
+              <div key={title} className="rounded-[1.25rem] border border-[#EDE1D6] bg-[#FBF7F1] p-5">
+                <p className="font-serif text-xl font-semibold text-[#3A3028]">{title}</p>
+                <p className="mt-2 text-sm leading-6 text-[#75675E]">{text}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>

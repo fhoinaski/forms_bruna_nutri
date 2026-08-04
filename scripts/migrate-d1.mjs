@@ -2,6 +2,12 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  isAlterAddColumnStatement,
+  isDuplicateColumnError,
+  isTransactionStatement,
+  splitSqlStatements,
+} from "./migration-utils.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const envPath = join(root, ".env.local");
@@ -14,6 +20,28 @@ if (existsSync(envPath)) {
     const value = line.slice(separator + 1).trim().replace(/^['"]|['"]$/g, "");
     if (!process.env[key]) process.env[key] = value;
   }
+}
+
+const migrationsDir = join(root, "db");
+const files = readdirSync(migrationsDir)
+  .filter((name) => /^\d{8}_\d{4}_.+\.sql$/.test(name))
+  .sort();
+
+function readMigration(file) {
+  return readFileSync(join(migrationsDir, file), "utf8");
+}
+
+function validateMigrationFiles() {
+  for (const file of files) {
+    const statements = splitSqlStatements(readMigration(file));
+    if (!statements.length) throw new Error(`Migracao vazia: ${file}`);
+  }
+}
+
+if (process.argv.includes("--check")) {
+  validateMigrationFiles();
+  console.log(`${files.length} migracao(oes) validada(s).`);
+  process.exit(0);
 }
 
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -39,6 +67,24 @@ async function query(sql, params = []) {
   return data.result?.[0]?.results ?? [];
 }
 
+async function executeMigrationStatement(statement, file, statementIndex) {
+  if (isTransactionStatement(statement)) {
+    console.log(`Ignorado comando transacional em ${file} #${statementIndex}.`);
+    return;
+  }
+
+  try {
+    await query(statement);
+  } catch (error) {
+    if (isAlterAddColumnStatement(statement) && isDuplicateColumnError(error)) {
+      console.log(`Coluna ja existente em ${file} #${statementIndex}; seguindo.`);
+      return;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Falha em ${file} #${statementIndex}: ${message}`);
+  }
+}
+
 await query(`CREATE TABLE IF NOT EXISTS schema_migrations (
   id TEXT PRIMARY KEY,
   checksum TEXT NOT NULL,
@@ -48,22 +94,22 @@ await query(`CREATE TABLE IF NOT EXISTS schema_migrations (
 const applied = new Map(
   (await query("SELECT id, checksum FROM schema_migrations")).map((row) => [row.id, row.checksum])
 );
-const migrationsDir = join(root, "db");
-const files = readdirSync(migrationsDir)
-  .filter((name) => /^\d{8}_\d{4}_.+\.sql$/.test(name))
-  .sort();
+validateMigrationFiles();
 
 let appliedCount = 0;
 for (const file of files) {
-  const sql = readFileSync(join(migrationsDir, file), "utf8");
+  const sql = readMigration(file);
   const checksum = createHash("sha256").update(sql).digest("hex");
   if (applied.has(file)) {
     if (applied.get(file) !== checksum) throw new Error(`A migração já aplicada foi alterada: ${file}`);
     continue;
   }
 
-  const statements = sql.split(";").map((item) => item.trim()).filter(Boolean);
-  for (const statement of statements) await query(statement);
+  const statements = splitSqlStatements(sql);
+  if (!statements.length) throw new Error(`Migracao vazia: ${file}`);
+  for (const [index, statement] of statements.entries()) {
+    await executeMigrationStatement(statement, file, index + 1);
+  }
   await query(
     "INSERT INTO schema_migrations (id, checksum, applied_at) VALUES (?1, ?2, ?3)",
     [file, checksum, new Date().toISOString()]

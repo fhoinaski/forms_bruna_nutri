@@ -18,6 +18,12 @@ const UpdateSchema = z
     paid_at: z.string().datetime().nullable().optional(),
     status: statusSchema.optional(),
     payment_method: methodSchema.nullable().optional(),
+    invoice_number: z.string().trim().max(80).nullable().optional(),
+    payment_link: z.string().trim().url().nullable().optional(),
+    receipt_url: z.string().trim().url().nullable().optional(),
+    installment_number: z.number().int().min(1).max(120).nullable().optional(),
+    installment_total: z.number().int().min(1).max(120).nullable().optional(),
+    category: z.string().trim().max(80).nullable().optional(),
     notes: z.string().trim().max(1000).nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0);

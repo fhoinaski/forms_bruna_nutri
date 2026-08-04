@@ -10,7 +10,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: ["/", "/servicos", "/como-funciona", "/formulario", "/blog", "/blog/", "/feed.xml", "/privacidade", "/termos", "/llms.txt"],
-        disallow: ["/api/", "/dashboard/", "/login"],
+        disallow: ["/api/", "/dashboard/", "/login", "/portal"],
       },
       {
         userAgent: [
@@ -21,7 +21,7 @@ export default function robots(): MetadataRoute.Robots {
           "Google-Extended",
         ],
         allow: ["/", "/servicos", "/como-funciona", "/formulario", "/blog", "/blog/", "/feed.xml", "/privacidade", "/termos", "/llms.txt"],
-        disallow: ["/api/", "/dashboard/", "/login"],
+        disallow: ["/api/", "/dashboard/", "/login", "/portal"],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,

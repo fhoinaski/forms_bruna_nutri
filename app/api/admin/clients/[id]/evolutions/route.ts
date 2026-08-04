@@ -10,12 +10,24 @@ export const dynamic = "force-dynamic";
 
 const createSchema = z.object({
   client_protocol_id: z.string().optional().nullable(),
+  measured_at: z.string().datetime().optional().nullable(),
   weight: z.number().positive().optional().nullable(),
   height: z.number().positive().optional().nullable(),
+  waist_cm: z.number().positive().optional().nullable(),
+  hip_cm: z.number().positive().optional().nullable(),
+  arm_cm: z.number().positive().optional().nullable(),
+  body_fat_percentage: z.number().min(1).max(80).optional().nullable(),
+  blood_pressure: z.string().max(40).optional().nullable(),
+  energy_level: z.number().int().min(1).max(5).optional().nullable(),
+  appetite: z.string().max(120).optional().nullable(),
+  bowel_pattern: z.string().max(120).optional().nullable(),
+  sleep_quality: z.string().max(120).optional().nullable(),
   symptoms: z.string().max(5000).optional().nullable(),
   adherence_notes: z.string().max(5000).optional().nullable(),
+  adherence_score: z.number().int().min(0).max(10).optional().nullable(),
   progress_notes: z.string().max(5000).optional().nullable(),
   conduct_notes: z.string().max(5000).optional().nullable(),
+  clinical_impression: z.string().max(5000).optional().nullable(),
   next_steps: z.string().max(5000).optional().nullable(),
 });
 

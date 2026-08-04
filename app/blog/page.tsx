@@ -4,6 +4,7 @@ import { ArrowRight, BookOpen, SearchCheck } from "lucide-react";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { getPublishedBlogPosts } from "@/lib/repositories/blog-posts";
+import { EDITORIAL_PILLARS, PROFESSIONAL_PROFILE } from "@/lib/seo/site";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,6 +115,23 @@ export default async function BlogPage() {
             <SearchCheck className="h-8 w-8 text-[#7F9A74]" />
           </div>
         </div>
+
+        <section className="mt-8 rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] p-6">
+          <p className="brand-kicker mb-3">Política editorial</p>
+          <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">
+            Conteúdo para orientar, não para substituir consulta.
+          </h2>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {EDITORIAL_PILLARS.map((pillar) => (
+              <div key={pillar} className="rounded-xl bg-[#FBF7F1] p-4 text-sm leading-6 text-[#75675E]">
+                {pillar}
+              </div>
+            ))}
+          </div>
+          <p className="mt-5 text-xs leading-6 text-[#8A7B70]">
+            {PROFESSIONAL_PROFILE.editorialDisclaimer}
+          </p>
+        </section>
       </section>
       <PublicFooter />
     </main>

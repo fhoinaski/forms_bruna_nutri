@@ -213,13 +213,25 @@ CREATE TABLE IF NOT EXISTS client_evolutions (
   id TEXT PRIMARY KEY,
   client_id TEXT NOT NULL,
   client_protocol_id TEXT,
+  measured_at TEXT,
   weight REAL,
   height REAL,
   bmi REAL,
+  waist_cm REAL,
+  hip_cm REAL,
+  arm_cm REAL,
+  body_fat_percentage REAL,
+  blood_pressure TEXT,
+  energy_level INTEGER,
+  appetite TEXT,
+  bowel_pattern TEXT,
+  sleep_quality TEXT,
   symptoms TEXT,
   adherence_notes TEXT,
+  adherence_score INTEGER,
   progress_notes TEXT,
   conduct_notes TEXT,
+  clinical_impression TEXT,
   next_steps TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -228,6 +240,7 @@ CREATE TABLE IF NOT EXISTS client_evolutions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_client_evolutions_client_id ON client_evolutions(client_id);
+CREATE INDEX IF NOT EXISTS idx_client_evolutions_measured_at ON client_evolutions(client_id, measured_at);
 
 -- Prontuario nutricional completo
 
@@ -235,6 +248,10 @@ CREATE TABLE IF NOT EXISTS nutrition_records (
   id TEXT PRIMARY KEY,
   client_id TEXT NOT NULL UNIQUE,
   chief_complaint TEXT,
+  life_stage TEXT,
+  biological_sex TEXT,
+  gestational_weeks TEXT,
+  breastfeeding_context TEXT,
   clinical_history TEXT,
   diagnoses TEXT,
   medications TEXT,
@@ -254,6 +271,9 @@ CREATE TABLE IF NOT EXISTS nutrition_records (
   bmi TEXT,
   waist_cm TEXT,
   anthropometry_notes TEXT,
+  pediatric_growth_notes TEXT,
+  target_weight_kg TEXT,
+  target_notes TEXT,
   exams TEXT,
   assessment TEXT,
   goals TEXT,
@@ -278,6 +298,9 @@ CREATE TABLE IF NOT EXISTS client_portal_access (
   is_active INTEGER NOT NULL DEFAULT 1,
   session_version INTEGER NOT NULL DEFAULT 1,
   last_used_at TEXT,
+  code_expires_at TEXT,
+  invited_at TEXT,
+  revoked_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (client_id) REFERENCES clients(id)
@@ -288,6 +311,9 @@ ON client_portal_access(client_id);
 
 CREATE INDEX IF NOT EXISTS idx_client_portal_access_active
 ON client_portal_access(is_active);
+
+CREATE INDEX IF NOT EXISTS idx_client_portal_access_expires
+ON client_portal_access(code_expires_at);
 
 -- ── Timeline do cliente ───────────────────────────────────────────────────
 
@@ -316,6 +342,9 @@ CREATE TABLE IF NOT EXISTS appointments (
   status TEXT NOT NULL DEFAULT 'agendado',
   location TEXT,
   notes TEXT,
+  portal_visible INTEGER NOT NULL DEFAULT 1,
+  client_confirmed_at TEXT,
+  cancellation_reason TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (client_id) REFERENCES clients(id)
@@ -386,6 +415,12 @@ CREATE TABLE IF NOT EXISTS payments (
   paid_at TEXT,
   status TEXT NOT NULL DEFAULT 'pendente',
   payment_method TEXT,
+  invoice_number TEXT,
+  payment_link TEXT,
+  receipt_url TEXT,
+  installment_number INTEGER,
+  installment_total INTEGER,
+  category TEXT,
   notes TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -395,6 +430,7 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
 CREATE INDEX IF NOT EXISTS idx_payments_due_date ON payments(due_date);
 CREATE INDEX IF NOT EXISTS idx_payments_client_id ON payments(client_id);
+CREATE INDEX IF NOT EXISTS idx_payments_invoice_number ON payments(invoice_number);
 
 -- Blog editorial para autoridade e SEO
 

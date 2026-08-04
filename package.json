@@ -10,10 +10,12 @@
     "clean": "next clean",
     "init-d1": "node scripts/init-d1.mjs",
     "migrate:d1": "node scripts/migrate-d1.mjs",
+    "migrate:d1:check": "node scripts/migrate-d1.mjs --check",
     "create-admin": "node scripts/create-admin.mjs",
     "backup:d1": "node scripts/backup-d1.mjs",
     "restore:d1": "node scripts/restore-d1.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -38,6 +40,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "4.1.11",
     "@tailwindcss/typography": "^0.5.19",
     "@types/bcryptjs": "^2.4.6",

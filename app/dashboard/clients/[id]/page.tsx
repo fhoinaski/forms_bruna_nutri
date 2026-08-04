@@ -45,10 +45,15 @@ interface ClientTask {
   completed_at: string | null; created_at: string;
 }
 interface ClientEvolution {
-  id: string; client_protocol_id: string | null; weight: number | null;
-  height: number | null; bmi: number | null; symptoms: string | null;
-  adherence_notes: string | null; progress_notes: string | null;
-  conduct_notes: string | null; next_steps: string | null; created_at: string;
+  id: string; client_protocol_id: string | null; measured_at: string | null;
+  weight: number | null; height: number | null; bmi: number | null;
+  waist_cm: number | null; hip_cm: number | null; arm_cm: number | null;
+  body_fat_percentage: number | null; blood_pressure: string | null;
+  energy_level: number | null; appetite: string | null; bowel_pattern: string | null;
+  sleep_quality: string | null; symptoms: string | null;
+  adherence_notes: string | null; adherence_score: number | null;
+  progress_notes: string | null; conduct_notes: string | null;
+  clinical_impression: string | null; next_steps: string | null; created_at: string;
 }
 interface TimelineEvent {
   id: string; type: string; title: string; description: string | null; created_at: string;
@@ -70,13 +75,16 @@ interface ClientPortalAccessState {
 }
 interface NutritionRecord {
   id: string; client_id: string;
-  chief_complaint: string | null; clinical_history: string | null; diagnoses: string | null;
+  chief_complaint: string | null; life_stage: string | null; biological_sex: string | null;
+  gestational_weeks: string | null; breastfeeding_context: string | null;
+  clinical_history: string | null; diagnoses: string | null;
   medications: string | null; supplements: string | null; allergies: string | null;
   restrictions: string | null; food_preferences: string | null; food_aversions: string | null;
   eating_routine: string | null; intestinal_health: string | null; sleep_routine: string | null;
   stress_context: string | null; physical_activity: string | null; hydration: string | null;
   current_weight_kg: string | null; height_cm: string | null; bmi: string | null; waist_cm: string | null;
-  anthropometry_notes: string | null; exams: string | null; assessment: string | null;
+  anthropometry_notes: string | null; pediatric_growth_notes: string | null;
+  target_weight_kg: string | null; target_notes: string | null; exams: string | null; assessment: string | null;
   goals: string | null; care_plan: string | null; risk_flags: string | null;
   family_context: string | null; private_notes: string | null;
   created_at: string; updated_at: string;
@@ -246,8 +254,126 @@ function EvolutionForm({ clientId, onSuccess }: { clientId: string; onSuccess: (
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
+function ClinicalEvolutionForm({ clientId, onSuccess }: { clientId: string; onSuccess: () => void }) {
+  const [measuredAt, setMeasuredAt] = useState(new Date().toISOString().slice(0, 10));
+  const [weight, setWeight] = useState("");
+  const [height, setHeight] = useState("");
+  const [waistCm, setWaistCm] = useState("");
+  const [hipCm, setHipCm] = useState("");
+  const [armCm, setArmCm] = useState("");
+  const [bodyFat, setBodyFat] = useState("");
+  const [bloodPressure, setBloodPressure] = useState("");
+  const [energyLevel, setEnergyLevel] = useState("");
+  const [appetite, setAppetite] = useState("");
+  const [bowelPattern, setBowelPattern] = useState("");
+  const [sleepQuality, setSleepQuality] = useState("");
+  const [symptoms, setSymptoms] = useState("");
+  const [adherenceNotes, setAdherenceNotes] = useState("");
+  const [adherenceScore, setAdherenceScore] = useState("");
+  const [progressNotes, setProgressNotes] = useState("");
+  const [conductNotes, setConductNotes] = useState("");
+  const [clinicalImpression, setClinicalImpression] = useState("");
+  const [nextSteps, setNextSteps] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const resetForm = () => {
+    setMeasuredAt(new Date().toISOString().slice(0, 10));
+    setWeight(""); setHeight(""); setWaistCm(""); setHipCm(""); setArmCm(""); setBodyFat("");
+    setBloodPressure(""); setEnergyLevel(""); setAppetite(""); setBowelPattern(""); setSleepQuality("");
+    setSymptoms(""); setAdherenceNotes(""); setAdherenceScore(""); setProgressNotes("");
+    setConductNotes(""); setClinicalImpression(""); setNextSteps("");
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true); setError("");
+    try {
+      const response = await fetch(`/api/admin/clients/${clientId}/evolutions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          measured_at: measuredAt ? new Date(`${measuredAt}T12:00:00`).toISOString() : null,
+          weight: weight ? Number(weight) : null,
+          height: height ? Number(height) : null,
+          waist_cm: waistCm ? Number(waistCm) : null,
+          hip_cm: hipCm ? Number(hipCm) : null,
+          arm_cm: armCm ? Number(armCm) : null,
+          body_fat_percentage: bodyFat ? Number(bodyFat) : null,
+          blood_pressure: bloodPressure || null,
+          energy_level: energyLevel ? Number(energyLevel) : null,
+          appetite: appetite || null,
+          bowel_pattern: bowelPattern || null,
+          sleep_quality: sleepQuality || null,
+          symptoms: symptoms || null,
+          adherence_notes: adherenceNotes || null,
+          adherence_score: adherenceScore ? Number(adherenceScore) : null,
+          progress_notes: progressNotes || null,
+          conduct_notes: conductNotes || null,
+          clinical_impression: clinicalImpression || null,
+          next_steps: nextSteps || null,
+        }),
+      });
+      if (!response.ok) throw new Error();
+      resetForm();
+      onSuccess();
+    } catch {
+      setError("Nao foi possivel registrar a evolucao clinica.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const bmiPreview = weight && height ? (Number(weight) / Math.pow(Number(height) / 100, 2)).toFixed(1) : null;
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/60 p-5">
+      <div>
+        <h3 className="font-serif text-lg font-semibold text-[#B47F6A]">Nova evolucao clinica</h3>
+        <p className="mt-1 text-xs leading-5 text-[#8C6E52]">Registre medidas, sinais da rotina e conduta para acompanhar a linha do tempo nutricional.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div><label className="brand-label">Data da avaliacao</label><input type="date" value={measuredAt} onChange={(event) => setMeasuredAt(event.target.value)} className="brand-input" /></div>
+        <div><label className="brand-label">Peso (kg)</label><input type="number" step="0.1" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="Ex: 68.5" className="brand-input" /></div>
+        <div><label className="brand-label">Altura (cm)</label><input type="number" step="0.1" value={height} onChange={(event) => setHeight(event.target.value)} placeholder="Ex: 165" className="brand-input" /></div>
+      </div>
+      {bmiPreview && <p className="text-xs font-medium text-[#7A9A74]">IMC calculado: {bmiPreview} ({classifyBmiLabel(bmiPreview)})</p>}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div><label className="brand-label">Cintura (cm)</label><input type="number" step="0.1" value={waistCm} onChange={(event) => setWaistCm(event.target.value)} placeholder="Ex: 82" className="brand-input" /></div>
+        <div><label className="brand-label">Quadril (cm)</label><input type="number" step="0.1" value={hipCm} onChange={(event) => setHipCm(event.target.value)} placeholder="Ex: 98" className="brand-input" /></div>
+        <div><label className="brand-label">Braco (cm)</label><input type="number" step="0.1" value={armCm} onChange={(event) => setArmCm(event.target.value)} placeholder="Ex: 29" className="brand-input" /></div>
+        <div><label className="brand-label">Gordura (%)</label><input type="number" step="0.1" value={bodyFat} onChange={(event) => setBodyFat(event.target.value)} placeholder="Ex: 31" className="brand-input" /></div>
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <div><label className="brand-label">Pressao arterial</label><input value={bloodPressure} onChange={(event) => setBloodPressure(event.target.value)} placeholder="Ex: 110/70" className="brand-input" /></div>
+        <div><label className="brand-label">Energia</label><select value={energyLevel} onChange={(event) => setEnergyLevel(event.target.value)} className="brand-input"><option value="">Selecione</option>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}/5</option>)}</select></div>
+        <div><label className="brand-label">Apetite</label><input value={appetite} onChange={(event) => setAppetite(event.target.value)} placeholder="Preservado, baixo..." className="brand-input" /></div>
+        <div><label className="brand-label">Intestino</label><input value={bowelPattern} onChange={(event) => setBowelPattern(event.target.value)} placeholder="Regular, constipado..." className="brand-input" /></div>
+        <div><label className="brand-label">Sono</label><input value={sleepQuality} onChange={(event) => setSleepQuality(event.target.value)} placeholder="Bom, fragmentado..." className="brand-input" /></div>
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div><label className="brand-label">Sintomas e sinais atuais</label><textarea value={symptoms} onChange={(event) => setSymptoms(event.target.value)} rows={3} className="brand-input resize-y" placeholder="Queixas, sintomas, tolerancia alimentar e sinais observados." /></div>
+        <div>
+          <label className="brand-label">Adesao ao plano</label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[140px_minmax(0,1fr)]">
+            <select value={adherenceScore} onChange={(event) => setAdherenceScore(event.target.value)} className="brand-input"><option value="">Escore</option>{Array.from({ length: 11 }, (_, value) => <option key={value} value={value}>{value}/10</option>)}</select>
+            <textarea value={adherenceNotes} onChange={(event) => setAdherenceNotes(event.target.value)} rows={3} className="brand-input resize-y" placeholder="Facilitadores, barreiras e combinados da rotina." />
+          </div>
+        </div>
+        <div><label className="brand-label">Progressos observados</label><textarea value={progressNotes} onChange={(event) => setProgressNotes(event.target.value)} rows={3} className="brand-input resize-y" placeholder="Mudancas clinicas, alimentares, comportamentais e familiares." /></div>
+        <div><label className="brand-label">Impressao clinica</label><textarea value={clinicalImpression} onChange={(event) => setClinicalImpression(event.target.value)} rows={3} className="brand-input resize-y" placeholder="Interpretacao profissional, pontos de alerta e prioridade." /></div>
+        <div><label className="brand-label">Conduta adotada</label><textarea value={conductNotes} onChange={(event) => setConductNotes(event.target.value)} rows={3} className="brand-input resize-y" placeholder="Ajustes, orientacoes e materiais enviados." /></div>
+        <div><label className="brand-label">Proximos passos</label><textarea value={nextSteps} onChange={(event) => setNextSteps(event.target.value)} rows={3} className="brand-input resize-y" placeholder="Metas ate o proximo encontro e sinais para monitorar." /></div>
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button type="submit" disabled={saving} className="brand-btn-primary"><Plus className="h-4 w-4" />{saving ? "Registrando..." : "Registrar evolucao"}</button>
+    </form>
+  );
+}
+
 const NUTRITION_TEXT_FIELDS: { key: keyof NutritionRecord; label: string; placeholder: string; rows?: number }[] = [
   { key: "chief_complaint", label: "Motivo principal do acompanhamento", placeholder: "O que trouxe a paciente ao atendimento, prioridade do momento e expectativa central.", rows: 3 },
+  { key: "breastfeeding_context", label: "Amamentacao e contexto lactante", placeholder: "Aleitamento, dificuldades, rotina de mamadas, ordenha, retorno ao trabalho e suporte.", rows: 3 },
   { key: "clinical_history", label: "Historico clinico e contexto atual", placeholder: "Historico de saude, gestacao/pos-parto, amamentacao, rotina familiar e pontos relevantes.", rows: 4 },
   { key: "diagnoses", label: "Diagnosticos, condicoes e antecedentes", placeholder: "Condicoes clinicas, antecedentes familiares, queixas recorrentes e observacoes de risco.", rows: 3 },
   { key: "medications", label: "Medicamentos em uso", placeholder: "Medicamentos, dose quando relevante, tempo de uso e prescritor.", rows: 2 },
@@ -262,9 +388,11 @@ const NUTRITION_TEXT_FIELDS: { key: keyof NutritionRecord; label: string; placeh
   { key: "stress_context", label: "Estresse, emocoes e suporte", placeholder: "Carga mental, ansiedade, rede de apoio, relacao emocional com comida e fatores de adesao.", rows: 3 },
   { key: "physical_activity", label: "Atividade fisica e movimento", placeholder: "Tipo, frequencia, limitacoes, preferencias e rotina possivel.", rows: 2 },
   { key: "hydration", label: "Hidratacao", placeholder: "Consumo de agua, aceitacao, sinais de baixa ingestao e estrategias possiveis.", rows: 2 },
+  { key: "pediatric_growth_notes", label: "Crescimento pediatrico", placeholder: "Curvas, percentis informados, ganho ponderal, observacoes do pediatra e sinais para monitorar.", rows: 3 },
   { key: "exams", label: "Exames e indicadores laboratoriais", placeholder: "Exames recentes, datas, marcadores alterados e pontos para acompanhar.", rows: 4 },
   { key: "assessment", label: "Avaliacao nutricional", placeholder: "Leitura profissional do caso, prioridades clinicas e hipoteses de trabalho.", rows: 4 },
   { key: "goals", label: "Objetivos combinados", placeholder: "Objetivos terapeuticos, metas realistas, sinais de evolucao e combinados com a paciente.", rows: 3 },
+  { key: "target_notes", label: "Metas antropometricas e clinicas", placeholder: "Metas pactuadas, criterio de acompanhamento, foco em composicao corporal ou crescimento saudavel.", rows: 3 },
   { key: "care_plan", label: "Plano de cuidado e conduta", placeholder: "Conduta nutricional, orientacoes, ajustes, materiais enviados e proximos passos.", rows: 5 },
   { key: "risk_flags", label: "Sinais de atencao", placeholder: "Alertas clinicos, sintomas que exigem encaminhamento, cuidados e pontos para monitorar.", rows: 3 },
   { key: "family_context", label: "Contexto familiar e rotina da casa", placeholder: "Participacao da familia, cuidadoras, escola, rede de apoio e acordos praticos.", rows: 3 },
@@ -276,6 +404,13 @@ const ANTHROPOMETRY_FIELDS: { key: keyof NutritionRecord; label: string; placeho
   { key: "height_cm", label: "Altura (cm)", placeholder: "Ex: 165" },
   { key: "bmi", label: "IMC", placeholder: "Ex: 25,2" },
   { key: "waist_cm", label: "Cintura (cm)", placeholder: "Ex: 82" },
+  { key: "target_weight_kg", label: "Peso/meta clinica", placeholder: "Ex: manter ganho adequado" },
+];
+
+const CLINICAL_PROFILE_FIELDS: { key: keyof NutritionRecord; label: string; options?: string[]; placeholder?: string }[] = [
+  { key: "life_stage", label: "Fase do cuidado", options: ["Gestacao", "Pos-parto", "Lactante", "Bebe", "Crianca", "Adolescente", "Adulto responsavel"] },
+  { key: "biological_sex", label: "Sexo biologico", options: ["Feminino", "Masculino", "Intersexo", "Nao informado"] },
+  { key: "gestational_weeks", label: "Semanas de gestacao", placeholder: "Ex: 28 semanas" },
 ];
 
 function parseDecimalInput(value: string | null): number | null {
@@ -290,6 +425,28 @@ function calculateBmi(weightValue: string | null, heightValue: string | null): s
   if (!weight || !heightCm) return null;
   const heightM = heightCm / 100;
   return (weight / (heightM * heightM)).toFixed(1).replace(".", ",");
+}
+
+function classifyBmiLabel(value: string | number | null): string {
+  const bmi = typeof value === "number" ? value : parseDecimalInput(value);
+  if (!bmi) return "Sem classificacao";
+  if (bmi < 18.5) return "Baixo peso";
+  if (bmi < 25) return "Eutrofia";
+  if (bmi < 30) return "Sobrepeso";
+  if (bmi < 35) return "Obesidade grau I";
+  if (bmi < 40) return "Obesidade grau II";
+  return "Obesidade grau III";
+}
+
+function formatDelta(value: number | null): string {
+  if (value === null) return "sem comparativo";
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`;
+}
+
+function weightDelta(current: ClientEvolution, next?: ClientEvolution): number | null {
+  if (!current.weight || !next?.weight) return null;
+  return Math.round((current.weight - next.weight) * 10) / 10;
 }
 
 function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSaved: () => void }) {
@@ -319,6 +476,7 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
     if (!record) return;
     setSaving(true); setSaved(false); setError("");
     const recordFields: (keyof NutritionRecord)[] = [
+      ...CLINICAL_PROFILE_FIELDS.map((field) => field.key),
       ...NUTRITION_TEXT_FIELDS.map((field) => field.key),
       ...ANTHROPOMETRY_FIELDS.map((field) => field.key),
       "anthropometry_notes",
@@ -363,6 +521,25 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
         <div className="text-xs text-[#A8927D] md:text-right">
           <p>Atualizado em {formatDateSafe(record.updated_at, "dd/MM/yyyy HH:mm")}</p>
           <p>Registro unico do paciente</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-5">
+        <h3 className="font-serif text-base font-semibold text-[#7A9A74]">Perfil clinico materno-infantil</h3>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+          {CLINICAL_PROFILE_FIELDS.map((field) => (
+            <div key={field.key}>
+              <label className="brand-label">{field.label}</label>
+              {field.options ? (
+                <select value={String(record[field.key] ?? "")} onChange={(e) => setField(field.key, e.target.value)} className="brand-input">
+                  <option value="">Selecionar</option>
+                  {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+              ) : (
+                <input value={String(record[field.key] ?? "")} onChange={(e) => setField(field.key, e.target.value)} className="brand-input" placeholder={field.placeholder} />
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1204,7 +1381,7 @@ export default function ClientDetailPage() {
               </div>
 
               {showEvolutionForm && (
-                <EvolutionForm clientId={id} onSuccess={() => { reloadEvolutions(); reloadTimeline(); }} />
+                <ClinicalEvolutionForm clientId={id} onSuccess={() => { reloadEvolutions(); reloadTimeline(); }} />
               )}
 
               {evolutionsLoading ? (

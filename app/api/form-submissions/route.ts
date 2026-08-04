@@ -5,6 +5,7 @@ import { recordConsent } from "@/lib/repositories/privacy";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { getRequestFingerprint } from "@/lib/security/request";
 import { ensureOpportunityForSubmission } from "@/lib/repositories/lead-opportunities";
+import { logger } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, id }, { status: 201 });
   } catch (error) {
-    console.error("[form-submissions] POST error:", error);
+    logger.error("form_submission_create_failed", { error });
     return NextResponse.json(
       { success: false, message: "Não foi possível enviar o formulário." },
       { status: 500 }

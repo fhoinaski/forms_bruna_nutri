@@ -28,6 +28,9 @@ const CreateSchema = z.object({
   status: statusSchema.default("agendado"),
   location: z.string().trim().max(160).nullable().optional(),
   notes: z.string().trim().max(1000).nullable().optional(),
+  portal_visible: z.number().int().min(0).max(1).nullable().optional(),
+  client_confirmed_at: z.string().datetime().nullable().optional(),
+  cancellation_reason: z.string().trim().max(500).nullable().optional(),
 });
 
 export async function GET(req: NextRequest) {

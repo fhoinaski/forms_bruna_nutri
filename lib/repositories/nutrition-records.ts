@@ -1,4 +1,5 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
+import { calculateBmiValue, formatClinicalNumber } from "@/lib/clinical/anthropometry";
 import { getClientById } from "@/lib/repositories/clients";
 import { getSubmissionById } from "@/lib/repositories/submissions";
 
@@ -6,6 +7,10 @@ export interface NutritionRecord {
   id: string;
   client_id: string;
   chief_complaint: string | null;
+  life_stage: string | null;
+  biological_sex: string | null;
+  gestational_weeks: string | null;
+  breastfeeding_context: string | null;
   clinical_history: string | null;
   diagnoses: string | null;
   medications: string | null;
@@ -25,6 +30,9 @@ export interface NutritionRecord {
   bmi: string | null;
   waist_cm: string | null;
   anthropometry_notes: string | null;
+  pediatric_growth_notes: string | null;
+  target_weight_kg: string | null;
+  target_notes: string | null;
   exams: string | null;
   assessment: string | null;
   goals: string | null;
@@ -43,6 +51,10 @@ export type NutritionRecordInput = Omit<
 
 const FIELDS: (keyof NutritionRecordInput)[] = [
   "chief_complaint",
+  "life_stage",
+  "biological_sex",
+  "gestational_weeks",
+  "breastfeeding_context",
   "clinical_history",
   "diagnoses",
   "medications",
@@ -62,6 +74,9 @@ const FIELDS: (keyof NutritionRecordInput)[] = [
   "bmi",
   "waist_cm",
   "anthropometry_notes",
+  "pediatric_growth_notes",
+  "target_weight_kg",
+  "target_notes",
   "exams",
   "assessment",
   "goals",
@@ -77,6 +92,10 @@ export async function ensureNutritionRecordsTable() {
       id TEXT PRIMARY KEY,
       client_id TEXT NOT NULL UNIQUE,
       chief_complaint TEXT,
+      life_stage TEXT,
+      biological_sex TEXT,
+      gestational_weeks TEXT,
+      breastfeeding_context TEXT,
       clinical_history TEXT,
       diagnoses TEXT,
       medications TEXT,
@@ -96,6 +115,9 @@ export async function ensureNutritionRecordsTable() {
       bmi TEXT,
       waist_cm TEXT,
       anthropometry_notes TEXT,
+      pediatric_growth_notes TEXT,
+      target_weight_kg TEXT,
+      target_notes TEXT,
       exams TEXT,
       assessment TEXT,
       goals TEXT,
@@ -132,6 +154,10 @@ async function buildInitialRecord(clientId: string): Promise<NutritionRecordInpu
 
   return {
     chief_complaint: answer(answers, ["motivacao", "queixa", "principalQueixa"]),
+    life_stage: answer(answers, ["tipoAtendimento"]),
+    biological_sex: answer(answers, ["sexo", "sexoBiologico"]),
+    gestational_weeks: answer(answers, ["gestante", "semanasGestacao", "idadeGestacional"]),
+    breastfeeding_context: answer(answers, ["amamentacao", "aleitamento", "posParto"]),
     clinical_history: answer(answers, ["historico", "historicoClinico", "gestacao", "posParto"]),
     diagnoses: answer(answers, ["diagnostico", "diagnosticos", "doencas"]),
     medications: answer(answers, ["medicacao", "medicamentos"]),
@@ -151,6 +177,9 @@ async function buildInitialRecord(clientId: string): Promise<NutritionRecordInpu
     bmi: null,
     waist_cm: answer(answers, ["cintura", "circunferenciaCintura"]),
     anthropometry_notes: null,
+    pediatric_growth_notes: answer(answers, ["crescimento", "curvaCrescimento", "pediatra"]),
+    target_weight_kg: null,
+    target_notes: null,
     exams: answer(answers, ["exames", "examesRecentes", "laboratorio"]),
     assessment: null,
     goals: answer(answers, ["objetivo", "objetivos", "expectativas"]),
@@ -214,10 +243,17 @@ export async function updateNutritionRecord(
   const updates: string[] = [];
   const params: unknown[] = [];
   let index = 1;
+  const normalizedInput = { ...input };
+  if (normalizedInput.bmi === undefined && (normalizedInput.current_weight_kg !== undefined || normalizedInput.height_cm !== undefined)) {
+    const weight = normalizedInput.current_weight_kg ?? existing.current_weight_kg;
+    const height = normalizedInput.height_cm ?? existing.height_cm;
+    const bmi = calculateBmiValue(weight, height);
+    normalizedInput.bmi = formatClinicalNumber(bmi);
+  }
   for (const field of FIELDS) {
-    if (input[field] !== undefined) {
+    if (normalizedInput[field] !== undefined) {
       updates.push(`${field} = ?${index++}`);
-      params.push(input[field] ?? null);
+      params.push(normalizedInput[field] ?? null);
     }
   }
   updates.push(`updated_at = ?${index++}`);

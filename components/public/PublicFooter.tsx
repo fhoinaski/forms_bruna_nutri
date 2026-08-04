@@ -30,6 +30,10 @@ export function PublicFooter() {
               Atendimento nutricional acolhedor e individualizado para gestantes,
               mães, bebês e crianças, com ciência aplicada à vida real.
             </p>
+            <p className="mt-4 max-w-xl text-xs leading-6 text-[#8A7B70]">
+              Conteúdos do site e do blog têm finalidade educativa e não substituem
+              avaliação individual, diagnóstico ou prescrição nutricional.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-8 sm:flex sm:justify-end">

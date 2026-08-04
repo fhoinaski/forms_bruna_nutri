@@ -10,6 +10,12 @@ export interface Payment {
   paid_at: string | null;
   status: string;
   payment_method: string | null;
+  invoice_number: string | null;
+  payment_link: string | null;
+  receipt_url: string | null;
+  installment_number: number | null;
+  installment_total: number | null;
+  category: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -30,6 +36,12 @@ export interface CreatePaymentInput {
   paid_at?: string | null;
   status?: string;
   payment_method?: string | null;
+  invoice_number?: string | null;
+  payment_link?: string | null;
+  receipt_url?: string | null;
+  installment_number?: number | null;
+  installment_total?: number | null;
+  category?: string | null;
   notes?: string | null;
 }
 
@@ -53,6 +65,12 @@ export async function ensurePaymentsTable(): Promise<void> {
       paid_at TEXT,
       status TEXT NOT NULL DEFAULT 'pendente',
       payment_method TEXT,
+      invoice_number TEXT,
+      payment_link TEXT,
+      receipt_url TEXT,
+      installment_number INTEGER,
+      installment_total INTEGER,
+      category TEXT,
       notes TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -62,6 +80,19 @@ export async function ensurePaymentsTable(): Promise<void> {
   await d1Execute(`CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)`);
   await d1Execute(`CREATE INDEX IF NOT EXISTS idx_payments_due_date ON payments(due_date)`);
   await d1Execute(`CREATE INDEX IF NOT EXISTS idx_payments_client_id ON payments(client_id)`);
+  for (const [column, definition] of [
+    ["invoice_number", "TEXT"],
+    ["payment_link", "TEXT"],
+    ["receipt_url", "TEXT"],
+    ["installment_number", "INTEGER"],
+    ["installment_total", "INTEGER"],
+    ["category", "TEXT"],
+  ] as const) {
+    try {
+      await d1Execute(`ALTER TABLE payments ADD COLUMN ${column} ${definition}`);
+    } catch {}
+  }
+  await d1Execute(`CREATE INDEX IF NOT EXISTS idx_payments_invoice_number ON payments(invoice_number)`);
 }
 
 function buildWhere(filters: PaymentFilters): { clause: string; params: unknown[] } {
@@ -115,8 +146,10 @@ export async function createPayment(input: CreatePaymentInput): Promise<string> 
 
   await d1Execute(
     `INSERT INTO payments
-       (id, client_id, description, amount_cents, due_date, paid_at, status, payment_method, notes, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+       (id, client_id, description, amount_cents, due_date, paid_at, status, payment_method,
+        invoice_number, payment_link, receipt_url, installment_number, installment_total,
+        category, notes, created_at, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)`,
     [
       id,
       input.client_id ?? null,
@@ -126,6 +159,12 @@ export async function createPayment(input: CreatePaymentInput): Promise<string> 
       input.paid_at ?? null,
       input.status ?? "pendente",
       input.payment_method ?? null,
+      input.invoice_number ?? null,
+      input.payment_link ?? null,
+      input.receipt_url ?? null,
+      input.installment_number ?? null,
+      input.installment_total ?? null,
+      input.category ?? null,
       input.notes ?? null,
       now,
       now,

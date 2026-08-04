@@ -53,6 +53,17 @@ type PortalSummary = {
   appointments: Appointment[];
   tasks: Task[];
   protocols: PortalProtocol[];
+  payments: Array<{
+    id: string;
+    description: string;
+    amount_cents: number;
+    due_date: string | null;
+    status: string;
+    payment_link: string | null;
+    receipt_url: string | null;
+    installment_number: number | null;
+    installment_total: number | null;
+  }>;
   carePlan: {
     goals: string | null;
     care_plan: string | null;
@@ -92,6 +103,7 @@ export default function ClientPortalPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [taskUpdating, setTaskUpdating] = useState<string | null>(null);
+  const [appointmentUpdating, setAppointmentUpdating] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   async function loadPortal() {
@@ -150,6 +162,13 @@ export default function ClientPortalPage() {
     });
     if (response.ok) await loadPortal();
     setTaskUpdating(null);
+  }
+
+  async function confirmAppointment(appointmentId: string) {
+    setAppointmentUpdating(appointmentId);
+    const response = await fetch(`/api/portal/appointments/${appointmentId}/confirm`, { method: "POST" });
+    if (response.ok) await loadPortal();
+    setAppointmentUpdating(null);
   }
 
   if (loading) {
@@ -275,6 +294,14 @@ export default function ClientPortalPage() {
                       {nextAppointment.location}
                     </p>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => void confirmAppointment(nextAppointment.id)}
+                    disabled={appointmentUpdating === nextAppointment.id || nextAppointment.status === "confirmado"}
+                    className="mt-4 rounded-full bg-[#607A56] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[#4F6847] disabled:cursor-not-allowed disabled:bg-[#A9BCA1]"
+                  >
+                    {nextAppointment.status === "confirmado" ? "Consulta confirmada" : appointmentUpdating === nextAppointment.id ? "Confirmando..." : "Confirmar presenca"}
+                  </button>
                 </div>
               ) : (
                 <p className="text-sm text-[#75675E]">Nenhuma consulta futura cadastrada no momento.</p>
@@ -294,6 +321,42 @@ export default function ClientPortalPage() {
                 </div>
               ) : (
                 <p className="text-sm text-[#75675E]">Seu plano principal aparecera aqui quando a Bruna registrar os combinados.</p>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-[#E6D5C5] bg-white/75 p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-[#C58D73]" />
+                <h2 className="font-serif text-xl font-semibold">Financeiro</h2>
+              </div>
+              {data.payments.length === 0 ? (
+                <p className="text-sm text-[#75675E]">Nenhuma cobranca ativa no momento.</p>
+              ) : (
+                <div className="space-y-3">
+                  {data.payments.slice(0, 4).map((payment) => (
+                    <div key={payment.id} className="rounded-xl border border-[#EFE2D6] bg-[#FBF7F1] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold">{payment.description}</p>
+                          <p className="mt-1 text-sm text-[#75675E]">
+                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(payment.amount_cents / 100)}
+                            {payment.installment_number && payment.installment_total ? ` · parcela ${payment.installment_number}/${payment.installment_total}` : ""}
+                          </p>
+                          <p className="mt-1 text-xs font-medium text-[#9A8B80]">Vencimento: {formatDate(payment.due_date)}</p>
+                        </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase text-[#607A56]">{payment.status}</span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {payment.payment_link && (
+                          <a href={payment.payment_link} target="_blank" rel="noreferrer" className="rounded-full bg-[#607A56] px-3 py-2 text-xs font-semibold text-white">Pagar</a>
+                        )}
+                        {payment.receipt_url && (
+                          <a href={payment.receipt_url} target="_blank" rel="noreferrer" className="rounded-full border border-[#DCC8B8] bg-white px-3 py-2 text-xs font-semibold text-[#607A56]">Recibo</a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

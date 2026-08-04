@@ -5,6 +5,7 @@ import { ArrowLeft, CalendarDays, UserRound } from "lucide-react";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { getBlogPostBySlug } from "@/lib/repositories/blog-posts";
+import { PROFESSIONAL_PROFILE } from "@/lib/seo/site";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,6 +108,11 @@ export default async function BlogPostPage({
     author: {
       "@type": "Person",
       name: post.author_name,
+      jobTitle: "Nutricionista materno-infantil",
+    },
+    reviewedBy: {
+      "@type": "Person",
+      name: PROFESSIONAL_PROFILE.professionalName,
     },
     publisher: {
       "@type": "Organization",
@@ -118,6 +124,8 @@ export default async function BlogPostPage({
     mainEntityOfPage: `${baseUrl}/blog/${post.slug}`,
     articleSection: post.category || "Nutrição materno-infantil",
     keywords: tags.join(", "),
+    isAccessibleForFree: true,
+    educationalUse: "Conteudo educativo em nutricao materno-infantil",
     inLanguage: "pt-BR",
   };
 
@@ -155,6 +163,15 @@ export default async function BlogPostPage({
 
         <div className="mx-auto max-w-3xl px-5 py-14 lg:px-8">
           <div className="prose-none">{renderMarkdown(post.content_markdown)}</div>
+
+          <aside className="mt-10 rounded-[1.25rem] border border-[#EDE1D6] bg-[#FBF7F1] p-5">
+            <p className="brand-kicker mb-2">Revisão e segurança</p>
+            <p className="text-sm leading-7 text-[#75675E]">
+              Conteúdo educativo revisado antes da publicação. Ele ajuda a entender
+              possibilidades de cuidado, mas não substitui avaliação individual,
+              diagnóstico ou prescrição nutricional.
+            </p>
+          </aside>
 
           {tags.length > 0 && (
             <div className="mt-12 flex flex-wrap gap-2 border-t border-[#EDE1D6] pt-8">

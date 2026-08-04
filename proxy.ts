@@ -5,40 +5,74 @@ import { writeAuditLog } from "@/lib/security/audit";
 
 const COOKIE_NAME = "bruna_nutri_admin_session";
 const SECURITY_PATH = "/dashboard/settings/security";
+const MUTATION_METHODS = ["POST", "PATCH", "PUT", "DELETE"];
+
+function hasAllowedOrigin(request: NextRequest): boolean {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === request.nextUrl.host;
+  } catch {
+    return false;
+  }
+}
+
+function noStore(response: NextResponse, enabled: boolean) {
+  if (enabled) response.headers.set("Cache-Control", "private, no-store, max-age=0");
+  return response;
+}
 
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
   const isDashboard = pathname.startsWith("/dashboard");
   const isAdminApi = pathname.startsWith("/api/admin");
   const isAuthApi = pathname.startsWith("/api/auth");
+  const isPortalApi = pathname.startsWith("/api/portal");
   const isLoginPage = pathname === "/login";
-  if (!isDashboard && !isAdminApi && !isAuthApi && !isLoginPage) return NextResponse.next();
+  const isMutation = MUTATION_METHODS.includes(request.method);
 
-  if (["POST", "PATCH", "PUT", "DELETE"].includes(request.method)) {
-    const origin = request.headers.get("origin");
-    if (origin) {
-      try {
-        if (new URL(origin).host !== request.nextUrl.host) return NextResponse.json({ message: "Origem não permitida." }, { status: 403 });
-      } catch {
-        return NextResponse.json({ message: "Origem não permitida." }, { status: 403 });
-      }
-    }
+  if (!isDashboard && !isAdminApi && !isAuthApi && !isPortalApi && !isLoginPage) {
+    return NextResponse.next();
+  }
+
+  if (isMutation && !hasAllowedOrigin(request)) {
+    return NextResponse.json({ message: "Origem nao permitida." }, { status: 403 });
+  }
+
+  if (isPortalApi) {
+    return noStore(NextResponse.next(), true);
   }
 
   const token = request.cookies.get(COOKIE_NAME)?.value;
   const session = token ? await verifySessionToken(token) : null;
   if (!session) {
     if (isDashboard) return NextResponse.redirect(new URL("/login", request.url));
-    if (isAdminApi) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
+    if (isAdminApi) return NextResponse.json({ message: "Nao autorizado." }, { status: 401 });
     return NextResponse.next();
   }
-  if (isLoginPage) return NextResponse.redirect(new URL(session.mustChangePassword ? SECURITY_PATH : "/dashboard", request.url));
-  if (session.mustChangePassword && isDashboard && pathname !== SECURITY_PATH) return NextResponse.redirect(new URL(SECURITY_PATH, request.url));
 
-  if (isAdminApi && ["POST", "PATCH", "PUT", "DELETE"].includes(request.method)) {
-    event.waitUntil(writeAuditLog({ action: "admin_mutation_requested", adminId: session.sub, entityType: "api_route", entityId: pathname, metadata: { method: request.method } }));
+  if (isLoginPage) {
+    return NextResponse.redirect(new URL(session.mustChangePassword ? SECURITY_PATH : "/dashboard", request.url));
   }
+  if (session.mustChangePassword && isDashboard && pathname !== SECURITY_PATH) {
+    return NextResponse.redirect(new URL(SECURITY_PATH, request.url));
+  }
+
+  if (isAdminApi && isMutation) {
+    event.waitUntil(
+      writeAuditLog({
+        action: "admin_mutation_requested",
+        adminId: session.sub,
+        entityType: "api_route",
+        entityId: pathname,
+        metadata: { method: request.method },
+      })
+    );
+  }
+
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/login", "/dashboard/:path*", "/api/admin/:path*", "/api/auth/:path*"] };
+export const config = {
+  matcher: ["/login", "/dashboard/:path*", "/api/admin/:path*", "/api/auth/:path*", "/api/portal/:path*"],
+};
