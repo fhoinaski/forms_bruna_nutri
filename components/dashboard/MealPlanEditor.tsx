@@ -90,12 +90,39 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         title: plan.title,
         status: nextStatus ?? plan.status,
         notes: plan.notes,
-        meals: plan.meals.map((meal) => ({
-          ...meal,
-          items: meal.items.filter((item) => item.food.trim()),
-        })).filter((meal) => meal.name.trim() && meal.items.length),
-        substitutions: plan.substitutions.filter((item) => item.base_food.trim() && item.option_food.trim()),
-        supplements: plan.supplements.filter((item) => item.name.trim()),
+        meals: plan.meals
+          .map((meal) => ({
+            name: meal.name,
+            suggested_time: meal.suggested_time ?? null,
+            notes: meal.notes ?? null,
+            items: meal.items
+              .filter((item) => item.food.trim())
+              .map((item) => ({
+                food: item.food,
+                quantity: item.quantity ?? null,
+                unit: item.unit ?? null,
+                notes: item.notes ?? null,
+              })),
+          }))
+          .filter((meal) => meal.name.trim() && meal.items.length),
+        substitutions: plan.substitutions
+          .filter((item) => item.base_food.trim() && item.option_food.trim())
+          .map((item) => ({
+            base_food: item.base_food,
+            option_food: item.option_food,
+            quantity: item.quantity ?? null,
+            unit: item.unit ?? null,
+            notes: item.notes ?? null,
+          })),
+        supplements: plan.supplements
+          .filter((item) => item.name.trim())
+          .map((item) => ({
+            name: item.name,
+            dosage: item.dosage ?? null,
+            unit: item.unit ?? null,
+            instructions: item.instructions ?? null,
+            notes: item.notes ?? null,
+          })),
       };
       const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/${plan.id}`, {
         method: "PUT",
