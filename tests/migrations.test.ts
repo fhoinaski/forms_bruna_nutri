@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  isAlterAddColumnStatement,
-  isDuplicateColumnError,
+  isDestructiveStatement,
   isTransactionStatement,
   splitSqlStatements,
 } from "../scripts/migration-utils.mjs";
@@ -26,9 +25,9 @@ describe("D1 migration utilities", () => {
     expect(isTransactionStatement("CREATE TABLE clients (id TEXT)")).toBe(false);
   });
 
-  it("identifies duplicate-column recovery cases", () => {
-    expect(isAlterAddColumnStatement("ALTER TABLE clients ADD COLUMN status TEXT")).toBe(true);
-    expect(isDuplicateColumnError(new Error("duplicate column name: status"))).toBe(true);
-    expect(isAlterAddColumnStatement("CREATE INDEX idx_clients_status ON clients(status)")).toBe(false);
+  it("blocks destructive DDL from ordinary migrations", () => {
+    expect(isDestructiveStatement("DROP TABLE clients")).toBe(true);
+    expect(isDestructiveStatement("ALTER TABLE clients DROP COLUMN email")).toBe(true);
+    expect(isDestructiveStatement("CREATE INDEX idx_clients_name ON clients(name)")).toBe(false);
   });
 });

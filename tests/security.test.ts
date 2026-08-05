@@ -13,7 +13,9 @@ describe("security primitives", () => {
     const session = { sub: "admin-1", email: "admin@example.com", name: "Admin", mustChangePassword: false, sessionVersion: 2 };
     const token = await createInternalSessionAssertion(session);
     await expect(verifyInternalSessionAssertion(token)).resolves.toEqual(session);
-    await expect(verifyInternalSessionAssertion(`${token.slice(0, -1)}x`)).resolves.toBeNull();
+    const parts = token.split(".");
+    parts[2] = `${parts[2][0] === "a" ? "b" : "a"}${parts[2].slice(1)}`;
+    await expect(verifyInternalSessionAssertion(parts.join("."))).resolves.toBeNull();
   });
 
   it("encrypts secrets with a random authenticated payload", () => {

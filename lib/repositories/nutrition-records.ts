@@ -86,57 +86,6 @@ const FIELDS: (keyof NutritionRecordInput)[] = [
   "private_notes",
 ];
 
-export async function ensureNutritionRecordsTable() {
-  await d1Execute(
-    `CREATE TABLE IF NOT EXISTS nutrition_records (
-      id TEXT PRIMARY KEY,
-      client_id TEXT NOT NULL UNIQUE,
-      chief_complaint TEXT,
-      life_stage TEXT,
-      biological_sex TEXT,
-      gestational_weeks TEXT,
-      breastfeeding_context TEXT,
-      clinical_history TEXT,
-      diagnoses TEXT,
-      medications TEXT,
-      supplements TEXT,
-      allergies TEXT,
-      restrictions TEXT,
-      food_preferences TEXT,
-      food_aversions TEXT,
-      eating_routine TEXT,
-      intestinal_health TEXT,
-      sleep_routine TEXT,
-      stress_context TEXT,
-      physical_activity TEXT,
-      hydration TEXT,
-      current_weight_kg TEXT,
-      height_cm TEXT,
-      bmi TEXT,
-      waist_cm TEXT,
-      anthropometry_notes TEXT,
-      pediatric_growth_notes TEXT,
-      target_weight_kg TEXT,
-      target_notes TEXT,
-      exams TEXT,
-      assessment TEXT,
-      goals TEXT,
-      care_plan TEXT,
-      risk_flags TEXT,
-      family_context TEXT,
-      private_notes TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (client_id) REFERENCES clients(id)
-    )`,
-    []
-  );
-  await d1Execute(
-    "CREATE INDEX IF NOT EXISTS idx_nutrition_records_client_id ON nutrition_records(client_id)",
-    []
-  );
-}
-
 function answer(answers: Record<string, unknown>, keys: string[]): string | null {
   const values = keys
     .map((key) => answers[key])
@@ -191,7 +140,6 @@ async function buildInitialRecord(clientId: string): Promise<NutritionRecordInpu
 }
 
 export async function getNutritionRecord(clientId: string): Promise<NutritionRecord | null> {
-  await ensureNutritionRecordsTable();
   const existing = await getExistingNutritionRecord(clientId);
   if (existing) return existing;
 
@@ -203,7 +151,6 @@ export async function getNutritionRecord(clientId: string): Promise<NutritionRec
 }
 
 export async function getExistingNutritionRecord(clientId: string): Promise<NutritionRecord | null> {
-  await ensureNutritionRecordsTable();
   const rows = await d1Query<NutritionRecord>(
     "SELECT * FROM nutrition_records WHERE client_id = ?1 LIMIT 1",
     [clientId]
@@ -215,7 +162,6 @@ export async function createNutritionRecord(
   clientId: string,
   input: NutritionRecordInput
 ): Promise<NutritionRecord> {
-  await ensureNutritionRecordsTable();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await d1Execute(
@@ -236,7 +182,6 @@ export async function updateNutritionRecord(
   clientId: string,
   input: Partial<NutritionRecordInput>
 ): Promise<NutritionRecord> {
-  await ensureNutritionRecordsTable();
   const existing = await getNutritionRecord(clientId);
   if (!existing) throw new Error("Cliente nao encontrado.");
 

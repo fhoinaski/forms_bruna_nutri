@@ -4,7 +4,6 @@ import { loginSchema } from "@/lib/validators/auth";
 import { getAdminByEmail } from "@/lib/repositories/admin-users";
 import { createSessionToken, primeSessionVersionCache, setAuthCookie } from "@/lib/auth/session";
 import { consumeRateLimit, clearRateLimit } from "@/lib/security/rate-limit";
-import { ensureSecuritySchema } from "@/lib/security/schema";
 import { decryptValue, hashRecoveryCode } from "@/lib/security/crypto";
 import { verifyMfaCode } from "@/lib/security/mfa";
 import { consumeRecoveryCode } from "@/lib/repositories/admin-users";
@@ -17,7 +16,6 @@ const GENERIC_ERROR = "E-mail ou senha inválidos.";
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureSecuritySchema();
     const limit = await consumeRateLimit(req, { scope: "admin-login", limit: 8, windowMs: 15 * 60 * 1000, blockMs: 30 * 60 * 1000 });
     if (!limit.allowed) {
       return NextResponse.json({ success: false, message: "Acesso temporariamente bloqueado. Aguarde e tente novamente." }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });

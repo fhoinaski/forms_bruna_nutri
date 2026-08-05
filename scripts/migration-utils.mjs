@@ -89,11 +89,7 @@ export function isTransactionStatement(statement) {
   );
 }
 
-export function isAlterAddColumnStatement(statement) {
-  return /^ALTER\s+TABLE\s+[\w"`[\].]+\s+ADD\s+COLUMN\s+/i.test(stripSqlComments(statement));
-}
-
-export function isDuplicateColumnError(error) {
-  const message = error instanceof Error ? error.message : String(error);
-  return /duplicate column name/i.test(message);
+export function isDestructiveStatement(statement) {
+  const normalized = stripSqlComments(statement).replace(/\s+/g, " ").trim().toUpperCase();
+  return /^(DROP (TABLE|INDEX|VIEW|TRIGGER)|TRUNCATE TABLE|ALTER TABLE .+ (DROP COLUMN|RENAME TO|RENAME COLUMN)|PRAGMA WRITABLE_SCHEMA)/.test(normalized);
 }

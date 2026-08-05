@@ -41,30 +41,6 @@ export interface OpportunityMetrics {
   convertidas: number;
 }
 
-export async function ensureLeadOpportunitiesTable() {
-  await d1Execute(
-    `CREATE TABLE IF NOT EXISTS lead_opportunities (
-      id TEXT PRIMARY KEY,
-      submission_id TEXT NOT NULL UNIQUE,
-      stage TEXT NOT NULL DEFAULT 'novo',
-      temperature TEXT NOT NULL DEFAULT 'morno',
-      source TEXT NOT NULL DEFAULT 'pre_consulta',
-      objective TEXT,
-      service_interest TEXT,
-      next_action_at TEXT,
-      last_contacted_at TEXT,
-      contact_attempts INTEGER NOT NULL DEFAULT 0,
-      notes TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (submission_id) REFERENCES form_submissions(id)
-    )`
-  );
-  await d1Execute("CREATE INDEX IF NOT EXISTS idx_lead_opportunities_stage ON lead_opportunities(stage)");
-  await d1Execute("CREATE INDEX IF NOT EXISTS idx_lead_opportunities_temperature ON lead_opportunities(temperature)");
-  await d1Execute("CREATE INDEX IF NOT EXISTS idx_lead_opportunities_next_action ON lead_opportunities(next_action_at)");
-}
-
 function firstString(answers: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const value = answers[key];
@@ -96,7 +72,6 @@ function defaultNextAction(createdAt: string) {
 }
 
 export async function ensureOpportunityForSubmission(submissionId: string) {
-  await ensureLeadOpportunitiesTable();
   const existing = (
     await d1Query<{ id: string }>(
       "SELECT id FROM lead_opportunities WHERE submission_id = ?1 LIMIT 1",
@@ -131,7 +106,6 @@ export async function ensureOpportunityForSubmission(submissionId: string) {
 }
 
 export async function backfillLeadOpportunities(limit = 200) {
-  await ensureLeadOpportunitiesTable();
   const rows = await d1Query<{ id: string }>(
     `SELECT s.id
      FROM form_submissions s
@@ -155,7 +129,6 @@ export async function listLeadOpportunities(filters: {
   temperature?: OpportunityTemperature;
   search?: string;
 }) {
-  await ensureLeadOpportunitiesTable();
   await backfillLeadOpportunities(200);
 
   const conditions: string[] = [];
@@ -199,7 +172,6 @@ export async function listLeadOpportunities(filters: {
 }
 
 export async function getLeadOpportunityById(id: string) {
-  await ensureLeadOpportunitiesTable();
   return (
     await d1Query<LeadOpportunity>(
       `SELECT o.*, s.patient_name, s.patient_email, s.patient_phone, s.child_name,
@@ -214,7 +186,6 @@ export async function getLeadOpportunityById(id: string) {
 }
 
 export async function getLeadOpportunityBySubmissionId(submissionId: string) {
-  await ensureLeadOpportunitiesTable();
   return (
     await d1Query<LeadOpportunity>(
       `SELECT o.*, s.patient_name, s.patient_email, s.patient_phone, s.child_name,
@@ -248,7 +219,6 @@ export async function updateLeadOpportunity(
     adminId?: string;
   }
 ) {
-  await ensureLeadOpportunitiesTable();
   const existing = await getLeadOpportunityById(id);
   if (!existing) return null;
 
@@ -296,7 +266,6 @@ export async function updateLeadOpportunity(
 }
 
 export async function getLeadOpportunityMetrics(): Promise<OpportunityMetrics> {
-  await ensureLeadOpportunitiesTable();
   await backfillLeadOpportunities(200);
   const now = new Date().toISOString();
   const [total, novos, quentes, atrasadas, convertidas] = await Promise.all([

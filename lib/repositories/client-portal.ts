@@ -2,12 +2,9 @@ import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { d1Execute, d1Query } from "@/lib/d1/client";
 import type { Client } from "@/lib/repositories/clients";
 import type { Appointment } from "@/lib/repositories/appointments";
-import { ensureAppointmentsTable } from "@/lib/repositories/appointments";
 import type { ClientTask } from "@/lib/repositories/client-tasks";
 import type { NutritionRecord } from "@/lib/repositories/nutrition-records";
-import { ensureNutritionRecordsTable } from "@/lib/repositories/nutrition-records";
 import type { Payment } from "@/lib/repositories/payments";
-import { ensurePaymentsTable } from "@/lib/repositories/payments";
 import { getActiveMealPlan, type MealPlanPayload } from "@/lib/repositories/meal-plans";
 
 export interface ClientPortalAccess {
@@ -52,42 +49,6 @@ export interface ClientPortalSummary {
   payments: Pick<Payment, "id" | "description" | "amount_cents" | "due_date" | "status" | "payment_link" | "receipt_url" | "installment_number" | "installment_total">[];
 }
 
-export async function ensureClientPortalTables() {
-  await d1Execute(
-    `CREATE TABLE IF NOT EXISTS client_portal_access (
-      id TEXT PRIMARY KEY,
-      client_id TEXT NOT NULL UNIQUE,
-      code_hash TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      session_version INTEGER NOT NULL DEFAULT 1,
-      last_used_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (client_id) REFERENCES clients(id)
-    )`
-  );
-  await d1Execute(
-    "CREATE INDEX IF NOT EXISTS idx_client_portal_access_client_id ON client_portal_access(client_id)"
-  );
-  await d1Execute(
-    "CREATE INDEX IF NOT EXISTS idx_client_portal_access_active ON client_portal_access(is_active)"
-  );
-  const columns = [
-    ["session_version", "INTEGER NOT NULL DEFAULT 1"],
-    ["code_expires_at", "TEXT"],
-    ["invited_at", "TEXT"],
-    ["revoked_at", "TEXT"],
-  ] as const;
-  for (const [column, definition] of columns) {
-    try {
-      await d1Execute(`ALTER TABLE client_portal_access ADD COLUMN ${column} ${definition}`);
-    } catch {}
-  }
-  await d1Execute(
-    "CREATE INDEX IF NOT EXISTS idx_client_portal_access_expires ON client_portal_access(code_expires_at)"
-  );
-}
-
 export function normalizePortalCode(code: string): string {
   return code.trim().toUpperCase().replace(/\s+/g, "");
 }
@@ -114,7 +75,6 @@ function generatePortalCode(): string {
 }
 
 export async function getClientPortalAccess(clientId: string): Promise<ClientPortalAccess | null> {
-  await ensureClientPortalTables();
   const rows = await d1Query<ClientPortalAccess>(
     "SELECT * FROM client_portal_access WHERE client_id = ?1 LIMIT 1",
     [clientId]
@@ -123,7 +83,6 @@ export async function getClientPortalAccess(clientId: string): Promise<ClientPor
 }
 
 export async function createOrRotateClientPortalCode(clientId: string) {
-  await ensureClientPortalTables();
   const code = generatePortalCode();
   const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
@@ -155,7 +114,6 @@ export async function createOrRotateClientPortalCode(clientId: string) {
 }
 
 export async function setClientPortalAccessActive(clientId: string, active: boolean) {
-  await ensureClientPortalTables();
   await d1Execute(
     "UPDATE client_portal_access SET is_active = ?1, session_version = session_version + 1, revoked_at = ?2, updated_at = ?3 WHERE client_id = ?4",
     [active ? 1 : 0, active ? null : new Date().toISOString(), new Date().toISOString(), clientId]
@@ -163,7 +121,6 @@ export async function setClientPortalAccessActive(clientId: string, active: bool
 }
 
 export async function verifyClientPortalLogin(email: string, code: string): Promise<{ client: Client; sessionVersion: number } | null> {
-  await ensureClientPortalTables();
   const rows = await d1Query<Client & { code_hash: string; portal_active: number; portal_session_version: number }>(
     `SELECT c.*, p.code_hash, p.is_active as portal_active, p.session_version as portal_session_version
      FROM clients c
@@ -186,10 +143,6 @@ export async function verifyClientPortalLogin(email: string, code: string): Prom
 }
 
 export async function getClientPortalSummary(clientId: string): Promise<ClientPortalSummary | null> {
-  await ensureClientPortalTables();
-  await ensureAppointmentsTable();
-  await ensureNutritionRecordsTable();
-  await ensurePaymentsTable();
   const clients = await d1Query<Client>(
     "SELECT id, name, email, phone, birth_date, source_submission_id, status, notes, created_at, updated_at FROM clients WHERE id = ?1 AND status != 'arquivado' LIMIT 1",
     [clientId]

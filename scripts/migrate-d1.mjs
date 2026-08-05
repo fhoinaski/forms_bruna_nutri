@@ -3,8 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  isAlterAddColumnStatement,
-  isDuplicateColumnError,
+  isDestructiveStatement,
   isTransactionStatement,
   splitSqlStatements,
 } from "./migration-utils.mjs";
@@ -32,9 +31,18 @@ function readMigration(file) {
 }
 
 function validateMigrationFiles() {
+  const ids = new Set();
   for (const file of files) {
-    const statements = splitSqlStatements(readMigration(file));
+    const id = file.slice(0, 13);
+    if (ids.has(id)) throw new Error(`Identificador de migracao duplicado: ${id}`);
+    ids.add(id);
+    const sql = readMigration(file);
+    const statements = splitSqlStatements(sql);
     if (!statements.length) throw new Error(`Migracao vazia: ${file}`);
+    const destructive = statements.find(isDestructiveStatement);
+    if (destructive && !sql.includes("migration:allow-destructive")) {
+      throw new Error(`DDL destrutivo bloqueado em ${file}. Exige revisao e marcador migration:allow-destructive.`);
+    }
   }
 }
 
@@ -51,37 +59,43 @@ if (!accountId || !databaseId || !apiToken) {
   throw new Error("Configure as credenciais do Cloudflare D1 antes de executar as migrações.");
 }
 
-async function query(sql, params = []) {
+async function request(body) {
   const response = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ sql, params }),
+      body: JSON.stringify(body),
     }
   );
   const data = await response.json();
-  if (!response.ok || !data.success) {
+  const failed = data.result?.find((item) => !item.success);
+  if (!response.ok || !data.success || failed) {
     throw new Error(data.errors?.map((item) => item.message).join("; ") || "Falha ao consultar o D1.");
   }
-  return data.result?.[0]?.results ?? [];
+  return data.result ?? [];
 }
 
-async function executeMigrationStatement(statement, file, statementIndex) {
-  if (isTransactionStatement(statement)) {
-    console.log(`Ignorado comando transacional em ${file} #${statementIndex}.`);
-    return;
-  }
+async function query(sql, params = []) {
+  const results = await request(params.length ? { sql, params } : { sql });
+  return results[0]?.results ?? [];
+}
 
+async function applyMigration(file, statements, checksum) {
+  const executable = statements.filter((statement) => !isTransactionStatement(statement));
   try {
-    await query(statement);
+    await request({
+      batch: [
+        ...executable.map((sql) => ({ sql })),
+        {
+          sql: "INSERT INTO schema_migrations (id, checksum, applied_at) VALUES (?1, ?2, ?3)",
+          params: [file, checksum, new Date().toISOString()],
+        },
+      ],
+    });
   } catch (error) {
-    if (isAlterAddColumnStatement(statement) && isDuplicateColumnError(error)) {
-      console.log(`Coluna ja existente em ${file} #${statementIndex}; seguindo.`);
-      return;
-    }
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Falha em ${file} #${statementIndex}: ${message}`);
+    throw new Error(`Falha na migracao transacional ${file}: ${message}`);
   }
 }
 
@@ -96,6 +110,18 @@ const applied = new Map(
 );
 validateMigrationFiles();
 
+if (process.argv.includes("--status")) {
+  const pending = files.filter((file) => !applied.has(file));
+  for (const file of files) {
+    if (!applied.has(file)) continue;
+    const checksum = createHash("sha256").update(readMigration(file)).digest("hex");
+    if (applied.get(file) !== checksum) throw new Error(`A migracao ja aplicada foi alterada: ${file}`);
+  }
+  if (pending.length) throw new Error(`Banco desatualizado. Migrations pendentes: ${pending.join(", ")}`);
+  console.log(`Banco atualizado: ${files.length} migration(oes) aplicadas e verificadas.`);
+  process.exit(0);
+}
+
 let appliedCount = 0;
 for (const file of files) {
   const sql = readMigration(file);
@@ -107,13 +133,7 @@ for (const file of files) {
 
   const statements = splitSqlStatements(sql);
   if (!statements.length) throw new Error(`Migracao vazia: ${file}`);
-  for (const [index, statement] of statements.entries()) {
-    await executeMigrationStatement(statement, file, index + 1);
-  }
-  await query(
-    "INSERT INTO schema_migrations (id, checksum, applied_at) VALUES (?1, ?2, ?3)",
-    [file, checksum, new Date().toISOString()]
-  );
+  await applyMigration(file, statements, checksum);
   appliedCount++;
   console.log(`Aplicada: ${file}`);
 }

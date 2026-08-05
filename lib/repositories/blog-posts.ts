@@ -49,33 +49,6 @@ export interface BlogMetrics {
   aiGenerated: number;
 }
 
-export async function ensureBlogPostsTable(): Promise<void> {
-  await d1Execute(
-    `CREATE TABLE IF NOT EXISTS blog_posts (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      slug TEXT NOT NULL UNIQUE,
-      excerpt TEXT NOT NULL,
-      content_markdown TEXT NOT NULL,
-      category TEXT,
-      tags_json TEXT NOT NULL DEFAULT '[]',
-      status TEXT NOT NULL DEFAULT 'draft',
-      author_name TEXT NOT NULL DEFAULT 'Bruna Flores Nutri',
-      cover_image_url TEXT,
-      seo_title TEXT,
-      seo_description TEXT,
-      ai_generated INTEGER NOT NULL DEFAULT 0,
-      ai_prompt TEXT,
-      published_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    )`
-  );
-  await d1Execute(`CREATE INDEX IF NOT EXISTS idx_blog_posts_status ON blog_posts(status)`);
-  await d1Execute(`CREATE INDEX IF NOT EXISTS idx_blog_posts_published_at ON blog_posts(published_at)`);
-  await d1Execute(`CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug)`);
-}
-
 export function slugify(value: string): string {
   return value
     .normalize("NFD")
@@ -104,7 +77,6 @@ async function uniqueSlug(base: string): Promise<string> {
 export async function getBlogPosts(
   filters: BlogPostFilters = {}
 ): Promise<BlogPost[]> {
-  await ensureBlogPostsTable();
   const conditions: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
@@ -137,7 +109,6 @@ export async function getPublishedBlogPosts(limit = 50): Promise<BlogPost[]> {
 }
 
 export async function getBlogMetrics(): Promise<BlogMetrics> {
-  await ensureBlogPostsTable();
   const [publishedRows, draftRows, aiRows] = await Promise.all([
     d1Query<{ c: number }>(
       `SELECT COUNT(*) as c FROM blog_posts WHERE status = 'published'`,
@@ -161,7 +132,6 @@ export async function getBlogMetrics(): Promise<BlogMetrics> {
 }
 
 export async function getBlogPostBySlug(slug: string): Promise<BlogPost | null> {
-  await ensureBlogPostsTable();
   const rows = await d1Query<BlogPost>(
     `SELECT * FROM blog_posts WHERE slug = ?1 AND status = 'published' LIMIT 1`,
     [slug]
@@ -170,7 +140,6 @@ export async function getBlogPostBySlug(slug: string): Promise<BlogPost | null> 
 }
 
 export async function getBlogPostById(id: string): Promise<BlogPost | null> {
-  await ensureBlogPostsTable();
   const rows = await d1Query<BlogPost>(
     `SELECT * FROM blog_posts WHERE id = ?1 LIMIT 1`,
     [id]
@@ -179,7 +148,6 @@ export async function getBlogPostById(id: string): Promise<BlogPost | null> {
 }
 
 export async function createBlogPost(input: BlogPostInput): Promise<string> {
-  await ensureBlogPostsTable();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const status = input.status ?? "draft";
@@ -221,7 +189,6 @@ export async function updateBlogPost(
   id: string,
   data: Partial<BlogPostInput>
 ): Promise<void> {
-  await ensureBlogPostsTable();
   const updates: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
@@ -267,6 +234,5 @@ export async function updateBlogPost(
 }
 
 export async function deleteBlogPost(id: string): Promise<void> {
-  await ensureBlogPostsTable();
   await d1Execute(`DELETE FROM blog_posts WHERE id = ?1`, [id]);
 }

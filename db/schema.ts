@@ -1,5 +1,5 @@
-// Schema moved to db/schema.sql (Cloudflare D1).
-// Repository types are defined close to each feature under lib/repositories.
+// Database structure lives in immutable SQL migrations under db/.
+// Runtime repository types remain close to each feature under lib/repositories.
 
 export const PROTOCOL_TEMPLATE_TYPES = [
   "DIETA",

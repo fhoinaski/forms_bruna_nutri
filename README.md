@@ -24,17 +24,20 @@ Navegador → Vercel (Next.js) → Cloudflare D1 HTTP API
 - Conta Vercel
 - Conta Cloudflare com acesso ao D1
 - Node.js 20+
-- `npx wrangler` (para aplicar schema via CLI)
+- Credenciais da API Cloudflare com acesso de leitura e escrita no D1
 
 ---
 
-## 1. Aplicar schema no D1
+## 1. Aplicar migrations no D1
 
 ```bash
-npx wrangler d1 execute forms_bruna_nutri --file=./db/schema.sql --remote
+npm run migrate:d1:check
+npm run migrate:d1
+npm run migrate:d1:status
 ```
 
-Isso cria as tabelas: `form_submissions`, `export_logs`, `admin_audit_logs`, `admin_users`.
+As migrations versionadas em `db/` sao a unica fonte do schema e devem ser
+aplicadas antes da publicacao. As convencoes estao em `db/README.md`.
 
 ---
 
@@ -107,12 +110,15 @@ Acesse:
 ## 5. Deploy na Vercel
 
 ```bash
+npm run migrate:d1
+npm run migrate:d1:status
 git add .
 git commit -m "feat: admin com D1 + bcrypt + mustChangePassword"
 git push
 ```
 
-A Vercel detecta o push e faz o build. Configure as variáveis de ambiente **antes** do primeiro deploy.
+A migration deve terminar antes do push que publica codigo dependente dela. A
+Vercel detecta o push e faz o build. Configure as variáveis de ambiente **antes** do primeiro deploy.
 
 ---
 
@@ -169,12 +175,9 @@ A Vercel detecta o push e faz o build. Configure as variáveis de ambiente **ant
 
 ## 8. Schema do banco D1
 
-```sql
-form_submissions      -- formulários recebidos
-export_logs           -- log de exportações
-admin_audit_logs      -- auditoria (ex: password_changed)
-admin_users           -- admins com senha hasheada bcrypt
-```
+O historico completo esta nos arquivos numerados de `db/`. Nao existe criacao
+dinamica de tabelas durante login, APIs ou renderizacao de paginas. O CI executa
+`schema:runtime-check` para impedir a reintroducao de DDL no runtime.
 
 ---
 

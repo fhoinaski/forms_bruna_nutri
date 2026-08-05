@@ -61,6 +61,9 @@ async function requestD1<T>(body: D1RequestBody): Promise<Array<D1Result<T>>> {
     const failedStatement = data.result?.find((result) => !result.success);
     if (!response.ok || !data.success || failedStatement) {
       const message = data.errors?.map((error) => error.message).join("; ") || "Cloudflare D1 query failed.";
+      if (/no such (table|column)|has no column named/i.test(message)) {
+        throw new Error(`Cloudflare D1 schema is outdated. Run npm run migrate:d1 before deploying. ${message}`);
+      }
       throw new Error(message);
     }
 

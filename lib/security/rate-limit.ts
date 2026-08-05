@@ -1,6 +1,5 @@
 import type { NextRequest } from "next/server";
 import { d1Execute, d1Query } from "@/lib/d1/client";
-import { ensureSecuritySchema } from "@/lib/security/schema";
 import { getRequestFingerprint } from "@/lib/security/request";
 
 type RateLimitRow = {
@@ -13,7 +12,6 @@ export async function consumeRateLimit(
   req: NextRequest,
   options: { scope: string; limit: number; windowMs: number; blockMs?: number }
 ) {
-  await ensureSecuritySchema();
   const { ipHash } = getRequestFingerprint(req);
   const key = `${options.scope}:${ipHash}`;
   const now = Date.now();

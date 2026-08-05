@@ -35,6 +35,9 @@ jobs:
       - name: Validate migrations
         run: npm run migrate:d1:check
 
+      - name: Block runtime DDL
+        run: npm run schema:runtime-check
+
       - name: Lint
         run: npm run lint
 

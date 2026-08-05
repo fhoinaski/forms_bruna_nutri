@@ -1,9 +1,4 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
-import { ensureSecuritySchema } from "@/lib/security/schema";
-import { ensureAppointmentWorkflowTable } from "@/lib/repositories/appointment-workflows";
-import { ensureLeadOpportunitiesTable } from "@/lib/repositories/lead-opportunities";
-import { ensureNutritionRecordsTable } from "@/lib/repositories/nutrition-records";
-import { ensureClientPortalTables } from "@/lib/repositories/client-portal";
 
 export const PRIVACY_POLICY_VERSION = "2026-08-04";
 export const PRE_CONSULTATION_FORM_VERSION = "2026-08-04";
@@ -28,7 +23,6 @@ export async function recordConsent(input: {
   ipHash: string;
   userAgentHash: string;
 }) {
-  await ensureSecuritySchema();
   await d1Execute(
     `INSERT INTO consent_records
       (id, submission_id, form_version, policy_version, consent_scope, accepted_at, ip_hash, user_agent_hash)
@@ -46,7 +40,6 @@ export async function createPrivacyRequest(input: {
   requestType: string;
   details?: string | null;
 }) {
-  await ensureSecuritySchema();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await d1Execute(
@@ -60,12 +53,10 @@ export async function createPrivacyRequest(input: {
 }
 
 export async function listPrivacyRequests() {
-  await ensureSecuritySchema();
   return d1Query<PrivacyRequest>("SELECT * FROM privacy_requests ORDER BY created_at DESC LIMIT 250");
 }
 
 export async function getPrivacyRequest(id: string) {
-  await ensureSecuritySchema();
   return (await d1Query<PrivacyRequest>("SELECT * FROM privacy_requests WHERE id = ?1 LIMIT 1", [id]))[0] ?? null;
 }
 
@@ -87,14 +78,12 @@ export async function updatePrivacyRequest(id: string, input: {
 }
 
 export async function getPrivacySettings() {
-  await ensureSecuritySchema();
   return (await d1Query<{ retention_months: number; updated_at: string }>(
     "SELECT retention_months, updated_at FROM privacy_settings WHERE id = 'default'"
   ))[0];
 }
 
 export async function updatePrivacySettings(retentionMonths: number, adminId: string) {
-  await ensureSecuritySchema();
   await d1Execute(
     `UPDATE privacy_settings SET retention_months = ?1, updated_by = ?2, updated_at = ?3 WHERE id = 'default'`,
     [retentionMonths, adminId, new Date().toISOString()]
@@ -114,10 +103,6 @@ export async function getRetentionPreview(retentionMonths: number) {
 }
 
 export async function anonymizePrivacyRequestData(request: PrivacyRequest) {
-  await ensureAppointmentWorkflowTable();
-  await ensureLeadOpportunitiesTable();
-  await ensureNutritionRecordsTable();
-  await ensureClientPortalTables();
   if (request.verification_status !== "verificada") {
     throw new Error("A identidade precisa ser verificada antes da anonimizacao.");
   }
@@ -159,10 +144,6 @@ export async function anonymizePrivacyRequestData(request: PrivacyRequest) {
 }
 
 export async function exportPrivacyRequestData(request: PrivacyRequest) {
-  await ensureAppointmentWorkflowTable();
-  await ensureLeadOpportunitiesTable();
-  await ensureNutritionRecordsTable();
-  await ensureClientPortalTables();
   if (request.verification_status !== "verificada") throw new Error("A identidade precisa ser verificada antes da exportacao.");
   const email = request.email.toLowerCase();
   const clients = await d1Query<Record<string, unknown>>("SELECT * FROM clients WHERE lower(email) = ?1", [email]);

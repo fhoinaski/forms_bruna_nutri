@@ -17,8 +17,6 @@ async function query(sql, params = []) {
   return data.result?.[0]?.results ?? [];
 }
 
-await query("CREATE TABLE IF NOT EXISTS backup_audit_logs (id TEXT PRIMARY KEY, action TEXT NOT NULL, filename TEXT, checksum TEXT, status TEXT NOT NULL, details TEXT, created_at TEXT NOT NULL)");
-
 const schema = await query("SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type DESC, name");
 const tables = schema.filter((item) => item.type === "table").map((item) => item.name).filter((name) => /^[A-Za-z0-9_]+$/.test(name));
 const data = {};

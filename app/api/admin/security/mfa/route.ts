@@ -6,7 +6,6 @@ import { getAdminFromRequest } from "@/lib/auth/session";
 import { consumeRecoveryCode, disableAdminMfa, enableAdminMfa, getAdminById, setPendingMfaSecret } from "@/lib/repositories/admin-users";
 import { createMfaSecret, createTotp, verifyMfaCode } from "@/lib/security/mfa";
 import { decryptValue, encryptValue, generateRecoveryCodes, hashRecoveryCode } from "@/lib/security/crypto";
-import { ensureSecuritySchema } from "@/lib/security/schema";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
 
@@ -20,7 +19,6 @@ const actionSchema = z.discriminatedUnion("action", [
 const disableSchema = z.object({ password: z.string().min(1).max(200), code: z.string().trim().min(6).max(20) });
 
 async function adminFor(req: NextRequest) {
-  await ensureSecuritySchema();
   const session = await getAdminFromRequest(req);
   if (!session) return null;
   return getAdminById(session.sub);

@@ -1,7 +1,6 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
 import {
   createStandardWorkflowForAppointment,
-  ensureAppointmentWorkflowTable,
   refreshWorkflowForAppointment,
 } from "@/lib/repositories/appointment-workflows";
 
@@ -46,47 +45,6 @@ export interface CreateAppointmentInput {
   cancellation_reason?: string | null;
 }
 
-export async function ensureAppointmentsTable(): Promise<void> {
-  await d1Execute(
-    `CREATE TABLE IF NOT EXISTS appointments (
-      id TEXT PRIMARY KEY,
-      client_id TEXT,
-      title TEXT NOT NULL,
-      appointment_type TEXT NOT NULL DEFAULT 'consulta',
-      starts_at TEXT NOT NULL,
-      ends_at TEXT,
-      status TEXT NOT NULL DEFAULT 'agendado',
-      location TEXT,
-      notes TEXT,
-      portal_visible INTEGER NOT NULL DEFAULT 1,
-      client_confirmed_at TEXT,
-      cancellation_reason TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (client_id) REFERENCES clients(id)
-    )`
-  );
-  await d1Execute(
-    `CREATE INDEX IF NOT EXISTS idx_appointments_starts_at ON appointments(starts_at)`
-  );
-  await d1Execute(
-    `CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status)`
-  );
-  await d1Execute(
-    `CREATE INDEX IF NOT EXISTS idx_appointments_client_id ON appointments(client_id)`
-  );
-  await ensureAppointmentWorkflowTable();
-  for (const [column, definition] of [
-    ["portal_visible", "INTEGER NOT NULL DEFAULT 1"],
-    ["client_confirmed_at", "TEXT"],
-    ["cancellation_reason", "TEXT"],
-  ] as const) {
-    try {
-      await d1Execute(`ALTER TABLE appointments ADD COLUMN ${column} ${definition}`);
-    } catch {}
-  }
-}
-
 function buildWhere(filters: AppointmentFilters): { clause: string; params: unknown[] } {
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -118,7 +76,6 @@ function buildWhere(filters: AppointmentFilters): { clause: string; params: unkn
 export async function getAppointments(
   filters: AppointmentFilters = {}
 ): Promise<Appointment[]> {
-  await ensureAppointmentsTable();
   const { clause, params } = buildWhere(filters);
 
   return d1Query<Appointment>(
@@ -134,7 +91,6 @@ export async function getAppointments(
 export async function createAppointment(
   input: CreateAppointmentInput
 ): Promise<string> {
-  await ensureAppointmentsTable();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -168,7 +124,6 @@ export async function updateAppointment(
   id: string,
   data: Partial<CreateAppointmentInput>
 ): Promise<void> {
-  await ensureAppointmentsTable();
   const updates: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
@@ -197,13 +152,11 @@ export async function updateAppointment(
 }
 
 export async function deleteAppointment(id: string): Promise<void> {
-  await ensureAppointmentsTable();
   await d1Execute(`DELETE FROM appointment_workflow_items WHERE appointment_id = ?1`, [id]);
   await d1Execute(`DELETE FROM appointments WHERE id = ?1`, [id]);
 }
 
 export async function getTodayAppointmentsCount(): Promise<number> {
-  await ensureAppointmentsTable();
   const now = new Date();
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
@@ -218,7 +171,6 @@ export async function getTodayAppointmentsCount(): Promise<number> {
 }
 
 export async function getUpcomingAppointments(limit = 5): Promise<Appointment[]> {
-  await ensureAppointmentsTable();
   return d1Query<Appointment>(
     `SELECT a.*, c.name as client_name, c.phone as client_phone, c.email as client_email
      FROM appointments a

@@ -1,5 +1,4 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
-import { ensureSecuritySchema } from "@/lib/security/schema";
 
 export type AuditLog = {
   id: string;
@@ -22,7 +21,6 @@ export async function writeAuditLog(input: {
   outcome?: "success" | "failure";
   metadata?: Record<string, unknown>;
 }) {
-  await ensureSecuritySchema();
   await d1Execute(
     `INSERT INTO admin_audit_logs
       (id, action, metadata_json, created_at, admin_id, entity_type, entity_id, ip_hash, outcome)
@@ -34,7 +32,6 @@ export async function writeAuditLog(input: {
 }
 
 export async function listAuditLogs(limit = 100) {
-  await ensureSecuritySchema();
   return d1Query<AuditLog>(
     `SELECT id, action, admin_id, entity_type, entity_id, ip_hash, outcome, metadata_json, created_at
      FROM admin_audit_logs ORDER BY created_at DESC LIMIT ?1`,

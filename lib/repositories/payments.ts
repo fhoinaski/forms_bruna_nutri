@@ -54,47 +54,6 @@ export interface PaymentMetrics {
   overdueCount: number;
 }
 
-export async function ensurePaymentsTable(): Promise<void> {
-  await d1Execute(
-    `CREATE TABLE IF NOT EXISTS payments (
-      id TEXT PRIMARY KEY,
-      client_id TEXT,
-      description TEXT NOT NULL,
-      amount_cents INTEGER NOT NULL,
-      due_date TEXT,
-      paid_at TEXT,
-      status TEXT NOT NULL DEFAULT 'pendente',
-      payment_method TEXT,
-      invoice_number TEXT,
-      payment_link TEXT,
-      receipt_url TEXT,
-      installment_number INTEGER,
-      installment_total INTEGER,
-      category TEXT,
-      notes TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (client_id) REFERENCES clients(id)
-    )`
-  );
-  await d1Execute(`CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)`);
-  await d1Execute(`CREATE INDEX IF NOT EXISTS idx_payments_due_date ON payments(due_date)`);
-  await d1Execute(`CREATE INDEX IF NOT EXISTS idx_payments_client_id ON payments(client_id)`);
-  for (const [column, definition] of [
-    ["invoice_number", "TEXT"],
-    ["payment_link", "TEXT"],
-    ["receipt_url", "TEXT"],
-    ["installment_number", "INTEGER"],
-    ["installment_total", "INTEGER"],
-    ["category", "TEXT"],
-  ] as const) {
-    try {
-      await d1Execute(`ALTER TABLE payments ADD COLUMN ${column} ${definition}`);
-    } catch {}
-  }
-  await d1Execute(`CREATE INDEX IF NOT EXISTS idx_payments_invoice_number ON payments(invoice_number)`);
-}
-
 function buildWhere(filters: PaymentFilters): { clause: string; params: unknown[] } {
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -124,7 +83,6 @@ function buildWhere(filters: PaymentFilters): { clause: string; params: unknown[
 }
 
 export async function getPayments(filters: PaymentFilters = {}): Promise<Payment[]> {
-  await ensurePaymentsTable();
   const { clause, params } = buildWhere(filters);
 
   return d1Query<Payment>(
@@ -140,7 +98,6 @@ export async function getPayments(filters: PaymentFilters = {}): Promise<Payment
 }
 
 export async function createPayment(input: CreatePaymentInput): Promise<string> {
-  await ensurePaymentsTable();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -178,7 +135,6 @@ export async function updatePayment(
   id: string,
   data: Partial<CreatePaymentInput>
 ): Promise<void> {
-  await ensurePaymentsTable();
   const updates: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
@@ -199,12 +155,10 @@ export async function updatePayment(
 }
 
 export async function deletePayment(id: string): Promise<void> {
-  await ensurePaymentsTable();
   await d1Execute(`DELETE FROM payments WHERE id = ?1`, [id]);
 }
 
 export async function getPaymentMetrics(): Promise<PaymentMetrics> {
-  await ensurePaymentsTable();
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
