@@ -1,4 +1,4 @@
-import { d1Execute, d1Query } from "@/lib/d1/client";
+import { d1Batch, d1Query, type D1Statement } from "@/lib/d1/client";
 import { getAllTemplates } from "@/lib/repositories/protocol-templates";
 import type { ProtocolTemplateTargetGroup } from "@/lib/protocol-templates/constants";
 
@@ -58,6 +58,17 @@ type MealRow = Omit<MealPlanMealPayload, "items"> & { id: string; meal_plan_id: 
 type ItemRow = MealPlanItemPayload & { id: string; meal_id: string; sort_order: number };
 type SubstitutionRow = MealPlanSubstitutionPayload & { id: string; meal_plan_id: string; sort_order: number };
 type SupplementRow = MealPlanSupplementPayload & { id: string; meal_plan_id: string; sort_order: number };
+
+function groupBy<T>(rows: T[], keyOf: (row: T) => string): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    const current = grouped.get(key) ?? [];
+    current.push(row);
+    grouped.set(key, current);
+  }
+  return grouped;
+}
 
 function text(value: unknown): string | null {
   if (value === null || value === undefined || value === "") return null;
@@ -169,11 +180,7 @@ export async function getClientMealPlans(clientId: string): Promise<MealPlanPayl
     "SELECT * FROM meal_plans WHERE client_id = ?1 ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END, updated_at DESC",
     [clientId]
   );
-  const plans: MealPlanPayload[] = [];
-  for (const row of rows) {
-    plans.push(await hydrateMealPlan(row));
-  }
-  return plans;
+  return hydrateMealPlans(rows);
 }
 
 export async function getActiveMealPlan(clientId: string): Promise<MealPlanPayload | null> {
@@ -181,22 +188,44 @@ export async function getActiveMealPlan(clientId: string): Promise<MealPlanPaylo
     "SELECT * FROM meal_plans WHERE client_id = ?1 AND status = 'active' ORDER BY updated_at DESC LIMIT 1",
     [clientId]
   );
-  return rows[0] ? hydrateMealPlan(rows[0]) : null;
+  return rows[0] ? (await hydrateMealPlans(rows))[0] : null;
 }
 
-async function hydrateMealPlan(row: MealPlanRow): Promise<MealPlanPayload> {
-  const [meals, substitutions, supplements] = await Promise.all([
-    d1Query<MealRow>("SELECT * FROM meal_plan_meals WHERE meal_plan_id = ?1 ORDER BY sort_order ASC", [row.id]),
-    d1Query<SubstitutionRow>("SELECT * FROM meal_plan_substitutions WHERE meal_plan_id = ?1 ORDER BY sort_order ASC", [row.id]),
-    d1Query<SupplementRow>("SELECT * FROM meal_plan_supplements WHERE meal_plan_id = ?1 ORDER BY sort_order ASC", [row.id]),
+async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]> {
+  if (!rows.length) return [];
+  const planIds = JSON.stringify(rows.map((row) => row.id));
+  const results = await d1Batch([
+    {
+      sql: "SELECT m.* FROM meal_plan_meals m JOIN json_each(?1) ids ON m.meal_plan_id = ids.value ORDER BY m.meal_plan_id, m.sort_order ASC",
+      params: [planIds],
+    },
+    {
+      sql: `SELECT i.* FROM meal_plan_items i
+            JOIN meal_plan_meals m ON m.id = i.meal_id
+            JOIN json_each(?1) ids ON m.meal_plan_id = ids.value
+            ORDER BY m.meal_plan_id, m.sort_order ASC, i.sort_order ASC`,
+      params: [planIds],
+    },
+    {
+      sql: "SELECT s.* FROM meal_plan_substitutions s JOIN json_each(?1) ids ON s.meal_plan_id = ids.value ORDER BY s.meal_plan_id, s.sort_order ASC",
+      params: [planIds],
+    },
+    {
+      sql: "SELECT s.* FROM meal_plan_supplements s JOIN json_each(?1) ids ON s.meal_plan_id = ids.value ORDER BY s.meal_plan_id, s.sort_order ASC",
+      params: [planIds],
+    },
   ]);
-  const itemsByMeal = new Map<string, ItemRow[]>();
-  for (const meal of meals) {
-    itemsByMeal.set(meal.id, await d1Query<ItemRow>("SELECT * FROM meal_plan_items WHERE meal_id = ?1 ORDER BY sort_order ASC", [meal.id]));
-  }
-  return {
+  const meals = (results[0]?.results ?? []) as MealRow[];
+  const items = (results[1]?.results ?? []) as ItemRow[];
+  const substitutions = (results[2]?.results ?? []) as SubstitutionRow[];
+  const supplements = (results[3]?.results ?? []) as SupplementRow[];
+  const mealsByPlan = groupBy(meals, (meal) => meal.meal_plan_id);
+  const itemsByMeal = groupBy(items, (item) => item.meal_id);
+  const substitutionsByPlan = groupBy(substitutions, (item) => item.meal_plan_id);
+  const supplementsByPlan = groupBy(supplements, (item) => item.meal_plan_id);
+  return rows.map((row) => ({
     ...row,
-    meals: meals.map((meal) => ({
+    meals: (mealsByPlan.get(row.id) ?? []).map((meal) => ({
       id: meal.id,
       name: meal.name,
       suggested_time: meal.suggested_time,
@@ -209,9 +238,9 @@ async function hydrateMealPlan(row: MealPlanRow): Promise<MealPlanPayload> {
         notes: item.notes,
       })),
     })),
-    substitutions: substitutions.map(({ id, base_food, option_food, quantity, unit, notes }) => ({ id, base_food, option_food, quantity, unit, notes })),
-    supplements: supplements.map(({ id, name, dosage, unit, instructions, notes }) => ({ id, name, dosage, unit, instructions, notes })),
-  };
+    substitutions: (substitutionsByPlan.get(row.id) ?? []).map(({ id, base_food, option_food, quantity, unit, notes }) => ({ id, base_food, option_food, quantity, unit, notes })),
+    supplements: (supplementsByPlan.get(row.id) ?? []).map(({ id, name, dosage, unit, instructions, notes }) => ({ id, name, dosage, unit, instructions, notes })),
+  }));
 }
 
 export async function createMealPlanFromTemplates(input: {
@@ -248,20 +277,22 @@ export async function createMealPlan(input: {
 }): Promise<MealPlanPayload> {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  const statements: D1Statement[] = [];
   if (input.status === "active") {
-    await d1Execute(
-      "UPDATE meal_plans SET status = 'archived', version = version + 1, updated_at = ?1 WHERE client_id = ?2 AND status = 'active'",
-      [now, input.clientId]
-    );
+    statements.push({
+      sql: "UPDATE meal_plans SET status = 'archived', version = version + 1, updated_at = ?1 WHERE client_id = ?2 AND status = 'active'",
+      params: [now, input.clientId],
+    });
   }
-  await d1Execute(
-    `INSERT INTO meal_plans (id, client_id, title, target_group, status, version, notes, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8)`,
-    [id, input.clientId, input.title, input.targetGroup ?? null, input.status ?? "draft", input.notes ?? null, now, now]
-  );
-  await replaceMealPlanDetails(id, input.meals, input.substitutions, input.supplements, now);
+  statements.push({
+    sql: `INSERT INTO meal_plans (id, client_id, title, target_group, status, version, notes, created_at, updated_at)
+          VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8)`,
+    params: [id, input.clientId, input.title, input.targetGroup ?? null, input.status ?? "draft", input.notes ?? null, now, now],
+  });
+  statements.push(...buildMealPlanDetailStatements(id, input.meals, input.substitutions, input.supplements, now));
+  await d1Batch(statements);
   const rows = await d1Query<MealPlanRow>("SELECT * FROM meal_plans WHERE id = ?1 LIMIT 1", [id]);
-  return hydrateMealPlan(rows[0]);
+  return (await hydrateMealPlans(rows))[0];
 }
 
 export async function updateMealPlan(planId: string, clientId: string, input: {
@@ -279,19 +310,21 @@ export async function updateMealPlan(planId: string, clientId: string, input: {
   if (!existingRows[0]) return null;
 
   const now = new Date().toISOString();
+  const statements: D1Statement[] = [];
   if (input.status === "active") {
-    await d1Execute(
-      "UPDATE meal_plans SET status = 'archived', version = version + 1, updated_at = ?1 WHERE client_id = ?2 AND status = 'active' AND id <> ?3",
-      [now, clientId, planId]
-    );
+    statements.push({
+      sql: "UPDATE meal_plans SET status = 'archived', version = version + 1, updated_at = ?1 WHERE client_id = ?2 AND status = 'active' AND id <> ?3",
+      params: [now, clientId, planId],
+    });
   }
-  await d1Execute(
-    "UPDATE meal_plans SET title = ?1, status = ?2, notes = ?3, version = version + 1, updated_at = ?4 WHERE id = ?5 AND client_id = ?6",
-    [input.title, input.status, input.notes ?? null, now, planId, clientId]
-  );
-  await replaceMealPlanDetails(planId, input.meals, input.substitutions, input.supplements, now);
+  statements.push({
+    sql: "UPDATE meal_plans SET title = ?1, status = ?2, notes = ?3, version = version + 1, updated_at = ?4 WHERE id = ?5 AND client_id = ?6",
+    params: [input.title, input.status, input.notes ?? null, now, planId, clientId],
+  });
+  statements.push(...buildMealPlanDetailStatements(planId, input.meals, input.substitutions, input.supplements, now));
+  await d1Batch(statements);
   const rows = await d1Query<MealPlanRow>("SELECT * FROM meal_plans WHERE id = ?1 LIMIT 1", [planId]);
-  return rows[0] ? hydrateMealPlan(rows[0]) : null;
+  return rows[0] ? (await hydrateMealPlans(rows))[0] : null;
 }
 
 export async function deleteMealPlan(planId: string, clientId: string): Promise<MealPlanRow | null> {
@@ -300,54 +333,58 @@ export async function deleteMealPlan(planId: string, clientId: string): Promise<
     [planId, clientId]
   );
   if (!rows[0]) return null;
-  await d1Execute("DELETE FROM meal_plans WHERE id = ?1 AND client_id = ?2", [planId, clientId]);
+  await d1Batch([{ sql: "DELETE FROM meal_plans WHERE id = ?1 AND client_id = ?2", params: [planId, clientId] }]);
   return rows[0];
 }
 
-async function replaceMealPlanDetails(
+function buildMealPlanDetailStatements(
   planId: string,
   meals: MealPlanMealPayload[],
   substitutions: MealPlanSubstitutionPayload[],
   supplements: MealPlanSupplementPayload[],
   now: string
-) {
-  await d1Execute("DELETE FROM meal_plan_items WHERE meal_id IN (SELECT id FROM meal_plan_meals WHERE meal_plan_id = ?1)", [planId]);
-  await d1Execute("DELETE FROM meal_plan_meals WHERE meal_plan_id = ?1", [planId]);
-  await d1Execute("DELETE FROM meal_plan_substitutions WHERE meal_plan_id = ?1", [planId]);
-  await d1Execute("DELETE FROM meal_plan_supplements WHERE meal_plan_id = ?1", [planId]);
-
+): D1Statement[] {
+  const mealRows: Record<string, unknown>[] = [];
+  const itemRows: Record<string, unknown>[] = [];
   for (const [mealIndex, meal] of meals.entries()) {
     const mealId = crypto.randomUUID();
-    await d1Execute(
-      `INSERT INTO meal_plan_meals (id, meal_plan_id, name, suggested_time, notes, sort_order, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
-      [mealId, planId, meal.name, meal.suggested_time ?? null, meal.notes ?? null, mealIndex, now, now]
-    );
+    mealRows.push({ id: mealId, planId, name: meal.name, time: meal.suggested_time ?? null, notes: meal.notes ?? null, order: mealIndex, now });
     for (const [itemIndex, item] of meal.items.entries()) {
       if (!item.food.trim()) continue;
-      await d1Execute(
-        `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
-        [crypto.randomUUID(), mealId, item.food, item.quantity ?? null, item.unit ?? null, item.notes ?? null, itemIndex, now, now]
-      );
+      itemRows.push({ id: crypto.randomUUID(), mealId, food: item.food, quantity: item.quantity ?? null, unit: item.unit ?? null, notes: item.notes ?? null, order: itemIndex, now });
     }
   }
-
-  for (const [index, item] of substitutions.entries()) {
-    if (!item.base_food.trim() || !item.option_food.trim()) continue;
-    await d1Execute(
-      `INSERT INTO meal_plan_substitutions (id, meal_plan_id, base_food, option_food, quantity, unit, notes, sort_order, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
-      [crypto.randomUUID(), planId, item.base_food, item.option_food, item.quantity ?? null, item.unit ?? null, item.notes ?? null, index, now, now]
-    );
-  }
-
-  for (const [index, item] of supplements.entries()) {
-    if (!item.name.trim()) continue;
-    await d1Execute(
-      `INSERT INTO meal_plan_supplements (id, meal_plan_id, name, dosage, unit, instructions, notes, sort_order, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
-      [crypto.randomUUID(), planId, item.name, item.dosage ?? null, item.unit ?? null, item.instructions ?? null, item.notes ?? null, index, now, now]
-    );
-  }
+  const substitutionRows = substitutions.filter((item) => item.base_food.trim() && item.option_food.trim()).map((item, order) => ({
+    id: crypto.randomUUID(), planId, baseFood: item.base_food, optionFood: item.option_food, quantity: item.quantity ?? null, unit: item.unit ?? null, notes: item.notes ?? null, order, now,
+  }));
+  const supplementRows = supplements.filter((item) => item.name.trim()).map((item, order) => ({
+    id: crypto.randomUUID(), planId, name: item.name, dosage: item.dosage ?? null, unit: item.unit ?? null, instructions: item.instructions ?? null, notes: item.notes ?? null, order, now,
+  }));
+  const statements: D1Statement[] = [
+    { sql: "DELETE FROM meal_plan_items WHERE meal_id IN (SELECT id FROM meal_plan_meals WHERE meal_plan_id = ?1)", params: [planId] },
+    { sql: "DELETE FROM meal_plan_meals WHERE meal_plan_id = ?1", params: [planId] },
+    { sql: "DELETE FROM meal_plan_substitutions WHERE meal_plan_id = ?1", params: [planId] },
+    { sql: "DELETE FROM meal_plan_supplements WHERE meal_plan_id = ?1", params: [planId] },
+  ];
+  if (mealRows.length) statements.push({
+    sql: `INSERT INTO meal_plan_meals (id, meal_plan_id, name, suggested_time, notes, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.planId'), json_extract(value,'$.name'), json_extract(value,'$.time'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    params: [JSON.stringify(mealRows)],
+  });
+  if (itemRows.length) statements.push({
+    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    params: [JSON.stringify(itemRows)],
+  });
+  if (substitutionRows.length) statements.push({
+    sql: `INSERT INTO meal_plan_substitutions (id, meal_plan_id, base_food, option_food, quantity, unit, notes, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.planId'), json_extract(value,'$.baseFood'), json_extract(value,'$.optionFood'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    params: [JSON.stringify(substitutionRows)],
+  });
+  if (supplementRows.length) statements.push({
+    sql: `INSERT INTO meal_plan_supplements (id, meal_plan_id, name, dosage, unit, instructions, notes, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.planId'), json_extract(value,'$.name'), json_extract(value,'$.dosage'), json_extract(value,'$.unit'), json_extract(value,'$.instructions'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    params: [JSON.stringify(supplementRows)],
+  });
+  return statements;
 }

@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { decryptValue, encryptValue, generateRecoveryCodes, hashRecoveryCode } from "../lib/security/crypto";
 import { createMfaSecret, createTotp, verifyMfaCode } from "../lib/security/mfa";
+import { createInternalSessionAssertion, verifyInternalSessionAssertion } from "../lib/auth/session";
 
 beforeAll(() => {
   process.env.AUTH_SECRET = "test-auth-secret-with-at-least-thirty-two-characters";
@@ -8,6 +9,13 @@ beforeAll(() => {
 });
 
 describe("security primitives", () => {
+  it("signs short-lived internal session assertions and rejects tampering", async () => {
+    const session = { sub: "admin-1", email: "admin@example.com", name: "Admin", mustChangePassword: false, sessionVersion: 2 };
+    const token = await createInternalSessionAssertion(session);
+    await expect(verifyInternalSessionAssertion(token)).resolves.toEqual(session);
+    await expect(verifyInternalSessionAssertion(`${token.slice(0, -1)}x`)).resolves.toBeNull();
+  });
+
   it("encrypts secrets with a random authenticated payload", () => {
     const first = encryptValue("sensitive-value");
     const second = encryptValue("sensitive-value");

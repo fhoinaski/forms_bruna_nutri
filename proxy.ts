@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
-import { verifySessionToken } from "@/lib/auth/session";
+import { createInternalSessionAssertion, INTERNAL_SESSION_HEADER, verifySessionToken } from "@/lib/auth/session";
 import { writeAuditLog } from "@/lib/security/audit";
 
 const COOKIE_NAME = "bruna_nutri_admin_session";
@@ -70,7 +70,10 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     );
   }
 
-  return NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete(INTERNAL_SESSION_HEADER);
+  requestHeaders.set(INTERNAL_SESSION_HEADER, await createInternalSessionAssertion(session));
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

@@ -63,7 +63,8 @@ export async function updateAdminPassword(
   passwordHash: string
 ): Promise<void> {
   await d1Execute(
-    `UPDATE admin_users SET password_hash = ?1, session_version = session_version + 1, updated_at = ?2 WHERE id = ?3`,
+    `UPDATE admin_users SET password_hash = ?1, must_change_password = 0,
+      session_version = session_version + 1, updated_at = ?2 WHERE id = ?3`,
     [passwordHash, new Date().toISOString(), userId]
   );
 }

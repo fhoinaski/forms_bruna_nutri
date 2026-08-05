@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { loginSchema } from "@/lib/validators/auth";
 import { getAdminByEmail } from "@/lib/repositories/admin-users";
-import { createSessionToken, setAuthCookie } from "@/lib/auth/session";
+import { createSessionToken, primeSessionVersionCache, setAuthCookie } from "@/lib/auth/session";
 import { consumeRateLimit, clearRateLimit } from "@/lib/security/rate-limit";
 import { ensureSecuritySchema } from "@/lib/security/schema";
 import { decryptValue, hashRecoveryCode } from "@/lib/security/crypto";
@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
       if (isRecovery) await consumeRecoveryCode(admin.id, recoveryHashes, recoveryHash);
     }
 
+    primeSessionVersionCache(admin.id, admin.session_version);
     const token = await createSessionToken(admin);
     const response = NextResponse.json({
       success: true,

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { changePasswordSchema } from "@/lib/validators/auth";
-import { getAdminFromRequest, createSessionToken, setAuthCookie } from "@/lib/auth/session";
-import { getAdminById, updateAdminPassword, setMustChangePassword } from "@/lib/repositories/admin-users";
+import { getAdminFromRequest, createSessionToken, primeSessionVersionCache, setAuthCookie } from "@/lib/auth/session";
+import { getAdminById, updateAdminPassword } from "@/lib/repositories/admin-users";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
 
@@ -43,14 +43,14 @@ export async function POST(req: NextRequest) {
 
     const newHash = await bcrypt.hash(newPassword, 12);
 
-    // Update password and clear must_change_password atomically
+    // The repository updates the password, session version and flag atomically.
     await updateAdminPassword(admin.id, newHash);
-    await setMustChangePassword(admin.id, false);
 
     await writeAuditLog({ action: "password_changed", adminId: admin.id, ipHash: getRequestFingerprint(req).ipHash });
 
     // Issue new token with mustChangePassword = false
     const updatedAdmin = { ...admin, must_change_password: 0, session_version: admin.session_version + 1 };
+    primeSessionVersionCache(admin.id, updatedAdmin.session_version);
     const token = await createSessionToken(updatedAdmin);
     const response = NextResponse.json({ success: true });
     setAuthCookie(response, token);
