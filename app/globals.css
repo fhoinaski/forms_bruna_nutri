@@ -83,6 +83,7 @@ body {
 }
 
 .dashboard-shell .brand-input {
+  max-width: 100%;
   min-height: 2.75rem;
   border-color: #ded2c7;
   border-radius: 0.625rem;
@@ -194,6 +195,7 @@ body {
 
 .brand-btn-primary {
   display: inline-flex;
+  max-width: 100%;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
@@ -209,6 +211,7 @@ body {
   transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
   cursor: pointer;
   border: none;
+  text-align: center;
 }
 .brand-btn-primary:hover {
   background: var(--sage-dark);
@@ -219,6 +222,7 @@ body {
 
 .brand-btn-secondary {
   display: inline-flex;
+  max-width: 100%;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
@@ -232,6 +236,7 @@ body {
   transition: background 0.2s;
   cursor: pointer;
   border: none;
+  text-align: center;
 }
 .brand-btn-secondary:hover { background: var(--sand-dark); }
 
@@ -265,6 +270,10 @@ body {
   .dashboard-shell main .brand-btn-primary,
   .dashboard-shell main .brand-btn-secondary {
     min-height: 2.75rem;
+  }
+
+  .dashboard-shell .brand-input {
+    font-size: 1rem;
   }
 }
 

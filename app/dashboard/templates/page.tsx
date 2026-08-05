@@ -137,12 +137,12 @@ export default function ProtocolTemplatesPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="brand-kicker">Base profissional</p>
-          <h1 className="font-serif text-3xl font-semibold text-[#3A3028]">Modelos de protocolos</h1>
+          <h1 className="font-serif text-2xl font-semibold text-[#3A3028] sm:text-3xl">Modelos de protocolos</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#75675E]">
             Cadastre dietas, suplementações e substituições por grupo alvo. Essa base alimenta o preenchimento manual e limita o agente de IA.
           </p>
         </div>
-        <button type="button" onClick={openCreate} className="brand-btn-primary">
+        <button type="button" onClick={openCreate} className="brand-btn-primary w-full sm:w-auto">
           <Plus className="h-4 w-4" />
           Novo modelo
         </button>
@@ -176,7 +176,7 @@ export default function ProtocolTemplatesPage() {
       </section>
 
       <section className="brand-card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-[#EDE1D6] px-5 py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-[#EDE1D6] px-4 py-4 sm:px-5">
           <h2 className="brand-section-title flex items-center gap-2">
             <LibraryBig className="h-4 w-4" />
             Templates cadastrados
@@ -185,7 +185,46 @@ export default function ProtocolTemplatesPage() {
             {filtered.length} modelo{filtered.length !== 1 ? "s" : ""}
           </span>
         </div>
-        <div className="overflow-x-auto">
+        <div className="md:hidden">
+          {loading ? (
+            <div className="py-12 text-center text-sm text-[#9A8B80]">Carregando...</div>
+          ) : filtered.length === 0 ? (
+            <div className="py-12 text-center text-sm text-[#9A8B80]">Nenhum modelo encontrado.</div>
+          ) : (
+            <div className="divide-y divide-[#F2E9DF]">
+              {filtered.map((template) => (
+                <article key={template.id} className="px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold text-[#3A3028]">{template.title}</p>
+                      <p className="mt-1 line-clamp-2 break-words text-xs text-[#9A8B80]">{template.content}</p>
+                    </div>
+                    <span className={`shrink-0 brand-badge ${template.is_active ? "brand-badge-finalizado" : "brand-badge-arquivado"}`}>
+                      {template.is_active ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+                  <div className="mt-4 grid gap-1 text-xs text-[#75675E]">
+                    <span>{PROTOCOL_TEMPLATE_TYPE_LABELS[template.type]}</span>
+                    <span>{PROTOCOL_TEMPLATE_GROUP_LABELS[template.target_group]}</span>
+                    <span>{formatDate(template.created_at)}</span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => openEdit(template)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#D9E4D3] text-sm font-semibold text-[#607A56] hover:bg-[#EAF0E4]">
+                      <Edit3 className="h-4 w-4" />
+                      Editar
+                    </button>
+                    <button type="button" onClick={() => void removeTemplate(template)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-red-100 text-sm font-semibold text-red-600 hover:bg-red-50">
+                      <Trash2 className="h-4 w-4" />
+                      Excluir
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left">
             <thead className="bg-[#FBF7F1]">
               <tr>
@@ -233,12 +272,12 @@ export default function ProtocolTemplatesPage() {
       {form && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 px-4 py-6 backdrop-blur-sm sm:items-center">
           <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#EDE1D6] bg-[#FFFDFC]/95 px-5 py-4 backdrop-blur">
-              <div>
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[#EDE1D6] bg-[#FFFDFC]/95 px-4 py-4 backdrop-blur sm:px-5">
+              <div className="min-w-0">
                 <p className="brand-kicker">{form.id ? "Editar modelo" : "Novo modelo"}</p>
-                <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Modelo de protocolo</h2>
+                <h2 className="font-serif text-xl font-semibold text-[#3A3028] sm:text-2xl">Modelo de protocolo</h2>
               </div>
-              <button type="button" onClick={() => setForm(null)} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" title="Fechar">
+              <button type="button" onClick={() => setForm(null)} className="shrink-0 rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" title="Fechar">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -269,9 +308,9 @@ export default function ProtocolTemplatesPage() {
               </label>
               {error && <p className="md:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
             </div>
-            <div className="flex justify-end gap-3 border-t border-[#EDE1D6] px-5 py-4">
-              <button type="button" onClick={() => setForm(null)} className="brand-btn-secondary">Cancelar</button>
-              <button type="button" onClick={() => void saveTemplate()} disabled={saving || !form.title.trim()} className="brand-btn-primary">
+            <div className="grid gap-3 border-t border-[#EDE1D6] px-4 py-4 sm:flex sm:justify-end sm:px-5">
+              <button type="button" onClick={() => setForm(null)} className="brand-btn-secondary w-full sm:w-auto">Cancelar</button>
+              <button type="button" onClick={() => void saveTemplate()} disabled={saving || !form.title.trim()} className="brand-btn-primary w-full sm:w-auto">
                 <Save className="h-4 w-4" />
                 {saving ? "Salvando..." : "Salvar modelo"}
               </button>

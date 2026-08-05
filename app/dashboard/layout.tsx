@@ -154,7 +154,7 @@ function Sidebar({ collapsed, mobile = false, onClose }: {
 }
 
 function IconButton({ label, children, onClick }: { label: string; children: ReactNode; onClick?: () => void }) {
-  return <button onClick={onClick} aria-label={label} title={label} className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] text-[#75675E] transition-colors hover:bg-[#FBF7F1] hover:text-[#3A3028]">{children}</button>;
+  return <button type="button" onClick={onClick} aria-label={label} title={label} className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] text-[#75675E] transition-colors hover:bg-[#FBF7F1] hover:text-[#3A3028]">{children}</button>;
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -229,14 +229,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <div className={`flex min-h-screen flex-col transition-[padding] duration-200 ${collapsed ? "lg:pl-20" : "lg:pl-64"}`}>
         <header className="sticky top-0 z-20 border-b border-[#EDE1D6] bg-[#FFFDFC]/95 backdrop-blur-xl">
-          <div className="flex h-16 items-center gap-3 px-4 lg:px-6">
-            <button onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1] lg:hidden" aria-label="Abrir menu"><Menu className="h-5 w-5" /></button>
+          <div className="flex h-16 min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 lg:px-6">
+            <button type="button" onClick={() => setMobileOpen(true)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1] lg:hidden" aria-label="Abrir menu"><Menu className="h-5 w-5" /></button>
             <nav className="hidden min-w-0 items-center gap-1 text-xs text-[#A9978A] md:flex" aria-label="Breadcrumb">
               {breadcrumbs.map((item, index) => <span key={item.href} className="flex items-center gap-1"><Link href={item.href} className={`max-w-32 truncate hover:text-[#607A56] ${index === breadcrumbs.length - 1 ? "font-semibold text-[#3A3028]" : ""}`}>{item.label}</Link>{index < breadcrumbs.length - 1 && <ChevronRight className="h-3 w-3" />}</span>)}
             </nav>
-            <form onSubmit={submitSearch} className="relative mx-auto min-w-0 w-full max-w-md">
+            <form onSubmit={submitSearch} className="relative mx-auto min-w-0 flex-1 md:max-w-md">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A9978A]" />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 w-full rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] pl-9 pr-3 text-sm text-[#3A3028] outline-none placeholder:text-[#A9978A] focus:border-[#7F9A74] focus:ring-4 focus:ring-[#7F9A74]/10" placeholder="Buscar paciente..." aria-label="Buscar paciente" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 w-full rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] pl-9 pr-3 text-base text-[#3A3028] outline-none placeholder:text-[#A9978A] focus:border-[#7F9A74] focus:ring-4 focus:ring-[#7F9A74]/10 sm:text-sm" placeholder="Buscar paciente..." aria-label="Buscar paciente" />
               {search.trim().length >= 2 && (
                 <div className="absolute left-0 right-0 top-12 overflow-hidden rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] shadow-xl">
                   {searchResults.length ? searchResults.map((patient) => (
@@ -248,13 +248,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
               )}
             </form>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <div className="relative">
                 <IconButton label="Notificações" onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false); }}><Bell className="h-4 w-4" /><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#C9937B]" /></IconButton>
-                {notificationsOpen && <div className="absolute right-0 top-12 w-72 rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-4 shadow-xl"><p className="text-sm font-semibold">Notificações</p><p className="mt-2 text-xs leading-5 text-[#75675E]">Seus lembretes de consultas, tarefas e retornos aparecerão aqui.</p></div>}
+                {notificationsOpen && <div className="fixed right-3 top-[4.5rem] w-[calc(100vw-1.5rem)] max-w-72 rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-4 shadow-xl sm:absolute sm:right-0 sm:top-12 sm:w-72"><p className="text-sm font-semibold">Notificações</p><p className="mt-2 text-xs leading-5 text-[#75675E]">Seus lembretes de consultas, tarefas e retornos aparecerão aqui.</p></div>}
               </div>
               <div ref={profileRef} className="relative">
-                <button onClick={() => { setProfileOpen((value) => !value); setNotificationsOpen(false); }} className="flex h-10 items-center gap-2 rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] px-1.5 pr-2 text-left hover:bg-[#FBF7F1]">
+                <button type="button" onClick={() => { setProfileOpen((value) => !value); setNotificationsOpen(false); }} className="flex h-10 min-w-10 shrink-0 items-center gap-2 rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] px-1 text-left hover:bg-[#FBF7F1] xl:px-1.5 xl:pr-2">
                   <Image src="/favicon-512.png" alt="Perfil de Bruna Flores" width={32} height={32} className="h-8 w-8 rounded-md object-contain" />
                   <span className="hidden text-xs font-semibold text-[#3A3028] xl:block">Bruna Flores</span>
                   <ChevronDown className="hidden h-3.5 w-3.5 text-[#75675E] xl:block" />

@@ -616,10 +616,10 @@ function SecondaryNavigation({ items, value, onChange }: {
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="mb-6 overflow-x-auto">
+    <div className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
       <div className="flex min-w-max gap-1 rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-1">
         {items.map((item) => (
-          <button key={item.id} type="button" onClick={() => onChange(item.id)} className={`h-9 rounded-md px-3 text-xs font-semibold transition-colors ${value === item.id ? "bg-[#FFFDFC] text-[#607A56] shadow-sm" : "text-[#75675E] hover:text-[#3A3028]"}`}>
+          <button key={item.id} type="button" onClick={() => onChange(item.id)} className={`h-9 shrink-0 rounded-md px-3 text-xs font-semibold transition-colors ${value === item.id ? "bg-[#FFFDFC] text-[#607A56] shadow-sm" : "text-[#75675E] hover:text-[#3A3028]"}`}>
             {item.label}
           </button>
         ))}
@@ -943,14 +943,14 @@ export default function ClientDetailPage() {
   return (
     <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-16 animate-fade-up">
       {/* Top bar */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link href="/dashboard/clients"
           className="inline-flex items-center gap-2 text-sm text-[#7A9A74] hover:text-[#B47F6A] transition-colors font-medium">
           <ArrowLeft className="w-4 h-4" />
           Clientes
         </Link>
         <Link href={`/dashboard/clients/${id}/print`} target="_blank"
-          className="inline-flex items-center gap-2 text-xs font-medium text-[#8C6E52] border border-[#EAD8C2] rounded-full px-4 py-2 hover:bg-[#EAD8C2]/40 transition-colors">
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#EAD8C2] px-4 py-2 text-xs font-medium text-[#8C6E52] transition-colors hover:bg-[#EAD8C2]/40 sm:w-auto">
           <Printer className="w-3.5 h-3.5" />
           Relatório imprimível
         </Link>
@@ -959,12 +959,12 @@ export default function ClientDetailPage() {
       {/* Patient workspace */}
       <div className="brand-card w-full min-w-0 overflow-hidden">
         <div className="flex min-w-0 flex-col gap-5 border-b border-[#EAD8C2] bg-[#FAF7F2] p-5 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 items-center gap-4">
+          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-[#EAD8C2] text-[#8C6E52]"><User className="h-7 w-7" /></div>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2"><h1 className="truncate font-serif text-2xl font-semibold text-[#3A2B1F]">{data.name}</h1><span className={STATUS_BADGE[data.status] ?? "brand-badge brand-badge-arquivado"}>{STATUS_LABEL[data.status] ?? data.status}</span></div>
+              <div className="flex flex-wrap items-center gap-2"><h1 className="min-w-0 break-words font-serif text-2xl font-semibold leading-tight text-[#3A2B1F] sm:truncate">{data.name}</h1><span className={STATUS_BADGE[data.status] ?? "brand-badge brand-badge-arquivado"}>{STATUS_LABEL[data.status] ?? data.status}</span></div>
               <p className="mt-1 text-sm text-[#75675E]">{calculateAge(data.birth_date)} · Paciente desde {formatDateSafe(data.created_at)}</p>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#8C6E52]">{data.phone && <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{data.phone}</span>}{data.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{data.email}</span>}</div>
+              <div className="mt-2 grid min-w-0 gap-1 text-xs text-[#8C6E52] sm:flex sm:flex-wrap sm:gap-x-4 sm:gap-y-1">{data.phone && <span className="flex min-w-0 items-center gap-1.5"><Phone className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 break-all">{data.phone}</span></span>}{data.email && <span className="flex min-w-0 items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 break-all">{data.email}</span></span>}</div>
             </div>
           </div>
           <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:w-[34rem] xl:shrink-0">
@@ -975,14 +975,14 @@ export default function ClientDetailPage() {
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)} className="min-w-0">
         {/* Tabs */}
-        <div className="border-b border-[#EAD8C2] overflow-x-auto">
+        <div className="-mx-4 overflow-x-auto border-b border-[#EAD8C2] px-4 sm:mx-0 sm:px-0">
           <TabsList className="w-full justify-start rounded-none border-0 bg-[#FFFDFC] p-2">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               return (
-                <TabsTrigger key={tab.id} value={tab.id}>
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
+                <TabsTrigger key={tab.id} value={tab.id} className="h-9 shrink-0 px-3 text-xs sm:h-10 sm:px-4 sm:text-sm">
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span>{tab.label}</span>
                 </TabsTrigger>
               );
             })}
@@ -1032,7 +1032,7 @@ export default function ClientDetailPage() {
               </div>
               {saveError && <p className="text-sm text-red-600">{saveError}</p>}
               <div className="flex justify-end">
-                <button onClick={handleSave} disabled={saving} className="brand-btn-primary">
+                <button onClick={handleSave} disabled={saving} className="brand-btn-primary w-full sm:w-auto">
                   <Save className="w-4 h-4" />
                   {saving ? "Salvando..." : saved ? "Salvo!" : "Salvar alterações"}
                 </button>
@@ -1147,12 +1147,12 @@ export default function ClientDetailPage() {
                   <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Protocolos da cliente</h2>
                   <p className="mt-1 text-sm leading-6 text-[#75675E]">Inicie um modelo padrão ou crie uma cópia individual sem alterar a biblioteca.</p>
                 </div>
-                <Link href="/dashboard/protocols" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#607A56] hover:text-[#B47F6A]">
+                <Link href="/dashboard/protocols" className="inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-[#607A56] hover:text-[#B47F6A]">
                   Ver biblioteca <ChevronRight className="h-4 w-4" />
                 </Link>
               </div>
 
-              <section className="rounded-xl border border-[#E6D5C5] bg-[#FBF7F1] p-5">
+              <section className="min-w-0 rounded-xl border border-[#E6D5C5] bg-[#FBF7F1] p-4 sm:p-5">
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
                   <div className="space-y-4">
                     <div>
@@ -1239,7 +1239,7 @@ export default function ClientDetailPage() {
                               <p className="mt-2 text-xs text-[#75675E]">Início: {formatDateSafe(protocol.started_at)}{protocol.review_date ? ` · Revisão: ${formatDateSafe(protocol.review_date)}` : " · Revisão não definida"}</p>
                               <p className="mt-1 text-xs text-[#8A7B70]">{protocol.phase_count} fase(s) · {protocol.completed_task_count}/{protocol.task_count} tarefas concluídas</p>
                             </div>
-                            <Link href={`/dashboard/protocols/${protocol.protocol_id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-[#607A56] hover:text-[#B47F6A]">Abrir plano <ChevronRight className="h-4 w-4" /></Link>
+                            <Link href={`/dashboard/protocols/${protocol.protocol_id}`} className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-[#607A56] hover:text-[#B47F6A]">Abrir plano <ChevronRight className="h-4 w-4" /></Link>
                           </div>
 
                           <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#F1ECE7]"><div className="h-full rounded-full bg-[#7F9A74]" style={{ width: `${progress}%` }} /></div>
@@ -1272,10 +1272,10 @@ export default function ClientDetailPage() {
           {/* ── Tarefas ────────────────────────────────────────── */}
           {activeTab === "evolucao" && evolutionView === "agenda" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Agenda do paciente</h2>
                 <Link href="/dashboard/agenda"
-                  className="text-xs font-medium text-[#7A9A74] hover:text-[#B47F6A] transition-colors flex items-center gap-1">
+                  className="flex min-h-10 items-center gap-1 text-xs font-medium text-[#7A9A74] transition-colors hover:text-[#B47F6A]">
                   Abrir agenda
                   <ChevronRight className="w-3.5 h-3.5" />
                 </Link>
@@ -1318,9 +1318,9 @@ export default function ClientDetailPage() {
 
           {activeTab === "evolucao" && evolutionView === "tarefas" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Tarefas</h2>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex flex-wrap gap-2">
                   {["", "pendente", "concluida", "cancelada"].map((s) => (
                     <button key={s} onClick={() => setTaskStatusFilter(s)}
                       className={`px-3 py-1 text-xs rounded-full border transition-colors ${
@@ -1363,7 +1363,7 @@ export default function ClientDetailPage() {
                             </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                           <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${TASK_STATUS_COLORS[task.status] ?? "bg-[#EAD8C2] text-[#8C6E52]"}`}>
                             {TASK_STATUS_LABELS[task.status] ?? task.status}
                           </span>
@@ -1393,10 +1393,10 @@ export default function ClientDetailPage() {
           {/* ── Evoluções ──────────────────────────────────────── */}
           {activeTab === "antropometria" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Evoluções clínicas</h2>
                 <button onClick={() => setShowEvolutionForm((v) => !v)}
-                  className="brand-btn-primary text-sm">
+                  className="brand-btn-primary w-full text-sm sm:w-auto">
                   <Plus className="w-4 h-4" />
                   Nova evolução
                 </button>
@@ -1422,9 +1422,9 @@ export default function ClientDetailPage() {
                 <ul className="space-y-4">
                   {evolutions.map((ev) => (
                     <li key={ev.id} className="border border-[#EAD8C2] rounded-xl p-5 bg-[#FAF7F2]/60">
-                      <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <p className="text-xs text-[#A8927D]">{formatDateSafe(ev.created_at, "dd/MM/yyyy 'às' HH:mm")}</p>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                           {ev.weight && (
                             <span className="text-xs font-semibold text-[#7A9A74]">{ev.weight}kg</span>
                           )}
@@ -1467,10 +1467,10 @@ export default function ClientDetailPage() {
           {/* ── Timeline ───────────────────────────────────────── */}
           {activeTab === "evolucao" && evolutionView === "financeiro" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Financeiro do paciente</h2>
                 <Link href="/dashboard/financeiro"
-                  className="text-xs font-medium text-[#7A9A74] hover:text-[#B47F6A] transition-colors flex items-center gap-1">
+                  className="flex min-h-10 items-center gap-1 text-xs font-medium text-[#7A9A74] transition-colors hover:text-[#B47F6A]">
                   Abrir financeiro
                   <ChevronRight className="w-3.5 h-3.5" />
                 </Link>
@@ -1556,15 +1556,15 @@ export default function ClientDetailPage() {
           {activeTab === "evolucao" && evolutionView === "relatorios" && (
             <div className="space-y-4">
               <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Relatórios</h2>
-              <div className="border border-[#EAD8C2] rounded-2xl p-6 bg-[#FAF7F2]/60 flex items-center justify-between">
-                <div>
+              <div className="flex flex-col gap-4 rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/60 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                <div className="min-w-0">
                   <p className="font-medium text-sm text-[#3A2B1F]">Relatório completo do cliente</p>
                   <p className="text-xs text-[#8C6E52] mt-1">
                     Dados, protocolos, tarefas, evoluções e timeline em um documento imprimível.
                   </p>
                 </div>
                 <Link href={`/dashboard/clients/${id}/print`} target="_blank"
-                  className="inline-flex items-center gap-2 bg-[#F4C9C6] text-[#B47F6A] px-5 py-2 rounded-full text-sm font-semibold hover:bg-[#f1b8b4] transition-colors shrink-0">
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F4C9C6] px-5 py-2 text-sm font-semibold text-[#B47F6A] transition-colors hover:bg-[#f1b8b4]">
                   <Printer className="w-4 h-4" />
                   Abrir relatório
                 </Link>

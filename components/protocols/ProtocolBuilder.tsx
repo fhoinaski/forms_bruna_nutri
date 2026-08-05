@@ -274,7 +274,7 @@ export function ProtocolBuilder({
   const protocolMacros = useMemo(() => roundedMacros(sumMacros(phaseMacros)), [phaseMacros]);
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <section className="brand-card p-5 sm:p-6">
         <div className="grid gap-4 md:grid-cols-2">
           <div>
@@ -292,7 +292,7 @@ export function ProtocolBuilder({
           </div>
           <div>
             <label className="brand-label">Importar modelo</label>
-            <div className="flex gap-2">
+            <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
               <select
                 value={selectedTemplateId}
                 onChange={(event) => setSelectedTemplateId(event.target.value)}
@@ -352,10 +352,10 @@ export function ProtocolBuilder({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="brand-kicker mb-1">Plano de cuidado</p>
-            <h2 className="font-serif text-2xl font-semibold">Fases do protocolo</h2>
+            <h2 className="font-serif text-xl font-semibold sm:text-2xl">Fases do protocolo</h2>
             <p className="mt-1 text-sm text-[#75675E]">Cada ação pode virar uma tarefa com prazo na ficha da cliente.</p>
           </div>
-          <button type="button" onClick={addPhase} className="brand-btn-secondary">
+          <button type="button" onClick={addPhase} className="brand-btn-secondary w-full sm:w-auto">
             <Plus className="h-4 w-4" />
             Adicionar fase
           </button>
@@ -365,7 +365,7 @@ export function ProtocolBuilder({
           <div className="rounded-xl border border-dashed border-[#D9C4B2] bg-[#FFFDFC] p-8 text-center">
             <p className="text-sm font-semibold text-[#3A3028]">Comece pela primeira fase</p>
             <p className="mt-1 text-xs leading-5 text-[#75675E]">Organize período, objetivo, ações práticas e observações profissionais.</p>
-            <button type="button" onClick={addPhase} className="brand-btn-secondary mt-4">
+            <button type="button" onClick={addPhase} className="brand-btn-secondary mt-4 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
               Criar primeira fase
             </button>
@@ -373,16 +373,16 @@ export function ProtocolBuilder({
         ) : (
           value.phases.map((phase, index) => (
             <article key={index} className="brand-card overflow-hidden rounded-lg">
-              <div className="flex items-center justify-between border-b border-[#EDE1D6] bg-[#FBF7F1] px-5 py-4">
-                <div>
+              <div className="flex items-start justify-between gap-3 border-b border-[#EDE1D6] bg-[#FBF7F1] px-4 py-4 sm:px-5">
+                <div className="min-w-0">
                   <p className="brand-kicker">Fase {index + 1}</p>
-                  <p className="mt-1 text-sm font-semibold text-[#3A3028]">{phase.title || "Sem título"}</p>
+                  <p className="mt-1 break-words text-sm font-semibold text-[#3A3028]">{phase.title || "Sem título"}</p>
                   {phaseMacros[index].kcal > 0 && <p className="mt-1 text-[11px] text-[#607A56]">{phaseMacros[index].kcal} kcal · P {phaseMacros[index].protein} g · C {phaseMacros[index].carbs} g · G {phaseMacros[index].fat} g</p>}
                 </div>
                 <button
                   type="button"
                   onClick={() => removePhase(index)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-red-600 transition hover:bg-red-50"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-red-600 transition hover:bg-red-50"
                   aria-label={`Remover fase ${index + 1}`}
                   title="Remover fase"
                 >
@@ -439,7 +439,7 @@ export function ProtocolBuilder({
         </section>
       )}
       <div className="flex justify-end">
-        <button type="button" onClick={onSubmit} disabled={saving || !value.title.trim()} className="brand-btn-primary">
+        <button type="button" onClick={onSubmit} disabled={saving || !value.title.trim()} className="brand-btn-primary w-full sm:w-auto">
           <Save className="h-4 w-4" />
           {saving ? "Salvando..." : submitLabel}
         </button>

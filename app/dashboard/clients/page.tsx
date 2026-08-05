@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, UserCheck, UserPlus, Search } from "lucide-react";
+import { CalendarDays, Mail, Phone, Search, UserCheck, UserPlus, Users } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { BrandBadge } from "@/components/brand/BrandBadge";
 import { BrandMetricCard } from "@/components/brand/BrandMetricCard";
@@ -103,7 +103,7 @@ export default function ClientsPage() {
   const metrics = data?.metrics;
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto animate-fade-up">
+    <div className="mx-auto max-w-6xl space-y-6 animate-fade-up">
       {/* Header */}
       <div>
         <p className="brand-kicker mb-1">CRM</p>
@@ -114,7 +114,7 @@ export default function ClientsPage() {
       </div>
 
       {/* Métricas */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <BrandMetricCard
           label="Total"
           value={metrics?.total ?? "—"}
@@ -171,16 +171,71 @@ export default function ClientsPage() {
 
       {/* Tabela */}
       <div className="brand-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-[#EAD8C2] flex justify-between items-center">
+        <div className="flex items-center justify-between gap-3 border-b border-[#EAD8C2] px-4 py-4 sm:px-6">
           <h4 className="brand-section-title">Pacientes cadastrados</h4>
           {data && (
-            <span className="text-xs text-[#7A9A74] font-medium border border-[#7A9A74]/30 px-3 py-1 rounded-full">
+            <span className="shrink-0 rounded-full border border-[#7A9A74]/30 px-3 py-1 text-xs font-medium text-[#7A9A74]">
               {data.total} cliente{data.total !== 1 ? "s" : ""}
             </span>
           )}
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="md:hidden">
+          {loading ? (
+            <div className="py-12 text-center text-sm text-[#A8927D]">Carregando...</div>
+          ) : data?.items.length === 0 ? (
+            <div className="px-4 py-12 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#EAD8C2]">
+                <Users className="h-6 w-6 text-[#8C6E52]" />
+              </div>
+              <p className="mt-3 text-sm text-[#A8927D]">Nenhum cliente cadastrado.</p>
+              <p className="mt-1 text-xs text-[#C4A99A]">
+                Converta um formulÃ¡rio em cliente para comeÃ§ar.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[#EAD8C2]">
+              {data?.items.map((row) => (
+                <Link
+                  key={row.id}
+                  href={`/dashboard/clients/${row.id}`}
+                  className="block px-4 py-4 transition-colors hover:bg-[#FAF7F2]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold leading-5 text-[#3A2B1F]">
+                        {row.name}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <ClientStatusBadge status={row.status} />
+                        <span className="inline-flex items-center gap-1 text-xs text-[#A8927D]">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          {formatDateSafe(row.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-[#7A9A74]/30 px-3 py-1 text-xs font-medium text-[#7A9A74]">
+                      Abrir
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 text-sm text-[#8C6E52]">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Phone className="h-4 w-4 shrink-0 text-[#A8927D]" />
+                      <span className="min-w-0 break-all">{row.phone || "Sem telefone"}</span>
+                    </div>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Mail className="h-4 w-4 shrink-0 text-[#A8927D]" />
+                      <span className="min-w-0 break-all">{row.email || "Sem e-mail"}</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left">
             <thead className="bg-[#FAF7F2]">
               <tr>
@@ -249,22 +304,22 @@ export default function ClientsPage() {
         </div>
 
         {data && data.totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-[#EAD8C2] flex items-center justify-between">
+          <div className="flex flex-col gap-3 border-t border-[#EAD8C2] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <span className="text-xs text-[#A8927D]">
               Página {data.page} de {data.totalPages}
             </span>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={data.page <= 1}
-                className="px-4 py-1.5 text-xs border border-[#EAD8C2] rounded-full text-[#8C6E52] hover:bg-[#FAF7F2] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="rounded-full border border-[#EAD8C2] px-4 py-2 text-xs text-[#8C6E52] transition-colors hover:bg-[#FAF7F2] disabled:cursor-not-allowed disabled:opacity-40 sm:py-1.5"
               >
                 Anterior
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
                 disabled={data.page >= data.totalPages}
-                className="px-4 py-1.5 text-xs border border-[#EAD8C2] rounded-full text-[#8C6E52] hover:bg-[#FAF7F2] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="rounded-full border border-[#EAD8C2] px-4 py-2 text-xs text-[#8C6E52] transition-colors hover:bg-[#FAF7F2] disabled:cursor-not-allowed disabled:opacity-40 sm:py-1.5"
               >
                 Próxima
               </button>

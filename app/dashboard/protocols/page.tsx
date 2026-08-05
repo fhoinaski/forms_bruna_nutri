@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, BookOpen, Plus, Archive, LibraryBig } from "lucide-react";
+import { Archive, BookOpen, CalendarDays, FileText, LibraryBig, Plus, Search, Sparkles } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 
 function formatDateSafe(value: string): string {
@@ -64,17 +64,17 @@ export default function ProtocolsPage() {
   }, [page, search, showInactive]);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-fade-up">
+    <div className="mx-auto max-w-5xl space-y-6 animate-fade-up">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="brand-kicker">Biblioteca</p>
-          <h1 className="font-serif text-3xl font-semibold text-[#3A2B1F]">Protocolos padrão</h1>
+          <h1 className="font-serif text-2xl font-semibold text-[#3A2B1F] sm:text-3xl">Protocolos padrão</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#75675E]">
             Modelos reutilizáveis para iniciar o cuidado com consistência. Na ficha da cliente, aplique como está ou crie uma cópia personalizada.
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="grid gap-2 sm:flex sm:flex-row">
           <Link href="/dashboard/templates" className="brand-btn-secondary">
             <LibraryBig className="h-4 w-4" />
             Modelos predefinidos
@@ -88,8 +88,8 @@ export default function ProtocolsPage() {
 
       {/* Filtros */}
       <div className="brand-card p-5">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[180px]">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div className="min-w-0">
             <label className="brand-label">Busca</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A8927D]" />
@@ -101,7 +101,7 @@ export default function ProtocolsPage() {
               />
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm text-[#8C6E52] cursor-pointer select-none">
+          <label className="flex min-h-11 cursor-pointer select-none items-center gap-2 text-sm text-[#8C6E52]">
             <input
               type="checkbox"
               checked={showInactive}
@@ -115,19 +115,70 @@ export default function ProtocolsPage() {
 
       {/* Tabela */}
       <div className="brand-card overflow-hidden">
-        <div className="px-6 py-4 border-b border-[#EAD8C2] flex justify-between items-center">
+        <div className="flex items-center justify-between gap-3 border-b border-[#EAD8C2] px-4 py-4 sm:px-6">
           <h4 className="brand-section-title flex items-center gap-2">
             <BookOpen className="w-4 h-4" />
             Protocolos
           </h4>
           {data && (
-            <span className="text-xs text-[#7A9A74] border border-[#7A9A74]/30 px-3 py-1 rounded-full">
+            <span className="shrink-0 rounded-full border border-[#7A9A74]/30 px-3 py-1 text-xs text-[#7A9A74]">
               {data.total} protocolo{data.total !== 1 ? "s" : ""}
             </span>
           )}
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="md:hidden">
+          {loading ? (
+            <div className="py-12 text-center text-sm text-[#A8927D]">Carregando...</div>
+          ) : !data?.items.length ? (
+            <div className="px-4 py-12 text-center">
+              <BookOpen className="mx-auto mb-3 h-10 w-10 text-[#EAD8C2]" />
+              <p className="text-sm text-[#A8927D]">Nenhum protocolo padrão encontrado.</p>
+              <p className="mt-1 text-xs text-[#A8927D]">
+                Crie manualmente ou transforme um rascunho de IA revisado em modelo.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[#EAD8C2]">
+              {data.items.map((row) => (
+                <Link
+                  key={row.id}
+                  href={`/dashboard/protocols/${row.id}`}
+                  className="block px-4 py-4 transition-colors hover:bg-[#FAF7F2]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold leading-5 text-[#3A2B1F]">{row.title}</p>
+                      {row.description && (
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#A8927D]">{row.description}</p>
+                      )}
+                    </div>
+                    <span className={`shrink-0 ${row.is_active ? "brand-badge brand-badge-finalizado" : "brand-badge brand-badge-arquivado"}`}>
+                      {row.is_active ? "Ativo" : "Arquivado"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 text-xs text-[#8C6E52]">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-[#A8927D]" />
+                      <span className="min-w-0 break-words">{row.category ?? "Sem categoria"}</span>
+                    </div>
+                    <div className="flex min-w-0 items-center gap-2">
+                      {row.source_draft_id ? <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#A8927D]" /> : <BookOpen className="h-3.5 w-3.5 shrink-0 text-[#A8927D]" />}
+                      <span>{row.source_draft_id ? "IA revisada" : "Manual"}</span>
+                    </div>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[#A8927D]" />
+                      <span>{formatDateSafe(row.created_at)}</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left">
             <thead className="bg-[#FAF7F2]">
               <tr>
@@ -206,15 +257,15 @@ export default function ProtocolsPage() {
         </div>
 
         {data && data.totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-[#EAD8C2] flex items-center justify-between">
+          <div className="flex flex-col gap-3 border-t border-[#EAD8C2] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <span className="text-xs text-[#A8927D]">Página {data.page} de {data.totalPages}</span>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex">
               <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={data.page <= 1}
-                className="px-4 py-1.5 text-xs border border-[#EAD8C2] rounded-full text-[#8C6E52] hover:bg-[#FAF7F2] disabled:opacity-40 disabled:cursor-not-allowed">
+                className="rounded-full border border-[#EAD8C2] px-4 py-2 text-xs text-[#8C6E52] hover:bg-[#FAF7F2] disabled:cursor-not-allowed disabled:opacity-40 sm:py-1.5">
                 Anterior
               </button>
               <button onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))} disabled={data.page >= data.totalPages}
-                className="px-4 py-1.5 text-xs border border-[#EAD8C2] rounded-full text-[#8C6E52] hover:bg-[#FAF7F2] disabled:opacity-40 disabled:cursor-not-allowed">
+                className="rounded-full border border-[#EAD8C2] px-4 py-2 text-xs text-[#8C6E52] hover:bg-[#FAF7F2] disabled:cursor-not-allowed disabled:opacity-40 sm:py-1.5">
                 Próxima
               </button>
             </div>

@@ -194,7 +194,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
             <p className="brand-kicker mb-1">Plano alimentar individual</p>
-            <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Prescrição visual para o cliente</h2>
+            <h2 className="font-serif text-xl font-semibold text-[#3A3028] sm:text-2xl">Prescrição visual para o cliente</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#75675E]">
               Use um modelo como ponto de partida, ajuste alimentos, quantidades, suplementos e substituições, depois ative no portal.
             </p>
@@ -203,7 +203,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             <select value={targetGroup} onChange={(event) => setTargetGroup(event.target.value as ProtocolTemplateTargetGroup)} className="brand-input">
               {PROTOCOL_TEMPLATE_TARGET_GROUPS.map((group) => <option key={group} value={group}>{PROTOCOL_TEMPLATE_GROUP_LABELS[group]}</option>)}
             </select>
-            <button type="button" onClick={() => void createFromTemplate()} disabled={creating} className="brand-btn-primary">
+            <button type="button" onClick={() => void createFromTemplate()} disabled={creating} className="brand-btn-primary w-full sm:w-auto">
               <Plus className="h-4 w-4" />
               {creating ? "Criando..." : "Criar por modelo"}
             </button>
@@ -254,9 +254,9 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
           </div>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Refeições</h3>
-              <button type="button" onClick={() => setPlan({ ...plan, meals: [...plan.meals, emptyMeal()] })} className="brand-btn-secondary">
+              <button type="button" onClick={() => setPlan({ ...plan, meals: [...plan.meals, emptyMeal()] })} className="brand-btn-secondary w-full sm:w-auto">
                 <Plus className="h-4 w-4" />
                 Refeição
               </button>
@@ -268,7 +268,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#EAF0E4] text-[#607A56]"><Utensils className="h-4 w-4" /></div>
                     <div className="min-w-0"><p className="text-sm font-semibold text-[#3A3028]">{meal.name || `Refeição ${mealIndex + 1}`}</p><p className="text-xs text-[#75675E]">{meal.items.filter((item) => item.food.trim()).length} alimento(s) · {mealMacros[mealIndex]?.kcal ?? 0} kcal estimadas</p></div>
                   </div>
-                  <button type="button" onClick={() => setPlan({ ...plan, meals: plan.meals.filter((_, index) => index !== mealIndex) })} className="inline-flex h-9 w-9 items-center justify-center self-end rounded-lg text-red-600 hover:bg-red-50 sm:self-auto" aria-label={`Remover ${meal.name || "refeição"}`} title="Remover refeição">
+                  <button type="button" onClick={() => setPlan({ ...plan, meals: plan.meals.filter((_, index) => index !== mealIndex) })} className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-lg text-red-600 hover:bg-red-50 sm:self-auto" aria-label={`Remover ${meal.name || "refeição"}`} title="Remover refeição">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -279,11 +279,11 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                 </div>
                 <div className="mt-3 space-y-2">
                   {meal.items.map((item, itemIndex) => (
-                    <div key={itemIndex} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_110px_90px_auto]">
+                    <div key={itemIndex} className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_110px_90px_auto]">
                       <input value={item.food} onChange={(event) => updateMealItem(mealIndex, itemIndex, { food: event.target.value })} className="brand-input" placeholder="Alimento" />
                       <input value={item.quantity ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { quantity: event.target.value })} className="brand-input" placeholder="Qtd." />
                       <input value={item.unit ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { unit: event.target.value })} className="brand-input" placeholder="Un." />
-                      <button type="button" onClick={() => updateMeal(mealIndex, { items: meal.items.filter((_, index) => index !== itemIndex) })} className="rounded-xl px-3 text-red-600 hover:bg-red-50">
+                      <button type="button" onClick={() => updateMeal(mealIndex, { items: meal.items.filter((_, index) => index !== itemIndex) })} className="inline-flex h-11 items-center justify-center rounded-xl px-3 text-red-600 hover:bg-red-50" aria-label="Remover alimento" title="Remover alimento">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -321,18 +321,18 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               {deleting ? "Excluindo..." : "Excluir plano"}
             </button>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={() => void save()} disabled={saving || deleting} className="brand-btn-secondary">
+              <button type="button" onClick={() => void save()} disabled={saving || deleting} className="brand-btn-secondary w-full sm:w-auto">
                 <Save className="h-4 w-4" />
                 {saving ? "Salvando..." : "Salvar rascunho"}
               </button>
-              <button type="button" onClick={() => void save("active")} disabled={saving || deleting || plan.status === "active"} className="brand-btn-primary">
+              <button type="button" onClick={() => void save("active")} disabled={saving || deleting || plan.status === "active"} className="brand-btn-primary w-full sm:w-auto">
                 <CheckCircle2 className="h-4 w-4" />
                 {plan.status === "active" ? "Plano ativo" : "Ativar no portal"}
               </button>
             </div>
           </div>
 
-          <div className="sticky bottom-4 z-10 rounded-lg border border-[#D9C4B2] bg-[#FFFDFC]/95 p-3 shadow-[0_16px_42px_rgba(58,48,40,0.14)] backdrop-blur-xl">
+          <div className="sticky bottom-3 z-10 rounded-lg border border-[#D9C4B2] bg-[#FFFDFC]/95 p-3 shadow-[0_16px_42px_rgba(58,48,40,0.14)] backdrop-blur-xl sm:bottom-4">
             <div className="flex min-w-0 flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#607A56]">Macros em tempo real</p>
@@ -379,9 +379,9 @@ function EditableList<T extends Record<string, string | null | undefined>>({
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="font-serif text-xl font-semibold text-[#3A3028]">{title}</h3>
-        <button type="button" onClick={() => onChange([...items, emptyItem])} className="brand-btn-secondary">
+        <button type="button" onClick={() => onChange([...items, emptyItem])} className="brand-btn-secondary w-full sm:w-auto">
           <Plus className="h-4 w-4" />
           Adicionar
         </button>
@@ -389,7 +389,7 @@ function EditableList<T extends Record<string, string | null | undefined>>({
       {items.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[#D9C4B2] px-4 py-5 text-center text-sm text-[#9A8B80]">Nenhum item cadastrado.</p>
       ) : items.map((item, itemIndex) => (
-        <div key={itemIndex} className="grid gap-2 md:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
+        <div key={itemIndex} className="grid min-w-0 gap-2 md:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
           {fields.map((field, fieldIndex) => (
             <input
               key={String(field)}
@@ -399,7 +399,7 @@ function EditableList<T extends Record<string, string | null | undefined>>({
               placeholder={labels[fieldIndex]}
             />
           ))}
-          <button type="button" onClick={() => onChange(items.filter((_, index) => index !== itemIndex))} className="rounded-xl px-3 text-red-600 hover:bg-red-50">
+          <button type="button" onClick={() => onChange(items.filter((_, index) => index !== itemIndex))} className="inline-flex h-11 items-center justify-center rounded-xl px-3 text-red-600 hover:bg-red-50" aria-label={`Remover ${title.toLowerCase()}`} title="Remover">
             <Trash2 className="h-4 w-4" />
           </button>
         </div>
