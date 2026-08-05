@@ -244,6 +244,10 @@ CREATE TABLE IF NOT EXISTS meal_plans (
 CREATE INDEX IF NOT EXISTS idx_meal_plans_client_status
 ON meal_plans(client_id, status);
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_plans_single_active_client
+ON meal_plans(client_id)
+WHERE status = 'active';
+
 CREATE TABLE IF NOT EXISTS meal_plan_meals (
   id TEXT PRIMARY KEY,
   meal_plan_id TEXT NOT NULL,

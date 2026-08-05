@@ -424,12 +424,12 @@ export function ProtocolBuilder({
       {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {protocolMacros.recognizedItems > 0 && (
         <section className="sticky bottom-4 z-10 rounded-lg border border-[#D9C4B2] bg-[#FFFDFC]/95 p-3 shadow-[0_16px_42px_rgba(58,48,40,0.14)] backdrop-blur-xl">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#607A56]">Estimativa do modelo alimentar</p>
               <p className="mt-0.5 text-[11px] text-[#75675E]">Calculada a partir das ações no formato “alimento - quantidade unidade”.</p>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 2xl:shrink-0">
               <ProtocolMacro icon={<Flame className="h-4 w-4" />} label="Energia" value={`${protocolMacros.kcal} kcal`} />
               <ProtocolMacro icon={<Beef className="h-4 w-4" />} label="Proteínas" value={`${protocolMacros.protein} g`} />
               <ProtocolMacro icon={<Wheat className="h-4 w-4" />} label="Carboidratos" value={`${protocolMacros.carbs} g`} />
@@ -449,5 +449,5 @@ export function ProtocolBuilder({
 }
 
 function ProtocolMacro({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return <div className="flex min-w-[8rem] items-center gap-2 rounded-lg bg-[#FBF7F1] px-3 py-2"><span className="text-[#C9937B]">{icon}</span><span><span className="block text-[9px] font-semibold uppercase text-[#75675E]">{label}</span><strong className="block text-sm text-[#3A3028]">{value}</strong></span></div>;
+  return <div className="flex min-w-0 items-center gap-2 rounded-lg bg-[#FBF7F1] px-3 py-2"><span className="shrink-0 text-[#C9937B]">{icon}</span><span className="min-w-0"><span className="block truncate text-[9px] font-semibold uppercase text-[#75675E]">{label}</span><strong className="block truncate text-sm text-[#3A3028]">{value}</strong></span></div>;
 }

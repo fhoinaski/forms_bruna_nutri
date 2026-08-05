@@ -35,18 +35,19 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   const [targetGroup, setTargetGroup] = useState<ProtocolTemplateTargetGroup>("ADULTO_SAUDAVEL");
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const loadPlans = useCallback(async () => {
+  const loadPlans = useCallback(async (preferredPlanId?: string) => {
     const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json() as MealPlan[];
     setPlans(data);
-    const current = data.find((item) => item.id === selectedPlanId) ?? data[0] ?? null;
+    const current = data.find((item) => item.id === preferredPlanId) ?? data[0] ?? null;
     setSelectedPlanId(current?.id ?? "");
     setPlan(current);
-  }, [clientId, selectedPlanId]);
+  }, [clientId]);
 
   useEffect(() => {
     void loadPlans();
@@ -69,9 +70,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "Não foi possível criar o plano.");
-      await loadPlans();
-      setSelectedPlanId(data.id);
-      setPlan(data);
+      await loadPlans(data.id);
       setMessage("Plano criado a partir do modelo. Revise, personalize e ative quando estiver pronto.");
       onSaved?.();
     } catch (cause) {
@@ -105,14 +104,39 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar o plano.");
-      setPlan(data);
-      await loadPlans();
+      await loadPlans(data.id);
       setMessage(nextStatus === "active" ? "Plano ativado no portal do cliente." : "Plano alimentar salvo.");
       onSaved?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível salvar o plano.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function removePlan() {
+    if (!plan) return;
+    const warning = plan.status === "active"
+      ? `O plano “${plan.title}” está ativo no portal. Deseja realmente excluí-lo?`
+      : `Deseja excluir o plano “${plan.title}”? Esta ação não pode ser desfeita.`;
+    if (!window.confirm(warning)) return;
+
+    setDeleting(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/${plan.id}`, { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? "Não foi possível excluir o plano.");
+      setSelectedPlanId("");
+      setPlan(null);
+      await loadPlans();
+      setMessage("Plano alimentar excluído.");
+      onSaved?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível excluir o plano.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -138,17 +162,17 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   const planMacros = useMemo(() => roundedMacros(sumMacros(mealMacros)), [mealMacros]);
 
   return (
-    <div className="space-y-5">
+    <div className="w-full min-w-0 space-y-5">
       <section className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/70 p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+        <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
             <p className="brand-kicker mb-1">Plano alimentar individual</p>
             <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Prescrição visual para o cliente</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#75675E]">
               Use um modelo como ponto de partida, ajuste alimentos, quantidades, suplementos e substituições, depois ative no portal.
             </p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-[220px_auto]">
+          <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,220px)_auto] xl:shrink-0">
             <select value={targetGroup} onChange={(event) => setTargetGroup(event.target.value as ProtocolTemplateTargetGroup)} className="brand-input">
               {PROTOCOL_TEMPLATE_TARGET_GROUPS.map((group) => <option key={group} value={group}>{PROTOCOL_TEMPLATE_GROUP_LABELS[group]}</option>)}
             </select>
@@ -164,8 +188,9 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         <div className="flex flex-wrap gap-2">
           {plans.map((item) => (
             <button key={item.id} type="button" onClick={() => selectPlan(item.id)}
-              className={`rounded-full border px-4 py-2 text-xs font-semibold ${selectedPlanId === item.id ? "border-[#7F9A74] bg-[#EAF0E4] text-[#607A56]" : "border-[#EAD8C2] bg-white text-[#75675E]"}`}>
-              {item.status === "active" ? "Ativo" : item.status === "draft" ? "Rascunho" : "Arquivado"} · v{item.version}
+              className={`max-w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors ${selectedPlanId === item.id ? "border-[#7F9A74] bg-[#EAF0E4] text-[#607A56]" : "border-[#EAD8C2] bg-white text-[#75675E] hover:border-[#D9C4B2]"}`}>
+              <span className="block max-w-52 truncate font-semibold">{item.title}</span>
+              <span className="mt-0.5 block text-[10px] uppercase tracking-[0.06em]">{item.status === "active" ? "Ativo no portal" : item.status === "draft" ? "Rascunho" : "Arquivado"} · v{item.version}</span>
             </button>
           ))}
         </div>
@@ -181,7 +206,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
           <p className="mt-1 text-xs text-[#75675E]">Selecione um grupo alvo e crie o primeiro plano a partir da base profissional.</p>
         </div>
       ) : (
-        <section className="space-y-5 rounded-2xl border border-[#EAD8C2] bg-white p-5">
+        <section className="min-w-0 space-y-5 rounded-2xl border border-[#EAD8C2] bg-white p-4 sm:p-5">
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_160px]">
             <div>
               <label className="brand-label">Título do plano</label>
@@ -263,24 +288,30 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             labels={["Alimento base", "Pode trocar por", "Qtd.", "Un."]}
           />
 
-          <div className="flex flex-wrap justify-end gap-3 border-t border-[#EDE1D6] pt-5">
-            <button type="button" onClick={() => void save()} disabled={saving} className="brand-btn-secondary">
-              <Save className="h-4 w-4" />
-              {saving ? "Salvando..." : "Salvar rascunho"}
+          <div className="flex flex-col gap-3 border-t border-[#EDE1D6] pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <button type="button" onClick={() => void removePlan()} disabled={deleting || saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50">
+              <Trash2 className="h-4 w-4" />
+              {deleting ? "Excluindo..." : "Excluir plano"}
             </button>
-            <button type="button" onClick={() => void save("active")} disabled={saving} className="brand-btn-primary">
-              <CheckCircle2 className="h-4 w-4" />
-              Ativar no portal
-            </button>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button type="button" onClick={() => void save()} disabled={saving || deleting} className="brand-btn-secondary">
+                <Save className="h-4 w-4" />
+                {saving ? "Salvando..." : "Salvar rascunho"}
+              </button>
+              <button type="button" onClick={() => void save("active")} disabled={saving || deleting || plan.status === "active"} className="brand-btn-primary">
+                <CheckCircle2 className="h-4 w-4" />
+                {plan.status === "active" ? "Plano ativo" : "Ativar no portal"}
+              </button>
+            </div>
           </div>
 
           <div className="sticky bottom-4 z-10 rounded-lg border border-[#D9C4B2] bg-[#FFFDFC]/95 p-3 shadow-[0_16px_42px_rgba(58,48,40,0.14)] backdrop-blur-xl">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#607A56]">Macros em tempo real</p>
                 <p className="mt-0.5 text-[11px] text-[#75675E]">Estimativa automática por alimento e porção. Confirme os valores antes de prescrever.</p>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 2xl:shrink-0">
                 <MacroMetric icon={<Flame className="h-4 w-4" />} label="Energia" value={`${planMacros.kcal} kcal`} />
                 <MacroMetric icon={<Beef className="h-4 w-4" />} label="Proteínas" value={`${planMacros.protein} g`} />
                 <MacroMetric icon={<Wheat className="h-4 w-4" />} label="Carboidratos" value={`${planMacros.carbs} g`} />
@@ -297,9 +328,9 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
 
 function MacroMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="flex min-w-[8.25rem] items-center gap-2 rounded-lg bg-[#FBF7F1] px-3 py-2">
+    <div className="flex min-w-0 items-center gap-2 rounded-lg bg-[#FBF7F1] px-3 py-2">
       <span className="text-[#C9937B]">{icon}</span>
-      <span><span className="block text-[9px] font-semibold uppercase text-[#75675E]">{label}</span><strong className="block text-sm text-[#3A3028]">{value}</strong></span>
+      <span className="min-w-0"><span className="block truncate text-[9px] font-semibold uppercase text-[#75675E]">{label}</span><strong className="block truncate text-sm text-[#3A3028]">{value}</strong></span>
     </div>
   );
 }

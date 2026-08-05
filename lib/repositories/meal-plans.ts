@@ -248,6 +248,12 @@ export async function createMealPlan(input: {
 }): Promise<MealPlanPayload> {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  if (input.status === "active") {
+    await d1Execute(
+      "UPDATE meal_plans SET status = 'archived', version = version + 1, updated_at = ?1 WHERE client_id = ?2 AND status = 'active'",
+      [now, input.clientId]
+    );
+  }
   await d1Execute(
     `INSERT INTO meal_plans (id, client_id, title, target_group, status, version, notes, created_at, updated_at)
      VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8)`,
@@ -258,7 +264,7 @@ export async function createMealPlan(input: {
   return hydrateMealPlan(rows[0]);
 }
 
-export async function updateMealPlan(planId: string, input: {
+export async function updateMealPlan(planId: string, clientId: string, input: {
   title: string;
   status: MealPlanStatus;
   notes?: string | null;
@@ -266,14 +272,36 @@ export async function updateMealPlan(planId: string, input: {
   substitutions: MealPlanSubstitutionPayload[];
   supplements: MealPlanSupplementPayload[];
 }): Promise<MealPlanPayload | null> {
+  const existingRows = await d1Query<MealPlanRow>(
+    "SELECT * FROM meal_plans WHERE id = ?1 AND client_id = ?2 LIMIT 1",
+    [planId, clientId]
+  );
+  if (!existingRows[0]) return null;
+
   const now = new Date().toISOString();
+  if (input.status === "active") {
+    await d1Execute(
+      "UPDATE meal_plans SET status = 'archived', version = version + 1, updated_at = ?1 WHERE client_id = ?2 AND status = 'active' AND id <> ?3",
+      [now, clientId, planId]
+    );
+  }
   await d1Execute(
-    "UPDATE meal_plans SET title = ?1, status = ?2, notes = ?3, version = version + 1, updated_at = ?4 WHERE id = ?5",
-    [input.title, input.status, input.notes ?? null, now, planId]
+    "UPDATE meal_plans SET title = ?1, status = ?2, notes = ?3, version = version + 1, updated_at = ?4 WHERE id = ?5 AND client_id = ?6",
+    [input.title, input.status, input.notes ?? null, now, planId, clientId]
   );
   await replaceMealPlanDetails(planId, input.meals, input.substitutions, input.supplements, now);
   const rows = await d1Query<MealPlanRow>("SELECT * FROM meal_plans WHERE id = ?1 LIMIT 1", [planId]);
   return rows[0] ? hydrateMealPlan(rows[0]) : null;
+}
+
+export async function deleteMealPlan(planId: string, clientId: string): Promise<MealPlanRow | null> {
+  const rows = await d1Query<MealPlanRow>(
+    "SELECT * FROM meal_plans WHERE id = ?1 AND client_id = ?2 LIMIT 1",
+    [planId, clientId]
+  );
+  if (!rows[0]) return null;
+  await d1Execute("DELETE FROM meal_plans WHERE id = ?1 AND client_id = ?2", [planId, clientId]);
+  return rows[0];
 }
 
 async function replaceMealPlanDetails(

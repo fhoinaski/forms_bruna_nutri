@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
-import { updateMealPlan } from "@/lib/repositories/meal-plans";
+import { deleteMealPlan, updateMealPlan } from "@/lib/repositories/meal-plans";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
@@ -65,8 +65,8 @@ export async function PUT(
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
   }
 
-  const plan = await updateMealPlan(planId, parsed.data);
-  if (!plan || plan.client_id !== id) return NextResponse.json({ message: "Plano não encontrado." }, { status: 404 });
+  const plan = await updateMealPlan(planId, id, parsed.data);
+  if (!plan) return NextResponse.json({ message: "Plano não encontrado." }, { status: 404 });
 
   await addTimelineEvent({
     client_id: id,
@@ -85,4 +85,37 @@ export async function PUT(
   });
 
   return NextResponse.json(plan);
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; planId: string }> }
+) {
+  const admin = await getAdminFromRequest(req);
+  if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
+
+  const { id, planId } = await params;
+  const client = await getClientById(id);
+  if (!client) return NextResponse.json({ message: "Cliente não encontrado." }, { status: 404 });
+
+  const deleted = await deleteMealPlan(planId, id);
+  if (!deleted) return NextResponse.json({ message: "Plano não encontrado." }, { status: 404 });
+
+  await addTimelineEvent({
+    client_id: id,
+    type: "meal_plan_deleted",
+    title: "Plano alimentar excluído",
+    description: `Plano ${deleted.title} excluído do prontuário.`,
+    metadata: { planId, previousStatus: deleted.status },
+  });
+  await writeAuditLog({
+    action: "meal_plan_deleted",
+    adminId: admin.sub,
+    entityType: "meal_plan",
+    entityId: planId,
+    ipHash: getRequestFingerprint(req).ipHash,
+    metadata: { clientId: id, previousStatus: deleted.status },
+  });
+
+  return NextResponse.json({ success: true });
 }

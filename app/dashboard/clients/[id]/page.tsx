@@ -941,7 +941,7 @@ export default function ClientDetailPage() {
   if (!data) return null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-16 animate-fade-up">
+    <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-16 animate-fade-up">
       {/* Top bar */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <Link href="/dashboard/clients"
@@ -957,8 +957,8 @@ export default function ClientDetailPage() {
       </div>
 
       {/* Patient workspace */}
-      <div className="brand-card overflow-hidden">
-        <div className="flex flex-col gap-5 border-b border-[#EAD8C2] bg-[#FAF7F2] p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+      <div className="brand-card w-full min-w-0 overflow-hidden">
+        <div className="flex min-w-0 flex-col gap-5 border-b border-[#EAD8C2] bg-[#FAF7F2] p-5 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-[#EAD8C2] text-[#8C6E52]"><User className="h-7 w-7" /></div>
             <div className="min-w-0">
@@ -967,13 +967,13 @@ export default function ClientDetailPage() {
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#8C6E52]">{data.phone && <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{data.phone}</span>}{data.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{data.email}</span>}</div>
             </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:w-[34rem]">
+          <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:w-[34rem] xl:shrink-0">
             <div className="rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] p-3"><p className="text-[9px] font-bold uppercase tracking-[0.1em] text-[#607A56]">Objetivo principal</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-[#3A3028]">{clinicalSummary?.goals || "Defina o objetivo clínico na anamnese."}</p></div>
             <div className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-3"><p className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[#8C5F50]"><AlertTriangle className="h-3 w-3" />Alertas de saúde</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-[#3A3028]">{clinicalSummary?.risk_flags || clinicalSummary?.allergies || clinicalSummary?.diagnoses || "Nenhum alerta registrado."}</p></div>
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)}>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)} className="min-w-0">
         {/* Tabs */}
         <div className="border-b border-[#EAD8C2] overflow-x-auto">
           <TabsList className="w-full justify-start rounded-none border-0 bg-[#FFFDFC] p-2">
@@ -990,7 +990,7 @@ export default function ClientDetailPage() {
         </div>
 
         {/* Tab content */}
-        <div className="p-4 sm:p-6 lg:p-8">
+        <div className="min-w-0 p-4 sm:p-6 xl:p-8">
           {activeTab === "resumo" && <SecondaryNavigation items={[{ id: "dados", label: "Dados principais" }, { id: "portal", label: "Portal do cliente" }]} value={summaryView} onChange={(value) => setSummaryView(value as typeof summaryView)} />}
           {activeTab === "plano-alimentar" && <SecondaryNavigation items={[{ id: "dieta", label: "Plano alimentar" }, { id: "protocolos", label: "Protocolos de cuidado" }]} value={planView} onChange={(value) => setPlanView(value as typeof planView)} />}
           {activeTab === "evolucao" && <SecondaryNavigation items={[{ id: "timeline", label: "Linha do tempo" }, { id: "agenda", label: "Consultas" }, { id: "tarefas", label: "Tarefas" }, { id: "financeiro", label: "Financeiro" }, { id: "relatorios", label: "Relatórios" }]} value={evolutionView} onChange={(value) => setEvolutionView(value as typeof evolutionView)} />}
