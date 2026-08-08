@@ -21,7 +21,7 @@ import { SectionTitle } from "@/components/public/SectionTitle";
 import { ServiceCard } from "@/components/public/ServiceCard";
 import { StepCard } from "@/components/public/StepCard";
 import { safeJsonLd } from "@/lib/seo/json-ld";
-import { EDITORIAL_PILLARS, siteConfig } from "@/lib/seo/site";
+import { siteConfig } from "@/lib/seo/site";
 
 export const metadata: Metadata = {
   title: {
@@ -256,7 +256,17 @@ const structuredData = {
         "@type": "City",
         name: `${siteConfig.city}, ${siteConfig.stateCode}`,
       },
-      knowsAbout: EDITORIAL_PILLARS,
+      knowsAbout: [
+        "Nutrição",
+        "Alimentação saudável",
+        "Acompanhamento nutricional",
+        "Reeducação alimentar",
+        "Nutrição na gestação",
+        "Nutrição materno-infantil",
+        "Nutrição infantil",
+        "Introdução alimentar",
+        "Seletividade alimentar",
+      ],
     },
   ],
 };

@@ -71,12 +71,6 @@ export function PublicHeader() {
 
           <div className="flex items-center gap-2">
             <Link
-              href="/dashboard"
-              className="hidden items-center rounded-full border border-[#7F9A74]/35 px-4 py-2 text-xs font-semibold text-[#607A56] transition-colors hover:bg-[#EAF0E4] sm:inline-flex"
-            >
-              Acessar painel
-            </Link>
-            <Link
               href="/formulario"
               className="brand-btn-primary hidden px-4 py-2 text-xs lg:inline-flex"
             >
@@ -136,13 +130,6 @@ export function PublicHeader() {
               {link.label}
             </Link>
           ))}
-          <Link
-            href="/dashboard"
-            onClick={() => setOpen(false)}
-            className="block rounded-xl px-4 py-3 text-sm text-[#607A56] transition-colors hover:bg-[#FBF7F1]"
-          >
-            Acessar painel
-          </Link>
         </nav>
         <div className="absolute inset-x-5 bottom-8">
           <a

@@ -15,7 +15,7 @@ export const siteConfig = {
   logoPath: "/brand/bruna-flores-nutri-logo.svg",
   symbolPath: "/brand/bruna-flores-nutri-simbolo.svg",
   ogImagePath: "/bruna-hero-family.png",
-  phoneDisplay: "+55 48 99136-3266",
+  phoneDisplay: "(48) 99136-3266",
   phoneHref: "tel:+5548991363266",
   telephone: "+5548991363266",
   whatsappUrl:
