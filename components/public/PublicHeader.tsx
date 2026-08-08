@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Menu, X } from "lucide-react";
+import { siteConfig } from "@/lib/seo/site";
 
 const NAV_LINKS = [
   { href: "/", label: "Início" },
@@ -34,7 +35,11 @@ export function PublicHeader() {
         }`}
       >
         <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-5 lg:px-8">
-          <Link href="/" className="flex shrink-0 items-center gap-3">
+          <Link
+            href="/"
+            className="flex shrink-0 items-center gap-3"
+            aria-label="Ir para a página inicial de Bruna Flores Nutri"
+          >
             <Image
               src="/brand/bruna-flores-nutri-simbolo.svg"
               alt=""
@@ -47,7 +52,7 @@ export function PublicHeader() {
                 Bruna Flores Nutri
               </p>
               <p className="text-[9px] uppercase leading-none tracking-[0.2em] text-[#75675E]">
-                Nutrição Materno-Infantil
+                Nutricionista
               </p>
             </div>
           </Link>
@@ -78,6 +83,15 @@ export function PublicHeader() {
               Pré-consulta
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
+            <a
+              href={siteConfig.whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden rounded-full border border-[#7F9A74]/35 px-4 py-2 text-xs font-semibold text-[#607A56] transition-colors hover:bg-[#EAF0E4] xl:inline-flex"
+              aria-label="Falar com Bruna Flores pelo WhatsApp"
+            >
+              WhatsApp
+            </a>
             <button
               onClick={() => setOpen(true)}
               className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1] lg:hidden"
@@ -131,6 +145,15 @@ export function PublicHeader() {
           </Link>
         </nav>
         <div className="absolute inset-x-5 bottom-8">
+          <a
+            href={siteConfig.whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-3 inline-flex w-full items-center justify-center rounded-full border border-[#7F9A74]/35 px-5 py-3 text-sm font-semibold text-[#607A56]"
+            aria-label="Falar com Bruna Flores pelo WhatsApp"
+          >
+            Falar pelo WhatsApp
+          </a>
           <Link
             href="/formulario"
             onClick={() => setOpen(false)}

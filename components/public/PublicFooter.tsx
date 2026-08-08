@@ -1,6 +1,7 @@
-import Image from "next/image";
+﻿import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { siteConfig } from "@/lib/seo/site";
 
 export function PublicFooter() {
   return (
@@ -22,14 +23,28 @@ export function PublicFooter() {
                   Bruna Flores Nutri
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.2em] text-[#607A56]">
-                  Nutrição Materno-Infantil
+                  Nutricionista em Florianópolis e online
                 </p>
               </div>
             </div>
             <p className="max-w-xl text-sm leading-7 text-[#75675E]">
-              Atendimento nutricional acolhedor e individualizado para gestantes,
-              mães, bebês e crianças, com ciência aplicada à vida real.
+              Atendimento nutricional acolhedor e individualizado para adultos,
+              gestantes, mães, bebês e crianças, com ciência aplicada à vida real.
             </p>
+            <div className="mt-5 flex flex-wrap gap-3 text-sm">
+              <a href={siteConfig.phoneHref} className="font-semibold text-[#607A56] transition hover:text-[#8C5F50]">
+                {siteConfig.phoneDisplay}
+              </a>
+              <a
+                href={siteConfig.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-[#607A56] transition hover:text-[#8C5F50]"
+                aria-label="Falar com Bruna Flores pelo WhatsApp"
+              >
+                WhatsApp
+              </a>
+            </div>
             <p className="mt-4 max-w-xl text-xs leading-6 text-[#8A7B70]">
               Conteúdos do site e do blog têm finalidade educativa e não substituem
               avaliação individual, diagnóstico ou prescrição nutricional.

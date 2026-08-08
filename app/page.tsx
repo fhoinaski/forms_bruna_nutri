@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -20,67 +20,89 @@ import { PublicFooter } from "@/components/public/PublicFooter";
 import { SectionTitle } from "@/components/public/SectionTitle";
 import { ServiceCard } from "@/components/public/ServiceCard";
 import { StepCard } from "@/components/public/StepCard";
-import { EDITORIAL_PILLARS, PROFESSIONAL_PROFILE } from "@/lib/seo/site";
+import { safeJsonLd } from "@/lib/seo/json-ld";
+import { EDITORIAL_PILLARS, siteConfig } from "@/lib/seo/site";
 
 export const metadata: Metadata = {
-  title: "Bruna Flores Nutri | Nutrição Materno-Infantil",
-  description:
-    "Atendimento nutricional materno-infantil com escuta, evidência e planos possíveis para gestantes, mães, bebês e crianças.",
+  title: {
+    absolute: siteConfig.homeTitle,
+  },
+  description: siteConfig.homeDescription,
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "/",
+    title: siteConfig.homeTitle,
+    description: siteConfig.homeDescription,
+    images: [
+      {
+        url: siteConfig.ogImagePath,
+        width: 1792,
+        height: 1024,
+        alt: "Bruna Flores Nutri - atendimento nutricional em Florianópolis e online",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteConfig.homeTitle,
+    description: siteConfig.homeDescription,
+    images: [siteConfig.ogImagePath],
+  },
 };
 
-const baseUrl =
-  process.env.NEXT_PUBLIC_BASE_URL ?? "https://brunanutri.com.br";
+const baseUrl = siteConfig.url;
 
 const SERVICES = [
   {
-    icon: <Sprout className="h-6 w-6" />,
-    title: "Introdução alimentar",
+    icon: <Salad className="h-6 w-6" />,
+    title: "Nutrição para adultos",
     description:
-      "Para famílias que querem começar com segurança, sem medo de errar. Texturas, sinais de prontidão e rotina são organizados de um jeito simples de aplicar.",
+      "Acompanhamento nutricional para quem busca mais energia, organização alimentar, qualidade de vida e escolhas possíveis dentro da rotina.",
     accent: "sage" as const,
   },
   {
     icon: <Utensils className="h-6 w-6" />,
-    title: "Seletividade alimentar",
+    title: "Reeducação alimentar",
     description:
-      "Quando a criança aceita poucos alimentos, recusa novidades ou a mesa virou tensão. O cuidado busca ampliar repertório sem pressão.",
+      "Para construir hábitos sustentáveis, sem terrorismo nutricional, cardápios genéricos ou promessas rápidas que não cabem na vida real.",
     accent: "rose" as const,
-  },
-  {
-    icon: <Puzzle className="h-6 w-6" />,
-    title: "TEA",
-    description:
-      "Para crianças no espectro que precisam de um plano respeitoso com sensibilidade, preferências, previsibilidade e segurança alimentar.",
-    accent: "fig" as const,
   },
   {
     icon: <Baby className="h-6 w-6" />,
     title: "Gestação e pós-parto",
     description:
-      "Para atravessar gestação, amamentação e pós-parto com orientações claras, possíveis e ajustadas ao momento da mãe e do bebê.",
+      "Orientações para atravessar gestação, amamentação e pós-parto com segurança, acolhimento e ajustes ao momento da mãe e do bebê.",
     accent: "rose" as const,
   },
   {
-    icon: <Salad className="h-6 w-6" />,
-    title: "Alimentação infantil",
+    icon: <Sprout className="h-6 w-6" />,
+    title: "Introdução alimentar",
     description:
-      "Para acompanhar crescimento, rotina escolar, preferências e variedade alimentar sem transformar comida em cobrança diária.",
+      "Apoio para famílias que querem começar com segurança, entendendo sinais de prontidão, texturas, rotina e dúvidas comuns dessa fase.",
     accent: "sage" as const,
+  },
+  {
+    icon: <Puzzle className="h-6 w-6" />,
+    title: "Seletividade alimentar",
+    description:
+      "Quando a criança aceita poucos alimentos, recusa novidades ou a mesa virou tensão. O cuidado busca ampliar repertório sem pressão.",
+    accent: "fig" as const,
   },
   {
     icon: <Microscope className="h-6 w-6" />,
     title: "Saúde intestinal",
     description:
-      "Quando constipação, dor, gases ou desconfortos atrapalham o bem-estar. A avaliação conecta sinais digestivos, hábitos e alimentação.",
+      "Avaliação de sinais digestivos, hábitos e alimentação quando constipação, gases, dor ou desconfortos atrapalham o bem-estar.",
     accent: "fig" as const,
   },
 ];
 
 const ABOUT_POINTS = [
-  "Atuação voltada ao cuidado materno-infantil",
-  "Orientações baseadas em evidências e explicadas com clareza",
-  "Planos construídos a partir da rotina real da família",
-  "Acolhimento para dúvidas, inseguranças e tentativas anteriores",
+  "Nutricionista em Florianópolis, com atendimento presencial e online",
+  "Atuação ampla em alimentação saudável, adultos e acompanhamento familiar",
+  "Diferencial em nutrição materno-infantil, gestação e infância",
+  "Planos construídos a partir da rotina real, sem promessas ou radicalismos",
 ];
 
 const SIGNATURES = [
@@ -132,57 +154,76 @@ const structuredData = {
     {
       "@type": "WebSite",
       "@id": `${baseUrl}/#website`,
-      name: "Bruna Flores Nutri",
+      name: siteConfig.name,
       url: baseUrl,
-      inLanguage: "pt-BR",
-      description:
-        "Nutrição materno-infantil para gestantes, mães, bebês e crianças.",
+      inLanguage: siteConfig.language,
+      description: siteConfig.description,
       publisher: {
-        "@id": `${baseUrl}/#business`,
+        "@id": `${baseUrl}/#service`,
       },
     },
     {
       "@type": "WebPage",
       "@id": `${baseUrl}/#webpage`,
-      url: baseUrl,
-      name: "Bruna Flores Nutri | Nutrição Materno-Infantil",
+      url: `${baseUrl}/`,
+      name: siteConfig.homeTitle,
+      description: siteConfig.homeDescription,
       isPartOf: {
         "@id": `${baseUrl}/#website`,
       },
       about: {
-        "@id": `${baseUrl}/#business`,
+        "@id": `${baseUrl}/#service`,
       },
       primaryImageOfPage: {
         "@type": "ImageObject",
-        url: `${baseUrl}/bruna-hero-family.png`,
+        url: `${baseUrl}${siteConfig.ogImagePath}`,
         width: 1792,
         height: 1024,
       },
-      inLanguage: "pt-BR",
+      inLanguage: siteConfig.language,
     },
     {
-      "@type": "MedicalBusiness",
-      "@id": `${baseUrl}/#business`,
-      name: "Bruna Flores Nutri",
+      "@type": "ProfessionalService",
+      "@id": `${baseUrl}/#service`,
+      name: siteConfig.name,
       url: baseUrl,
-      logo: `${baseUrl}/brand/bruna-flores-nutri-logo.svg`,
-      image: `${baseUrl}/bruna-hero-family.png`,
-      description:
-        "Atendimento nutricional materno-infantil com escuta clínica, evidência e orientações possíveis para a rotina familiar.",
-      medicalSpecialty: "https://schema.org/DietNutrition",
-      areaServed: {
-        "@type": "Country",
-        name: "Brasil",
-      },
+      logo: `${baseUrl}${siteConfig.logoPath}`,
+      image: `${baseUrl}${siteConfig.ogImagePath}`,
+      telephone: siteConfig.telephone,
+      description: siteConfig.description,
+      areaServed: [
+        {
+          "@type": "City",
+          name: siteConfig.city,
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: siteConfig.city,
+            addressRegion: siteConfig.stateCode,
+            addressCountry: "BR",
+          },
+        },
+        {
+          "@type": "Country",
+          name: siteConfig.country,
+        },
+      ],
       availableLanguage: "Portuguese",
+      contactPoint: {
+        "@type": "ContactPoint",
+        telephone: siteConfig.telephone,
+        contactType: "customer service",
+        areaServed: "BR",
+        availableLanguage: "Portuguese",
+      },
       knowsAbout: [
-        "Nutrição materno-infantil",
+        "Nutrição para adultos",
+        "Acompanhamento nutricional",
+        "Alimentação saudável",
+        "Reeducação alimentar",
+        "Nutrição na gestação",
+        "Nutrição infantil",
         "Introdução alimentar",
         "Seletividade alimentar",
-        "Nutrição para TEA",
-        "Gestação e pós-parto",
-        "Alimentação infantil",
-        "Saúde intestinal infantil",
       ],
       makesOffer: SERVICES.map((service) => ({
         "@type": "Offer",
@@ -191,7 +232,7 @@ const structuredData = {
           name: service.title,
           description: service.description,
           serviceType: service.title,
-          areaServed: "Brasil",
+          areaServed: [siteConfig.city, siteConfig.country],
         },
       })),
       potentialAction: {
@@ -199,16 +240,21 @@ const structuredData = {
         name: "Preencher pré-consulta",
         target: `${baseUrl}/formulario`,
       },
-      slogan: "Nutrição para famílias que querem leveza à mesa",
+      slogan: "Nutrição para uma vida mais leve e saudável",
       publishingPrinciples: `${baseUrl}/blog`,
     },
     {
       "@type": "Person",
       "@id": `${baseUrl}/#bruna-flores`,
-      name: PROFESSIONAL_PROFILE.professionalName,
-      jobTitle: "Nutricionista materno-infantil",
+      name: siteConfig.professionalName,
+      jobTitle: siteConfig.profession,
+      telephone: siteConfig.telephone,
       worksFor: {
-        "@id": `${baseUrl}/#business`,
+        "@id": `${baseUrl}/#service`,
+      },
+      workLocation: {
+        "@type": "City",
+        name: `${siteConfig.city}, ${siteConfig.stateCode}`,
       },
       knowsAbout: EDITORIAL_PILLARS,
     },
@@ -221,13 +267,13 @@ export default function HomePage() {
       <PublicHeader />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(structuredData) }}
       />
 
       <section className="relative min-h-[94vh] overflow-hidden">
         <Image
           src="/bruna-hero-family.png"
-          alt="Mãe e criança preparando frutas em uma mesa clara e acolhedora"
+          alt="Família preparando alimentos frescos em uma mesa clara e acolhedora"
           fill
           priority
           className="object-cover"
@@ -238,18 +284,19 @@ export default function HomePage() {
 
         <div className="relative z-10 mx-auto flex min-h-[94vh] max-w-7xl flex-col justify-end px-5 pb-10 pt-28 lg:px-8 lg:pb-14">
           <div className="max-w-3xl">
-            <p className="brand-kicker mb-5">Nutrição materno-infantil</p>
+            <p className="brand-kicker mb-5">Nutricionista em Florianópolis e online</p>
             <h1 className="max-w-4xl font-serif text-5xl font-semibold leading-[0.95] text-[#3A3028] sm:text-6xl lg:text-7xl">
-              Nutrição para famílias que querem
+              Nutrição para uma vida mais
               <span className="brand-script-line relative z-10 italic text-[#7F9A74]">
                 {" "}
-                leveza
+                leve
               </span>{" "}
-              à mesa.
+              e saudável.
             </h1>
             <p className="mt-7 max-w-2xl text-base leading-8 text-[#75675E] sm:text-lg">
-              Acompanhamento para gestantes, mães, bebês e crianças, com
-              orientação segura, acolhedora e possível para a vida real.
+              Atendimento nutricional em Florianópolis e online para adultos,
+              gestantes, mães e crianças, respeitando sua rotina, necessidades
+              e objetivos.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link href="/formulario" className="brand-btn-primary px-7 py-4">
@@ -298,10 +345,10 @@ export default function HomePage() {
               Um cuidado técnico, mas com conversa de gente.
             </h2>
             <p className="relative z-10 mt-5 text-base leading-8 text-[#75675E]">
-              A Bruna acompanha famílias que buscam mais segurança na alimentação
-              de gestantes, bebês e crianças. O atendimento parte da escuta:
-              antes de falar sobre cardápio, é preciso entender a casa, a rotina,
-              as tentativas anteriores e o que está difícil agora.
+              Bruna Flores é nutricionista em Florianópolis, com atendimento
+              presencial e online. Ela acompanha adultos e famílias em diferentes
+              fases da vida, com um olhar especial para gestação, infância,
+              introdução alimentar e seletividade alimentar.
             </p>
           </div>
 
@@ -341,7 +388,7 @@ export default function HomePage() {
               Informação profissional, decisão compartilhada e orientação possível.
             </h2>
             <p className="mt-5 text-base leading-8 text-[#75675E]">
-              O site foi pensado para acolher famílias que chegam com dúvidas reais.
+              O site foi pensado para acolher pessoas e famílias que chegam com dúvidas reais.
               O conteúdo ajuda a entender caminhos, mas a conduta nutricional nasce
               da avaliação individual, da fase de vida e da rotina da casa.
             </p>
@@ -445,8 +492,8 @@ export default function HomePage() {
           <div className="mb-12 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
             <SectionTitle
               kicker="Especialidades"
-              title="Cuidado para cada fase da família."
-              subtitle="Da gestação à alimentação infantil, cada orientação considera desenvolvimento, contexto, vínculo e segurança."
+              title="Cuidado nutricional para diferentes fases da vida."
+              subtitle="Adultos, gestantes, mães e crianças recebem orientação individualizada, considerando rotina, contexto, vínculo e segurança."
             />
             <Link
               href="/servicos"
@@ -524,6 +571,19 @@ export default function HomePage() {
             Quero contar meu momento
             <ArrowRight className="h-4 w-4" />
           </Link>
+          <p className="mt-5 text-sm text-[#607066]">
+            Prefere falar primeiro?{" "}
+            <a
+              href={siteConfig.whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-[#607A56] underline-offset-4 hover:underline"
+              aria-label="Falar com Bruna Flores pelo WhatsApp"
+            >
+              Chame a Bruna no WhatsApp
+            </a>
+            .
+          </p>
         </div>
       </section>
 

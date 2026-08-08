@@ -1,57 +1,74 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Baby, Microscope, Puzzle, Salad, Sprout, Utensils } from "lucide-react";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
+import { siteConfig } from "@/lib/seo/site";
 
 export const metadata: Metadata = {
-  title: "Serviços | Bruna Flores Nutri",
+  title: "Serviços de nutrição em Florianópolis e online",
   description:
-    "Conheça as especialidades de atendimento: introdução alimentar, seletividade, TEA, gestação, alimentação infantil e saúde intestinal.",
+    "Atendimento nutricional presencial em Florianópolis e online para adultos, gestantes, mães e crianças. Conheça acompanhamento nutricional, reeducação alimentar, gestação, introdução alimentar e seletividade.",
+  alternates: { canonical: "/servicos" },
+  openGraph: {
+    type: "website",
+    url: "/servicos",
+    title: "Serviços de nutrição em Florianópolis e online",
+    description:
+      "Atendimento nutricional para adultos, gestantes, mães e crianças, com acompanhamento individualizado em Florianópolis e online.",
+    images: [siteConfig.ogImagePath],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Serviços de nutrição em Florianópolis e online",
+    description:
+      "Atendimento nutricional para adultos, gestantes, mães e crianças, em Florianópolis e online.",
+    images: [siteConfig.ogImagePath],
+  },
 };
 
 const SERVICES = [
   {
-    icon: <Sprout className="h-7 w-7" />,
-    title: "Introdução Alimentar",
-    subtitle: "Para bebês a partir de 6 meses",
+    icon: <Salad className="h-7 w-7" />,
+    title: "Nutrição para adultos",
+    subtitle: "Alimentação saudável, rotina e qualidade de vida",
     description:
-      "A introdução alimentar é um dos momentos mais importantes e desafiadores da vida de uma família. O atendimento inclui orientações sobre textura, progressão dos alimentos, sinais de prontidão do bebê, como lidar com recusas e como tornar as refeições um momento prazeroso. A abordagem é baseada em evidências, respeitando o ritmo e as preferências do bebê.",
+      "Acompanhamento nutricional para adultos que querem organizar a alimentação, melhorar hábitos, cuidar da saúde e construir uma rotina possível. A orientação considera preferências, exames disponíveis, objetivos, histórico e contexto de vida, sem promessas rápidas ou planos genéricos.",
   },
   {
     icon: <Utensils className="h-7 w-7" />,
-    title: "Seletividade Alimentar",
-    subtitle: "Para crianças com repertório alimentar restrito",
+    title: "Reeducação alimentar",
+    subtitle: "Mudança de hábitos com consistência",
     description:
-      "Muitas crianças apresentam seletividade por textura, cor, cheiro ou sabor. O atendimento envolve avaliação detalhada do perfil sensorial, estratégias práticas para ampliar o repertório alimentar sem pressão e orientações para a família sobre como lidar com as recusas no dia a dia.",
-  },
-  {
-    icon: <Puzzle className="h-7 w-7" />,
-    title: "Nutrição para TEA",
-    subtitle: "Atendimento especializado para crianças no espectro autista",
-    description:
-      "Crianças com TEA frequentemente apresentam desafios sensoriais relacionados à alimentação. O atendimento é individualizado, considerando hipersensibilidades, restrições alimentares, uso de suplementos quando necessário e orientações para a família sobre como tornar as refeições mais tranquilas.",
+      "Atendimento para quem busca uma relação mais leve com a comida e precisa transformar informação em prática. O plano trabalha escolhas alimentares, organização das refeições, compras, preparo e ajustes graduais para sustentar mudanças no dia a dia.",
   },
   {
     icon: <Baby className="h-7 w-7" />,
-    title: "Gestação e Pós-parto",
+    title: "Gestação e pós-parto",
     subtitle: "Nutrição materna em cada fase",
     description:
-      "Durante a gestação, as necessidades nutricionais mudam e cada fase pede atenção especial. No pós-parto, a recuperação do corpo e a amamentação também demandam cuidados específicos. O atendimento inclui plano alimentar individualizado, orientações sobre suplementação e manejo de enjoos, ânsias e outros desconfortos.",
+      "Durante a gestação, o pós-parto e a amamentação, as necessidades mudam e cada fase pede atenção. O atendimento organiza alimentação, rotina, sintomas, suplementação quando indicada e escolhas possíveis para o momento da mãe e do bebê.",
   },
   {
-    icon: <Salad className="h-7 w-7" />,
-    title: "Alimentação Infantil",
-    subtitle: "Para crianças de 2 a 12 anos",
+    icon: <Sprout className="h-7 w-7" />,
+    title: "Introdução alimentar",
+    subtitle: "Para bebês a partir dos sinais de prontidão",
     description:
-      "Acompanhamento nutricional para crianças em crescimento, com foco em promover uma relação saudável com a comida desde cedo. Inclui avaliação do crescimento, adequação de nutrientes para cada faixa etária e orientações práticas para o preparo de refeições.",
+      "Apoio para famílias que querem iniciar a alimentação complementar com segurança. O atendimento aborda sinais de prontidão, texturas, progressão, dúvidas frequentes, rotina da casa e estratégias para tornar as refeições mais tranquilas.",
+  },
+  {
+    icon: <Puzzle className="h-7 w-7" />,
+    title: "Seletividade alimentar",
+    subtitle: "Para crianças com repertório alimentar restrito",
+    description:
+      "Quando a criança aceita poucos alimentos ou recusa novidades, a condução precisa de paciência e estratégia. O atendimento busca compreender rotina, preferências, sensibilidade, ambiente alimentar e caminhos graduais para ampliar repertório sem pressão.",
   },
   {
     icon: <Microscope className="h-7 w-7" />,
-    title: "Saúde Intestinal Infantil",
-    subtitle: "Microbiota e bem-estar digestivo",
+    title: "Saúde intestinal",
+    subtitle: "Hábitos, sinais digestivos e bem-estar",
     description:
-      "Constipação, diarreias frequentes, cólicas e desconforto abdominal são queixas comuns em crianças. O atendimento aborda a modulação da microbiota intestinal, identificação de possíveis intolerâncias e estratégias alimentares para promover equilíbrio e bem-estar digestivo.",
+      "Constipação, gases, desconfortos e alterações intestinais podem ter relação com rotina, hidratação, fibras, padrão alimentar e contexto individual. A avaliação conecta sinais digestivos, hábitos e alimentação para orientar condutas seguras.",
   },
 ];
 
@@ -68,8 +85,8 @@ export default function ServicosPage() {
             Áreas de atuação com profundidade e contexto.
           </h1>
           <p className="max-w-2xl text-lg leading-relaxed text-[#75675E]">
-            Cada fase da vida materno-infantil tem suas necessidades. Todas são
-            cuidadas com atenção, evidência e afeto.
+            Atendimento nutricional em Florianópolis e online para adultos,
+            gestantes, mães e crianças, com orientação individualizada e contexto.
           </p>
         </div>
       </section>

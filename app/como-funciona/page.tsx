@@ -1,21 +1,39 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, ChartNoAxesCombined, ClipboardList, SearchCheck, Sprout } from "lucide-react";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { SectionTitle } from "@/components/public/SectionTitle";
 import { StepCard } from "@/components/public/StepCard";
+import { safeJsonLd } from "@/lib/seo/json-ld";
+import { siteConfig } from "@/lib/seo/site";
 
 export const metadata: Metadata = {
-  title: "Como funciona | Bruna Flores Nutri",
+  title: "Como funciona o atendimento nutricional",
   description:
-    "Entenda como funciona o atendimento nutricional: pré-consulta, análise personalizada, plano alimentar e acompanhamento contínuo.",
+    "Entenda como funciona o atendimento nutricional com Bruna Flores: pré-consulta, análise individualizada, plano alimentar e acompanhamento em Florianópolis ou online.",
+  alternates: { canonical: "/como-funciona" },
+  openGraph: {
+    type: "website",
+    url: "/como-funciona",
+    title: "Como funciona o atendimento nutricional",
+    description:
+      "Pré-consulta, análise individualizada, plano alimentar e acompanhamento nutricional presencial em Florianópolis ou online.",
+    images: [siteConfig.ogImagePath],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Como funciona o atendimento nutricional",
+    description:
+      "Entenda a pré-consulta, a consulta e o acompanhamento nutricional com Bruna Flores.",
+    images: [siteConfig.ogImagePath],
+  },
 };
 
 const DETAILS = [
   {
     icon: <ClipboardList className="h-5 w-5" />,
-    title: "Pré-consulta online",
+    title: "Pré-consulta inicial",
     step: "1",
     description:
       "Tudo começa com um formulário detalhado sobre você. Histórico de saúde, rotina alimentar, hábitos, objetivos e muito mais. Quanto mais você compartilha, mais personalizado será o atendimento.",
@@ -51,10 +69,46 @@ const DETAILS = [
   },
 ];
 
+const FAQ_ITEMS = [
+  {
+    q: "O formulário de pré-consulta é obrigatório?",
+    a: "Sim. Ele é o ponto de partida de todo o atendimento e garante que a consulta seja aproveitada ao máximo.",
+  },
+  {
+    q: "Atende online ou presencialmente?",
+    a: "O atendimento pode acontecer presencialmente em Florianópolis ou online, conforme disponibilidade e necessidade de cada caso.",
+  },
+  {
+    q: "Qual a frequência dos retornos?",
+    a: "Em geral, mensais. Mas a frequência é definida conforme a necessidade de cada caso.",
+  },
+  {
+    q: "O plano alimentar considera minhas restrições?",
+    a: "Sim. Intolerâncias, alergias, preferências e aversões são sempre consideradas.",
+  },
+];
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQ_ITEMS.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.a,
+    },
+  })),
+};
+
 export default function ComoFuncionaPage() {
   return (
     <div className="bg-[#FBF7F1] text-[#3A3028]">
       <PublicHeader />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(faqJsonLd) }}
+      />
 
       {/* Hero */}
       <section className="brand-texture px-5 pb-20 pt-32 lg:px-8">
@@ -139,24 +193,7 @@ export default function ComoFuncionaPage() {
             <SectionTitle kicker="Dúvidas" title="Perguntas frequentes" />
           </div>
           <div className="space-y-5">
-            {[
-              {
-                q: "O formulário de pré-consulta é obrigatório?",
-                a: "Sim. Ele é o ponto de partida de todo o atendimento e garante que a consulta seja aproveitada ao máximo.",
-              },
-              {
-                q: "Atende online ou presencialmente?",
-                a: "O atendimento é realizado online, o que facilita o acesso independente de onde você mora.",
-              },
-              {
-                q: "Qual a frequência dos retornos?",
-                a: "Em geral, mensais. Mas a frequência é definida conforme a necessidade de cada caso.",
-              },
-              {
-                q: "O plano alimentar considera minhas restrições?",
-                a: "Absolutamente. Intolerâncias, alergias, preferências e aversões são sempre consideradas.",
-              },
-            ].map((item) => (
+            {FAQ_ITEMS.map((item) => (
               <div key={item.q} className="border-b border-[#EDE1D6] pb-5">
                 <p className="font-medium text-[#3A3028] mb-2">{item.q}</p>
                 <p className="text-sm text-[#75675E] leading-relaxed">{item.a}</p>

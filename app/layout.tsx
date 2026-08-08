@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Jost, Cormorant_Garamond } from "next/font/google";
-import { PROFESSIONAL_PROFILE, SITE_URL, TOPIC_KEYWORDS } from "@/lib/seo/site";
+import { Cormorant_Garamond, Jost } from "next/font/google";
+import { PROFESSIONAL_PROFILE, SITE_URL, TOPIC_KEYWORDS, siteConfig } from "@/lib/seo/site";
 import "./globals.css";
 
 const jost = Jost({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -17,20 +17,19 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: {
-    default: "Bruna Flores Nutri | Nutrição Materno-Infantil",
-    template: "%s",
-  },
-  description:
-    "Nutricionista materno-infantil para gestantes, mães, bebês e crianças. Introdução alimentar, seletividade, TEA, alimentação infantil e saúde intestinal com acolhimento e evidência.",
-  applicationName: PROFESSIONAL_PROFILE.brandName,
-  authors: [{ name: PROFESSIONAL_PROFILE.professionalName }],
-  keywords: TOPIC_KEYWORDS,
-  creator: PROFESSIONAL_PROFILE.professionalName,
-  publisher: PROFESSIONAL_PROFILE.brandName,
-  category: "healthcare",
-  classification: "Nutrição materno-infantil",
   metadataBase: new URL(SITE_URL),
+  title: {
+    default: siteConfig.homeTitle,
+    template: "%s | Bruna Flores Nutri",
+  },
+  description: siteConfig.homeDescription,
+  applicationName: siteConfig.name,
+  authors: [{ name: siteConfig.professionalName }],
+  keywords: TOPIC_KEYWORDS,
+  creator: siteConfig.professionalName,
+  publisher: siteConfig.name,
+  category: "healthcare",
+  classification: "Nutrição",
   alternates: {
     canonical: "/",
   },
@@ -53,27 +52,25 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    locale: "pt_BR",
+    locale: siteConfig.locale,
     url: "/",
-    siteName: PROFESSIONAL_PROFILE.brandName,
-    title: "Bruna Flores Nutri | Nutrição Materno-Infantil",
-    description:
-      "Acompanhamento nutricional para gestantes, mães, bebês e crianças com escuta clínica, acolhimento e orientação possível para a rotina familiar.",
+    siteName: siteConfig.name,
+    title: siteConfig.homeTitle,
+    description: siteConfig.homeDescription,
     images: [
       {
-        url: "/bruna-hero-editorial.png",
+        url: siteConfig.ogImagePath,
         width: 1792,
         height: 1024,
-        alt: "Bruna Flores Nutri - nutrição materno-infantil para famílias",
+        alt: "Bruna Flores Nutri - atendimento nutricional em Florianópolis e online",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Bruna Flores Nutri | Nutrição Materno-Infantil",
-    description:
-      "Nutrição para gestantes, mães, bebês e crianças com acolhimento, segurança e rotina possível.",
-    images: ["/bruna-hero-editorial.png"],
+    title: siteConfig.homeTitle,
+    description: siteConfig.homeDescription,
+    images: [siteConfig.ogImagePath],
   },
   icons: {
     icon: [

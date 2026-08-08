@@ -1,16 +1,17 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, UserRound } from "lucide-react";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { getBlogPostBySlug } from "@/lib/repositories/blog-posts";
-import { PROFESSIONAL_PROFILE } from "@/lib/seo/site";
+import { safeJsonLd } from "@/lib/seo/json-ld";
+import { PROFESSIONAL_PROFILE, siteConfig } from "@/lib/seo/site";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://brunanutri.com.br";
+const baseUrl = siteConfig.url;
 
 function formatDate(value: string | null) {
   if (!value) return "";
@@ -78,6 +79,7 @@ export async function generateMetadata({
       title: post.seo_title || post.title,
       description: post.seo_description || post.excerpt,
       publishedTime: post.published_at ?? undefined,
+      modifiedTime: post.updated_at ?? undefined,
       authors: [post.author_name],
       images: post.cover_image_url ? [post.cover_image_url] : ["/bruna-hero-family.png"],
     },
@@ -102,13 +104,15 @@ export default async function BlogPostPage({
   const tags = JSON.parse(post.tags_json || "[]") as string[];
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "Article",
+    "@type": "BlogPosting",
+    "@id": `${baseUrl}/blog/${post.slug}#article`,
     headline: post.title,
     description: post.seo_description || post.excerpt,
+    image: post.cover_image_url || `${baseUrl}${siteConfig.ogImagePath}`,
     author: {
       "@type": "Person",
       name: post.author_name,
-      jobTitle: "Nutricionista materno-infantil",
+      jobTitle: siteConfig.profession,
     },
     reviewedBy: {
       "@type": "Person",
@@ -116,17 +120,21 @@ export default async function BlogPostPage({
     },
     publisher: {
       "@type": "Organization",
-      name: "Bruna Flores Nutri",
+      name: siteConfig.name,
       url: baseUrl,
+      logo: {
+        "@type": "ImageObject",
+        url: `${baseUrl}${siteConfig.logoPath}`,
+      },
     },
-    datePublished: post.published_at,
-    dateModified: post.updated_at,
+    ...(post.published_at ? { datePublished: post.published_at } : {}),
+    ...(post.updated_at ? { dateModified: post.updated_at } : {}),
     mainEntityOfPage: `${baseUrl}/blog/${post.slug}`,
-    articleSection: post.category || "Nutrição materno-infantil",
+    articleSection: post.category || "Nutrição",
     keywords: tags.join(", "),
     isAccessibleForFree: true,
-    educationalUse: "Conteudo educativo em nutricao materno-infantil",
-    inLanguage: "pt-BR",
+    educationalUse: "Conteúdo educativo em nutrição e alimentação",
+    inLanguage: siteConfig.language,
   };
 
   return (
@@ -143,7 +151,7 @@ export default async function BlogPostPage({
               <ArrowLeft className="h-4 w-4" />
               Voltar ao blog
             </Link>
-            <p className="brand-kicker mb-4">{post.category || "Nutrição materno-infantil"}</p>
+            <p className="brand-kicker mb-4">{post.category || "Nutrição"}</p>
             <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] md:text-6xl">
               {post.title}
             </h1>
@@ -191,8 +199,9 @@ export default async function BlogPostPage({
               Precisa de orientação individual?
             </p>
             <p className="mt-2 text-sm leading-7 text-[#75675E]">
-              Este conteúdo é educativo. Para avaliar rotina, sintomas, fase da
-              criança ou gestação, o ideal é uma consulta personalizada.
+              Este conteúdo é educativo. Para avaliar rotina, sintomas,
+              objetivos, fase da vida, criança ou gestação, o ideal é uma
+              consulta personalizada.
             </p>
             <Link href="/formulario" className="brand-btn-primary mt-5">
               Preencher pré-consulta
@@ -202,7 +211,7 @@ export default async function BlogPostPage({
       </article>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
       />
       <PublicFooter />
     </main>

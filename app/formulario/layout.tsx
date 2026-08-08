@@ -1,5 +1,6 @@
-import { Metadata } from 'next';
+﻿import { Metadata } from 'next';
 import { Jost, Cormorant_Garamond } from 'next/font/google';
+import { siteConfig } from '@/lib/seo/site';
 import '../globals.css';
 
 const jost = Jost({ 
@@ -16,8 +17,22 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: 'Formulário Pré-Consulta',
-  description: 'Preencha o formulário pré-consulta da Bruna Flores Nutri. Quanto mais você compartilhar, mais assertivo será seu plano alimentar.',
+  title: 'Pré-consulta nutricional',
+  description: 'Preencha a pré-consulta nutricional da Bruna Flores para atendimento em Florianópolis ou online. Suas respostas ajudam a preparar um acompanhamento individualizado.',
+  alternates: { canonical: '/formulario' },
+  openGraph: {
+    type: 'website',
+    url: '/formulario',
+    title: 'Pré-consulta nutricional | Bruna Flores Nutri',
+    description: 'Formulário seguro para iniciar o atendimento nutricional com Bruna Flores em Florianópolis ou online.',
+    images: [siteConfig.ogImagePath],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Pré-consulta nutricional | Bruna Flores Nutri',
+    description: 'Formulário para iniciar o atendimento nutricional com Bruna Flores em Florianópolis ou online.',
+    images: [siteConfig.ogImagePath],
+  },
 };
 
 export default function FormularioLayout({ children }: { children: React.ReactNode }) {

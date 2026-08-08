@@ -1,19 +1,34 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, BookOpen, SearchCheck } from "lucide-react";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { getPublishedBlogPosts } from "@/lib/repositories/blog-posts";
-import { EDITORIAL_PILLARS, PROFESSIONAL_PROFILE } from "@/lib/seo/site";
+import { EDITORIAL_PILLARS, PROFESSIONAL_PROFILE, siteConfig } from "@/lib/seo/site";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Blog de Nutrição Materno-Infantil",
+  title: "Blog de nutrição e alimentação saudável",
   description:
-    "Conteúdos sobre introdução alimentar, seletividade, gestação, saúde intestinal infantil e nutrição familiar com linguagem humana e base profissional.",
+    "Conteúdos educativos sobre alimentação saudável, acompanhamento nutricional, gestação, introdução alimentar, seletividade alimentar e rotina familiar.",
   alternates: { canonical: "/blog" },
+  openGraph: {
+    type: "website",
+    url: "/blog",
+    title: "Blog de nutrição e alimentação saudável",
+    description:
+      "Artigos de Bruna Flores Nutri sobre nutrição, alimentação saudável, gestação, infância e rotina familiar.",
+    images: [siteConfig.ogImagePath],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Blog de nutrição e alimentação saudável",
+    description:
+      "Conteúdos educativos sobre nutrição, alimentação saudável, gestação, infância e rotina familiar.",
+    images: [siteConfig.ogImagePath],
+  },
 };
 
 function formatDate(value: string | null) {
@@ -40,8 +55,9 @@ export default async function BlogPage() {
               Conteúdo para cuidar da alimentação com mais clareza.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-8 text-[#75675E]">
-              Artigos sobre nutrição materno-infantil, rotina familiar, introdução
-              alimentar, seletividade, gestação e saúde intestinal infantil.
+              Artigos sobre alimentação saudável, acompanhamento nutricional,
+              gestação, introdução alimentar, seletividade alimentar, rotina
+              familiar e cuidado possível no dia a dia.
             </p>
           </div>
         </div>
