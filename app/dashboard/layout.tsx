@@ -320,6 +320,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setProfileOpen(false);
   }
 
+  // Paginas de impressao/PDF sao documentos autonomos (proprio estilo,
+  // proprio cabecalho e rodape) e nao devem aparecer dentro da casca do
+  // dashboard (menu, busca, sino) nem na tela nem no papel impresso.
+  const isStandalonePrintRoute = pathname.endsWith("/print") || pathname.endsWith("/pdf");
+  if (isStandalonePrintRoute) {
+    return <>{children}</>;
+  }
+
   return (
     <div className={`${jost.variable} ${cormorant.variable} dashboard-shell min-h-screen bg-[#FBF7F1] font-sans text-[#3A3028]`}>
       <aside className={`fixed inset-y-0 left-0 z-30 hidden border-r border-[#EDE1D6] transition-[width] duration-200 lg:block ${collapsed ? "w-20" : "w-64"}`}>

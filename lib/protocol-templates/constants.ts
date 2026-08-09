@@ -30,4 +30,7 @@ export const PROTOCOL_TEMPLATE_GROUP_LABELS: Record<ProtocolTemplateTargetGroup,
   VEGETARIANO_ESTRITO: "Vegetariano estrito",
   ENDURANCE: "Endurance",
   RESISTENCIA_INSULINA: "Resistência à insulina",
+  BARIATRICO: "Bariátrico",
+  RENAL: "Renal",
+  ONCOLOGICO: "Oncológico",
 };

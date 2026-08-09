@@ -3,6 +3,8 @@ import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientEvolutions, createClientEvolution } from "@/lib/repositories/client-evolutions";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { getClientById } from "@/lib/repositories/clients";
+import { getNutritionRecord } from "@/lib/repositories/nutrition-records";
+import { calculateAgeInYears } from "@/lib/clinical/anthropometry";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -16,7 +18,16 @@ const createSchema = z.object({
   waist_cm: z.number().positive().optional().nullable(),
   hip_cm: z.number().positive().optional().nullable(),
   arm_cm: z.number().positive().optional().nullable(),
+  abdomen_cm: z.number().positive().optional().nullable(),
+  thigh_cm: z.number().positive().optional().nullable(),
   body_fat_percentage: z.number().min(1).max(80).optional().nullable(),
+  skinfold_triceps_mm: z.number().positive().max(80).optional().nullable(),
+  skinfold_subscapular_mm: z.number().positive().max(80).optional().nullable(),
+  skinfold_chest_mm: z.number().positive().max(80).optional().nullable(),
+  skinfold_midaxillary_mm: z.number().positive().max(80).optional().nullable(),
+  skinfold_suprailiac_mm: z.number().positive().max(80).optional().nullable(),
+  skinfold_abdominal_mm: z.number().positive().max(80).optional().nullable(),
+  skinfold_thigh_mm: z.number().positive().max(80).optional().nullable(),
   blood_pressure: z.string().max(40).optional().nullable(),
   energy_level: z.number().int().min(1).max(5).optional().nullable(),
   appetite: z.string().max(120).optional().nullable(),
@@ -61,7 +72,16 @@ export async function POST(
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
   }
 
-  const evolutionId = await createClientEvolution({ client_id: id, ...parsed.data });
+  const nutritionRecord = await getNutritionRecord(id);
+  const measurementDate = parsed.data.measured_at ? new Date(parsed.data.measured_at) : new Date();
+  const ageYears = calculateAgeInYears(client.birth_date, measurementDate);
+
+  const evolutionId = await createClientEvolution({
+    client_id: id,
+    ...parsed.data,
+    age_years: ageYears,
+    biological_sex: nutritionRecord?.biological_sex ?? null,
+  });
 
   const weightNote = parsed.data.weight ? ` | Peso: ${parsed.data.weight}kg` : "";
   await addTimelineEvent({

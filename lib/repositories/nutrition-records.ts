@@ -10,6 +10,7 @@ export interface NutritionRecord {
   chief_complaint: string | null;
   life_stage: string | null;
   biological_sex: string | null;
+  target_group: string | null;
   gestational_weeks: string | null;
   breastfeeding_context: string | null;
   clinical_history: string | null;
@@ -31,6 +32,8 @@ export interface NutritionRecord {
   bmi: string | null;
   pre_pregnancy_weight_kg: string | null;
   waist_cm: string | null;
+  pre_surgery_weight_kg: string | null;
+  bariatric_surgery_date: string | null;
   anthropometry_notes: string | null;
   pediatric_growth_notes: string | null;
   target_weight_kg: string | null;
@@ -55,6 +58,7 @@ const FIELDS: (keyof NutritionRecordInput)[] = [
   "chief_complaint",
   "life_stage",
   "biological_sex",
+  "target_group",
   "gestational_weeks",
   "breastfeeding_context",
   "clinical_history",
@@ -76,6 +80,8 @@ const FIELDS: (keyof NutritionRecordInput)[] = [
   "bmi",
   "pre_pregnancy_weight_kg",
   "waist_cm",
+  "pre_surgery_weight_kg",
+  "bariatric_surgery_date",
   "anthropometry_notes",
   "pediatric_growth_notes",
   "target_weight_kg",
@@ -121,6 +127,7 @@ async function buildInitialRecord(clientId: string): Promise<NutritionRecordInpu
     chief_complaint: answer(answers, ["motivacao", "queixa", "principalQueixa"]),
     life_stage: answer(answers, ["tipoAtendimento"]),
     biological_sex: answer(answers, ["sexo", "sexoBiologico"]),
+    target_group: null,
     gestational_weeks: answer(answers, ["gestante", "semanasGestacao", "idadeGestacional"]),
     breastfeeding_context: answer(answers, ["amamentacao", "aleitamento", "posParto"]),
     clinical_history: answer(answers, ["historico", "historicoClinico", "gestacao", "posParto"]),
@@ -142,6 +149,8 @@ async function buildInitialRecord(clientId: string): Promise<NutritionRecordInpu
     bmi: null,
     pre_pregnancy_weight_kg: answer(answers, ["pesoPreGestacional", "pesoAntesGestacao"]),
     waist_cm: answer(answers, ["cintura", "circunferenciaCintura"]),
+    pre_surgery_weight_kg: null,
+    bariatric_surgery_date: null,
     anthropometry_notes: null,
     pediatric_growth_notes: answer(answers, ["crescimento", "curvaCrescimento", "pediatra"]),
     target_weight_kg: null,

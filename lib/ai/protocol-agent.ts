@@ -59,6 +59,9 @@ function inferTargetGroup(input: GenerateProtocolInput): ProtocolTemplateTargetG
     getStr(a, "child_age"),
   ].filter(Boolean).join(" "));
 
+  if (haystack.includes("bariatric") || haystack.includes("cirurgia bariatrica") || haystack.includes("bypass gastrico") || haystack.includes("sleeve") || haystack.includes("gastrectomia") || haystack.includes("banda gastrica")) return "BARIATRICO";
+  if (haystack.includes("renal") || haystack.includes("dialise") || haystack.includes("hemodialise") || haystack.includes("insuficiencia renal") || haystack.includes("nefro")) return "RENAL";
+  if (haystack.includes("oncolog") || haystack.includes("cancer") || haystack.includes("quimioterapia") || haystack.includes("radioterapia") || haystack.includes("tumor")) return "ONCOLOGICO";
   if (haystack.includes("tea") || haystack.includes("autismo") || haystack.includes("espectro")) return "TEA";
   if (haystack.includes("sop") || haystack.includes("ovario policistico") || haystack.includes("policistico")) return "SOP";
   if (haystack.includes("vegano") || haystack.includes("vegetariano estrito") || haystack.includes("vegetarianismo estrito")) return "VEGETARIANO_ESTRITO";

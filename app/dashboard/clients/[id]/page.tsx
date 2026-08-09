@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,6 +16,9 @@ import { MealPlanEditor } from "@/components/dashboard/MealPlanEditor";
 import { EvolutionChart } from "@/components/dashboard/EvolutionChart";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { suggestEducationCardsFromDiagnoses } from "@/lib/clinical/patient-education-suggestions";
+import { calculateAgeInYears } from "@/lib/clinical/anthropometry";
+import { calculateBodyComposition, type SkinfoldValuesMm } from "@/lib/clinical/body-composition";
+import { PROTOCOL_TEMPLATE_GROUP_LABELS, PROTOCOL_TEMPLATE_TARGET_GROUPS } from "@/lib/protocol-templates/constants";
 
 function formatDateSafe(value: string | null, fmt = "dd/MM/yyyy"): string {
   if (!value) return "—";
@@ -53,7 +56,14 @@ interface ClientEvolution {
   id: string; client_protocol_id: string | null; measured_at: string | null;
   weight: number | null; height: number | null; bmi: number | null;
   waist_cm: number | null; hip_cm: number | null; arm_cm: number | null;
-  body_fat_percentage: number | null; blood_pressure: string | null;
+  abdomen_cm: number | null; thigh_cm: number | null;
+  body_fat_percentage: number | null;
+  skinfold_triceps_mm: number | null; skinfold_subscapular_mm: number | null;
+  skinfold_chest_mm: number | null; skinfold_midaxillary_mm: number | null;
+  skinfold_suprailiac_mm: number | null; skinfold_abdominal_mm: number | null;
+  skinfold_thigh_mm: number | null;
+  body_density_g_ml: number | null; fat_mass_kg: number | null; lean_mass_kg: number | null;
+  blood_pressure: string | null;
   energy_level: number | null; appetite: string | null; bowel_pattern: string | null;
   sleep_quality: string | null; symptoms: string | null;
   adherence_notes: string | null; adherence_score: number | null;
@@ -81,6 +91,7 @@ interface ClientPortalAccessState {
 interface NutritionRecord {
   id: string; client_id: string;
   chief_complaint: string | null; life_stage: string | null; biological_sex: string | null;
+  target_group: string | null;
   gestational_weeks: string | null; breastfeeding_context: string | null;
   clinical_history: string | null; diagnoses: string | null;
   medications: string | null; supplements: string | null; allergies: string | null;
@@ -88,6 +99,7 @@ interface NutritionRecord {
   eating_routine: string | null; intestinal_health: string | null; sleep_routine: string | null;
   stress_context: string | null; physical_activity: string | null; hydration: string | null;
   current_weight_kg: string | null; height_cm: string | null; bmi: string | null; pre_pregnancy_weight_kg: string | null; waist_cm: string | null;
+  pre_surgery_weight_kg: string | null; bariatric_surgery_date: string | null;
   anthropometry_notes: string | null; pediatric_growth_notes: string | null;
   target_weight_kg: string | null; target_notes: string | null; exams: string | null; assessment: string | null;
   goals: string | null; care_plan: string | null; risk_flags: string | null;
@@ -132,6 +144,13 @@ interface ClinicalGrowthResponse {
     weeklyGainRate: number | null;
     weeklyGainClassification: { classification: string; label: string; p25: number; p75: number } | null;
     referenceNote: string;
+  };
+  bariatric: {
+    applicable: boolean;
+    preSurgeryWeightKg: number | null;
+    idealWeightKg: number | null;
+    currentWeightKg: number | null;
+    progress: { percentTotalWeightLoss: number; percentExcessWeightLoss: number | null; weightLostKg: number } | null;
   };
 }
 
@@ -304,14 +323,25 @@ function EvolutionForm({ clientId, onSuccess }: { clientId: string; onSuccess: (
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
-function ClinicalEvolutionForm({ clientId, onSuccess }: { clientId: string; onSuccess: () => void }) {
+function ClinicalEvolutionForm({ clientId, onSuccess, biologicalSex, ageYears }: {
+  clientId: string; onSuccess: () => void; biologicalSex: string | null; ageYears: number | null;
+}) {
   const [measuredAt, setMeasuredAt] = useState(new Date().toISOString().slice(0, 10));
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [waistCm, setWaistCm] = useState("");
   const [hipCm, setHipCm] = useState("");
   const [armCm, setArmCm] = useState("");
+  const [abdomenCm, setAbdomenCm] = useState("");
+  const [thighCm, setThighCm] = useState("");
   const [bodyFat, setBodyFat] = useState("");
+  const [skinfoldTriceps, setSkinfoldTriceps] = useState("");
+  const [skinfoldSubscapular, setSkinfoldSubscapular] = useState("");
+  const [skinfoldChest, setSkinfoldChest] = useState("");
+  const [skinfoldMidaxillary, setSkinfoldMidaxillary] = useState("");
+  const [skinfoldSuprailiac, setSkinfoldSuprailiac] = useState("");
+  const [skinfoldAbdominal, setSkinfoldAbdominal] = useState("");
+  const [skinfoldThigh, setSkinfoldThigh] = useState("");
   const [bloodPressure, setBloodPressure] = useState("");
   const [energyLevel, setEnergyLevel] = useState("");
   const [appetite, setAppetite] = useState("");
@@ -327,9 +357,31 @@ function ClinicalEvolutionForm({ clientId, onSuccess }: { clientId: string; onSu
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const skinfoldValuesMm: SkinfoldValuesMm = {
+    triceps: skinfoldTriceps ? Number(skinfoldTriceps) : null,
+    subscapular: skinfoldSubscapular ? Number(skinfoldSubscapular) : null,
+    chest: skinfoldChest ? Number(skinfoldChest) : null,
+    midaxillary: skinfoldMidaxillary ? Number(skinfoldMidaxillary) : null,
+    suprailiac: skinfoldSuprailiac ? Number(skinfoldSuprailiac) : null,
+    abdominal: skinfoldAbdominal ? Number(skinfoldAbdominal) : null,
+    thigh: skinfoldThigh ? Number(skinfoldThigh) : null,
+  };
+  const hasAnySkinfold = Object.values(skinfoldValuesMm).some((value) => value !== null);
+  const bodyComposition = useMemo(
+    () => calculateBodyComposition({ weightKg: weight ? Number(weight) : null, ageYears, sex: biologicalSex, skinfolds: skinfoldValuesMm }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weight, ageYears, biologicalSex, skinfoldTriceps, skinfoldSubscapular, skinfoldChest, skinfoldMidaxillary, skinfoldSuprailiac, skinfoldAbdominal, skinfoldThigh]
+  );
+
+  useEffect(() => {
+    if (bodyComposition) setBodyFat(bodyComposition.bodyFatPercentage.toFixed(1));
+  }, [bodyComposition]);
+
   const resetForm = () => {
     setMeasuredAt(new Date().toISOString().slice(0, 10));
-    setWeight(""); setHeight(""); setWaistCm(""); setHipCm(""); setArmCm(""); setBodyFat("");
+    setWeight(""); setHeight(""); setWaistCm(""); setHipCm(""); setArmCm(""); setAbdomenCm(""); setThighCm(""); setBodyFat("");
+    setSkinfoldTriceps(""); setSkinfoldSubscapular(""); setSkinfoldChest(""); setSkinfoldMidaxillary("");
+    setSkinfoldSuprailiac(""); setSkinfoldAbdominal(""); setSkinfoldThigh("");
     setBloodPressure(""); setEnergyLevel(""); setAppetite(""); setBowelPattern(""); setSleepQuality("");
     setSymptoms(""); setAdherenceNotes(""); setAdherenceScore(""); setProgressNotes("");
     setConductNotes(""); setClinicalImpression(""); setNextSteps("");
@@ -349,7 +401,16 @@ function ClinicalEvolutionForm({ clientId, onSuccess }: { clientId: string; onSu
           waist_cm: waistCm ? Number(waistCm) : null,
           hip_cm: hipCm ? Number(hipCm) : null,
           arm_cm: armCm ? Number(armCm) : null,
+          abdomen_cm: abdomenCm ? Number(abdomenCm) : null,
+          thigh_cm: thighCm ? Number(thighCm) : null,
           body_fat_percentage: bodyFat ? Number(bodyFat) : null,
+          skinfold_triceps_mm: skinfoldValuesMm.triceps,
+          skinfold_subscapular_mm: skinfoldValuesMm.subscapular,
+          skinfold_chest_mm: skinfoldValuesMm.chest,
+          skinfold_midaxillary_mm: skinfoldValuesMm.midaxillary,
+          skinfold_suprailiac_mm: skinfoldValuesMm.suprailiac,
+          skinfold_abdominal_mm: skinfoldValuesMm.abdominal,
+          skinfold_thigh_mm: skinfoldValuesMm.thigh,
           blood_pressure: bloodPressure || null,
           energy_level: energyLevel ? Number(energyLevel) : null,
           appetite: appetite || null,
@@ -375,6 +436,7 @@ function ClinicalEvolutionForm({ clientId, onSuccess }: { clientId: string; onSu
   };
 
   const bmiPreview = weight && height ? (Number(weight) / Math.pow(Number(height) / 100, 2)).toFixed(1) : null;
+  const sexDefined = biologicalSex === "Masculino" || biologicalSex === "Feminino";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/60 p-5">
@@ -392,8 +454,49 @@ function ClinicalEvolutionForm({ clientId, onSuccess }: { clientId: string; onSu
         <div><label className="brand-label">Cintura (cm)</label><input type="number" step="0.1" value={waistCm} onChange={(event) => setWaistCm(event.target.value)} placeholder="Ex: 82" className="brand-input" /></div>
         <div><label className="brand-label">Quadril (cm)</label><input type="number" step="0.1" value={hipCm} onChange={(event) => setHipCm(event.target.value)} placeholder="Ex: 98" className="brand-input" /></div>
         <div><label className="brand-label">Braco (cm)</label><input type="number" step="0.1" value={armCm} onChange={(event) => setArmCm(event.target.value)} placeholder="Ex: 29" className="brand-input" /></div>
-        <div><label className="brand-label">Gordura (%)</label><input type="number" step="0.1" value={bodyFat} onChange={(event) => setBodyFat(event.target.value)} placeholder="Ex: 31" className="brand-input" /></div>
+        <div><label className="brand-label">Abdomen (cm)</label><input type="number" step="0.1" value={abdomenCm} onChange={(event) => setAbdomenCm(event.target.value)} placeholder="Ex: 90" className="brand-input" /></div>
       </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div><label className="brand-label">Coxa (cm)</label><input type="number" step="0.1" value={thighCm} onChange={(event) => setThighCm(event.target.value)} placeholder="Ex: 58" className="brand-input" /></div>
+        <div>
+          <label className="brand-label">{bodyComposition ? "Gordura (%) — calculado pelas dobras" : "Gordura (%)"}</label>
+          <input type="number" step="0.1" value={bodyFat} onChange={(event) => setBodyFat(event.target.value)} placeholder="Ex: 31" className="brand-input" />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-[#EAD8C2] bg-[#FFFDFC] p-4">
+        <h4 className="font-serif text-base font-semibold text-[#3A3028]">Dobras cutaneas (protocolo Jackson &amp; Pollock, 7 dobras)</h4>
+        <p className="mt-1 text-xs leading-5 text-[#8C6E52]">Valores em milimetros. Preencha as 7 para o sistema calcular densidade corporal, % de gordura, massa gorda e massa magra automaticamente.</p>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div><label className="brand-label">Triceps</label><input type="number" step="0.1" value={skinfoldTriceps} onChange={(event) => setSkinfoldTriceps(event.target.value)} placeholder="Ex: 20" className="brand-input" /></div>
+          <div><label className="brand-label">Subescapular</label><input type="number" step="0.1" value={skinfoldSubscapular} onChange={(event) => setSkinfoldSubscapular(event.target.value)} placeholder="Ex: 18" className="brand-input" /></div>
+          <div><label className="brand-label">Peitoral</label><input type="number" step="0.1" value={skinfoldChest} onChange={(event) => setSkinfoldChest(event.target.value)} placeholder="Ex: 15" className="brand-input" /></div>
+          <div><label className="brand-label">Axilar media</label><input type="number" step="0.1" value={skinfoldMidaxillary} onChange={(event) => setSkinfoldMidaxillary(event.target.value)} placeholder="Ex: 17" className="brand-input" /></div>
+          <div><label className="brand-label">Supra-iliaca</label><input type="number" step="0.1" value={skinfoldSuprailiac} onChange={(event) => setSkinfoldSuprailiac(event.target.value)} placeholder="Ex: 22" className="brand-input" /></div>
+          <div><label className="brand-label">Abdominal</label><input type="number" step="0.1" value={skinfoldAbdominal} onChange={(event) => setSkinfoldAbdominal(event.target.value)} placeholder="Ex: 25" className="brand-input" /></div>
+          <div><label className="brand-label">Coxa</label><input type="number" step="0.1" value={skinfoldThigh} onChange={(event) => setSkinfoldThigh(event.target.value)} placeholder="Ex: 23" className="brand-input" /></div>
+        </div>
+
+        {!sexDefined && hasAnySkinfold && (
+          <p className="mt-4 text-xs font-medium text-[#B47F6A]">
+            Defina o sexo biologico na Anamnese para calcular a composicao corporal por dobras cutaneas.
+          </p>
+        )}
+        {sexDefined && ageYears === null && hasAnySkinfold && (
+          <p className="mt-4 text-xs font-medium text-[#B47F6A]">
+            Cadastre a data de nascimento do paciente para calcular a composicao corporal por dobras cutaneas.
+          </p>
+        )}
+        {bodyComposition && (
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-lg bg-[#EAF0E4] p-3"><p className="brand-label mb-1">Soma das dobras</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.sumSkinfoldsMm.toFixed(0)} mm</p></div>
+            <div className="rounded-lg bg-[#EAF0E4] p-3"><p className="brand-label mb-1">Densidade corporal</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.bodyDensity.toFixed(4)} g/ml</p></div>
+            <div className="rounded-lg bg-[#EAF0E4] p-3"><p className="brand-label mb-1">Massa gorda</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.fatMassKg.toFixed(1)} kg</p></div>
+            <div className="rounded-lg bg-[#EAF0E4] p-3"><p className="brand-label mb-1">Massa livre de gordura</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.leanMassKg.toFixed(1)} kg</p></div>
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div><label className="brand-label">Pressao arterial</label><input value={bloodPressure} onChange={(event) => setBloodPressure(event.target.value)} placeholder="Ex: 110/70" className="brand-input" /></div>
         <div><label className="brand-label">Energia</label><select value={energyLevel} onChange={(event) => setEnergyLevel(event.target.value)} className="brand-input"><option value="">Selecione</option>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}/5</option>)}</select></div>
@@ -418,6 +521,76 @@ function ClinicalEvolutionForm({ clientId, onSuccess }: { clientId: string; onSu
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={saving} className="brand-btn-primary"><Plus className="h-4 w-4" />{saving ? "Registrando..." : "Registrar evolucao"}</button>
     </form>
+  );
+}
+
+function formatComparisonDelta(current: number | null, initial: number | null, unit: string, decimals = 1): string {
+  if (current === null || initial === null) return "—";
+  const delta = Math.round((current - initial) * 10 ** decimals) / 10 ** decimals;
+  const prefix = delta > 0 ? "+" : "";
+  return `${prefix}${delta.toLocaleString("pt-BR", { maximumFractionDigits: decimals, minimumFractionDigits: decimals })} ${unit}`;
+}
+
+function formatComparisonValue(value: number | null, unit: string, decimals = 1): string {
+  if (value === null) return "—";
+  return `${value.toLocaleString("pt-BR", { maximumFractionDigits: decimals, minimumFractionDigits: decimals })} ${unit}`;
+}
+
+const REASSESSMENT_ROWS: { key: keyof ClientEvolution; label: string; unit: string; decimals?: number }[] = [
+  { key: "weight", label: "Peso", unit: "kg" },
+  { key: "body_fat_percentage", label: "% de gordura", unit: "%" },
+  { key: "fat_mass_kg", label: "Massa gorda", unit: "kg" },
+  { key: "waist_cm", label: "Cintura", unit: "cm", decimals: 0 },
+];
+
+function ReassessmentTable({ evolutions }: { evolutions: ClientEvolution[] }) {
+  if (evolutions.length < 2) {
+    return (
+      <div className="rounded-2xl border border-dashed border-[#D9C4B2] bg-white p-6 text-center">
+        <p className="text-sm text-[#75675E]">Registre uma nova avaliação para ver a comparação com a primeira medição.</p>
+      </div>
+    );
+  }
+
+  // A lista chega ordenada da mais recente para a mais antiga.
+  const latest = evolutions[0];
+  const initial = evolutions[evolutions.length - 1];
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[#EAD8C2] bg-white">
+      <div className="border-b border-[#EAD8C2] bg-[#FAF7F2]/60 px-5 py-3">
+        <h3 className="font-serif text-base font-semibold text-[#B47F6A]">Reavaliação</h3>
+        <p className="mt-1 text-xs leading-5 text-[#8C6E52]">
+          Comparando {formatDateSafe(initial.measured_at ?? initial.created_at)} (inicial) com {formatDateSafe(latest.measured_at ?? latest.created_at)} (mais recente).
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[10px] font-bold uppercase tracking-[0.1em] text-[#8C6E52]">
+              <th className="px-5 py-3">Indicador</th>
+              <th className="px-3 py-3">Inicial</th>
+              <th className="px-3 py-3">Atual</th>
+              <th className="px-3 py-3">Diferença</th>
+            </tr>
+          </thead>
+          <tbody>
+            {REASSESSMENT_ROWS.map((row) => {
+              const initialValue = initial[row.key] as number | null;
+              const latestValue = latest[row.key] as number | null;
+              return (
+                <tr key={row.key} className="border-t border-[#EDE1D6]">
+                  <td className="px-5 py-3 font-medium text-[#3A3028]">{row.label}</td>
+                  <td className="px-3 py-3 text-[#75675E]">{formatComparisonValue(initialValue, row.unit, row.decimals)}</td>
+                  <td className="px-3 py-3 text-[#75675E]">{formatComparisonValue(latestValue, row.unit, row.decimals)}</td>
+                  <td className="px-3 py-3 font-semibold text-[#7A9A74]">{formatComparisonDelta(latestValue, initialValue, row.unit, row.decimals)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -449,18 +622,55 @@ const NUTRITION_TEXT_FIELDS: { key: keyof NutritionRecord; label: string; placeh
   { key: "private_notes", label: "Notas privadas do atendimento", placeholder: "Observacoes sensiveis para uso interno profissional.", rows: 3 },
 ];
 
-const ANTHROPOMETRY_FIELDS: { key: keyof NutritionRecord; label: string; placeholder: string }[] = [
+const isPregnancyRecord = (record: NutritionRecord) => record.life_stage === "Gestacao";
+const isBariatricRecord = (record: NutritionRecord) => record.target_group === "BARIATRICO";
+
+const ANTHROPOMETRY_FIELDS: {
+  key: keyof NutritionRecord;
+  label: string;
+  placeholder: string | ((record: NutritionRecord) => string);
+  type?: string;
+  visibleWhen?: (record: NutritionRecord) => boolean;
+}[] = [
   { key: "current_weight_kg", label: "Peso atual (kg)", placeholder: "Ex: 68,5" },
   { key: "height_cm", label: "Altura (cm)", placeholder: "Ex: 165" },
   { key: "bmi", label: "IMC", placeholder: "Ex: 25,2" },
-  { key: "pre_pregnancy_weight_kg", label: "Peso pre-gestacional (kg)", placeholder: "Ex: 62,0" },
   { key: "waist_cm", label: "Cintura (cm)", placeholder: "Ex: 82" },
-  { key: "target_weight_kg", label: "Peso/meta clinica", placeholder: "Ex: manter ganho adequado" },
+  {
+    key: "target_weight_kg",
+    label: "Peso/meta clinica",
+    placeholder: (record) => isBariatricRecord(record)
+      ? "Numero em kg — habilita o calculo de %EWL"
+      : "Ex: manter ganho adequado",
+  },
+  // Campos abaixo só fazem sentido para o contexto correspondente — evita
+  // pedir peso pre-gestacional de um homem ou data de cirurgia bariatrica
+  // de quem nao esta nessa categoria de cuidado.
+  { key: "pre_pregnancy_weight_kg", label: "Peso pre-gestacional (kg)", placeholder: "Ex: 62,0", visibleWhen: isPregnancyRecord },
+  { key: "pre_surgery_weight_kg", label: "Peso pre-cirurgico (kg)", placeholder: "Ex: 120", visibleWhen: isBariatricRecord },
+  { key: "bariatric_surgery_date", label: "Data da cirurgia bariatrica", placeholder: "", type: "date", visibleWhen: isBariatricRecord },
 ];
 
+const LIFE_STAGE_OPTIONS = ["Gestacao", "Pos-parto", "Lactante", "Bebe", "Crianca", "Adolescente", "Adulto responsavel"];
+const LIFE_STAGES_REQUIRING_GESTATION_CAPACITY = ["Gestacao", "Pos-parto", "Lactante"];
+
+/**
+ * Fases de gestacao/pos-parto/lactacao nao se aplicam a pacientes cujo sexo
+ * biologico esta registrado como Masculino. Para os demais valores
+ * (Feminino, Intersexo, Nao informado ou em branco) nao restringimos nada,
+ * para nao presumir algo que a profissional ainda nao registrou.
+ */
+function availableLifeStageOptions(biologicalSex: string | null | undefined): string[] {
+  if (biologicalSex === "Masculino") {
+    return LIFE_STAGE_OPTIONS.filter((option) => !LIFE_STAGES_REQUIRING_GESTATION_CAPACITY.includes(option));
+  }
+  return LIFE_STAGE_OPTIONS;
+}
+
 const CLINICAL_PROFILE_FIELDS: { key: keyof NutritionRecord; label: string; options?: string[]; placeholder?: string }[] = [
-  { key: "life_stage", label: "Fase do cuidado", options: ["Gestacao", "Pos-parto", "Lactante", "Bebe", "Crianca", "Adolescente", "Adulto responsavel"] },
   { key: "biological_sex", label: "Sexo biologico", options: ["Feminino", "Masculino", "Intersexo", "Nao informado"] },
+  { key: "life_stage", label: "Fase do cuidado", options: LIFE_STAGE_OPTIONS },
+  { key: "target_group", label: "Categoria de cuidado" },
   { key: "gestational_weeks", label: "Semanas de gestacao", placeholder: "Ex: 28 semanas" },
 ];
 
@@ -528,7 +738,17 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
   }, []);
 
   const setField = (key: keyof NutritionRecord, value: string) => {
-    setRecord((prev) => prev ? { ...prev, [key]: value } : prev);
+    setRecord((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, [key]: value };
+      // Se o sexo biologico virar Masculino, uma fase do cuidado
+      // ligada a gestacao/pos-parto/lactacao deixa de fazer sentido —
+      // evita manter uma combinacao clinicamente incoerente salva.
+      if (key === "biological_sex" && value === "Masculino" && next.life_stage && LIFE_STAGES_REQUIRING_GESTATION_CAPACITY.includes(next.life_stage)) {
+        next.life_stage = "";
+      }
+      return next;
+    });
   };
 
   const handleSave = async () => {
@@ -592,35 +812,57 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
       </div>
 
       <div className="rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-5">
-        <h3 className="font-serif text-base font-semibold text-[#7A9A74]">Perfil clinico materno-infantil</h3>
+        <h3 className="font-serif text-base font-semibold text-[#7A9A74]">Perfil clinico e fase de vida</h3>
+        <p className="mt-1 text-xs leading-5 text-[#8C6E52]">As opcoes de fase do cuidado se ajustam ao sexo biologico informado.</p>
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-          {CLINICAL_PROFILE_FIELDS.map((field) => (
-            <div key={field.key}>
-              <label className="brand-label">{field.label}</label>
-              {field.options ? (
-                <select value={String(record[field.key] ?? "")} onChange={(e) => setField(field.key, e.target.value)} className="brand-input">
-                  <option value="">Selecionar</option>
-                  {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
-                </select>
-              ) : (
-                <input value={String(record[field.key] ?? "")} onChange={(e) => setField(field.key, e.target.value)} className="brand-input" placeholder={field.placeholder} />
-              )}
-            </div>
-          ))}
+          {CLINICAL_PROFILE_FIELDS
+            .filter((field) => field.key !== "gestational_weeks" || record.life_stage === "Gestacao")
+            .map((field) => {
+            if (field.key === "target_group") {
+              return (
+                <div key={field.key}>
+                  <label className="brand-label">{field.label}</label>
+                  <select value={String(record.target_group ?? "")} onChange={(e) => setField("target_group", e.target.value)} className="brand-input">
+                    <option value="">Selecionar</option>
+                    {PROTOCOL_TEMPLATE_TARGET_GROUPS.map((group) => (
+                      <option key={group} value={group}>{PROTOCOL_TEMPLATE_GROUP_LABELS[group]}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            }
+            const options = field.key === "life_stage" ? availableLifeStageOptions(record.biological_sex) : field.options;
+            return (
+              <div key={field.key}>
+                <label className="brand-label">{field.label}</label>
+                {options ? (
+                  <select value={String(record[field.key] ?? "")} onChange={(e) => setField(field.key, e.target.value)} className="brand-input">
+                    <option value="">Selecionar</option>
+                    {options.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                ) : (
+                  <input value={String(record[field.key] ?? "")} onChange={(e) => setField(field.key, e.target.value)} className="brand-input" placeholder={field.placeholder} />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       <div className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/70 p-5">
         <h3 className="font-serif text-base font-semibold text-[#7A9A74]">Antropometria e medidas</h3>
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
-          {ANTHROPOMETRY_FIELDS.map((field) => (
+          {ANTHROPOMETRY_FIELDS
+            .filter((field) => !field.visibleWhen || field.visibleWhen(record))
+            .map((field) => (
             <div key={field.key}>
               <label className="brand-label">{field.label}</label>
               <input
+                type={field.type ?? "text"}
                 value={String(record[field.key] ?? "")}
                 onChange={(e) => setField(field.key, e.target.value)}
                 className="brand-input"
-                placeholder={field.placeholder}
+                placeholder={typeof field.placeholder === "function" ? field.placeholder(record) : field.placeholder}
               />
             </div>
           ))}
@@ -721,7 +963,7 @@ export default function ClientDetailPage() {
   const [planView, setPlanView] = useState<"dieta" | "protocolos">("dieta");
   const [evolutionView, setEvolutionView] = useState<"timeline" | "agenda" | "tarefas" | "financeiro" | "relatorios">("timeline");
   const [data, setData] = useState<ClientDetail | null>(null);
-  const [clinicalSummary, setClinicalSummary] = useState<Pick<NutritionRecord, "goals" | "risk_flags" | "diagnoses" | "allergies"> | null>(null);
+  const [clinicalSummary, setClinicalSummary] = useState<Pick<NutritionRecord, "goals" | "risk_flags" | "diagnoses" | "allergies" | "biological_sex"> | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Resumo edit state
@@ -797,7 +1039,7 @@ export default function ClientDetailPage() {
   useEffect(() => {
     fetch(`/api/admin/clients/${id}/nutrition-record`)
       .then((response) => response.ok ? response.json() as Promise<NutritionRecord> : null)
-      .then((record) => record && setClinicalSummary({ goals: record.goals, risk_flags: record.risk_flags, diagnoses: record.diagnoses, allergies: record.allergies }))
+      .then((record) => record && setClinicalSummary({ goals: record.goals, risk_flags: record.risk_flags, diagnoses: record.diagnoses, allergies: record.allergies, biological_sex: record.biological_sex }))
       .catch(() => null);
   }, [id]);
 
@@ -1055,7 +1297,8 @@ export default function ClientDetailPage() {
 
   const hasClinicalGrowth =
     Boolean(clinicalGrowth?.pediatric.applicable && clinicalGrowth.pediatric.results.length) ||
-    Boolean(clinicalGrowth?.gestational.applicable);
+    Boolean(clinicalGrowth?.gestational.applicable) ||
+    Boolean(clinicalGrowth?.bariatric.applicable);
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-16 animate-fade-up">
@@ -1183,7 +1426,7 @@ export default function ClientDetailPage() {
           {activeTab === "plano-alimentar" && planView === "dieta" && (
             <div className="space-y-4">
               <div className="flex justify-end">
-                <Link href={`/dashboard/clients/${id}/print`} target="_blank" className="brand-btn-secondary w-full sm:w-auto">
+                <Link href={`/dashboard/clients/${id}/print?secao=plano-alimentar`} target="_blank" className="brand-btn-secondary w-full sm:w-auto">
                   <Printer className="h-4 w-4" />
                   Imprimir plano alimentar
                 </Link>
@@ -1608,13 +1851,55 @@ export default function ClientDetailPage() {
                         </div>
                       </div>
                     )}
+
+                    {clinicalGrowth?.bariatric.applicable && (
+                      <div className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-4">
+                        <p className="brand-kicker">Acompanhamento bariatrico</p>
+                        <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Perda de peso pos-cirurgica</h3>
+                        {clinicalGrowth.bariatric.progress ? (
+                          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="rounded-lg bg-[#FBF7F1] p-3">
+                              <p className="brand-label mb-1">%TWL (perda de peso total)</p>
+                              <p className="text-sm font-semibold text-[#3A3028]">
+                                {clinicalGrowth.bariatric.progress.percentTotalWeightLoss.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+                              </p>
+                            </div>
+                            <div className="rounded-lg bg-[#FBF7F1] p-3">
+                              <p className="brand-label mb-1">%EWL (excesso de peso perdido)</p>
+                              <p className="text-sm font-semibold text-[#3A3028]">
+                                {clinicalGrowth.bariatric.progress.percentExcessWeightLoss !== null
+                                  ? `${clinicalGrowth.bariatric.progress.percentExcessWeightLoss.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
+                                  : "Defina o peso/meta clinica"}
+                              </p>
+                            </div>
+                            <div className="rounded-lg bg-[#FBF7F1] p-3 sm:col-span-2">
+                              <p className="brand-label mb-1">Peso perdido desde a cirurgia</p>
+                              <p className="text-sm font-semibold text-[#3A3028]">
+                                {clinicalGrowth.bariatric.progress.weightLostKg.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs leading-5 text-[#75675E]">
+                            Informe o peso pre-cirurgico na Antropometria e registre uma evolucao com o peso atual para calcular o progresso.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
                 <EvolutionChart history={evolutions} referenceLines={clinicalGrowth?.pediatric.chartReferenceLines ?? []} />
               </section>
 
+              <ReassessmentTable evolutions={evolutions} />
+
               {showEvolutionForm && (
-                <ClinicalEvolutionForm clientId={id} onSuccess={() => { reloadEvolutions(); reloadTimeline(); }} />
+                <ClinicalEvolutionForm
+                  clientId={id}
+                  onSuccess={() => { reloadEvolutions(); reloadTimeline(); }}
+                  biologicalSex={clinicalSummary?.biological_sex ?? null}
+                  ageYears={calculateAgeInYears(birthDate || null)}
+                />
               )}
 
               {evolutionsLoading ? (

@@ -407,6 +407,9 @@ export default function FormularioPage() {
                   "Seletividade alimentar",
                   "Emagrecimento",
                   "Saúde intestinal",
+                  "Bariátrico",
+                  "Renal",
+                  "Oncológico",
                   "Outro",
                 ].map((tag) => (
                   <Tag

@@ -40,3 +40,25 @@ export function calculateWeightDelta(
   if (!currentWeight || !previousWeight) return null;
   return Math.round((currentWeight - previousWeight) * 10) / 10;
 }
+
+/**
+ * Idade completa em anos na data de referencia (por padrao, hoje).
+ * Usada para calculos clinicos que dependem da idade no momento da
+ * medicao, nao apenas da idade atual do paciente.
+ */
+export function calculateAgeInYears(
+  birthDate: string | null | undefined,
+  referenceDate: Date = new Date()
+): number | null {
+  if (!birthDate) return null;
+  const birth = new Date(birthDate);
+  if (Number.isNaN(birth.getTime())) return null;
+
+  let age = referenceDate.getFullYear() - birth.getFullYear();
+  const referenceIsBeforeBirthdayThisYear =
+    referenceDate.getMonth() < birth.getMonth() ||
+    (referenceDate.getMonth() === birth.getMonth() && referenceDate.getDate() < birth.getDate());
+  if (referenceIsBeforeBirthdayThisYear) age -= 1;
+
+  return age >= 0 ? age : null;
+}

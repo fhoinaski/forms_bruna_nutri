@@ -6,6 +6,7 @@ import { getClientEvolutions } from "@/lib/repositories/client-evolutions";
 import { calculateBmiValue, parseMeasurement } from "@/lib/clinical/anthropometry";
 import { classifyPrePregnancyBmi, classifyWeeklyGainRate, getGestationalReferenceNote, getRecommendedTotalGain } from "@/lib/clinical/gestational";
 import { calculateZScore, classifyZScore, getReferenceValue, normalizePediatricSex, type PediatricIndicator, type PediatricSex } from "@/lib/clinical/pediatric-growth";
+import { calculateBariatricProgress } from "@/lib/clinical/bariatric";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -123,7 +124,12 @@ export async function GET(
       .filter((item): item is NonNullable<typeof item> => item !== null);
   }
 
-  const gestationalApplicable = lifeStage.includes("gestacao");
+  // life_stage isolado nao basta: um registro antigo ou inconsistente
+  // poderia ter "gestacao" salvo com sexo biologico Masculino. A
+  // classificacao gestacional so se aplica quando o sexo nao afasta essa
+  // possibilidade.
+  const biologicalSexNormalized = normalizeText(record?.biological_sex);
+  const gestationalApplicable = lifeStage.includes("gestacao") && biologicalSexNormalized !== "masculino";
   const preWeight = parseMeasurement(record?.pre_pregnancy_weight_kg);
   const preBmi = calculateBmiValue(preWeight, height);
   const preClassification = preBmi ? classifyPrePregnancyBmi(preBmi) : null;
@@ -134,6 +140,14 @@ export async function GET(
   const weeksBetween = first && last ? (measurementDate(last).getTime() - measurementDate(first).getTime()) / (7 * 86_400_000) : 0;
   const weeklyGainRate = first?.weight && last?.weight && weeksBetween > 0 ? Math.round(((last.weight - first.weight) / weeksBetween) * 100) / 100 : null;
   const weeklyClassification = preClassification && weeklyGainRate !== null ? classifyWeeklyGainRate(preClassification.category, weeklyGainRate) : null;
+
+  const bariatricApplicable = normalizeText(record?.target_group) === "bariatrico";
+  const preSurgeryWeight = parseMeasurement(record?.pre_surgery_weight_kg);
+  const idealWeight = parseMeasurement(record?.target_weight_kg);
+  const currentWeightForBariatric = last?.weight ?? weight;
+  const bariatricProgress = bariatricApplicable
+    ? calculateBariatricProgress({ preSurgeryWeightKg: preSurgeryWeight, idealWeightKg: idealWeight, currentWeightKg: currentWeightForBariatric })
+    : null;
 
   return NextResponse.json({
     pediatric: {
@@ -151,6 +165,13 @@ export async function GET(
       weeklyGainRate,
       weeklyGainClassification: weeklyClassification,
       referenceNote: getGestationalReferenceNote(),
+    },
+    bariatric: {
+      applicable: bariatricApplicable,
+      preSurgeryWeightKg: preSurgeryWeight,
+      idealWeightKg: idealWeight,
+      currentWeightKg: currentWeightForBariatric,
+      progress: bariatricProgress,
     },
   });
 }

@@ -44,6 +44,66 @@ const TASK_STATUS_LABELS: Record<string, string> = {
   cancelada: "Cancelada",
 };
 
+const SUBMISSION_ANSWER_LABELS: Record<string, string> = {
+  tipoAtendimento: "Tipo de atendimento",
+  idade: "Idade",
+  nascimento: "Data de nascimento",
+  profissao: "Profissão",
+  cidade: "Cidade",
+  motivacao: "Motivação para buscar acompanhamento",
+  objetivo: "Objetivo principal",
+  incomodo: "O que mais incomoda hoje",
+  diagnostico: "Diagnóstico",
+  medicacao: "Medicação em uso",
+  anticoncepcional: "Uso de anticoncepcional",
+  gestante: "Gestante ou amamentando",
+  sintomas: "Sintomas frequentes",
+  suplementos: "Suplementos em uso",
+  suplementosNegativo: "Suplementos que não se adaptaram",
+  rotina: "Rotina diária",
+  semComer: "Fica muito tempo sem comer",
+  comerEmocao: "Come por fome ou emoção",
+  fomeDia: "Fome ao longo do dia",
+  sonoHoras: "Horas de sono",
+  descansada: "Acorda descansada",
+  estresse: "Nível de estresse",
+  atividadeFisica: "Atividade física",
+  intestinoFreq: "Frequência intestinal",
+  desconforto: "Desconforto intestinal",
+  naoGosta: "Alimentos que não gosta",
+  favoritos: "Alimentos favoritos",
+  diaAlimentar: "Dia alimentar típico",
+  expectativas: "Expectativas do acompanhamento",
+  disposicao: "Disposição para mudar (0-10)",
+  espacoLivre: "Espaço livre / outras observações",
+  child_name: "Nome da criança",
+  child_age: "Idade da criança",
+  child_weight_kg: "Peso da criança (kg)",
+  child_height_cm: "Altura da criança (cm)",
+  child_birth_date: "Data de nascimento da criança",
+  child_breastfeeding: "Amamentação",
+  child_food_repertoire: "Repertório alimentar da criança",
+  child_feeding_difficulties: "Dificuldades alimentares da criança",
+  child_school_routine: "Rotina escolar",
+};
+
+const SUBMISSION_LONG_TEXT_KEYS = new Set([
+  "motivacao",
+  "incomodo",
+  "rotina",
+  "fomeDia",
+  "atividadeFisica",
+  "naoGosta",
+  "favoritos",
+  "diaAlimentar",
+  "expectativas",
+  "espacoLivre",
+  "child_food_repertoire",
+  "child_feeding_difficulties",
+  "child_school_routine",
+  "child_breastfeeding",
+]);
+
 function hasNutritionRecordContent(record: Awaited<ReturnType<typeof getExistingNutritionRecord>>): boolean {
   if (!record) return false;
   return [
@@ -86,13 +146,17 @@ function hasNutritionRecordContent(record: Awaited<ReturnType<typeof getExisting
 
 export default async function ClientPrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ secao?: string }>;
 }) {
   const admin = await getSessionFromCookies();
   if (!admin) notFound();
 
   const { id } = await params;
+  const { secao } = await searchParams;
+  const onlyMealPlan = secao === "plano-alimentar";
 
   const [client, protocols, tasks, evolutions, timeline, nutritionRecord, activeMealPlan] = await Promise.all([
     getClientById(id),
@@ -163,7 +227,7 @@ export default async function ClientPrintPage({
       `}</style>
 
       <div className="no-print" style={{ padding: "16px 40px", background: "#FAF7F2", borderBottom: "1px solid #EAD8C2", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <p style={{ fontSize: "13px", color: "#8C6E52" }}>Relatório do cliente — {client.name}</p>
+        <p style={{ fontSize: "13px", color: "#8C6E52" }}>{onlyMealPlan ? "Plano alimentar" : "Relatório do cliente"} — {client.name}</p>
         <PrintButton />
       </div>
 
@@ -181,6 +245,7 @@ export default async function ClientPrintPage({
         </div>
 
         {/* Dados do cliente */}
+        {!onlyMealPlan && (
         <div className="section">
           <p className="section-title">Dados do cliente</p>
           <div className="kv">
@@ -198,19 +263,20 @@ export default async function ClientPrintPage({
             </div>
           )}
         </div>
+        )}
 
         {/* Formulário de origem */}
-        {submission && (
+        {!onlyMealPlan && submission && Object.entries(submission.answers).some(([, value]) => typeof value === "string" && value.trim().length > 0) && (
           <div className="section">
             <p className="section-title">Formulário de pré-consulta</p>
             <div className="kv">
-              {(["motivacao", "objetivo", "tipoAtendimento", "diagnostico", "medicacao"] as string[]).map((key) => {
+              {Object.entries(SUBMISSION_ANSWER_LABELS).map(([key, label]) => {
                 const val = submission.answers[key];
-                if (!val) return null;
+                if (!val || typeof val !== "string" || !val.trim()) return null;
                 return (
-                  <div key={key} className="kv-item" style={{ gridColumn: ["motivacao", "objetivo"].includes(key) ? "span 2" : undefined }}>
-                    <label>{key}</label>
-                    <span>{String(val)}</span>
+                  <div key={key} className="kv-item" style={{ gridColumn: SUBMISSION_LONG_TEXT_KEYS.has(key) ? "span 2" : undefined }}>
+                    <label>{label}</label>
+                    <span style={{ whiteSpace: "pre-wrap" }}>{val}</span>
                   </div>
                 );
               })}
@@ -219,7 +285,7 @@ export default async function ClientPrintPage({
         )}
 
         {/* Última evolução */}
-        {hasNutritionRecordContent(nutritionRecord) && nutritionRecord && (
+        {!onlyMealPlan && hasNutritionRecordContent(nutritionRecord) && nutritionRecord && (
           <div className="section">
             <p className="section-title">Prontuario nutricional</p>
             <div className="kv">
@@ -262,7 +328,7 @@ export default async function ClientPrintPage({
           </div>
         )}
 
-        {lastEvolution && (
+        {!onlyMealPlan && lastEvolution && (
           <div className="section">
             <p className="section-title">Última evolução registrada</p>
             <div className="card">
@@ -276,6 +342,12 @@ export default async function ClientPrintPage({
         )}
 
         {/* Plano alimentar ativo */}
+        {onlyMealPlan && !activeMealPlan && (
+          <div className="section">
+            <p className="section-title">Plano alimentar</p>
+            <p>Este paciente não tem um plano alimentar ativo no momento.</p>
+          </div>
+        )}
         {activeMealPlan && (
           <div className="section">
             <p className="section-title">Plano alimentar ativo</p>
@@ -349,7 +421,7 @@ export default async function ClientPrintPage({
         )}
 
         {/* Protocolos */}
-        {protocols.length > 0 && (
+        {!onlyMealPlan && protocols.length > 0 && (
           <div className="section">
             <p className="section-title">Protocolos aplicados ({protocols.length})</p>
             {protocols.map((p) => (
@@ -374,7 +446,7 @@ export default async function ClientPrintPage({
         )}
 
         {/* Tarefas */}
-        {tasks.length > 0 && (
+        {!onlyMealPlan && tasks.length > 0 && (
           <div className="section">
             <p className="section-title">Tarefas ({tasks.length})</p>
             {tasks.map((t) => (
@@ -393,7 +465,7 @@ export default async function ClientPrintPage({
         )}
 
         {/* Todas as evoluções */}
-        {evolutions.length > 1 && (
+        {!onlyMealPlan && evolutions.length > 1 && (
           <div className="section">
             <p className="section-title">Histórico de evoluções ({evolutions.length})</p>
             {evolutions.map((ev) => (
@@ -411,7 +483,7 @@ export default async function ClientPrintPage({
         )}
 
         {/* Timeline */}
-        {timeline.length > 0 && (
+        {!onlyMealPlan && timeline.length > 0 && (
           <div className="section">
             <p className="section-title">Timeline do paciente</p>
             {timeline.map((event) => (

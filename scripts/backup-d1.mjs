@@ -17,7 +17,7 @@ async function query(sql, params = []) {
   return data.result?.[0]?.results ?? [];
 }
 
-const schema = await query("SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type DESC, name");
+const schema = await query("SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' ORDER BY type DESC, name");
 const tables = schema.filter((item) => item.type === "table").map((item) => item.name).filter((name) => /^[A-Za-z0-9_]+$/.test(name));
 const data = {};
 for (const table of tables) {

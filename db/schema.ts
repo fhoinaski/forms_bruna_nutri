@@ -19,6 +19,9 @@ export const PROTOCOL_TEMPLATE_TARGET_GROUPS = [
   "VEGETARIANO_ESTRITO",
   "ENDURANCE",
   "RESISTENCIA_INSULINA",
+  "BARIATRICO",
+  "RENAL",
+  "ONCOLOGICO",
 ] as const;
 
 export type ProtocolTemplateType = typeof PROTOCOL_TEMPLATE_TYPES[number];
