@@ -1,4 +1,5 @@
-﻿import type { Metadata } from "next";
+﻿//explica ndo como funciona o atendimento nutricional com Bruna Flores, incluindo pré-consulta, análise individualizada, plano alimentar e acompanhamento em Florianópolis ou online.
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, ChartNoAxesCombined, ClipboardList, SearchCheck, Sprout } from "lucide-react";
 import { PublicHeader } from "@/components/public/PublicHeader";
