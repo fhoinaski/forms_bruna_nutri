@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Archive, BookOpen, Copy, Sparkles, UserRound } from "lucide-react";
+import { ArrowLeft, Archive, BookOpen, CheckCircle2, Copy, Sparkles, UserRound } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import {
   ProtocolBuilder,
@@ -13,9 +13,9 @@ import {
 function formatDateSafe(value: string): string {
   try {
     const date = parseISO(value);
-    return isValid(date) ? format(date, "dd/MM/yyyy 'às' HH:mm") : "—";
+    return isValid(date) ? format(date, "dd/MM/yyyy 'às' HH:mm") : "-";
   } catch {
-    return "—";
+    return "-";
   }
 }
 
@@ -94,6 +94,7 @@ export default function ProtocolDetailPage() {
     setSaving(true);
     setError("");
     setSaved(false);
+
     try {
       const response = await fetch(`/api/admin/protocols/${id}`, {
         method: "PATCH",
@@ -127,6 +128,7 @@ export default function ProtocolDetailPage() {
     if (!window.confirm("Arquivar este protocolo? Aplicações já registradas permanecem no histórico.")) return;
     setArchiving(true);
     setError("");
+
     try {
       const response = await fetch(`/api/admin/protocols/${id}`, {
         method: "PATCH",
@@ -148,45 +150,70 @@ export default function ProtocolDetailPage() {
   const KindIcon = data.kind === "personalized" ? UserRound : BookOpen;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-16 animate-fade-up">
+    <div className="mx-auto max-w-5xl space-y-6 pb-16 animate-fade-up">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link href={data.client_id ? `/dashboard/clients/${data.client_id}` : "/dashboard/protocols"} className="inline-flex items-center gap-2 text-sm font-medium text-[#607A56] hover:text-[#B47F6A]">
           <ArrowLeft className="h-4 w-4" />
-          {data.client_id ? "Voltar à cliente" : "Voltar à biblioteca"}
+          {data.client_id ? "Voltar ao cliente" : "Voltar à biblioteca"}
         </Link>
         <span className={data.is_active ? "brand-badge brand-badge-finalizado" : "brand-badge brand-badge-arquivado"}>
           {data.is_active ? "Ativo" : "Arquivado"}
         </span>
       </div>
 
-      <header className="brand-card overflow-hidden">
-        <div className="flex flex-col gap-5 border-b border-[#EAD8C2] bg-[#FAF7F2] p-6 sm:flex-row sm:items-start">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#EAF0E4] text-[#607A56]">
-            <KindIcon className="h-6 w-6" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="brand-kicker">{data.kind === "personalized" ? "Protocolo personalizado" : "Protocolo padrão"}</p>
-              {data.copied_from_protocol_id && <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-[#75675E]"><Copy className="h-3 w-3" />Cópia individual</span>}
-              {data.source_draft_id && <span className="inline-flex items-center gap-1 rounded-full bg-[#F3E8E5] px-2.5 py-1 text-[10px] font-semibold text-[#8C5F50]"><Sparkles className="h-3 w-3" />Origem IA revisada</span>}
+      <header className="overflow-hidden rounded-[1.35rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="flex min-w-0 flex-col gap-4 p-5 sm:flex-row sm:items-start sm:p-6">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#EAF0E4] text-[#607A56]">
+              <KindIcon className="h-6 w-6" />
             </div>
-            <h1 className="mt-2 font-serif text-3xl font-semibold text-[#3A2B1F]">{data.title}</h1>
-            <p className="mt-2 text-xs text-[#A8927D]">Criado em {formatDateSafe(data.created_at)}</p>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="brand-kicker">{data.kind === "personalized" ? "Protocolo personalizado" : "Protocolo padrão"}</p>
+                {data.copied_from_protocol_id && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#FBF7F1] px-2.5 py-1 text-[10px] font-semibold text-[#75675E]">
+                    <Copy className="h-3 w-3" />
+                    Cópia individual
+                  </span>
+                )}
+                {data.source_draft_id && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#F3E8E5] px-2.5 py-1 text-[10px] font-semibold text-[#8C5F50]">
+                    <Sparkles className="h-3 w-3" />
+                    Origem IA revisada
+                  </span>
+                )}
+              </div>
+              <h1 className="mt-2 break-words font-serif text-2xl font-semibold text-[#3A3028] sm:text-3xl">{data.title}</h1>
+              <p className="mt-2 text-xs text-[#A8927D]">Criado em {formatDateSafe(data.created_at)}</p>
+            </div>
           </div>
-        </div>
-        <div className="p-5 text-sm leading-6 text-[#75675E]">
-          {data.kind === "personalized"
-            ? "Esta cópia pertence a uma cliente específica. Alterações feitas aqui não modificam o protocolo padrão de origem."
-            : "Este é um modelo reutilizável da biblioteca. Para adaptar a uma cliente sem alterar a base, crie uma cópia personalizada na ficha dela."}
+
+          <aside className="border-t border-[#EDE1D6] bg-[#FBF7F1] p-5 lg:border-l lg:border-t-0">
+            <p className="brand-kicker mb-3">Uso correto</p>
+            <div className="space-y-2 text-sm text-[#75675E]">
+              {data.kind === "personalized" ? (
+                <>
+                  <p className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#607A56]" />Este protocolo pertence a um cliente específico.</p>
+                  <p className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#607A56]" />Ajustes aqui não alteram o modelo padrão.</p>
+                </>
+              ) : (
+                <>
+                  <p className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#607A56]" />Este é um modelo reutilizável da biblioteca.</p>
+                  <p className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#607A56]" />Para uso individual, personalize dentro do prontuário.</p>
+                </>
+              )}
+            </div>
+          </aside>
         </div>
       </header>
 
       {saved && <p className="rounded-xl border border-[#D9E4D3] bg-[#F4F8F1] px-4 py-3 text-sm text-[#4F6847]">Protocolo salvo com sucesso.</p>}
+
       <ProtocolBuilder value={value} onChange={setValue} onSubmit={save} saving={saving} submitLabel="Salvar alterações" error={error} />
 
       {data.is_active === 1 && (
         <div className="flex justify-end border-t border-[#EDE1D6] pt-5">
-          <button onClick={archive} disabled={archiving} className="inline-flex items-center gap-2 rounded-full border border-red-200 px-5 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50">
+          <button onClick={archive} disabled={archiving} className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-red-200 px-5 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50 sm:w-auto">
             <Archive className="h-4 w-4" />
             {archiving ? "Arquivando..." : "Arquivar protocolo"}
           </button>

@@ -472,7 +472,7 @@ export default function FinanceiroPage() {
                   <input
                     value={form.amount}
                     onChange={(event) => updateForm("amount", event.target.value)}
-                    className="brand-input pl-9"
+                    className="brand-input brand-input-with-icon"
                     placeholder="250,00"
                     inputMode="decimal"
                     required

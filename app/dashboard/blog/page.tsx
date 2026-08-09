@@ -305,7 +305,7 @@ export default function DashboardBlogPage() {
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    className="brand-input pl-9"
+                    className="brand-input brand-input-with-icon"
                     placeholder="Buscar artigo..."
                   />
                 </div>

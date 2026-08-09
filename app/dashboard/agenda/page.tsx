@@ -5,6 +5,8 @@ import Link from "next/link";
 import {
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clipboard,
   Clock,
   MapPin,
@@ -18,12 +20,13 @@ import {
   Video,
   XCircle,
 } from "lucide-react";
-import { format, isValid, parseISO } from "date-fns";
+import { addDays, format, isValid, parseISO } from "date-fns";
 
 type AppointmentStatus = "agendado" | "confirmado" | "realizado" | "cancelado";
 type AppointmentType = "consulta" | "retorno" | "avaliacao" | "online" | "outro";
 type WorkflowStatus = "pendente" | "enviado" | "dispensado";
 type WorkflowStep = "confirmacao" | "lembrete_24h" | "preparo" | "pos_consulta";
+type StatusFilter = AppointmentStatus | "todos";
 
 interface Client {
   id: string;
@@ -86,17 +89,25 @@ const statusLabels: Record<AppointmentStatus, string> = {
 const typeLabels: Record<AppointmentType, string> = {
   consulta: "Consulta",
   retorno: "Retorno",
-  avaliacao: "Avaliação",
+  avaliacao: "Avaliacao",
   online: "Online",
   outro: "Outro",
 };
 
 const workflowLabels: Record<WorkflowStep, string> = {
-  confirmacao: "Confirmação",
+  confirmacao: "Confirmacao",
   lembrete_24h: "Lembrete 24h",
   preparo: "Preparo",
-  pos_consulta: "Pós-consulta",
+  pos_consulta: "Pos-consulta",
 };
+
+const statusFilters: Array<{ value: StatusFilter; label: string }> = [
+  { value: "todos", label: "Todos" },
+  { value: "agendado", label: "Agendados" },
+  { value: "confirmado", label: "Confirmados" },
+  { value: "realizado", label: "Realizados" },
+  { value: "cancelado", label: "Cancelados" },
+];
 
 function pad(value: number) {
   return String(value).padStart(2, "0");
@@ -130,7 +141,8 @@ function dayRange(date: string) {
   };
 }
 
-function formatTime(value: string) {
+function formatTime(value: string | null) {
+  if (!value) return "--:--";
   try {
     const date = parseISO(value);
     return isValid(date) ? format(date, "HH:mm") : "--:--";
@@ -139,20 +151,34 @@ function formatTime(value: string) {
   }
 }
 
-function formatFullDate(value: string) {
+function formatDate(value: string | null, fallback = "--") {
+  if (!value) return fallback;
   try {
     const date = parseISO(value);
-    return isValid(date) ? format(date, "dd/MM/yyyy") : "--";
+    return isValid(date) ? format(date, "dd/MM/yyyy") : fallback;
   } catch {
-    return "--";
+    return fallback;
+  }
+}
+
+function formatReadableDay(value: string) {
+  try {
+    const date = new Date(`${value}T00:00:00`);
+    return new Intl.DateTimeFormat("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+    }).format(date);
+  } catch {
+    return value;
   }
 }
 
 function statusTone(status: AppointmentStatus) {
-  if (status === "confirmado") return "bg-[#EAF0E4] text-[#607A56] border-[#C7D7BC]";
-  if (status === "realizado") return "bg-[#EEF5F3] text-[#4F7B73] border-[#C8DFDA]";
-  if (status === "cancelado") return "bg-[#F6E6E0] text-[#9A5C4E] border-[#E8C3BA]";
-  return "bg-[#FBF7F1] text-[#75675E] border-[#EDE1D6]";
+  if (status === "confirmado") return "border-[#C7D7BC] bg-[#EAF0E4] text-[#607A56]";
+  if (status === "realizado") return "border-[#C8DFDA] bg-[#EEF5F3] text-[#4F7B73]";
+  if (status === "cancelado") return "border-[#E8C3BA] bg-[#F6E6E0] text-[#9A5C4E]";
+  return "border-[#EDE1D6] bg-[#FBF7F1] text-[#75675E]";
 }
 
 function workflowTone(status: WorkflowStatus) {
@@ -169,8 +195,23 @@ function whatsappUrl(phone: string | null, message: string) {
   return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }
 
+function getInitials(name: string | null) {
+  if (!name) return "P";
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+function moveDate(value: string, amount: number) {
+  return inputDate(addDays(new Date(`${value}T00:00:00`), amount));
+}
+
 export default function AgendaPage() {
   const [selectedDate, setSelectedDate] = useState(todayInputDate());
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -190,7 +231,7 @@ export default function AgendaPage() {
     cancellation_reason: "",
   });
 
-  const visibleAppointments = useMemo(
+  const sortedAppointments = useMemo(
     () =>
       [...appointments].sort(
         (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
@@ -198,9 +239,27 @@ export default function AgendaPage() {
     [appointments]
   );
 
+  const visibleAppointments = useMemo(
+    () =>
+      statusFilter === "todos"
+        ? sortedAppointments
+        : sortedAppointments.filter((item) => item.status === statusFilter),
+    [sortedAppointments, statusFilter]
+  );
+
   const pendingWorkflows = useMemo(
     () => workflows.filter((item) => item.status === "pendente"),
     [workflows]
+  );
+
+  const stats = useMemo(
+    () => ({
+      total: sortedAppointments.filter((item) => item.status !== "cancelado").length,
+      confirmado: sortedAppointments.filter((item) => item.status === "confirmado").length,
+      realizado: sortedAppointments.filter((item) => item.status === "realizado").length,
+      pendencias: pendingWorkflows.length,
+    }),
+    [sortedAppointments, pendingWorkflows.length]
   );
 
   async function loadAgenda() {
@@ -230,7 +289,7 @@ export default function AgendaPage() {
       setWorkflows(workflowJson.items);
       setClients(clientsJson.items);
     } catch {
-      setMessage("Não foi possível carregar a agenda agora.");
+      setMessage("Nao foi possivel carregar a agenda agora.");
     } finally {
       setLoading(false);
     }
@@ -254,7 +313,7 @@ export default function AgendaPage() {
       const startsAt = toIso(form.starts_at);
       const endsAt = form.ends_at ? toIso(form.ends_at) : null;
       if (endsAt && new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
-        setMessage("O horário final precisa ser depois do início.");
+        setMessage("O horario final precisa ser depois do inicio.");
         return;
       }
 
@@ -288,10 +347,10 @@ export default function AgendaPage() {
         portal_visible: true,
         cancellation_reason: "",
       }));
-      setMessage("Consulta adicionada à agenda com roteiro de acompanhamento.");
+      setMessage("Consulta adicionada com roteiro de acompanhamento.");
       await loadAgenda();
     } catch {
-      setMessage("Não foi possível salvar a consulta.");
+      setMessage("Nao foi possivel salvar a consulta.");
     } finally {
       setSaving(false);
     }
@@ -307,7 +366,7 @@ export default function AgendaPage() {
       body: JSON.stringify({ status }),
     });
     if (!response.ok) {
-      setMessage("Não foi possível atualizar o status.");
+      setMessage("Nao foi possivel atualizar o status.");
       await loadAgenda();
     }
   }
@@ -317,7 +376,7 @@ export default function AgendaPage() {
       method: "DELETE",
     });
     if (!response.ok) {
-      setMessage("Não foi possível remover o horário.");
+      setMessage("Nao foi possivel remover o horario.");
       return;
     }
     setAppointments((current) => current.filter((item) => item.id !== id));
@@ -330,7 +389,7 @@ export default function AgendaPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ appointmentId }),
     });
-    setMessage(response.ok ? "Roteiro de acompanhamento preparado." : "Não foi possível preparar o roteiro.");
+    setMessage(response.ok ? "Roteiro de acompanhamento preparado." : "Nao foi possivel preparar o roteiro.");
     await loadAgenda();
   }
 
@@ -344,7 +403,7 @@ export default function AgendaPage() {
       body: JSON.stringify({ status }),
     });
     if (!response.ok) {
-      setMessage("Não foi possível atualizar a ação.");
+      setMessage("Nao foi possivel atualizar a acao.");
       await loadAgenda();
     }
   }
@@ -354,187 +413,124 @@ export default function AgendaPage() {
     setMessage("Mensagem copiada.");
   }
 
-  const todayCount = visibleAppointments.filter((item) => item.status !== "cancelado").length;
-  const confirmedCount = visibleAppointments.filter((item) => item.status === "confirmado").length;
-  const doneCount = visibleAppointments.filter((item) => item.status === "realizado").length;
-
   return (
     <div className="mx-auto max-w-7xl space-y-7 animate-fade-up">
-      <section className="rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] p-6 shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="brand-kicker mb-3">Agenda clínica</p>
-            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028]">
+      <section className="overflow-hidden rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="p-6 sm:p-7">
+            <p className="brand-kicker mb-3">Agenda clinica</p>
+            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">
               Rotina de atendimentos
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
-              Organize consultas, confirme presença, prepare o atendimento e mantenha
-              o pós-consulta com uma comunicação humana e consistente.
+              Visualize o dia, confirme consultas, prepare mensagens e mantenha
+              cada retorno conectado ao cuidado da paciente.
             </p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              {statusFilters.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => setStatusFilter(item.value)}
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
+                    statusFilter === item.value
+                      ? "border-[#7F9A74] bg-[#EAF0E4] text-[#607A56]"
+                      : "border-[#EDE1D6] bg-[#FBF7F1] text-[#75675E] hover:bg-[#F5FAF0]"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div>
-              <label className="brand-label">Dia</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(event) => setSelectedDate(event.target.value)}
-                className="brand-input min-w-[170px]"
-              />
+          <aside className="border-t border-[#EDE1D6] bg-[#FBF7F1] p-6 lg:border-l lg:border-t-0">
+            <p className="brand-kicker mb-3">Dia selecionado</p>
+            <div className="rounded-2xl bg-[#FFFDFC] p-4">
+              <p className="font-serif text-2xl font-semibold capitalize text-[#3A3028]">
+                {formatReadableDay(selectedDate)}
+              </p>
+              <div className="mt-4 grid grid-cols-[44px_1fr_44px] gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate((current) => moveDate(current, -1))}
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[#EDE1D6] text-[#75675E] transition hover:bg-[#FBF7F1]"
+                  aria-label="Dia anterior"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  className="brand-input text-center"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate((current) => moveDate(current, 1))}
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[#EDE1D6] text-[#75675E] transition hover:bg-[#FBF7F1]"
+                  aria-label="Proximo dia"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(todayInputDate())}
+                  className="rounded-full border border-[#7F9A74]/35 px-4 py-2 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]"
+                >
+                  Hoje
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void loadAgenda()}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-full border border-[#EDE1D6] px-4 py-2 text-xs font-semibold text-[#75675E] transition hover:bg-[#FBF7F1]"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Atualizar
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => void loadAgenda()}
-              className="mt-5 inline-flex h-11 items-center gap-2 rounded-full border border-[#7F9A74]/35 px-5 text-xs font-semibold uppercase tracking-[0.12em] text-[#607A56] transition hover:bg-[#EAF0E4]"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Atualizar
-            </button>
-          </div>
+          </aside>
         </div>
       </section>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Metric icon={<CalendarDays />} label="No dia" value={todayCount} hint={`ativos em ${formatFullDate(`${selectedDate}T00:00:00`)}`} />
-        <Metric icon={<CheckCircle2 />} label="Confirmados" value={confirmedCount} hint="presença alinhada" />
-        <Metric icon={<Clock />} label="Realizados" value={doneCount} hint="atendimentos finalizados" />
-        <Metric icon={<MessageCircle />} label="Ações pendentes" value={pendingWorkflows.length} hint="comunicações a conduzir" />
+        <Metric icon={<CalendarDays />} label="No dia" value={stats.total} hint="consultas ativas" />
+        <Metric icon={<CheckCircle2 />} label="Confirmados" value={stats.confirmado} hint="presenca alinhada" />
+        <Metric icon={<Clock />} label="Realizados" value={stats.realizado} hint="finalizados" />
+        <Metric icon={<MessageCircle />} label="Acoes pendentes" value={stats.pendencias} hint="mensagens a conduzir" />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(420px,0.85fr)]">
-        <section className="rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
-          <div className="border-b border-[#EDE1D6] px-6 py-5">
-            <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">
-              Horários do dia
-            </h2>
-            <p className="mt-1 text-sm text-[#75675E]">
-              Fluxo clínico com status, paciente e ações conectadas.
-            </p>
-          </div>
+      {message && (
+        <div className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] px-5 py-3 text-sm text-[#75675E] shadow-[0_12px_32px_rgba(58,48,40,0.04)]">
+          {message}
+        </div>
+      )}
 
-          <div className="divide-y divide-[#F5ECE4]">
-            {loading ? (
-              <div className="px-6 py-16 text-center text-sm text-[#A9978A]">
-                Carregando agenda...
-              </div>
-            ) : visibleAppointments.length === 0 ? (
-              <div className="px-6 py-16 text-center">
-                <CalendarDays className="mx-auto mb-4 h-9 w-9 text-[#C4B3A6]" />
-                <p className="font-serif text-xl font-semibold text-[#3A3028]">
-                  Nenhum horário cadastrado
-                </p>
-                <p className="mt-2 text-sm text-[#75675E]">
-                  Use o formulário para organizar o primeiro atendimento do dia.
-                </p>
-              </div>
-            ) : (
-              visibleAppointments.map((item) => {
-                const itemWorkflowCount = workflows.filter((workflow) => workflow.appointment_id === item.id).length;
-                return (
-                  <article
-                    key={item.id}
-                    className="grid gap-4 px-6 py-5 transition hover:bg-[#FBF7F1]/75 md:grid-cols-[88px_minmax(0,1fr)_190px]"
-                  >
-                    <div>
-                      <p className="font-serif text-3xl font-semibold leading-none text-[#3A3028]">
-                        {formatTime(item.starts_at)}
-                      </p>
-                      {item.ends_at && (
-                        <p className="mt-1 text-xs text-[#A9978A]">até {formatTime(item.ends_at)}</p>
-                      )}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-[#3A3028]">{item.title}</h3>
-                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${statusTone(item.status)}`}>
-                          {statusLabels[item.status]}
-                        </span>
-                        <span className="rounded-full border border-[#EDE1D6] bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8A7B70]">
-                          {itemWorkflowCount} ações
-                        </span>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#75675E]">
-                        <span className="inline-flex items-center gap-1.5">
-                          <UserRound className="h-3.5 w-3.5 text-[#A9978A]" />
-                          {item.client_name || "Paciente sem vínculo"}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          {item.appointment_type === "online" ? (
-                            <Video className="h-3.5 w-3.5 text-[#A9978A]" />
-                          ) : (
-                            <Clock className="h-3.5 w-3.5 text-[#A9978A]" />
-                          )}
-                          {typeLabels[item.appointment_type]}
-                        </span>
-                        {item.location && (
-                          <span className="inline-flex items-center gap-1.5">
-                            <MapPin className="h-3.5 w-3.5 text-[#A9978A]" />
-                            {item.location}
-                          </span>
-                        )}
-                      </div>
-                      {item.notes && (
-                        <p className="mt-3 rounded-xl bg-[#FBF7F1] px-3 py-2 text-xs leading-5 text-[#75675E]">
-                          {item.notes}
-                        </p>
-                      )}
-                      {itemWorkflowCount === 0 && (
-                        <button
-                          type="button"
-                          onClick={() => void generateWorkflow(item.id)}
-                          className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#607A56] transition hover:text-[#8C5F50]"
-                        >
-                          <Sparkles className="h-3.5 w-3.5" />
-                          Preparar roteiro de acompanhamento
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex items-start gap-2 md:justify-end">
-                      <select
-                        value={item.status}
-                        onChange={(event) =>
-                          void updateStatus(item.id, event.target.value as AppointmentStatus)
-                        }
-                        className="h-10 rounded-full border border-[#EDE1D6] bg-white px-3 text-xs font-semibold text-[#75675E] outline-none transition focus:border-[#7F9A74] focus:ring-2 focus:ring-[#7F9A74]/15"
-                      >
-                        {Object.entries(statusLabels).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => void removeAppointment(item.id)}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#E8C3BA] text-[#9A5C4E] transition hover:bg-[#F6E6E0]"
-                        aria-label="Remover horário"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </article>
-                );
-              })
-            )}
-          </div>
-        </section>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.12fr)_minmax(380px,0.88fr)]">
+        <SchedulePanel
+          loading={loading}
+          appointments={visibleAppointments}
+          workflows={workflows}
+          onGenerateWorkflow={generateWorkflow}
+          onRemove={removeAppointment}
+          onStatusChange={updateStatus}
+        />
 
         <div className="space-y-6">
-          <WorkflowPanel
-            workflows={workflows}
-            onCopy={copyMessage}
-            onStatusChange={updateWorkflowStatus}
-          />
           <NewAppointmentForm
             form={form}
             clients={clients}
             saving={saving}
-            message={message}
             onSubmit={createNewAppointment}
             onChange={updateForm}
+          />
+          <WorkflowPanel
+            workflows={workflows}
+            onCopy={copyMessage}
+            onStatusChange={updateWorkflowStatus}
           />
         </div>
       </div>
@@ -555,6 +551,149 @@ function Metric({ icon, label, value, hint }: { icon: React.ReactNode; label: st
   );
 }
 
+function SchedulePanel({
+  loading,
+  appointments,
+  workflows,
+  onGenerateWorkflow,
+  onRemove,
+  onStatusChange,
+}: {
+  loading: boolean;
+  appointments: Appointment[];
+  workflows: WorkflowItem[];
+  onGenerateWorkflow: (appointmentId: string) => Promise<void>;
+  onRemove: (id: string) => Promise<void>;
+  onStatusChange: (id: string, status: AppointmentStatus) => Promise<void>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
+      <div className="border-b border-[#EDE1D6] px-5 py-5 sm:px-6">
+        <p className="brand-kicker mb-2">Linha do tempo</p>
+        <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">
+          Horarios do dia
+        </h2>
+        <p className="mt-1 text-sm text-[#75675E]">
+          Clique nas acoes para atualizar status, preparar roteiro ou remover um horario.
+        </p>
+      </div>
+
+      <div className="divide-y divide-[#F5ECE4]">
+        {loading ? (
+          <div className="px-6 py-16 text-center text-sm text-[#A9978A]">
+            Carregando agenda...
+          </div>
+        ) : appointments.length === 0 ? (
+          <div className="px-6 py-16 text-center">
+            <CalendarDays className="mx-auto mb-4 h-9 w-9 text-[#C4B3A6]" />
+            <p className="font-serif text-xl font-semibold text-[#3A3028]">
+              Nenhum horario para este filtro
+            </p>
+            <p className="mt-2 text-sm text-[#75675E]">
+              Ajuste o status ou crie um atendimento no painel ao lado.
+            </p>
+          </div>
+        ) : (
+          appointments.map((item) => {
+            const itemWorkflowCount = workflows.filter((workflow) => workflow.appointment_id === item.id).length;
+            return (
+              <article
+                key={item.id}
+                className="grid gap-4 px-5 py-5 transition hover:bg-[#FBF7F1]/75 sm:px-6 lg:grid-cols-[90px_minmax(0,1fr)_190px]"
+              >
+                <div className="flex items-start gap-3 lg:block">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#EAF0E4] font-serif text-base font-semibold text-[#607A56] lg:hidden">
+                    {getInitials(item.client_name)}
+                  </span>
+                  <div>
+                    <p className="font-serif text-3xl font-semibold leading-none text-[#3A3028]">
+                      {formatTime(item.starts_at)}
+                    </p>
+                    {item.ends_at && (
+                      <p className="mt-1 text-xs text-[#A9978A]">ate {formatTime(item.ends_at)}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="break-words font-semibold text-[#3A3028]">{item.title}</h3>
+                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${statusTone(item.status)}`}>
+                      {statusLabels[item.status]}
+                    </span>
+                    <span className="rounded-full border border-[#EDE1D6] bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8A7B70]">
+                      {itemWorkflowCount} acoes
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#75675E]">
+                    <span className="inline-flex items-center gap-1.5">
+                      <UserRound className="h-3.5 w-3.5 text-[#A9978A]" />
+                      {item.client_name || "Paciente sem vinculo"}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      {item.appointment_type === "online" ? (
+                        <Video className="h-3.5 w-3.5 text-[#A9978A]" />
+                      ) : (
+                        <Clock className="h-3.5 w-3.5 text-[#A9978A]" />
+                      )}
+                      {typeLabels[item.appointment_type]}
+                    </span>
+                    {item.location && (
+                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-[#A9978A]" />
+                        <span className="break-words">{item.location}</span>
+                      </span>
+                    )}
+                  </div>
+                  {item.notes && (
+                    <p className="mt-3 rounded-xl bg-[#FBF7F1] px-3 py-2 text-xs leading-5 text-[#75675E]">
+                      {item.notes}
+                    </p>
+                  )}
+                  {itemWorkflowCount === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void onGenerateWorkflow(item.id)}
+                      className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#607A56] transition hover:text-[#8C5F50]"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Preparar roteiro
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-[1fr_44px] items-start gap-2 lg:flex lg:justify-end">
+                  <select
+                    value={item.status}
+                    onChange={(event) =>
+                      void onStatusChange(item.id, event.target.value as AppointmentStatus)
+                    }
+                    className="h-11 rounded-full border border-[#EDE1D6] bg-white px-3 text-xs font-semibold text-[#75675E] outline-none transition focus:border-[#7F9A74] focus:ring-2 focus:ring-[#7F9A74]/15"
+                  >
+                    {Object.entries(statusLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void onRemove(item.id)}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#E8C3BA] text-[#9A5C4E] transition hover:bg-[#F6E6E0]"
+                    aria-label="Remover horario"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </article>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
 function WorkflowPanel({
   workflows,
   onCopy,
@@ -565,23 +704,20 @@ function WorkflowPanel({
   onStatusChange: (id: string, status: WorkflowStatus) => Promise<void>;
 }) {
   return (
-    <section className="rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
-      <div className="border-b border-[#EDE1D6] px-6 py-5">
+    <section className="overflow-hidden rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
+      <div className="border-b border-[#EDE1D6] px-5 py-5 sm:px-6">
         <p className="brand-kicker mb-2">Central de cuidado</p>
         <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">
-          Ações de acompanhamento
+          Acoes de acompanhamento
         </h2>
-        <p className="mt-1 text-sm text-[#75675E]">
-          Mensagens prontas para confirmar, lembrar, preparar e acolher depois da consulta.
-        </p>
       </div>
-      <div className="max-h-[680px] divide-y divide-[#F5ECE4] overflow-y-auto">
+      <div className="max-h-[560px] divide-y divide-[#F5ECE4] overflow-y-auto">
         {workflows.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <MessageCircle className="mx-auto mb-4 h-9 w-9 text-[#C4B3A6]" />
-            <p className="font-serif text-xl font-semibold">Nenhuma ação preparada</p>
+            <p className="font-serif text-xl font-semibold">Nenhuma acao preparada</p>
             <p className="mt-2 text-sm text-[#75675E]">
-              Ao criar uma consulta, o roteiro aparece aqui automaticamente.
+              Ao criar uma consulta, o roteiro aparece aqui.
             </p>
           </div>
         ) : (
@@ -600,10 +736,10 @@ function WorkflowPanel({
                       </span>
                     </div>
                     <h3 className="mt-3 font-semibold text-[#3A3028]">
-                      {item.client_name || "Paciente sem vínculo"}
+                      {item.client_name || "Paciente sem vinculo"}
                     </h3>
-                    <p className="mt-1 text-xs text-[#8A7B70]">
-                      {item.appointment_title} às {formatTime(item.starts_at)} · ação em {formatFullDate(item.due_at)} {formatTime(item.due_at)}
+                    <p className="mt-1 text-xs leading-5 text-[#8A7B70]">
+                      {item.appointment_title} as {formatTime(item.starts_at)} · acao em {formatDate(item.due_at)} {formatTime(item.due_at)}
                     </p>
                   </div>
                   {url ? (
@@ -642,7 +778,7 @@ function WorkflowPanel({
                         className="inline-flex items-center gap-1.5 rounded-full border border-[#D9E4D3] px-3 py-2 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]"
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        Marcar enviado
+                        Enviado
                       </button>
                       <button
                         type="button"
@@ -659,7 +795,7 @@ function WorkflowPanel({
                       onClick={() => void onStatusChange(item.id, "pendente")}
                       className="inline-flex items-center gap-1.5 rounded-full border border-[#EDE1D6] px-3 py-2 text-xs font-semibold text-[#75675E] transition hover:bg-[#FBF7F1]"
                     >
-                      Reabrir ação
+                      Reabrir
                     </button>
                   )}
                 </div>
@@ -676,21 +812,19 @@ function NewAppointmentForm({
   form,
   clients,
   saving,
-  message,
   onSubmit,
   onChange,
 }: {
   form: FormState;
   clients: Client[];
   saving: boolean;
-  message: string;
   onSubmit: (event: React.FormEvent) => Promise<void>;
   onChange: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
 }) {
   return (
-    <section className="rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] p-6 shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
+    <section className="rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] p-5 shadow-[0_18px_45px_rgba(58,48,40,0.055)] sm:p-6">
       <div className="mb-5">
-        <p className="brand-kicker mb-2">Novo horário</p>
+        <p className="brand-kicker mb-2">Novo horario</p>
         <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">
           Agendar atendimento
         </h2>
@@ -704,7 +838,7 @@ function NewAppointmentForm({
             onChange={(event) => onChange("client_id", event.target.value)}
             className="brand-input"
           >
-            <option value="">Sem vínculo por enquanto</option>
+            <option value="">Sem vinculo por enquanto</option>
             {clients.map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
@@ -714,7 +848,7 @@ function NewAppointmentForm({
         </div>
 
         <div>
-          <label className="brand-label">Título</label>
+          <label className="brand-label">Titulo</label>
           <input
             value={form.title}
             onChange={(event) => onChange("title", event.target.value)}
@@ -757,7 +891,7 @@ function NewAppointmentForm({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="brand-label">Início</label>
+            <label className="brand-label">Inicio</label>
             <input
               type="datetime-local"
               value={form.starts_at}
@@ -783,7 +917,7 @@ function NewAppointmentForm({
             value={form.location}
             onChange={(event) => onChange("location", event.target.value)}
             className="brand-input"
-            placeholder="Consultório, videochamada ou endereço"
+            placeholder="Consultorio, videochamada ou endereco"
           />
         </div>
 
@@ -796,7 +930,7 @@ function NewAppointmentForm({
           />
           <span>
             <strong className="block text-[#3A3028]">Mostrar no portal do cliente</strong>
-            A cliente podera ver e confirmar esta consulta dentro do portal.
+            A cliente podera ver e confirmar esta consulta no portal.
           </span>
         </label>
 
@@ -813,7 +947,7 @@ function NewAppointmentForm({
         )}
 
         <div>
-          <label className="brand-label">Observações internas</label>
+          <label className="brand-label">Observacoes internas</label>
           <textarea
             value={form.notes}
             onChange={(event) => onChange("notes", event.target.value)}
@@ -822,19 +956,13 @@ function NewAppointmentForm({
           />
         </div>
 
-        {message && (
-          <p className="rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] px-3 py-2 text-xs text-[#75675E]">
-            {message}
-          </p>
-        )}
-
         <button
           type="submit"
           disabled={saving}
           className="brand-btn-primary w-full justify-center disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Plus className="h-4 w-4" />
-          {saving ? "Salvando..." : "Adicionar à agenda"}
+          {saving ? "Salvando..." : "Adicionar a agenda"}
         </button>
 
         <Link

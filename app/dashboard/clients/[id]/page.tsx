@@ -616,10 +616,10 @@ function SecondaryNavigation({ items, value, onChange }: {
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-      <div className="flex min-w-max gap-1 rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-1">
+    <div className="mb-6 min-w-0">
+      <div className="grid w-full min-w-0 grid-cols-2 gap-1 rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-1 sm:inline-grid sm:w-auto sm:grid-flow-col sm:auto-cols-max sm:grid-cols-none">
         {items.map((item) => (
-          <button key={item.id} type="button" onClick={() => onChange(item.id)} className={`h-9 shrink-0 rounded-md px-3 text-xs font-semibold transition-colors ${value === item.id ? "bg-[#FFFDFC] text-[#607A56] shadow-sm" : "text-[#75675E] hover:text-[#3A3028]"}`}>
+          <button key={item.id} type="button" onClick={() => onChange(item.id)} className={`min-h-10 min-w-0 rounded-md px-3 text-center text-[11px] font-semibold leading-tight transition-colors sm:h-9 sm:whitespace-nowrap sm:text-xs ${value === item.id ? "bg-[#FFFDFC] text-[#607A56] shadow-sm" : "text-[#75675E] hover:text-[#3A3028]"}`}>
             {item.label}
           </button>
         ))}
@@ -975,14 +975,14 @@ export default function ClientDetailPage() {
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)} className="min-w-0">
         {/* Tabs */}
-        <div className="-mx-4 overflow-x-auto border-b border-[#EAD8C2] px-4 sm:mx-0 sm:px-0">
-          <TabsList className="w-full justify-start rounded-none border-0 bg-[#FFFDFC] p-2">
+        <div className="border-b border-[#EAD8C2] bg-[#FFFDFC] p-2">
+          <TabsList className="grid w-full min-w-0 grid-cols-2 gap-1 rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-1 sm:grid-cols-3 lg:flex lg:justify-start lg:rounded-none lg:border-0 lg:bg-[#FFFDFC] lg:p-0">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               return (
-                <TabsTrigger key={tab.id} value={tab.id} className="h-9 shrink-0 px-3 text-xs sm:h-10 sm:px-4 sm:text-sm">
+                <TabsTrigger key={tab.id} value={tab.id} className="min-h-10 min-w-0 whitespace-normal px-2 text-[11px] leading-tight sm:px-3 sm:text-xs lg:h-10 lg:shrink-0 lg:whitespace-nowrap lg:px-4 lg:text-sm">
                   <Icon className="h-4 w-4 shrink-0" />
-                  <span>{tab.label}</span>
+                  <span className="min-w-0 whitespace-normal text-center lg:whitespace-nowrap">{tab.label}</span>
                 </TabsTrigger>
               );
             })}
@@ -998,8 +998,17 @@ export default function ClientDetailPage() {
           {/* ── Resumo ─────────────────────────────────────────── */}
           {activeTab === "resumo" && summaryView === "dados" && (
             <div className="space-y-6">
-              <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Dados do paciente</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] p-4 shadow-[0_14px_35px_rgba(58,48,40,0.04)] sm:p-5">
+                <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="brand-kicker mb-1">Cadastro clínico</p>
+                    <h2 className="font-serif text-xl font-semibold text-[#B47F6A]">Dados do paciente</h2>
+                  </div>
+                  <p className="text-xs leading-5 text-[#8C6E52] sm:max-w-xs sm:text-right">
+                    Mantenha contato, status e observações internas atualizados para facilitar os próximos atendimentos.
+                  </p>
+                </div>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div>
                   <label className="brand-label">Nome completo</label>
                   <input value={name} onChange={(e) => setName(e.target.value)} className="brand-input" placeholder="Nome da paciente" />
@@ -1028,7 +1037,8 @@ export default function ClientDetailPage() {
               <div>
                 <label className="brand-label">Notas internas</label>
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
-                  rows={4} className="brand-input resize-y" placeholder="Observações sobre a paciente..." />
+                  rows={4} className="brand-input resize-none leading-6" placeholder="Observações sobre a paciente, preferências de contato e pontos importantes para o atendimento..." />
+              </div>
               </div>
               {saveError && <p className="text-sm text-red-600">{saveError}</p>}
               <div className="flex justify-end">

@@ -238,7 +238,7 @@ export default function TarefasPage() {
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    className="brand-input pl-9"
+                    className="brand-input brand-input-with-icon"
                     placeholder="Paciente ou tarefa..."
                   />
                 </div>
