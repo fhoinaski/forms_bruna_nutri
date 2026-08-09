@@ -49,6 +49,16 @@ export interface RecipeInput {
   ingredients: RecipeIngredient[];
   tags?: string[];
   source_note?: string | null;
+  nutrition_override?: Partial<{
+    total_kcal: number;
+    total_protein_g: number;
+    total_carbs_g: number;
+    total_fat_g: number;
+    per_portion_kcal: number;
+    per_portion_protein_g: number;
+    per_portion_carbs_g: number;
+    per_portion_fat_g: number;
+  }> | null;
   is_active?: boolean;
   created_by?: string | null;
 }
@@ -72,29 +82,46 @@ function hydrateRecipe(row: Recipe): RecipePayload {
 
 function sanitizeIngredients(ingredients: RecipeIngredient[]): RecipeIngredient[] {
   return ingredients
-    .map((ingredient) => ({
-      taco_number: Number(ingredient.taco_number),
-      food_name: String(ingredient.food_name ?? "").trim(),
-      grams: Number(ingredient.grams),
-    }))
-    .filter((ingredient) => Number.isFinite(ingredient.taco_number) && ingredient.food_name && Number.isFinite(ingredient.grams) && ingredient.grams > 0);
+    .map((ingredient) => {
+      const tacoNumber = Number(ingredient.taco_number);
+      const grams = Number(ingredient.grams);
+      const foodName = String(ingredient.food_name ?? ingredient.free_text ?? "").trim();
+      const hasTaco = Number.isFinite(tacoNumber) && tacoNumber > 0;
+      const hasGrams = Number.isFinite(grams) && grams > 0;
+      return {
+        taco_number: hasTaco ? tacoNumber : null,
+        food_name: foodName,
+        grams: hasGrams ? grams : null,
+        free_text: hasTaco ? null : foodName,
+      };
+    })
+    .filter((ingredient) => ingredient.food_name && ((ingredient.taco_number && ingredient.grams) || ingredient.free_text));
 }
 
 function sanitizeTags(tags: string[] | undefined): string[] {
   return Array.from(new Set((tags ?? []).map((tag) => tag.trim()).filter(Boolean))).slice(0, 20);
 }
 
-function nutritionParams(input: Pick<RecipeInput, "ingredients" | "servings">) {
+function nutritionParams(input: Pick<RecipeInput, "ingredients" | "servings" | "nutrition_override">) {
   const nutrition = calculateRecipeNutrition(input.ingredients, input.servings);
+  const override = input.nutrition_override ?? {};
+  const numericOrFallback = (value: unknown, fallback: number) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+  };
+  const totalKcal = Number(override.total_kcal ?? override.per_portion_kcal ?? nutrition.total.kcal);
+  const totalProtein = Number(override.total_protein_g ?? override.per_portion_protein_g ?? nutrition.total.protein);
+  const totalCarbs = Number(override.total_carbs_g ?? override.per_portion_carbs_g ?? nutrition.total.carbs);
+  const totalFat = Number(override.total_fat_g ?? override.per_portion_fat_g ?? nutrition.total.fat);
   return [
-    nutrition.total.kcal,
-    nutrition.total.protein,
-    nutrition.total.carbs,
-    nutrition.total.fat,
-    nutrition.perPortion.kcal,
-    nutrition.perPortion.protein,
-    nutrition.perPortion.carbs,
-    nutrition.perPortion.fat,
+    Number.isFinite(totalKcal) ? totalKcal : nutrition.total.kcal,
+    Number.isFinite(totalProtein) ? totalProtein : nutrition.total.protein,
+    Number.isFinite(totalCarbs) ? totalCarbs : nutrition.total.carbs,
+    Number.isFinite(totalFat) ? totalFat : nutrition.total.fat,
+    numericOrFallback(override.per_portion_kcal, nutrition.perPortion.kcal),
+    numericOrFallback(override.per_portion_protein_g, nutrition.perPortion.protein),
+    numericOrFallback(override.per_portion_carbs_g, nutrition.perPortion.carbs),
+    numericOrFallback(override.per_portion_fat_g, nutrition.perPortion.fat),
   ];
 }
 
@@ -142,7 +169,7 @@ export async function createRecipe(input: RecipeInput): Promise<string> {
   const ingredients = sanitizeIngredients(input.ingredients);
   const tags = sanitizeTags(input.tags);
   const servings = Math.max(1, Math.round(Number(input.servings) || 1));
-  const macros = nutritionParams({ ingredients, servings });
+  const macros = nutritionParams({ ingredients, servings, nutrition_override: input.nutrition_override });
 
   await d1Execute(
     `INSERT INTO recipes
@@ -178,7 +205,7 @@ export async function upsertRecipe(id: string, input: RecipeInput): Promise<void
   const ingredients = sanitizeIngredients(input.ingredients);
   const tags = sanitizeTags(input.tags);
   const servings = Math.max(1, Math.round(Number(input.servings) || 1));
-  const macros = nutritionParams({ ingredients, servings });
+  const macros = nutritionParams({ ingredients, servings, nutrition_override: input.nutrition_override });
 
   await d1Execute(
     `INSERT INTO recipes
@@ -233,7 +260,7 @@ export async function updateRecipe(id: string, input: RecipeInput): Promise<void
   const ingredients = sanitizeIngredients(input.ingredients);
   const tags = sanitizeTags(input.tags);
   const servings = Math.max(1, Math.round(Number(input.servings) || 1));
-  const macros = nutritionParams({ ingredients, servings });
+  const macros = nutritionParams({ ingredients, servings, nutrition_override: input.nutrition_override });
 
   await d1Execute(
     `UPDATE recipes SET

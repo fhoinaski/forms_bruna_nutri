@@ -1,0 +1,552 @@
+[
+  {
+    "id": "edu-geral-rotulos-nutricionais",
+    "slug": "como-ler-rotulos-nutricionais",
+    "title": "Como ler r?tulos nutricionais",
+    "category": "geral",
+    "summary": "Guia para interpretar por??o, lista de ingredientes, %VD e nomes alternativos de a??car antes da compra.",
+    "sections": {
+      "o_que_e": "O r?tulo ajuda a comparar alimentos e entender o que realmente est? sendo consumido.",
+      "dica": "Comece pela por??o, depois leia a lista de ingredientes e observe a??cares, s?dio, gorduras e fibras.",
+      "fato_importante": "A lista de ingredientes aparece em ordem decrescente: o primeiro item ? o que est? em maior quantidade.",
+      "nomes_alternativos_acucar": [
+        "sacarose",
+        "xarope de glicose",
+        "maltodextrina",
+        "dextrose",
+        "frutose",
+        "a??car invertido",
+        "melado",
+        "xarope de milho"
+      ],
+      "pontos_de_atencao": [
+        "Por??o informada pode ser menor que o consumo real",
+        "%VD ? refer?ncia geral, n?o meta individual",
+        "Produtos com muitos ingredientes e aditivos merecem aten??o"
+      ]
+    }
+  },
+  {
+    "id": "edu-geral-prato-ideal",
+    "slug": "prato-ideal-por-refeicao",
+    "title": "Prato ideal por refei??o",
+    "category": "geral",
+    "summary": "Modelo visual simples: metade do prato com vegetais, um quarto com prote?na, um quarto com carboidrato e uma fonte de gordura boa.",
+    "sections": {
+      "o_que_e": "Uma forma pr?tica de montar refei??es equilibradas sem depender de contagem r?gida.",
+      "alimentos_recomendados": [
+        "1/2 prato de vegetais",
+        "1/4 prato de prote?na",
+        "1/4 prato de carboidrato",
+        "Gordura boa em pequena quantidade"
+      ],
+      "dica": "Use esse modelo como ponto de partida e ajuste conforme objetivo, fome, rotina, fase de vida e conduta profissional.",
+      "fato_importante": "O prato ideal n?o precisa ser perfeito todos os dias; ele orienta propor??o e variedade."
+    }
+  },
+  {
+    "id": "edu-geral-grupos-alimentares",
+    "slug": "grupos-alimentares-e-funcao-no-corpo",
+    "title": "Grupos alimentares e fun??o no corpo",
+    "category": "geral",
+    "summary": "Explica a fun??o de carboidratos, prote?nas, gorduras, frutas, vegetais e l?quidos na rotina alimentar.",
+    "sections": {
+      "o_que_e": "Cada grupo alimentar contribui com energia, constru??o, regula??o, saciedade e prote??o metab?lica.",
+      "nutrientes_chave": [
+        "Carboidratos: energia",
+        "Prote?nas: constru??o e reparo",
+        "Gorduras: horm?nios, saciedade e absor??o de vitaminas",
+        "Vitaminas e minerais: regula??o",
+        "Fibras: intestino e saciedade"
+      ],
+      "dica": "Quanto mais variado e colorido o prato, maior a chance de cobrir necessidades importantes.",
+      "fato_importante": "Nenhum grupo precisa ser demonizado; a estrat?gia depende do contexto cl?nico."
+    }
+  },
+  {
+    "id": "edu-geral-hidratacao-diaria",
+    "slug": "hidratacao-diaria",
+    "title": "Hidrata??o di?ria",
+    "category": "geral",
+    "summary": "Orienta??o pr?tica de hidrata??o usando 35 ml/kg como refer?ncia inicial ajust?vel.",
+    "sections": {
+      "o_que_e": "A ?gua participa da digest?o, circula??o, temperatura corporal, intestino e disposi??o.",
+      "dica": "Como refer?ncia simples, pode-se estimar cerca de 35 ml por kg de peso ao dia, ajustando para clima, atividade f?sica, gesta??o, lacta??o e condi??es cl?nicas.",
+      "fato_importante": "Sede, urina muito escura, constipa??o e dor de cabe?a podem sinalizar baixa ingest?o h?drica.",
+      "o_que_evitar": [
+        "Trocar ?gua por refrigerantes ou bebidas a?ucaradas",
+        "Esperar sentir muita sede para beber ?gua"
+      ]
+    }
+  },
+  {
+    "id": "edu-geral-fibras",
+    "slug": "fibras-onde-encontrar-e-por-que-importam",
+    "title": "Fibras: onde encontrar e por que importam",
+    "category": "geral",
+    "summary": "Diferen?a entre fibras sol?veis e insol?veis e como elas ajudam intestino, saciedade e glicemia.",
+    "sections": {
+      "o_que_e": "Fibras s?o carboidratos n?o digeridos completamente, importantes para intestino, saciedade e controle metab?lico.",
+      "nutrientes_chave": [
+        "Fibra sol?vel: ajuda saciedade, colesterol e controle glic?mico",
+        "Fibra insol?vel: auxilia tr?nsito intestinal e volume fecal"
+      ],
+      "alimentos_recomendados": [
+        "Aveia",
+        "Feij?es e lentilha",
+        "Frutas com casca",
+        "Verduras",
+        "Legumes",
+        "Sementes como chia e linha?a"
+      ],
+      "dica": "Aumente fibras aos poucos e junto com ?gua para reduzir gases e desconforto.",
+      "fato_importante": "Baixo consumo de fibras pode piorar constipa??o e dificultar saciedade."
+    }
+  },
+  {
+    "id": "edu-geral-acucares-escondidos",
+    "slug": "acucares-escondidos-nos-alimentos",
+    "title": "A??cares escondidos nos alimentos",
+    "category": "geral",
+    "summary": "Ajuda a reconhecer a??car em produtos industrializados mesmo quando ele aparece com outros nomes.",
+    "sections": {
+      "o_que_e": "A??car pode aparecer no r?tulo com nomes diferentes e em produtos que n?o parecem doces.",
+      "o_que_evitar": [
+        "Bebidas ado?adas",
+        "Cereais a?ucarados",
+        "Molhos prontos",
+        "Iogurtes com calda ou saborizados",
+        "Barras com xarope ou cobertura"
+      ],
+      "dica": "Leia a lista de ingredientes e procure nomes como xarope, maltodextrina, dextrose, sacarose e a??car invertido.",
+      "fato_importante": "Reduzir a??car escondido costuma melhorar qualidade alimentar sem exigir restri??o extrema."
+    }
+  },
+  {
+    "id": "edu-geral-porcoes-na-mao",
+    "slug": "porcoes-na-mao",
+    "title": "Por??es na m?o",
+    "category": "geral",
+    "summary": "M?todo visual: palma para prote?na, punho para carboidrato, polegar para gordura e duas m?os em concha para vegetais.",
+    "sections": {
+      "o_que_e": "Uma estrat?gia simples para estimar por??es fora de casa ou quando n?o h? balan?a.",
+      "dica": "Use a palma para prote?na, o punho para carboidrato, o polegar para gordura e duas m?os em concha para vegetais.",
+      "fato_importante": "? uma refer?ncia educativa, n?o substitui prescri??o individual quando h? necessidade cl?nica espec?fica.",
+      "exemplos": [
+        "Palma: frango, peixe, ovos, tofu",
+        "Punho: arroz, batata, mandioca, massa",
+        "Polegar: azeite, pasta de amendoim, castanhas",
+        "Duas m?os em concha: saladas e legumes"
+      ]
+    }
+  },
+  {
+    "id": "edu-geral-substituicoes-inteligentes",
+    "slug": "substituicoes-inteligentes",
+    "title": "Substitui??es inteligentes",
+    "category": "geral",
+    "summary": "Tabela educativa de trocas simples para melhorar saciedade, fibras, prote?na e qualidade da rotina.",
+    "sections": {
+      "o_que_e": "Substitui??es ajudam a ajustar qualidade alimentar sem transformar a rotina em uma dieta r?gida.",
+      "dica": "Troque pensando em fun??o: mais fibras, mais prote?na, menos a??car adicionado ou melhor gordura.",
+      "substituicoes": [
+        {
+          "em_vez_de": "Refrigerante",
+          "troque_por": "?gua com g?s e lim?o ou ch? gelado sem a??car"
+        },
+        {
+          "em_vez_de": "P?o branco sempre",
+          "troque_por": "P?o integral ou p?o com fonte de prote?na junto"
+        },
+        {
+          "em_vez_de": "Doce isolado no lanche",
+          "troque_por": "Fruta com iogurte natural ou castanhas"
+        },
+        {
+          "em_vez_de": "Tempero pronto",
+          "troque_por": "Alho, cebola, lim?o, ervas e especiarias"
+        }
+      ],
+      "fato_importante": "A melhor substitui??o ? aquela que a pessoa consegue repetir na vida real."
+    }
+  },
+  {
+    "id": "edu-geral-fome-real-emocional",
+    "slug": "fome-real-x-fome-emocional",
+    "title": "Fome real x fome emocional",
+    "category": "geral",
+    "summary": "Ajuda o paciente a diferenciar sinais f?sicos de fome de vontade de comer ligada a emo??o, estresse ou h?bito.",
+    "sections": {
+      "o_que_e": "Fome real costuma crescer aos poucos e melhora com comida. Fome emocional tende a surgir r?pido, com desejo espec?fico e ligada a emo??es.",
+      "sintomas": [
+        "Vontade urgente de um alimento espec?fico",
+        "Comer no autom?tico",
+        "Culpa ap?s comer",
+        "Busca por comida em momentos de estresse, ansiedade ou cansa?o"
+      ],
+      "dica": "Antes de comer, pergunte: ? fome f?sica, vontade, cansa?o, ansiedade ou h?bito?",
+      "fato_importante": "O objetivo n?o ? culpa, mas consci?ncia para escolher melhor o pr?ximo passo."
+    }
+  },
+  {
+    "id": "edu-geral-lista-compras-saudavel",
+    "slug": "como-organizar-lista-de-compras-saudavel",
+    "title": "Como organizar lista de compras saud?vel",
+    "category": "geral",
+    "summary": "Modelo para organizar compras por grupos e facilitar refei??es pr?ticas durante a semana.",
+    "sections": {
+      "o_que_e": "Uma lista organizada reduz improviso, desperd?cio e depend?ncia de ultraprocessados.",
+      "alimentos_recomendados": [
+        "Prote?nas",
+        "Carboidratos base",
+        "Legumes e verduras",
+        "Frutas",
+        "Latic?nios ou alternativas",
+        "Temperos naturais",
+        "Lanches pr?ticos"
+      ],
+      "dica": "Planeje 2 ou 3 refei??es-chave da semana antes de comprar.",
+      "fato_importante": "Comprar com lista ajuda a alinhar rotina, or?amento e ades?o ao plano alimentar."
+    }
+  },
+  {
+    "id": "edu-patologia-anemia-ferropriva",
+    "slug": "anemia-ferropriva",
+    "title": "Anemia Ferropriva",
+    "category": "patologia",
+    "summary": "Deficiência de ferro que reduz a produção de hemoglobina, proteína responsável por transportar oxigênio no sangue. É a deficiência de ferro mais comum no mundo.",
+    "sections": {
+      "o_que_e": "Deficiência de ferro que reduz a produção de hemoglobina, proteína responsável por transportar oxigênio no sangue. É a deficiência de ferro mais comum no mundo.",
+      "sintomas": [
+        "Fadiga e cansaço constante",
+        "Palidez",
+        "Tontura e falta de ar",
+        "Unhas fracas e quebradiças"
+      ],
+      "nutrientes_chave": [
+        "Ferro (forma hemoglobina e transporta oxigênio)",
+        "Vitamina B12 (formação de células vermelhas)",
+        "Ácido fólico (formação de novas células sanguíneas)",
+        "Vitamina C (melhora absorção do ferro)"
+      ],
+      "alimentos_recomendados": [
+        "Carnes magras (bovina, frango, peixe)",
+        "Feijão e outras leguminosas (lentilha, grão-de-bico)",
+        "Lentilha",
+        "Folhas verde-escuras (couve, espinafre, rúcula)"
+      ],
+      "o_que_evitar": [
+        "Café ou chá preto junto às refeições principais (reduzem absorção do ferro)"
+      ],
+      "dica": "Combine ferro com vitamina C (laranja, acerola, kiwi, morango, pimentão) para melhorar a absorção.",
+      "fato_importante": "Causas podem incluir alimentação inadequada, perdas de sangue e má absorção intestinal — investigar e orientar sempre que necessário."
+    }
+  },
+  {
+    "id": "edu-patologia-doenca-celiaca",
+    "slug": "doenca-celiaca",
+    "title": "Doença Celíaca",
+    "category": "patologia",
+    "summary": "Doença autoimune desencadeada pelo glúten, que causa inflamação e danifica o intestino delgado.",
+    "sections": {
+      "o_que_e": "Doença autoimune desencadeada pelo glúten, que causa inflamação e danifica o intestino delgado.",
+      "sintomas": [
+        "Distensão abdominal (inchaço e desconforto)",
+        "Diarreia (evacuações frequentes e pastosas)",
+        "Perda de peso (mesmo com apetite normal)",
+        "Fadiga (cansaço constante e fraqueza)"
+      ],
+      "nutrientes_chave": [
+        "Ferro",
+        "Cálcio",
+        "Vitamina D",
+        "Fibras"
+      ],
+      "alimentos_recomendados": [
+        "Arroz (fonte de energia naturalmente sem glúten)",
+        "Milho",
+        "Tubérculos (batata, mandioca, inhame)",
+        "Carnes (proteína de alto valor biológico)",
+        "Frutas"
+      ],
+      "o_que_evitar": [
+        "Trigo (pães, massas, bolos, biscoitos)",
+        "Cevada (cervejas, molhos, sopas industrializadas)",
+        "Centeio (pães, bolos, biscoitos)",
+        "Traços em industrializados (ler rótulos, risco de contaminação cruzada)"
+      ],
+      "dica": "Prefira alimentos in natura e minimamente processados.",
+      "fato_importante": "O diagnóstico deve ser confirmado por exames antes da exclusão do glúten."
+    }
+  },
+  {
+    "id": "edu-patologia-hipotireoidismo",
+    "slug": "hipotireoidismo",
+    "title": "Hipotireoidismo",
+    "category": "patologia",
+    "summary": "Produção insuficiente de hormônios tireoidianos (T3 e T4) pela tireoide, levando a metabolismo mais lento.",
+    "sections": {
+      "o_que_e": "Produção insuficiente de hormônios tireoidianos (T3 e T4) pela tireoide, levando a metabolismo mais lento.",
+      "sintomas": [
+        "Fadiga e cansaço constante",
+        "Ganho de peso",
+        "Sensibilidade ao frio"
+      ],
+      "nutrientes_chave": [
+        "Iodo (essencial para produção dos hormônios)",
+        "Selênio (conversão dos hormônios e proteção da tireoide)",
+        "Zinco (função tireoidiana e imunidade)",
+        "Ferro (deficiência pode agravar sintomas)"
+      ],
+      "alimentos_recomendados": [
+        "Peixes (fontes de iodo e selênio)",
+        "Castanha-do-pará (rica em selênio, 1-2 unidades/dia)",
+        "Sal iodado",
+        "Ovos (iodo, selênio, zinco, proteína)"
+      ],
+      "o_que_evitar": [
+        "Crucíferas cruas (brócolis, couve-flor, repolho, couve — podem interferir na absorção do iodo perto do horário da medicação; preferir cozidas e em outros horários)"
+      ],
+      "dica": "Oriente a medicação em jejum, com intervalo das refeições. Tomar a medicação de manhã, em jejum, com água.",
+      "fato_importante": null
+    }
+  },
+  {
+    "id": "edu-patologia-diabetes-tipo-2",
+    "slug": "diabetes-tipo-2",
+    "title": "Diabetes Tipo 2",
+    "category": "patologia",
+    "summary": "Resistência à insulina, elevando a glicose no sangue — o corpo não usa a insulina de forma eficiente, o que faz a glicose se acumular no sangue.",
+    "sections": {
+      "o_que_e": "Resistência à insulina, elevando a glicose no sangue — o corpo não usa a insulina de forma eficiente, o que faz a glicose se acumular no sangue.",
+      "sintomas": [
+        "Sede excessiva",
+        "Urina frequente",
+        "Fadiga"
+      ],
+      "nutrientes_chave": [
+        "Fibras (reduzem absorção de glicose e promovem saciedade)",
+        "Cromo (auxilia na ação da insulina e metabolismo da glicose)",
+        "Magnésio (sensibilidade à insulina e controle glicêmico)"
+      ],
+      "alimentos_recomendados": [
+        "Grãos integrais (arroz integral, aveia, quinoa)",
+        "Leguminosas (feijão, lentilha, grão-de-bico, ervilha)",
+        "Proteínas magras (frango, peixe, ovos, cortes magros)"
+      ],
+      "o_que_evitar": [
+        "Açúcares simples (doces, bolos, balas, sobremesas)",
+        "Sucos industrializados (bebidas açucaradas e refrigerantes)"
+      ],
+      "dica": "Combine carboidratos com fibra ou proteína. Movimente-se todos os dias — atividade física melhora a sensibilidade à insulina.",
+      "fato_importante": "Com o tempo, a resistência à insulina pode causar danos a órgãos, nervos e vasos sanguíneos, afetando energia, visão e cicatrização."
+    }
+  },
+  {
+    "id": "edu-patologia-hipertensao-arterial",
+    "slug": "hipertensao-arterial",
+    "title": "Hipertensão Arterial",
+    "category": "patologia",
+    "summary": "Pressão sanguínea persistentemente elevada — a força do sangue contra as paredes das artérias fica acima do ideal por muito tempo.",
+    "sections": {
+      "o_que_e": "Pressão sanguínea persistentemente elevada — a força do sangue contra as paredes das artérias fica acima do ideal por muito tempo.",
+      "sintomas": [
+        "Frequentemente assintomática",
+        "Dor de cabeça em casos elevados"
+      ],
+      "nutrientes_chave": [
+        "Potássio (ajuda a eliminar o sódio e relaxar os vasos)",
+        "Magnésio (relaxamento dos vasos e controle da pressão)",
+        "Cálcio (contração adequada dos vasos e musculatura)"
+      ],
+      "alimentos_recomendados": [
+        "Frutas (potássio, fibras, antioxidantes)",
+        "Vegetais (minerais e fibras que ajudam a controlar a pressão)",
+        "Leguminosas (fibras, potássio e magnésio)",
+        "Temperos naturais (alho, cebola, limão, cúrcuma, pimenta — realçam sabor sem sal)"
+      ],
+      "o_que_evitar": [
+        "Embutidos (salsicha, presunto, mortadela, peito de peru, salame)",
+        "Caldos prontos (excesso de sódio e realçadores de sabor)",
+        "Excesso de sal à mesa"
+      ],
+      "dica": "A maior parte do sódio vem de industrializados, não do sal caseiro. Prefira produtos com até 120mg de sódio por 100g/100ml.",
+      "fato_importante": "Manter o peso adequado, atividade física regular e evitar consumo excessivo de álcool ajudam a controlar a pressão."
+    }
+  },
+  {
+    "id": "edu-patologia-intolerancia-a-lactose",
+    "slug": "intolerancia-a-lactose",
+    "title": "Intolerância à Lactose",
+    "category": "patologia",
+    "summary": "Dificuldade de digerir lactose por deficiência da enzima lactase, responsável por quebrar a lactose no intestino.",
+    "sections": {
+      "o_que_e": "Dificuldade de digerir lactose por deficiência da enzima lactase, responsável por quebrar a lactose no intestino.",
+      "sintomas": [
+        "Distensão (inchaço e abdômen estufado)",
+        "Gases (excesso de gases e borborigmos)",
+        "Diarreia (evacuações líquidas após laticínios)"
+      ],
+      "nutrientes_chave": [
+        "Cálcio (ossos, dentes e contração muscular)",
+        "Vitamina D (absorção do cálcio e saúde óssea)"
+      ],
+      "graus_de_intolerancia": [
+        "Leve: tolera pequenas quantidades com poucos sintomas",
+        "Moderada: sintomas aparecem com quantidades moderadas",
+        "Intensa: reage a pequenas quantidades; pode precisar evitar totalmente"
+      ],
+      "alimentos_recomendados": [
+        "Leites sem lactose",
+        "Bebidas vegetais fortificadas (soja, amêndoas, aveia com cálcio e vitamina D)",
+        "Iogurtes fermentados (baixa lactose e probióticos)"
+      ],
+      "o_que_evitar": [
+        "Laticínios tradicionais acima da tolerância individual (leite comum, queijos frescos, creme de leite, sorvetes)"
+      ],
+      "dica": "Teste o limite individual — nem todos precisam eliminar 100%.",
+      "fato_importante": "Os sintomas podem variar de leves a intensos, conforme o grau de intolerância."
+    }
+  },
+  {
+    "id": "edu-patologia-sop-sindrome-do-ovario-policistico",
+    "slug": "sop-sindrome-do-ovario-policistico",
+    "title": "SOP — Síndrome do Ovário Policístico",
+    "category": "patologia",
+    "summary": "Condição hormonal ligada à resistência à insulina, envolvendo desequilíbrio hormonal e ovários com múltiplos folículos.",
+    "sections": {
+      "o_que_e": "Condição hormonal ligada à resistência à insulina, envolvendo desequilíbrio hormonal e ovários com múltiplos folículos.",
+      "sintomas": [
+        "Ciclos irregulares",
+        "Acne (alterações na pele relacionadas ao desequilíbrio hormonal)",
+        "Dificuldade de emagrecer (resistência à perda de peso mesmo com dieta e exercícios)",
+        "Outros sinais: pelos em excesso, queda de cabelo, cansaço, alterações de humor"
+      ],
+      "nutrientes_chave": [
+        "Inositol (melhora sensibilidade à insulina e equilíbrio hormonal)",
+        "Magnésio (controle da glicose, função muscular, redução da inflamação)",
+        "Ômega-3 (anti-inflamatório, equilíbrio hormonal e metabólico)",
+        "Fibras (controle da glicemia, saciedade, saúde intestinal)"
+      ],
+      "alimentos_recomendados": [
+        "Grãos integrais (arroz integral, aveia, quinoa)",
+        "Leguminosas (feijão, lentilha, grão-de-bico, ervilha, soja)",
+        "Peixes ricos em ômega-3 (salmão, sardinha, atum, cavalinha)",
+        "Folhas verdes, frutas com casca, sementes (chia, linhaça), azeite, castanhas"
+      ],
+      "o_que_evitar": [
+        "Ultraprocessados (industrializados, salgadinhos, fast food, refeições prontas)",
+        "Açúcar refinado (doces, bolos, refrigerantes, alto teor de açúcar)"
+      ],
+      "dica": "O manejo do SOP se conecta ao controle da resistência à insulina. Alimentação + atividade física + sono de qualidade = equilíbrio hormonal e bem-estar.",
+      "fato_importante": null
+    }
+  },
+  {
+    "id": "edu-patologia-resistencia-a-insulina",
+    "slug": "resistencia-a-insulina",
+    "title": "Resistência à Insulina",
+    "category": "patologia",
+    "summary": "Menor resposta das células à insulina — glicose permanece mais tempo no sangue, dificultando controle de fome, energia e peso.",
+    "sections": {
+      "o_que_e": "Menor resposta das células à insulina — glicose permanece mais tempo no sangue, dificultando controle de fome, energia e peso.",
+      "sintomas": [
+        "Fadiga pós-refeição",
+        "Dificuldade de emagrecer"
+      ],
+      "nutrientes_chave": [
+        "Fibras (retardam absorção de glicose, aumentam saciedade)",
+        "Magnésio (apoia metabolismo da glicose e ação da insulina)",
+        "Cromo (auxilia na ação da insulina e metabolismo dos carboidratos)",
+        "Proteína (controle glicêmico e saciedade)"
+      ],
+      "alimentos_recomendados": [
+        "Vegetais fibrosos (melhoram sensibilidade à insulina e saciedade)",
+        "Proteínas magras (peixes, frango, ovos, tofu — ajudam no controle glicêmico)",
+        "Grãos integrais (liberação de energia mais lenta e melhor controle da glicose)"
+      ],
+      "o_que_evitar": [
+        "Açúcares simples (promovem picos de glicose e aumentam a resistência à insulina)",
+        "Jejuns muito prolongados sem orientação (podem aumentar fome compulsiva e prejudicar o controle glicêmico)"
+      ],
+      "dica": "Priorize fibra e proteína em cada refeição.",
+      "fato_importante": null
+    }
+  },
+  {
+    "id": "edu-patologia-doenca-renal-cronica-fase-inicial",
+    "slug": "doenca-renal-cronica-fase-inicial",
+    "title": "Doença Renal Crônica (Fase Inicial)",
+    "category": "patologia",
+    "summary": "Perda progressiva da função renal.",
+    "sections": {
+      "o_que_e": "Perda progressiva da função renal.",
+      "sintomas": [
+        "Muitas vezes assintomática no início",
+        "Quando aparecem: inchaço, cansaço, alterações na urina, pressão alta"
+      ],
+      "o_que_os_rins_fazem": [
+        "Filtrar resíduos (removem toxinas e substâncias em excesso do sangue)",
+        "Equilibrar líquidos",
+        "Ajudar no controle de minerais (sódio, potássio, fósforo)"
+      ],
+      "nutrientes_chave": [
+        "Sódio (excesso favorece retenção e piora a pressão)",
+        "Potássio (deve ser ajustado conforme exames)",
+        "Fósforo (excesso pode sobrecarregar o organismo)",
+        "Proteína (quantidade deve ser individualizada)"
+      ],
+      "alimentos_recomendados": [
+        "Legumes e verduras in natura, com ajuste conforme exames",
+        "Frutas apropriadas (respeitando níveis de potássio dos exames)",
+        "Arroz e preparações simples (temperos naturais, pouco sal)",
+        "Proteínas em porções orientadas conforme fase da doença"
+      ],
+      "o_que_evitar": [
+        "Refrigerante tipo cola (ricos em aditivos e fósforo)",
+        "Embutidos (ricos em sódio, conservantes e fosfatos)",
+        "Macarrão instantâneo (alto teor de sódio e fósforo aditivo)",
+        "Salgadinhos e ultraprocessados",
+        "Queijos processados e alimentos prontos (fosfatos e excesso de sódio)"
+      ],
+      "dica": "Acompanhamento em conjunto com o nefrologista, com revisão frequente.",
+      "fato_importante": "Fósforo aditivo (industrializados) é absorvido mais facilmente e pode acelerar a perda da função renal."
+    }
+  },
+  {
+    "id": "edu-patologia-refluxo-gastroesofagico-e-gastrite",
+    "slug": "refluxo-gastroesofagico-e-gastrite",
+    "title": "Refluxo Gastroesofágico e Gastrite",
+    "category": "patologia",
+    "summary": "Irritação da mucosa ou retorno do conteúdo gástrico.",
+    "sections": {
+      "o_que_e": "Irritação da mucosa ou retorno do conteúdo gástrico.",
+      "sintomas": [
+        "Azia",
+        "Queimação",
+        "Dor abdominal"
+      ],
+      "nutrientes_chave": [
+        "Foco em evitar gatilhos, não em nutriente específico — cada pessoa tem sensibilidade diferente"
+      ],
+      "alimentos_recomendados": [
+        "Preparações leves (sopas leves, caldos naturais e temperos suaves)",
+        "Alimentos cozidos (legumes e verduras cozidas, mais fáceis de digerir)",
+        "Baixo teor de gordura (frango grelhado leve, peixes magros, arroz e batata)"
+      ],
+      "o_que_evitar": [
+        "Frituras (retardam esvaziamento gástrico)",
+        "Café (pode aumentar a acidez e irritar a mucosa)",
+        "Álcool (irritante para a mucosa gástrica)",
+        "Cítricos (podem aumentar a acidez e causar desconforto)"
+      ],
+      "habitos_que_ajudam": [
+        "Comer devagar (mastigar bem, refeições com calma)",
+        "Evitar refeições volumosas (porções menores e mais frequentes)",
+        "Não deitar após comer (aguardar 2 a 3 horas antes de deitar)"
+      ],
+      "dica": "Fracionar refeições e evitar deitar logo após comer reduz os sintomas.",
+      "fato_importante": null
+    }
+  }
+]

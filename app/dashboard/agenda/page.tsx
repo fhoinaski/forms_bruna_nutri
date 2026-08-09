@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   CalendarDays,
   CheckCircle2,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   Clipboard,
@@ -23,7 +24,7 @@ import {
 import { addDays, format, isValid, parseISO } from "date-fns";
 
 type AppointmentStatus = "agendado" | "confirmado" | "realizado" | "cancelado";
-type AppointmentType = "consulta" | "retorno" | "avaliacao" | "online" | "outro";
+type AppointmentType = "primeira_consulta" | "consulta" | "retorno" | "avaliacao" | "online" | "outro";
 type WorkflowStatus = "pendente" | "enviado" | "dispensado";
 type WorkflowStep = "confirmacao" | "lembrete_24h" | "preparo" | "pos_consulta";
 type StatusFilter = AppointmentStatus | "todos";
@@ -87,6 +88,7 @@ const statusLabels: Record<AppointmentStatus, string> = {
 };
 
 const typeLabels: Record<AppointmentType, string> = {
+  primeira_consulta: "Primeira consulta",
   consulta: "Consulta",
   retorno: "Retorno",
   avaliacao: "Avaliacao",
@@ -100,6 +102,20 @@ const workflowLabels: Record<WorkflowStep, string> = {
   preparo: "Preparo",
   pos_consulta: "Pos-consulta",
 };
+
+const firstAppointmentPreparationChecklist = [
+  "Ficha de anamnese pronta, impressa ou digital",
+  "Balanca e fita metrica calibradas",
+  "Ambiente organizado e sem interrupcoes",
+  "Revisao das informacoes ja enviadas pela paciente",
+];
+
+const firstAppointmentClosingChecklist = [
+  "Resumir em voz alta os pontos combinados",
+  "Confirmar que a paciente entendeu o plano",
+  "Definir data e formato do proximo contato",
+  "Explicar como proceder em caso de duvidas antes do retorno",
+];
 
 const statusFilters: Array<{ value: StatusFilter; label: string }> = [
   { value: "todos", label: "Todos" },
@@ -657,6 +673,38 @@ function SchedulePanel({
                     <p className="mt-3 rounded-xl bg-[#FBF7F1] px-3 py-2 text-xs leading-5 text-[#75675E]">
                       {item.notes}
                     </p>
+                  )}
+                  {item.appointment_type === "primeira_consulta" && (
+                    <details className="mt-3 rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] p-3">
+                      <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold text-[#607A56]">
+                        <CheckSquare className="h-4 w-4" />
+                        Checklist da primeira consulta
+                      </summary>
+                      <div className="mt-3 grid gap-3 text-xs leading-5 text-[#607066] sm:grid-cols-2">
+                        <div>
+                          <p className="mb-2 font-bold uppercase tracking-[0.12em] text-[#607A56]">Antes</p>
+                          <ul className="space-y-1.5">
+                            {firstAppointmentPreparationChecklist.map((label) => (
+                              <li key={label} className="flex gap-2">
+                                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7F9A74]" />
+                                <span>{label}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="mb-2 font-bold uppercase tracking-[0.12em] text-[#8C5F50]">Depois</p>
+                          <ul className="space-y-1.5">
+                            {firstAppointmentClosingChecklist.map((label) => (
+                              <li key={label} className="flex gap-2">
+                                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#C58D73]" />
+                                <span>{label}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </details>
                   )}
                   {itemWorkflowCount === 0 && (
                     <button

@@ -83,10 +83,22 @@ type PortalSummary = {
       notes: string | null;
       items: Array<{ food: string; quantity: string | null; unit: string | null; notes: string | null }>;
     }>;
+    weekly_slots: Array<{
+      weekday: number;
+      meal_type: "almoco" | "jantar";
+      title: string | null;
+      notes: string | null;
+    }>;
     substitutions: Array<{ base_food: string; option_food: string; quantity: string | null; unit: string | null; notes: string | null }>;
     supplements: Array<{ name: string; dosage: string | null; unit: string | null; instructions: string | null; notes: string | null }>;
   } | null;
 };
+
+const WEEK_DAYS = ["Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado", "Domingo"] as const;
+const WEEKLY_MEAL_TYPES = [
+  { id: "almoco", label: "Almoco" },
+  { id: "jantar", label: "Jantar" },
+] as const;
 
 type AvailableDay = {
   date: string;
@@ -382,6 +394,33 @@ export default function ClientPortalPage() {
                 </article>
               ))}
             </div>
+            {mealPlan.weekly_slots.length > 0 && (
+              <div className="mt-5 rounded-xl border border-[#E6D5C5] bg-[#FFFDFC] p-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5 text-[#607A56]" />
+                  <h3 className="font-serif text-lg font-semibold">Guia da semana</h3>
+                </div>
+                <div className="grid gap-3 lg:grid-cols-7">
+                  {WEEK_DAYS.map((day, weekday) => (
+                    <div key={day} className="rounded-xl border border-[#EFE2D6] bg-[#FBF7F1] p-3">
+                      <p className="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-[#607A56]">{day}</p>
+                      <div className="space-y-3">
+                        {WEEKLY_MEAL_TYPES.map((mealType) => {
+                          const slot = mealPlan.weekly_slots.find((item) => item.weekday === weekday && item.meal_type === mealType.id);
+                          return (
+                            <div key={mealType.id}>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#9A6F5E]">{mealType.label}</p>
+                              <p className="mt-1 text-sm font-semibold text-[#3A3028]">{slot?.title || "A combinar"}</p>
+                              {slot?.notes && <p className="mt-1 text-xs leading-5 text-[#75675E]">{slot.notes}</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {(mealPlan.supplements.length > 0 || mealPlan.substitutions.length > 0) && (
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
                 {mealPlan.supplements.length > 0 && (

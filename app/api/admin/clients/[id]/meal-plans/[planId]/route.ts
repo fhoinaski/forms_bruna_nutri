@@ -25,6 +25,14 @@ const mealSchema = z.object({
   items: z.array(itemSchema).max(80),
 }).strict();
 
+const weeklySlotSchema = z.object({
+  weekday: z.number().int().min(0).max(6),
+  meal_type: z.enum(["almoco", "jantar"]),
+  title: z.string().max(200).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  source_meal_id: z.string().max(100).nullable().optional(),
+}).strict();
+
 const substitutionSchema = z.object({
   base_food: z.string().min(1).max(300),
   option_food: z.string().min(1).max(300),
@@ -46,6 +54,7 @@ const UpdateSchema = z.object({
   status: z.enum(["draft", "active", "archived"]),
   notes: z.string().max(3000).nullable().optional(),
   meals: z.array(mealSchema).max(30),
+  weekly_slots: z.array(weeklySlotSchema).max(14).optional(),
   substitutions: z.array(substitutionSchema).max(120),
   supplements: z.array(supplementSchema).max(80),
 }).strict();

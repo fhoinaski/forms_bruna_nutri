@@ -15,6 +15,7 @@ export type MealPlanPayload = {
   created_at: string;
   updated_at: string;
   meals: MealPlanMealPayload[];
+  weekly_slots: MealPlanWeeklySlotPayload[];
   substitutions: MealPlanSubstitutionPayload[];
   supplements: MealPlanSupplementPayload[];
 };
@@ -36,6 +37,15 @@ export type MealPlanItemPayload = {
   notes?: string | null;
 };
 
+export type MealPlanWeeklySlotPayload = {
+  id?: string;
+  weekday: number;
+  meal_type: "almoco" | "jantar";
+  title?: string | null;
+  notes?: string | null;
+  source_meal_id?: string | null;
+};
+
 export type MealPlanSubstitutionPayload = {
   id?: string;
   base_food: string;
@@ -54,9 +64,10 @@ export type MealPlanSupplementPayload = {
   notes?: string | null;
 };
 
-type MealPlanRow = Omit<MealPlanPayload, "meals" | "substitutions" | "supplements">;
+type MealPlanRow = Omit<MealPlanPayload, "meals" | "weekly_slots" | "substitutions" | "supplements">;
 type MealRow = Omit<MealPlanMealPayload, "items"> & { id: string; meal_plan_id: string; sort_order: number };
 type ItemRow = MealPlanItemPayload & { id: string; meal_id: string; sort_order: number };
+type WeeklySlotRow = MealPlanWeeklySlotPayload & { id: string; meal_plan_id: string; sort_order: number };
 type SubstitutionRow = MealPlanSubstitutionPayload & { id: string; meal_plan_id: string; sort_order: number };
 type SupplementRow = MealPlanSupplementPayload & { id: string; meal_plan_id: string; sort_order: number };
 type DietTemplateMealRow = Omit<MealPlanMealPayload, "items"> & { id: string; template_id: string; sort_order: number };
@@ -276,6 +287,10 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
       params: [planIds],
     },
     {
+      sql: "SELECT w.* FROM meal_plan_weekly_slots w JOIN json_each(?1) ids ON w.meal_plan_id = ids.value ORDER BY w.meal_plan_id, w.weekday ASC, w.meal_type ASC, w.sort_order ASC",
+      params: [planIds],
+    },
+    {
       sql: "SELECT s.* FROM meal_plan_substitutions s JOIN json_each(?1) ids ON s.meal_plan_id = ids.value ORDER BY s.meal_plan_id, s.sort_order ASC",
       params: [planIds],
     },
@@ -286,10 +301,12 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
   ]);
   const meals = (results[0]?.results ?? []) as MealRow[];
   const items = (results[1]?.results ?? []) as ItemRow[];
-  const substitutions = (results[2]?.results ?? []) as SubstitutionRow[];
-  const supplements = (results[3]?.results ?? []) as SupplementRow[];
+  const weeklySlots = (results[2]?.results ?? []) as WeeklySlotRow[];
+  const substitutions = (results[3]?.results ?? []) as SubstitutionRow[];
+  const supplements = (results[4]?.results ?? []) as SupplementRow[];
   const mealsByPlan = groupBy(meals, (meal) => meal.meal_plan_id);
   const itemsByMeal = groupBy(items, (item) => item.meal_id);
+  const weeklySlotsByPlan = groupBy(weeklySlots, (item) => item.meal_plan_id);
   const substitutionsByPlan = groupBy(substitutions, (item) => item.meal_plan_id);
   const supplementsByPlan = groupBy(supplements, (item) => item.meal_plan_id);
   return rows.map((row) => ({
@@ -306,7 +323,15 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
         quantity: item.quantity,
         unit: item.unit,
         notes: item.notes,
+        })),
       })),
+    weekly_slots: (weeklySlotsByPlan.get(row.id) ?? []).map(({ id, weekday, meal_type, title, notes, source_meal_id }) => ({
+      id,
+      weekday,
+      meal_type,
+      title,
+      notes,
+      source_meal_id,
     })),
     substitutions: (substitutionsByPlan.get(row.id) ?? []).map(({ id, base_food, option_food, quantity, unit, notes }) => ({ id, base_food, option_food, quantity, unit, notes })),
     supplements: (supplementsByPlan.get(row.id) ?? []).map(({ id, name, dosage, unit, instructions, notes }) => ({ id, name, dosage, unit, instructions, notes })),
@@ -344,6 +369,7 @@ export async function createMealPlanFromTemplates(input: {
     status: "draft",
     notes: "Plano criado a partir de modelo predefinido. Revisar e personalizar antes de ativar no portal.",
     meals,
+    weekly_slots: [],
     substitutions,
     supplements,
   });
@@ -452,6 +478,7 @@ export async function createMealPlan(input: {
   status?: MealPlanStatus;
   notes?: string | null;
   meals: MealPlanMealPayload[];
+  weekly_slots?: MealPlanWeeklySlotPayload[];
   substitutions: MealPlanSubstitutionPayload[];
   supplements: MealPlanSupplementPayload[];
 }): Promise<MealPlanPayload> {
@@ -469,7 +496,7 @@ export async function createMealPlan(input: {
           VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8)`,
     params: [id, input.clientId, input.title, input.targetGroup ?? null, input.status ?? "draft", input.notes ?? null, now, now],
   });
-  statements.push(...buildMealPlanDetailStatements(id, input.meals, input.substitutions, input.supplements, now));
+  statements.push(...buildMealPlanDetailStatements(id, input.meals, input.weekly_slots ?? [], input.substitutions, input.supplements, now));
   await d1Batch(statements);
   const rows = await d1Query<MealPlanRow>("SELECT * FROM meal_plans WHERE id = ?1 LIMIT 1", [id]);
   return (await hydrateMealPlans(rows))[0];
@@ -480,6 +507,7 @@ export async function updateMealPlan(planId: string, clientId: string, input: {
   status: MealPlanStatus;
   notes?: string | null;
   meals: MealPlanMealPayload[];
+  weekly_slots?: MealPlanWeeklySlotPayload[];
   substitutions: MealPlanSubstitutionPayload[];
   supplements: MealPlanSupplementPayload[];
 }): Promise<MealPlanPayload | null> {
@@ -501,7 +529,7 @@ export async function updateMealPlan(planId: string, clientId: string, input: {
     sql: "UPDATE meal_plans SET title = ?1, status = ?2, notes = ?3, version = version + 1, updated_at = ?4 WHERE id = ?5 AND client_id = ?6",
     params: [input.title, input.status, input.notes ?? null, now, planId, clientId],
   });
-  statements.push(...buildMealPlanDetailStatements(planId, input.meals, input.substitutions, input.supplements, now));
+  statements.push(...buildMealPlanDetailStatements(planId, input.meals, input.weekly_slots ?? [], input.substitutions, input.supplements, now));
   await d1Batch(statements);
   const rows = await d1Query<MealPlanRow>("SELECT * FROM meal_plans WHERE id = ?1 LIMIT 1", [planId]);
   return rows[0] ? (await hydrateMealPlans(rows))[0] : null;
@@ -520,20 +548,37 @@ export async function deleteMealPlan(planId: string, clientId: string): Promise<
 function buildMealPlanDetailStatements(
   planId: string,
   meals: MealPlanMealPayload[],
+  weeklySlots: MealPlanWeeklySlotPayload[],
   substitutions: MealPlanSubstitutionPayload[],
   supplements: MealPlanSupplementPayload[],
   now: string
 ): D1Statement[] {
   const mealRows: Record<string, unknown>[] = [];
   const itemRows: Record<string, unknown>[] = [];
+  const savedMealIdsByClientId = new Map<string, string>();
   for (const [mealIndex, meal] of meals.entries()) {
     const mealId = crypto.randomUUID();
+    if (meal.id) savedMealIdsByClientId.set(meal.id, mealId);
     mealRows.push({ id: mealId, planId, name: meal.name, time: meal.suggested_time ?? null, notes: meal.notes ?? null, sourceRecipeId: meal.source_recipe_id ?? null, order: mealIndex, now });
     for (const [itemIndex, item] of meal.items.entries()) {
       if (!item.food.trim()) continue;
       itemRows.push({ id: crypto.randomUUID(), mealId, food: item.food, quantity: item.quantity ?? null, unit: item.unit ?? null, notes: item.notes ?? null, order: itemIndex, now });
     }
   }
+  const weeklyRows = weeklySlots
+    .filter((slot) => Number.isInteger(slot.weekday) && slot.weekday >= 0 && slot.weekday <= 6 && (slot.meal_type === "almoco" || slot.meal_type === "jantar"))
+    .filter((slot) => (slot.title ?? "").trim() || (slot.notes ?? "").trim() || slot.source_meal_id)
+    .map((slot, order) => ({
+      id: crypto.randomUUID(),
+      planId,
+      weekday: slot.weekday,
+      mealType: slot.meal_type,
+      title: (slot.title ?? "").trim() || null,
+      notes: (slot.notes ?? "").trim() || null,
+      sourceMealId: slot.source_meal_id ? savedMealIdsByClientId.get(slot.source_meal_id) ?? null : null,
+      order,
+      now,
+    }));
   const substitutionRows = substitutions.filter((item) => item.base_food.trim() && item.option_food.trim()).map((item, order) => ({
     id: crypto.randomUUID(), planId, baseFood: item.base_food, optionFood: item.option_food, quantity: item.quantity ?? null, unit: item.unit ?? null, notes: item.notes ?? null, order, now,
   }));
@@ -542,6 +587,7 @@ function buildMealPlanDetailStatements(
   }));
   const statements: D1Statement[] = [
     { sql: "DELETE FROM meal_plan_items WHERE meal_id IN (SELECT id FROM meal_plan_meals WHERE meal_plan_id = ?1)", params: [planId] },
+    { sql: "DELETE FROM meal_plan_weekly_slots WHERE meal_plan_id = ?1", params: [planId] },
     { sql: "DELETE FROM meal_plan_meals WHERE meal_plan_id = ?1", params: [planId] },
     { sql: "DELETE FROM meal_plan_substitutions WHERE meal_plan_id = ?1", params: [planId] },
     { sql: "DELETE FROM meal_plan_supplements WHERE meal_plan_id = ?1", params: [planId] },
@@ -555,6 +601,11 @@ function buildMealPlanDetailStatements(
     sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, sort_order, created_at, updated_at)
           SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(itemRows)],
+  });
+  if (weeklyRows.length) statements.push({
+    sql: `INSERT INTO meal_plan_weekly_slots (id, meal_plan_id, weekday, meal_type, title, notes, source_meal_id, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.planId'), json_extract(value,'$.weekday'), json_extract(value,'$.mealType'), json_extract(value,'$.title'), json_extract(value,'$.notes'), json_extract(value,'$.sourceMealId'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    params: [JSON.stringify(weeklyRows)],
   });
   if (substitutionRows.length) statements.push({
     sql: `INSERT INTO meal_plan_substitutions (id, meal_plan_id, base_food, option_food, quantity, unit, notes, sort_order, created_at, updated_at)

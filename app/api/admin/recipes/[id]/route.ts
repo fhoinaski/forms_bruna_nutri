@@ -9,9 +9,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ingredientSchema = z.object({
-  taco_number: z.number().int().positive(),
+  taco_number: z.number().int().positive().nullable().optional(),
   food_name: z.string().min(1).max(300),
-  grams: z.number().positive(),
+  grams: z.number().positive().nullable().optional(),
+  free_text: z.string().max(300).nullable().optional(),
 }).strict();
 
 const recipeSchema = z.object({
@@ -24,6 +25,16 @@ const recipeSchema = z.object({
   ingredients: z.array(ingredientSchema).min(1).max(80),
   tags: z.array(z.string().min(1).max(60)).max(20).optional(),
   source_note: z.string().max(2000).nullable().optional(),
+  nutrition_override: z.object({
+    total_kcal: z.number().nonnegative().optional(),
+    total_protein_g: z.number().nonnegative().optional(),
+    total_carbs_g: z.number().nonnegative().optional(),
+    total_fat_g: z.number().nonnegative().optional(),
+    per_portion_kcal: z.number().nonnegative().optional(),
+    per_portion_protein_g: z.number().nonnegative().optional(),
+    per_portion_carbs_g: z.number().nonnegative().optional(),
+    per_portion_fat_g: z.number().nonnegative().optional(),
+  }).nullable().optional(),
   is_active: z.boolean().optional(),
 }).strict();
 

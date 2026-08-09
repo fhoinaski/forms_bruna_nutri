@@ -64,6 +64,7 @@ const breadcrumbLabels: Record<string, string> = {
   agenda: "Agenda",
   templates: "Modelos",
   receitas: "Receitas",
+  educacao: "Educação",
   financeiro: "Financeiro",
   protocols: "Protocolos",
   oportunidades: "Oportunidades",

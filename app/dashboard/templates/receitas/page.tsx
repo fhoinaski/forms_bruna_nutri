@@ -6,9 +6,10 @@ import { AlertTriangle, Archive, Edit3, Eye, Plus, Save, Search, Sparkles, Trash
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 
 type RecipeIngredient = {
-  taco_number: number;
+  taco_number?: number | null;
   food_name: string;
-  grams: number;
+  grams?: number | null;
+  free_text?: string | null;
   ai_suggested?: boolean;
 };
 
@@ -51,7 +52,7 @@ const emptyForm: RecipeForm = {
   servings: 1,
   portion_grams: null,
   preparation_steps: "",
-  ingredients: [{ taco_number: 0, food_name: "", grams: 100 }],
+  ingredients: [{ taco_number: 0, food_name: "", grams: 100, free_text: null }],
   tags: [],
   tags_text: "",
   source_note: "",
@@ -150,7 +151,11 @@ export default function RecipesPage() {
         servings: Number(form.servings),
         portion_grams: form.portion_grams ? Number(form.portion_grams) : null,
         preparation_steps: form.preparation_steps?.trim() || null,
-        ingredients: form.ingredients.filter((item) => item.taco_number && item.food_name.trim() && Number(item.grams) > 0),
+        ingredients: form.ingredients.filter((item) => {
+          const hasTaco = item.taco_number && item.food_name.trim() && Number(item.grams) > 0;
+          const hasFreeText = !item.taco_number && item.food_name.trim();
+          return hasTaco || hasFreeText;
+        }),
         tags: form.tags_text.split(",").map((tag) => tag.trim()).filter(Boolean),
         source_note: form.source_note?.trim() || null,
         is_active: form.is_active,
@@ -377,7 +382,7 @@ function RecipeViewModal({ recipe, onClose, onEdit }: {
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
             <div className="space-y-4">
               {recipe.description && <ReadBox title="Descricao" value={recipe.description} />}
-              <ReadBox title="Ingredientes" value={recipe.ingredients.map((item) => `${item.food_name} - ${item.grams} g`).join("\n")} />
+              <ReadBox title="Ingredientes" value={recipe.ingredients.map(formatIngredientLabel).join("\n")} />
               <ReadBox title="Modo de preparo" value={recipe.preparation_steps || "Sem preparo cadastrado."} />
               {recipe.source_note && <ReadBox title="Nota de fonte" value={recipe.source_note} />}
               {recipe.tags.length > 0 && <ReadBox title="Tags" value={recipe.tags.join(", ")} />}
@@ -490,8 +495,11 @@ function RecipeModal({ form, error, saving, aiEnabled, aiSuggesting, setForm, on
             <div className="md:col-span-2"><label className="brand-label">Nota de fonte ou limitacao</label><textarea value={form.source_note ?? ""} onChange={(e) => setForm({ ...form, source_note: e.target.value })} className="brand-input min-h-20" placeholder="Ex: ingrediente aproximado por ausencia na TACO." /></div>
             <div className="md:col-span-2">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Ingredientes TACO</h3>
-                <button type="button" onClick={() => setForm({ ...form, ingredients: [...form.ingredients, { taco_number: 0, food_name: "", grams: 100 }] })} className="brand-btn-secondary"><Plus className="h-4 w-4" />Ingrediente</button>
+                <div>
+                  <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Ingredientes</h3>
+                  <p className="text-xs leading-5 text-[#75675E]">Use a busca TACO quando houver gramatura. Receitas do bonus podem manter ingredientes em texto livre.</p>
+                </div>
+                <button type="button" onClick={() => setForm({ ...form, ingredients: [...form.ingredients, { taco_number: 0, food_name: "", grams: 100, free_text: null }] })} className="brand-btn-secondary"><Plus className="h-4 w-4" />Ingrediente</button>
               </div>
               <div className="space-y-2">
                 {form.ingredients.map((ingredient, index) => (
@@ -562,7 +570,7 @@ function IngredientRow({ ingredient, onChange, onRemove }: {
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
-                  onChange({ ...ingredient, taco_number: Number(suggestion.numero), food_name: suggestion.descricao });
+                  onChange({ ...ingredient, taco_number: Number(suggestion.numero), food_name: suggestion.descricao, free_text: null });
                   setSuggestions([suggestion]);
                   setOpen(false);
                 }}
@@ -580,7 +588,7 @@ function IngredientRow({ ingredient, onChange, onRemove }: {
           sugerido por IA
         </span>
       )}
-      <input type="number" min={1} value={ingredient.grams} onChange={(event) => onChange({ ...ingredient, grams: Number(event.target.value) })} className="brand-input" placeholder="g" />
+      <input type="number" min={1} value={ingredient.grams ?? ""} onChange={(event) => onChange({ ...ingredient, grams: event.target.value ? Number(event.target.value) : null })} className="brand-input" placeholder="g" />
       {ingredient.ai_suggested && (
         <span className="hidden min-h-11 items-center rounded-xl bg-[#FFF7F3] px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50] md:inline-flex">
           IA
@@ -589,6 +597,11 @@ function IngredientRow({ ingredient, onChange, onRemove }: {
       <button type="button" onClick={onRemove} className="inline-flex min-h-11 items-center justify-center rounded-xl px-3 text-red-600 hover:bg-red-50"><X className="h-4 w-4" /></button>
     </div>
   );
+}
+
+function formatIngredientLabel(item: RecipeIngredient): string {
+  if (item.grams && Number(item.grams) > 0) return `${item.food_name} - ${item.grams} g`;
+  return item.food_name;
 }
 
 function Stat({ label, value }: { label: string; value: number }) {

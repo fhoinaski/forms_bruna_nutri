@@ -116,6 +116,7 @@ async function resolveAndValidate(output: AiMealSuggestionOutput, context: AiMea
       if (!recipe) throw new Error(`Receita invalida retornada pela IA: ${String(item.id)}.`);
       sourceRecipeId = recipe.id;
       for (const ingredient of recipe.ingredients) {
+        if (!ingredient.taco_number || !ingredient.grams) continue;
         resolvedItems.push({
           source: "recipe",
           id: recipe.id,

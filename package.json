@@ -16,6 +16,8 @@
     "build:who-reference": "node scripts/build-who-growth-reference.mjs",
     "seed:templates": "tsx db/seed-templates.ts",
     "seed:recipes": "tsx db/seed-recipes.ts",
+    "seed:recipes-bruna": "tsx db/seed-recipes-bruna.ts",
+    "seed:patient-education": "tsx db/seed-patient-education.ts",
     "create-admin": "node scripts/create-admin.mjs",
     "backup:d1": "node scripts/backup-d1.mjs",
     "restore:d1": "node scripts/restore-d1.mjs",

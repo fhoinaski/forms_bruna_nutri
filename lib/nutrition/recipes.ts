@@ -3,9 +3,10 @@ import { getTacoFoodByNumber } from "@/lib/nutrition/taco";
 import { type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 
 export interface RecipeIngredient {
-  taco_number: number;
+  taco_number?: number | null;
   food_name: string;
-  grams: number;
+  grams?: number | null;
+  free_text?: string | null;
 }
 
 export interface RecipeNutrition {
@@ -25,6 +26,16 @@ export function normalizeRecipeMealGroup(value: string | null | undefined): Reci
 
 export function calculateRecipeNutrition(ingredients: RecipeIngredient[], servings: number): RecipeNutrition {
   const total = roundedMacros(sumMacros(ingredients.map((ingredient) => {
+    if (!ingredient.taco_number || !ingredient.grams) {
+      return {
+        kcal: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        recognizedItems: 0,
+        totalItems: 1,
+      };
+    }
     const food = getTacoFoodByNumber(ingredient.taco_number) ?? {
       descricao: ingredient.food_name,
       energia_kcal: 0,

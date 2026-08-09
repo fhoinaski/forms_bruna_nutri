@@ -15,6 +15,7 @@ import { format, parseISO, isValid } from "date-fns";
 import { MealPlanEditor } from "@/components/dashboard/MealPlanEditor";
 import { EvolutionChart } from "@/components/dashboard/EvolutionChart";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { suggestEducationCardsFromDiagnoses } from "@/lib/clinical/patient-education-suggestions";
 
 function formatDateSafe(value: string | null, fmt = "dd/MM/yyyy"): string {
   if (!value) return "—";
@@ -92,6 +93,13 @@ interface NutritionRecord {
   goals: string | null; care_plan: string | null; risk_flags: string | null;
   family_context: string | null; private_notes: string | null;
   created_at: string; updated_at: string;
+}
+
+interface PatientEducationCardLite {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
 }
 
 interface ClinicalGrowthResponse {
@@ -494,6 +502,7 @@ function weightDelta(current: ClientEvolution, next?: ClientEvolution): number |
 
 function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSaved: () => void }) {
   const [record, setRecord] = useState<NutritionRecord | null>(null);
+  const [educationCards, setEducationCards] = useState<PatientEducationCardLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -510,6 +519,13 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
       .catch(() => setError("Nao foi possivel carregar o prontuario."))
       .finally(() => setLoading(false));
   }, [clientId]);
+
+  useEffect(() => {
+    fetch("/api/admin/patient-education-cards?category=patologia", { cache: "no-store" })
+      .then((res) => res.ok ? res.json() as Promise<{ items: PatientEducationCardLite[] }> : { items: [] })
+      .then((data) => setEducationCards(data.items ?? []))
+      .catch(() => setEducationCards([]));
+  }, []);
 
   const setField = (key: keyof NutritionRecord, value: string) => {
     setRecord((prev) => prev ? { ...prev, [key]: value } : prev);
@@ -551,6 +567,14 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
 
   if (loading) return <p className="text-sm text-[#A8927D]">Carregando prontuario...</p>;
   if (!record) return <p className="text-sm text-red-600">{error || "Prontuario indisponivel."}</p>;
+
+  const suggestedEducationCards = suggestEducationCardsFromDiagnoses(record.diagnoses)
+    .map((match) => ({
+      match,
+      card: educationCards.find((card) => card.slug === match.slug),
+    }))
+    .filter((item): item is { match: { slug: string; keywords: string[] }; card: PatientEducationCardLite } => Boolean(item.card))
+    .slice(0, 4);
 
   return (
     <div className="space-y-6">
@@ -629,6 +653,32 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
               className="brand-input resize-y"
               placeholder={field.placeholder}
             />
+            {field.key === "diagnoses" && suggestedEducationCards.length > 0 && (
+              <div className="mt-3 rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] p-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-[#607A56]" />
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#607A56]">Fichas sugeridas pelo prontuario</p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {suggestedEducationCards.map(({ card, match }) => (
+                    <Link
+                      key={card.id}
+                      href="/dashboard/templates/educacao"
+                      className="rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] p-3 transition hover:border-[#7F9A74]"
+                    >
+                      <p className="text-sm font-semibold text-[#3A3028]">{card.title}</p>
+                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#75675E]">{card.summary}</p>
+                      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8C6E52]">
+                        Sinal: {match.keywords.slice(0, 2).join(", ")}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-[#8C6E52]">
+                  Sugestao automatica por palavra-chave. Revise o contexto antes de enviar material ao paciente.
+                </p>
+              </div>
+            )}
           </div>
         ))}
       </div>

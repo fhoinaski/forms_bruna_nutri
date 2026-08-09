@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
 import { MealItemsEditor, cleanMealsForSave, type Meal } from "@/components/dashboard/MealItemsEditor";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
@@ -13,6 +13,13 @@ import {
 type MealPlanStatus = "draft" | "active" | "archived";
 type Substitution = { base_food: string; option_food: string; quantity?: string | null; unit?: string | null; notes?: string | null };
 type Supplement = { name: string; dosage?: string | null; unit?: string | null; instructions?: string | null; notes?: string | null };
+type WeeklySlot = {
+  weekday: number;
+  meal_type: "almoco" | "jantar";
+  title?: string | null;
+  notes?: string | null;
+  source_meal_id?: string | null;
+};
 type TemplateDraft = {
   title: string;
   targetGroup: ProtocolTemplateTargetGroup;
@@ -26,6 +33,7 @@ type MealPlan = {
   version: number;
   notes: string | null;
   meals: Meal[];
+  weekly_slots: WeeklySlot[];
   substitutions: Substitution[];
   supplements: Supplement[];
 };
@@ -121,6 +129,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         status: nextStatus ?? plan.status,
         notes: plan.notes,
         meals: cleanMealsForSave(plan.meals),
+        weekly_slots: cleanWeeklySlotsForSave(plan.weekly_slots ?? []),
         substitutions: plan.substitutions
           .filter((item) => item.base_food.trim() && item.option_food.trim())
           .map((item) => ({
@@ -294,6 +303,11 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             onError={setError}
           />
 
+          <WeeklyMealGridEditor
+            slots={plan.weekly_slots ?? []}
+            onChange={(weekly_slots) => setPlan({ ...plan, weekly_slots })}
+          />
+
           <EditableList
             title="Suplementos"
             items={plan.supplements}
@@ -371,6 +385,109 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         document.body
       )}
     </div>
+  );
+}
+
+const WEEK_DAYS = [
+  "Segunda",
+  "Terca",
+  "Quarta",
+  "Quinta",
+  "Sexta",
+  "Sabado",
+  "Domingo",
+] as const;
+
+const WEEKLY_MEAL_TYPES = [
+  { id: "almoco", label: "Almoco" },
+  { id: "jantar", label: "Jantar" },
+] as const;
+
+function cleanWeeklySlotsForSave(slots: WeeklySlot[]): WeeklySlot[] {
+  return slots
+    .filter((slot) => slot.weekday >= 0 && slot.weekday <= 6)
+    .filter((slot) => slot.meal_type === "almoco" || slot.meal_type === "jantar")
+    .map((slot) => ({
+      weekday: slot.weekday,
+      meal_type: slot.meal_type,
+      title: slot.title?.trim() || null,
+      notes: slot.notes?.trim() || null,
+      source_meal_id: slot.source_meal_id ?? null,
+    }))
+    .filter((slot) => slot.title || slot.notes || slot.source_meal_id);
+}
+
+function WeeklyMealGridEditor({
+  slots,
+  onChange,
+}: {
+  slots: WeeklySlot[];
+  onChange: (slots: WeeklySlot[]) => void;
+}) {
+  const slotFor = (weekday: number, mealType: WeeklySlot["meal_type"]) =>
+    slots.find((slot) => slot.weekday === weekday && slot.meal_type === mealType);
+
+  const updateSlot = (weekday: number, mealType: WeeklySlot["meal_type"], patch: Partial<WeeklySlot>) => {
+    const current = slotFor(weekday, mealType);
+    if (current) {
+      onChange(slots.map((slot) => slot.weekday === weekday && slot.meal_type === mealType ? { ...slot, ...patch } : slot));
+      return;
+    }
+    onChange([...slots, { weekday, meal_type: mealType, title: "", notes: "", ...patch }]);
+  };
+
+  return (
+    <section className="space-y-4 rounded-2xl border border-[#EDE1D6] bg-[#FAF7F2]/60 p-4 sm:p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="brand-kicker mb-1">Grade semanal</p>
+          <h3 className="flex items-center gap-2 font-serif text-xl font-semibold text-[#3A3028]">
+            <CalendarDays className="h-5 w-5 text-[#607A56]" />
+            Almoco e jantar da semana
+          </h3>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[#75675E]">
+            Guia simples para preencher junto com a paciente. Ele complementa o plano alimentar ativo e aparece no portal.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="rounded-full border border-[#EAD8C2] px-3 py-2 text-xs font-semibold text-[#8C6E52] transition hover:bg-[#FFFDFC]"
+        >
+          Limpar grade
+        </button>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-7">
+        {WEEK_DAYS.map((day, weekday) => (
+          <div key={day} className="rounded-xl border border-[#EAD8C2] bg-[#FFFDFC] p-3">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-[#607A56]">{day}</p>
+            <div className="space-y-3">
+              {WEEKLY_MEAL_TYPES.map((mealType) => {
+                const slot = slotFor(weekday, mealType.id);
+                return (
+                  <div key={mealType.id} className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#8C5F50]">{mealType.label}</label>
+                    <input
+                      value={slot?.title ?? ""}
+                      onChange={(event) => updateSlot(weekday, mealType.id, { title: event.target.value })}
+                      className="brand-input h-10 rounded-xl px-3 text-xs"
+                      placeholder="Ex: arroz, feijao..."
+                    />
+                    <textarea
+                      value={slot?.notes ?? ""}
+                      onChange={(event) => updateSlot(weekday, mealType.id, { notes: event.target.value })}
+                      className="brand-input min-h-16 resize-y rounded-xl px-3 py-2 text-xs"
+                      placeholder="Observacao"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

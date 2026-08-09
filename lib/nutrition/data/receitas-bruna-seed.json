@@ -1,0 +1,480 @@
+[
+  {
+    "id": "r1",
+    "titulo": "Omelete Fit",
+    "meal_group": "cafe_da_manha",
+    "kcal_aprox": 220,
+    "tempo_min": 10,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "2 ovos",
+      "espinafre",
+      "queijo cottage",
+      "sal"
+    ],
+    "modo_preparo": [
+      "Bata os ovos com sal.",
+      "Misture o espinafre picado.",
+      "Cozinhe em frigideira antiaderente e finalize com o cottage."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r2",
+    "titulo": "Panqueca de Banana",
+    "meal_group": "cafe_da_manha",
+    "kcal_aprox": 180,
+    "tempo_min": 12,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "1 banana",
+      "1 ovo",
+      "2 col. aveia",
+      "canela"
+    ],
+    "modo_preparo": [
+      "Amasse a banana até virar purê.",
+      "Misture o ovo, a aveia e a canela.",
+      "Doure a massa dos dois lados na frigideira."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r3",
+    "titulo": "Vitamina Verde",
+    "meal_group": "cafe_da_manha",
+    "kcal_aprox": 190,
+    "tempo_min": 5,
+    "rendimento": "1 copo",
+    "ingredientes": [
+      "Couve",
+      "banana",
+      "leite vegetal",
+      "gengibre"
+    ],
+    "modo_preparo": [
+      "Lave bem a couve.",
+      "Bata todos os ingredientes no liquidificador.",
+      "Sirva imediatamente, gelado."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r4",
+    "titulo": "Mingau de Aveia",
+    "meal_group": "cafe_da_manha",
+    "kcal_aprox": 210,
+    "tempo_min": 8,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "3 col. aveia",
+      "leite",
+      "canela",
+      "mel"
+    ],
+    "modo_preparo": [
+      "Aqueça o leite em fogo baixo.",
+      "Adicione a aveia mexendo sempre até engrossar.",
+      "Finalize com canela e mel."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r5",
+    "titulo": "Tapioca Proteica",
+    "meal_group": "cafe_da_manha",
+    "kcal_aprox": 200,
+    "tempo_min": 8,
+    "rendimento": "1 unidade",
+    "ingredientes": [
+      "Goma de tapioca",
+      "ovo",
+      "queijo branco"
+    ],
+    "modo_preparo": [
+      "Hidrate a goma na frigideira quente.",
+      "Adicione o ovo mexido por cima.",
+      "Acrescente o queijo e dobre ao meio."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r6",
+    "titulo": "Iogurte com Granola",
+    "meal_group": "cafe_da_manha",
+    "kcal_aprox": 230,
+    "tempo_min": 5,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "Iogurte natural",
+      "granola caseira",
+      "frutas vermelhas"
+    ],
+    "modo_preparo": [
+      "Coloque uma camada de iogurte no pote.",
+      "Adicione a granola e as frutas.",
+      "Repita as camadas e sirva na hora."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r7",
+    "titulo": "Frango com Batata Doce",
+    "meal_group": "almoco",
+    "kcal_aprox": 380,
+    "tempo_min": 35,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "Filé de frango",
+      "batata doce",
+      "alecrim",
+      "azeite"
+    ],
+    "modo_preparo": [
+      "Tempere o frango com alecrim e azeite.",
+      "Corte a batata doce em cubos.",
+      "Asse tudo junto por 30 min a 200°C."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r8",
+    "titulo": "Peixe ao Limão",
+    "meal_group": "almoco",
+    "kcal_aprox": 320,
+    "tempo_min": 20,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "Filé de peixe branco",
+      "limão",
+      "alho",
+      "salsa"
+    ],
+    "modo_preparo": [
+      "Tempere o peixe com limão e alho picado.",
+      "Deixe marinar por 10 minutos.",
+      "Grelhe em frigideira antiaderente até dourar dos dois lados."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r9",
+    "titulo": "Carne com Legumes",
+    "meal_group": "jantar",
+    "kcal_aprox": 350,
+    "tempo_min": 25,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "Patinho em cubos",
+      "abobrinha",
+      "cenoura",
+      "cebola"
+    ],
+    "modo_preparo": [
+      "Refogue a cebola até dourar.",
+      "Adicione a carne e sele todos os lados.",
+      "Acrescente os legumes e cozinhe até ficarem macios."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r10",
+    "titulo": "Grão-de-Bico ao Curry",
+    "meal_group": "jantar",
+    "kcal_aprox": 310,
+    "tempo_min": 20,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "Grão-de-bico cozido",
+      "curry",
+      "leite de coco",
+      "cebola"
+    ],
+    "modo_preparo": [
+      "Refogue a cebola no azeite.",
+      "Adicione o grão-de-bico e o curry, misture bem.",
+      "Finalize com leite de coco e cozinhe por 5 min."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r11",
+    "titulo": "Salmão Grelhado",
+    "meal_group": "jantar",
+    "kcal_aprox": 340,
+    "tempo_min": 18,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "Salmão",
+      "aspargos",
+      "azeite",
+      "limão"
+    ],
+    "modo_preparo": [
+      "Tempere o salmão com sal e limão.",
+      "Grelhe com a pele para baixo primeiro, 5 min.",
+      "Vire e finalize; sirva com aspargos salteados."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r12",
+    "titulo": "Quinoa com Legumes",
+    "meal_group": "almoco",
+    "kcal_aprox": 290,
+    "tempo_min": 20,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "Quinoa cozida",
+      "pimentão",
+      "ervilha",
+      "azeite"
+    ],
+    "modo_preparo": [
+      "Cozinhe a quinoa conforme instruções da embalagem.",
+      "Salteie os legumes no azeite.",
+      "Misture tudo e tempere com ervas a gosto."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r13",
+    "titulo": "Bolinho de Banana Fit",
+    "meal_group": "lanche",
+    "kcal_aprox": 140,
+    "tempo_min": 25,
+    "rendimento": "6 unidades",
+    "ingredientes": [
+      "Banana",
+      "aveia",
+      "ovo",
+      "canela"
+    ],
+    "modo_preparo": [
+      "Amasse a banana e misture os demais ingredientes.",
+      "Distribua em forminhas.",
+      "Asse por 20 min a 180°C."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r14",
+    "titulo": "Hummus com Palitos",
+    "meal_group": "lanche",
+    "kcal_aprox": 160,
+    "tempo_min": 10,
+    "rendimento": "2 porções",
+    "ingredientes": [
+      "Grão-de-bico",
+      "tahine",
+      "limão",
+      "cenoura e pepino"
+    ],
+    "modo_preparo": [
+      "Bata o grão-de-bico com tahine e limão.",
+      "Ajuste o sal e a consistência com um fio de água.",
+      "Sirva com os palitos de legumes."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r15",
+    "titulo": "Mix de Castanhas",
+    "meal_group": "lanche",
+    "kcal_aprox": 180,
+    "tempo_min": 2,
+    "rendimento": "1 porção (30g)",
+    "ingredientes": [
+      "Castanha-do-pará",
+      "amêndoas",
+      "nozes"
+    ],
+    "modo_preparo": [
+      "Misture as castanhas em partes iguais.",
+      "Porcione em potinhos de 30g.",
+      "Guarde em local seco para levar pronto."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r16",
+    "titulo": "Sanduíche Natural",
+    "meal_group": "lanche",
+    "kcal_aprox": 250,
+    "tempo_min": 10,
+    "rendimento": "1 unidade",
+    "ingredientes": [
+      "Pão integral",
+      "frango desfiado",
+      "alface",
+      "tomate"
+    ],
+    "modo_preparo": [
+      "Tempere o frango desfiado com ervas.",
+      "Monte o sanduíche com alface e tomate.",
+      "Sirva na hora ou embale para transportar."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r17",
+    "titulo": "Chips de Batata Doce",
+    "meal_group": "lanche",
+    "kcal_aprox": 150,
+    "tempo_min": 25,
+    "rendimento": "1 porção",
+    "ingredientes": [
+      "Batata doce fatiada fina",
+      "azeite",
+      "páprica"
+    ],
+    "modo_preparo": [
+      "Corte a batata doce em fatias bem finas.",
+      "Tempere com azeite e páprica.",
+      "Asse a 200°C por 20 min até ficarem crocantes."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r18",
+    "titulo": "Mousse de Chocolate Fit",
+    "meal_group": "sobremesa",
+    "kcal_aprox": 150,
+    "tempo_min": "10 min + 1h geladeira",
+    "rendimento": "2 porções",
+    "ingredientes": [
+      "Abacate",
+      "cacau em pó",
+      "mel",
+      "banana"
+    ],
+    "modo_preparo": [
+      "Bata todos os ingredientes no processador.",
+      "Ajuste o mel conforme o dulçor desejado.",
+      "Leve à geladeira por pelo menos 1 hora antes de servir."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r19",
+    "titulo": "Picolé de Frutas",
+    "meal_group": "sobremesa",
+    "kcal_aprox": 90,
+    "tempo_min": "10 min + 4h congelador",
+    "rendimento": "4 unidades",
+    "ingredientes": [
+      "Morango",
+      "iogurte natural",
+      "mel"
+    ],
+    "modo_preparo": [
+      "Bata os ingredientes até ficar homogêneo.",
+      "Despeje em forminhas de picolé.",
+      "Congele por no mínimo 4 horas."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r20",
+    "titulo": "Brownie de Banana",
+    "meal_group": "sobremesa",
+    "kcal_aprox": 170,
+    "tempo_min": 30,
+    "rendimento": "6 porções",
+    "ingredientes": [
+      "Banana",
+      "cacau",
+      "aveia",
+      "ovo"
+    ],
+    "modo_preparo": [
+      "Amasse a banana e misture os demais ingredientes.",
+      "Despeje em forma pequena untada.",
+      "Asse por 25 min a 180°C."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r21",
+    "titulo": "Gelatina com Frutas",
+    "meal_group": "sobremesa",
+    "kcal_aprox": 80,
+    "tempo_min": "10 min + geladeira",
+    "rendimento": "2 porções",
+    "ingredientes": [
+      "Gelatina diet",
+      "morango",
+      "kiwi"
+    ],
+    "modo_preparo": [
+      "Prepare a gelatina conforme instruções da embalagem.",
+      "Pique as frutas em cubos pequenos.",
+      "Adicione as frutas antes da gelatina firmar totalmente."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  },
+  {
+    "id": "r22",
+    "titulo": "Bolinho de Maçã e Canela",
+    "meal_group": "sobremesa",
+    "kcal_aprox": 160,
+    "tempo_min": 25,
+    "rendimento": "6 unidades",
+    "ingredientes": [
+      "Maçã",
+      "aveia",
+      "canela",
+      "ovo"
+    ],
+    "modo_preparo": [
+      "Rale a maçã e misture com os demais ingredientes.",
+      "Distribua a massa em forminhas.",
+      "Asse por 20 min a 180°C."
+    ],
+    "source_note": "Estimativa de calorias do material fonte; sem detalhamento de macros por ingrediente",
+    "is_active": true,
+    "created_by": "seed:receitas-bruna"
+  }
+]

@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const statusSchema = z.enum(["agendado", "confirmado", "realizado", "cancelado"]);
-const typeSchema = z.enum(["consulta", "retorno", "avaliacao", "online", "outro"]);
+const typeSchema = z.enum(["primeira_consulta", "consulta", "retorno", "avaliacao", "online", "outro"]);
 
 const UpdateSchema = z
   .object({
