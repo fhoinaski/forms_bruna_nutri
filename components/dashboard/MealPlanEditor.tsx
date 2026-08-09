@@ -7,13 +7,24 @@ import {
   PROTOCOL_TEMPLATE_TARGET_GROUPS,
   type ProtocolTemplateTargetGroup,
 } from "@/lib/protocol-templates/constants";
-import { estimateFoodMacros, roundedMacros, sumMacros } from "@/lib/nutrition/macros";
+import { estimateFoodMacros, roundedMacros, sumMacros, type MacroReferenceFood } from "@/lib/nutrition/macros";
+import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 
 type MealPlanStatus = "draft" | "active" | "archived";
 type MealItem = { food: string; quantity?: string | null; unit?: string | null; notes?: string | null };
-type Meal = { name: string; suggested_time?: string | null; notes?: string | null; items: MealItem[] };
+type Meal = { name: string; suggested_time?: string | null; notes?: string | null; source_recipe_id?: string | null; items: MealItem[] };
 type Substitution = { base_food: string; option_food: string; quantity?: string | null; unit?: string | null; notes?: string | null };
 type Supplement = { name: string; dosage?: string | null; unit?: string | null; instructions?: string | null; notes?: string | null };
+type FoodSuggestion = MacroReferenceFood & { numero: number | string; grupo: string };
+type RecipeLibraryItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  meal_group: RecipeMealGroup;
+  ingredients: Array<{ taco_number: number; food_name: string; grams: number }>;
+  source_note: string | null;
+  per_portion_kcal: number;
+};
 type MealPlan = {
   id: string;
   title: string;
@@ -38,6 +49,14 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [activeFoodField, setActiveFoodField] = useState("");
+  const [foodSearch, setFoodSearch] = useState<{ key: string; query: string }>({ key: "", query: "" });
+  const [foodSuggestions, setFoodSuggestions] = useState<Record<string, FoodSuggestion[]>>({});
+  const [recipeSelectorOpen, setRecipeSelectorOpen] = useState(false);
+  const [recipeSearch, setRecipeSearch] = useState("");
+  const [recipeMealGroup, setRecipeMealGroup] = useState("");
+  const [recipes, setRecipes] = useState<RecipeLibraryItem[]>([]);
+  const [recipesLoading, setRecipesLoading] = useState(false);
 
   const loadPlans = useCallback(async (preferredPlanId?: string) => {
     const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, { cache: "no-store" });
@@ -52,6 +71,61 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   useEffect(() => {
     void loadPlans();
   }, [loadPlans]);
+
+  useEffect(() => {
+    if (!plan) return;
+    const foodsToPrime = plan.meals.flatMap((meal, mealIndex) =>
+      meal.items.map((item, itemIndex) => ({ key: `${mealIndex}:${itemIndex}`, query: item.food.trim() }))
+    ).filter(({ key, query }) => query.length >= 2 && !foodSuggestions[key]?.length).slice(0, 24);
+    if (!foodsToPrime.length) return;
+
+    const controller = new AbortController();
+    Promise.all(foodsToPrime.map(async ({ key, query }) => {
+      try {
+        const response = await fetch(`/api/admin/foods/search?q=${encodeURIComponent(query)}`, { cache: "no-store", signal: controller.signal });
+        const data = response.ok ? await response.json() as { items?: FoodSuggestion[] } : { items: [] as FoodSuggestion[] };
+        return [key, data.items ?? []] as const;
+      } catch (cause) {
+        if (cause instanceof Error && cause.name === "AbortError") return null;
+        return [key, [] as FoodSuggestion[]] as const;
+      }
+    })).then((entries) => {
+      setFoodSuggestions((current) => {
+        const next = { ...current };
+        for (const entry of entries) {
+          if (!entry) continue;
+          next[entry[0]] = entry[1];
+        }
+        return next;
+      });
+    });
+
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan?.id]);
+
+  useEffect(() => {
+    const query = foodSearch.query.trim();
+    if (!foodSearch.key || query.length < 2) return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetch(`/api/admin/foods/search?q=${encodeURIComponent(query)}`, { cache: "no-store", signal: controller.signal })
+        .then((response) => response.ok ? response.json() : { items: [] })
+        .then((data: { items?: FoodSuggestion[] }) => {
+          setFoodSuggestions((current) => ({ ...current, [foodSearch.key]: data.items ?? [] }));
+        })
+        .catch((cause) => {
+          if (cause instanceof Error && cause.name === "AbortError") return;
+          setFoodSuggestions((current) => ({ ...current, [foodSearch.key]: [] }));
+        });
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [foodSearch]);
 
   function selectPlan(id: string) {
     setSelectedPlanId(id);
@@ -95,6 +169,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             name: meal.name,
             suggested_time: meal.suggested_time ?? null,
             notes: meal.notes ?? null,
+            source_recipe_id: meal.source_recipe_id ?? null,
             items: meal.items
               .filter((item) => item.food.trim())
               .map((item) => ({
@@ -182,9 +257,71 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     });
   };
 
+  useEffect(() => {
+    if (!recipeSelectorOpen) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setRecipesLoading(true);
+      const params = new URLSearchParams({ includeInactive: "false" });
+      if (recipeSearch.trim()) params.set("q", recipeSearch.trim());
+      if (recipeMealGroup) params.set("meal_group", recipeMealGroup);
+      fetch(`/api/admin/recipes?${params}`, { cache: "no-store", signal: controller.signal })
+        .then((response) => response.ok ? response.json() : { items: [] })
+        .then((data: { items?: RecipeLibraryItem[] }) => setRecipes(data.items ?? []))
+        .catch((cause) => {
+          if (cause instanceof Error && cause.name === "AbortError") return;
+          setRecipes([]);
+        })
+        .finally(() => setRecipesLoading(false));
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [recipeMealGroup, recipeSearch, recipeSelectorOpen]);
+
+  function insertRecipe(recipe: RecipeLibraryItem) {
+    if (!plan) return;
+    const mealIndex = plan.meals.length;
+    const meal: Meal = {
+      name: recipe.title,
+      suggested_time: "",
+      notes: recipe.source_note ? `Receita da biblioteca. Observacao: ${recipe.source_note}` : "Receita inserida da biblioteca.",
+      source_recipe_id: recipe.id,
+      items: recipe.ingredients.map((ingredient) => ({
+        food: ingredient.food_name,
+        quantity: String(ingredient.grams),
+        unit: "g",
+        notes: null,
+      })),
+    };
+    setPlan({ ...plan, meals: [...plan.meals, meal] });
+    void Promise.all(recipe.ingredients.map(async (ingredient, itemIndex) => {
+      const response = await fetch(`/api/admin/foods/search?q=${encodeURIComponent(ingredient.food_name)}`, { cache: "no-store" });
+      const data = response.ok ? await response.json() as { items?: FoodSuggestion[] } : { items: [] as FoodSuggestion[] };
+      return [`${mealIndex}:${itemIndex}`, data.items ?? []] as const;
+    })).then((entries) => {
+      setFoodSuggestions((current) => {
+        const next = { ...current };
+        for (const [key, suggestions] of entries) next[key] = suggestions;
+        return next;
+      });
+    });
+    setRecipeSelectorOpen(false);
+    setMessage(`Receita "${recipe.title}" inserida como copia. Salve o plano para registrar no prontuario.`);
+  };
+
+  const knownFoodReferences = useMemo(() => {
+    const byKey = new Map<string, FoodSuggestion>();
+    for (const suggestion of Object.values(foodSuggestions).flat()) {
+      byKey.set(String(suggestion.numero ?? suggestion.descricao), suggestion);
+    }
+    return Array.from(byKey.values());
+  }, [foodSuggestions]);
+
   const mealMacros = useMemo(() => plan?.meals.map((meal) => roundedMacros(sumMacros(
-    meal.items.filter((item) => item.food.trim()).map((item) => estimateFoodMacros(item.food, item.quantity, item.unit))
-  ))) ?? [], [plan]);
+    meal.items.filter((item) => item.food.trim()).map((item) => estimateFoodMacros(item.food, item.quantity, item.unit, knownFoodReferences))
+  ))) ?? [], [plan, knownFoodReferences]);
 
   const planMacros = useMemo(() => roundedMacros(sumMacros(mealMacros)), [mealMacros]);
 
@@ -256,10 +393,16 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Refeições</h3>
+              <div className="grid gap-2 sm:flex">
               <button type="button" onClick={() => setPlan({ ...plan, meals: [...plan.meals, emptyMeal()] })} className="brand-btn-secondary w-full sm:w-auto">
                 <Plus className="h-4 w-4" />
                 Refeição
               </button>
+              <button type="button" onClick={() => setRecipeSelectorOpen(true)} className="brand-btn-secondary w-full sm:w-auto">
+                <Utensils className="h-4 w-4" />
+                Inserir receita
+              </button>
+              </div>
             </div>
             {plan.meals.map((meal, mealIndex) => (
               <article key={mealIndex} className="overflow-hidden rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_8px_28px_rgba(58,48,40,0.04)]">
@@ -280,7 +423,47 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                 <div className="mt-3 space-y-2">
                   {meal.items.map((item, itemIndex) => (
                     <div key={itemIndex} className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_110px_90px_auto]">
-                      <input value={item.food} onChange={(event) => updateMealItem(mealIndex, itemIndex, { food: event.target.value })} className="brand-input" placeholder="Alimento" />
+                      <div className="relative min-w-0">
+                        <input
+                          value={item.food}
+                          onChange={(event) => {
+                            const key = `${mealIndex}:${itemIndex}`;
+                            updateMealItem(mealIndex, itemIndex, { food: event.target.value });
+                            setActiveFoodField(key);
+                            setFoodSearch({ key, query: event.target.value });
+                          }}
+                          onFocus={(event) => {
+                            const key = `${mealIndex}:${itemIndex}`;
+                            setActiveFoodField(key);
+                            setFoodSearch({ key, query: event.target.value });
+                          }}
+                          onBlur={() => window.setTimeout(() => setActiveFoodField(""), 140)}
+                          className="brand-input"
+                          placeholder="Digite para buscar na TACO"
+                        />
+                        {activeFoodField === `${mealIndex}:${itemIndex}` && (foodSuggestions[`${mealIndex}:${itemIndex}`]?.length ?? 0) > 0 && (
+                          <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 overflow-y-auto rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
+                            {foodSuggestions[`${mealIndex}:${itemIndex}`].map((suggestion) => (
+                              <button
+                                key={suggestion.numero}
+                                type="button"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => {
+                                  updateMealItem(mealIndex, itemIndex, { food: suggestion.descricao });
+                                  setFoodSuggestions((current) => ({ ...current, [`${mealIndex}:${itemIndex}`]: [suggestion] }));
+                                  setActiveFoodField("");
+                                }}
+                                className="block w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-[#FAF7F2]"
+                              >
+                                <span className="block text-sm font-medium text-[#3A3028]">{suggestion.descricao}</span>
+                                <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">
+                                  {suggestion.grupo} · {Math.round(suggestion.energia_kcal)} kcal/100g
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <input value={item.quantity ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { quantity: event.target.value })} className="brand-input" placeholder="Qtd." />
                       <input value={item.unit ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { unit: event.target.value })} className="brand-input" placeholder="Un." />
                       <button type="button" onClick={() => updateMeal(mealIndex, { items: meal.items.filter((_, index) => index !== itemIndex) })} className="inline-flex h-11 items-center justify-center rounded-xl px-3 text-red-600 hover:bg-red-50" aria-label="Remover alimento" title="Remover alimento">
@@ -348,6 +531,41 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             {planMacros.totalItems > 0 && planMacros.recognizedItems < planMacros.totalItems && <p className="mt-2 text-[10px] text-[#8C5F50]">{planMacros.totalItems - planMacros.recognizedItems} alimento(s) ainda não reconhecido(s) pelo cálculo automático.</p>}
           </div>
         </section>
+      )}
+      {recipeSelectorOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+          <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-5 py-4">
+              <div>
+                <p className="brand-kicker">Biblioteca de receitas</p>
+                <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Inserir receita no plano</h2>
+              </div>
+              <button type="button" onClick={() => setRecipeSelectorOpen(false)} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" title="Fechar">x</button>
+            </div>
+            <div className="grid shrink-0 gap-3 border-b border-[#EDE1D6] p-4 md:grid-cols-[minmax(0,1fr)_220px]">
+              <input value={recipeSearch} onChange={(event) => setRecipeSearch(event.target.value)} className="brand-input" placeholder="Buscar por nome ou tag..." />
+              <select value={recipeMealGroup} onChange={(event) => setRecipeMealGroup(event.target.value)} className="brand-input">
+                <option value="">Todos os grupos</option>
+                {RECIPE_MEAL_GROUPS.map((group) => <option key={group} value={group}>{RECIPE_MEAL_GROUP_LABELS[group]}</option>)}
+              </select>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+              {recipesLoading ? <p className="text-sm text-[#8C6E52]">Carregando receitas...</p> : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {recipes.map((recipe) => (
+                    <button key={recipe.id} type="button" onClick={() => insertRecipe(recipe)} className="rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] p-4 text-left transition hover:border-[#7F9A74]/50 hover:bg-[#F5FAF0]">
+                      <span className="block font-semibold text-[#3A3028]">{recipe.title}</span>
+                      <span className="mt-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#8C5F50]">{RECIPE_MEAL_GROUP_LABELS[recipe.meal_group]} · {Math.round(recipe.per_portion_kcal)} kcal/porcao</span>
+                      {recipe.description && <span className="mt-2 block text-xs leading-5 text-[#75675E]">{recipe.description}</span>}
+                      {recipe.source_note && <span className="mt-2 block rounded-xl border border-[#F0D4C7] bg-[#FFF7F3] px-3 py-2 text-xs leading-5 text-[#8C5F50]">{recipe.source_note}</span>}
+                    </button>
+                  ))}
+                  {!recipes.length && <p className="text-sm text-[#8C6E52]">Nenhuma receita encontrada.</p>}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

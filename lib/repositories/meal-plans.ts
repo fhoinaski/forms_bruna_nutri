@@ -24,6 +24,7 @@ export type MealPlanMealPayload = {
   name: string;
   suggested_time?: string | null;
   notes?: string | null;
+  source_recipe_id?: string | null;
   items: MealPlanItemPayload[];
 };
 
@@ -230,6 +231,7 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
       name: meal.name,
       suggested_time: meal.suggested_time,
       notes: meal.notes,
+      source_recipe_id: meal.source_recipe_id,
       items: (itemsByMeal.get(meal.id) ?? []).map((item) => ({
         id: item.id,
         food: item.food,
@@ -348,7 +350,7 @@ function buildMealPlanDetailStatements(
   const itemRows: Record<string, unknown>[] = [];
   for (const [mealIndex, meal] of meals.entries()) {
     const mealId = crypto.randomUUID();
-    mealRows.push({ id: mealId, planId, name: meal.name, time: meal.suggested_time ?? null, notes: meal.notes ?? null, order: mealIndex, now });
+    mealRows.push({ id: mealId, planId, name: meal.name, time: meal.suggested_time ?? null, notes: meal.notes ?? null, sourceRecipeId: meal.source_recipe_id ?? null, order: mealIndex, now });
     for (const [itemIndex, item] of meal.items.entries()) {
       if (!item.food.trim()) continue;
       itemRows.push({ id: crypto.randomUUID(), mealId, food: item.food, quantity: item.quantity ?? null, unit: item.unit ?? null, notes: item.notes ?? null, order: itemIndex, now });
@@ -367,8 +369,8 @@ function buildMealPlanDetailStatements(
     { sql: "DELETE FROM meal_plan_supplements WHERE meal_plan_id = ?1", params: [planId] },
   ];
   if (mealRows.length) statements.push({
-    sql: `INSERT INTO meal_plan_meals (id, meal_plan_id, name, suggested_time, notes, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.planId'), json_extract(value,'$.name'), json_extract(value,'$.time'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO meal_plan_meals (id, meal_plan_id, name, suggested_time, notes, source_recipe_id, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.planId'), json_extract(value,'$.name'), json_extract(value,'$.time'), json_extract(value,'$.notes'), json_extract(value,'$.sourceRecipeId'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(mealRows)],
   });
   if (itemRows.length) statements.push({

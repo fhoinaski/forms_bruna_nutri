@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
 import { getClientProtocols } from "@/lib/repositories/client-protocols";
@@ -7,6 +8,9 @@ import { getClientEvolutions } from "@/lib/repositories/client-evolutions";
 import { getClientTimeline } from "@/lib/repositories/client-timeline";
 import { getSubmissionById } from "@/lib/repositories/submissions";
 import { getExistingNutritionRecord } from "@/lib/repositories/nutrition-records";
+import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
+import { estimateFoodMacrosFromTaco } from "@/lib/nutrition/taco";
+import { roundedMacros, sumMacros } from "@/lib/nutrition/macros";
 import { PrintButton } from "./PrintButton";
 
 export const dynamic = "force-dynamic";
@@ -90,13 +94,14 @@ export default async function ClientPrintPage({
 
   const { id } = await params;
 
-  const [client, protocols, tasks, evolutions, timeline, nutritionRecord] = await Promise.all([
+  const [client, protocols, tasks, evolutions, timeline, nutritionRecord, activeMealPlan] = await Promise.all([
     getClientById(id),
     getClientProtocols(id),
     getClientTasks(id),
     getClientEvolutions(id),
     getClientTimeline(id),
     getExistingNutritionRecord(id),
+    getActiveMealPlan(id),
   ]);
 
   if (!client) notFound();
@@ -107,6 +112,16 @@ export default async function ClientPrintPage({
 
   const activeEvolutions = evolutions.filter((e) => e.weight || e.progress_notes);
   const lastEvolution = activeEvolutions[0];
+  const mealMacros = activeMealPlan?.meals.map((meal) => roundedMacros(sumMacros(
+    meal.items.map((item) => estimateFoodMacrosFromTaco(item.food, item.quantity, item.unit))
+  ))) ?? [];
+  const planMacros = roundedMacros(sumMacros(mealMacros));
+  const substitutionsByBase = new Map<string, NonNullable<typeof activeMealPlan>["substitutions"]>();
+  for (const substitution of activeMealPlan?.substitutions ?? []) {
+    const current = substitutionsByBase.get(substitution.base_food) ?? [];
+    current.push(substitution);
+    substitutionsByBase.set(substitution.base_food, current);
+  }
 
   return (
     <>
@@ -122,6 +137,15 @@ export default async function ClientPrintPage({
         .kv-item label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #A8927D; display: block; }
         .kv-item span { font-weight: 500; color: #3A2B1F; }
         .card { background: #FAF7F2; border: 1px solid #EAD8C2; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+        .meal { border: 1px solid #EAD8C2; border-radius: 12px; margin-bottom: 12px; overflow: hidden; page-break-inside: avoid; }
+        .meal-head { background: #FAF7F2; border-bottom: 1px solid #EAD8C2; padding: 10px 14px; display: flex; justify-content: space-between; gap: 12px; }
+        .meal-body { padding: 10px 14px; }
+        .meal-item { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid #F0E4D8; padding: 7px 0; }
+        .meal-item:last-child { border-bottom: 0; }
+        .macro-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+        .macro { border: 1px solid #EAD8C2; border-radius: 10px; padding: 8px; background: #FFFDFC; }
+        .macro label { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: #A8927D; }
+        .macro strong { font-size: 14px; color: #3A2B1F; }
         .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
         .badge-green { background: #D4EDDA; color: #4A7C59; }
         .badge-sand { background: #EAD8C2; color: #8C6E52; }
@@ -133,6 +157,8 @@ export default async function ClientPrintPage({
         @media print {
           .no-print { display: none !important; }
           body { background: #fff; }
+          @page { margin: 14mm; }
+          .page { max-width: none; padding: 0; }
         }
       `}</style>
 
@@ -144,6 +170,7 @@ export default async function ClientPrintPage({
       <div className="page">
         {/* Cabeçalho */}
         <div style={{ textAlign: "center", marginBottom: "32px", borderBottom: "2px solid #EAD8C2", paddingBottom: "24px" }}>
+          <Image src="/brand/bruna-flores-nutri-logo.webp" alt="Bruna Flores Nutri" width={150} height={57} style={{ width: "150px", height: "auto", margin: "0 auto 14px" }} priority />
           <p style={{ fontSize: "10px", letterSpacing: ".2em", textTransform: "uppercase", color: "#7A9A74", marginBottom: "6px" }}>
             Bruna Flores Nutri · Nutrição Materna
           </p>
@@ -245,6 +272,79 @@ export default async function ClientPrintPage({
               {lastEvolution.conduct_notes && <p style={{ marginTop: "6px" }}><strong>Conduta:</strong> {lastEvolution.conduct_notes}</p>}
               {lastEvolution.next_steps && <p style={{ marginTop: "6px" }}><strong>Próximos passos:</strong> {lastEvolution.next_steps}</p>}
             </div>
+          </div>
+        )}
+
+        {/* Plano alimentar ativo */}
+        {activeMealPlan && (
+          <div className="section">
+            <p className="section-title">Plano alimentar ativo</p>
+            <div className="card">
+              <p style={{ fontWeight: 700, fontSize: "14px" }}>{activeMealPlan.title}</p>
+              {activeMealPlan.notes && <p style={{ marginTop: "6px", whiteSpace: "pre-wrap" }}>{activeMealPlan.notes}</p>}
+              <div className="macro-grid">
+                <div className="macro"><label>Energia</label><strong>{planMacros.kcal} kcal</strong></div>
+                <div className="macro"><label>Proteinas</label><strong>{planMacros.protein} g</strong></div>
+                <div className="macro"><label>Carboidratos</label><strong>{planMacros.carbs} g</strong></div>
+                <div className="macro"><label>Gorduras</label><strong>{planMacros.fat} g</strong></div>
+              </div>
+              {planMacros.totalItems > 0 && planMacros.recognizedItems < planMacros.totalItems && (
+                <p style={{ color: "#8C5F50", fontSize: "10px" }}>
+                  {planMacros.totalItems - planMacros.recognizedItems} alimento(s) sem correspondencia automatica na TACO.
+                </p>
+              )}
+            </div>
+            {activeMealPlan.meals.map((meal, mealIndex) => (
+              <div key={`${meal.name}-${mealIndex}`} className="meal">
+                <div className="meal-head">
+                  <div>
+                    <p style={{ fontWeight: 700 }}>{meal.name}</p>
+                    {meal.suggested_time && <p style={{ color: "#8C6E52", fontSize: "10px" }}>Horario sugerido: {meal.suggested_time}</p>}
+                  </div>
+                  <span className="badge badge-green">{mealMacros[mealIndex]?.kcal ?? 0} kcal</span>
+                </div>
+                <div className="meal-body">
+                  {meal.notes && <p style={{ color: "#8C6E52", marginBottom: "6px", whiteSpace: "pre-wrap" }}>{meal.notes}</p>}
+                  {meal.items.map((item, itemIndex) => (
+                    <div key={`${item.food}-${itemIndex}`} className="meal-item">
+                      <span>{item.food}{item.notes ? ` - ${item.notes}` : ""}</span>
+                      <strong>{[item.quantity, item.unit].filter(Boolean).join(" ") || "Porcao individual"}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {substitutionsByBase.size > 0 && (
+              <div className="card">
+                <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: ".08em", color: "#A8927D", marginBottom: "8px" }}>Substituicoes</p>
+                {Array.from(substitutionsByBase.entries()).map(([baseFood, substitutions]) => (
+                  <div key={baseFood} style={{ marginBottom: "8px" }}>
+                    <p style={{ fontWeight: 700 }}>{baseFood}</p>
+                    <ul style={{ paddingLeft: "18px" }}>
+                      {substitutions.map((substitution, index) => (
+                        <li key={`${baseFood}-${index}`}>
+                          {substitution.option_food} {[substitution.quantity, substitution.unit].filter(Boolean).join(" ")}
+                          {substitution.notes ? ` - ${substitution.notes}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+            {activeMealPlan.supplements.length > 0 && (
+              <div className="card">
+                <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: ".08em", color: "#A8927D", marginBottom: "8px" }}>Suplementos</p>
+                {activeMealPlan.supplements.map((supplement, index) => (
+                  <p key={`${supplement.name}-${index}`}>
+                    <strong>{supplement.name}</strong>
+                    {[supplement.dosage, supplement.unit].filter(Boolean).length ? ` - ${[supplement.dosage, supplement.unit].filter(Boolean).join(" ")}` : ""}
+                    {supplement.instructions ? ` - ${supplement.instructions}` : ""}
+                    {supplement.notes ? ` (${supplement.notes})` : ""}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

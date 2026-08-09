@@ -271,6 +271,7 @@ export default function AgendaPage() {
       const workflowsParams = new URLSearchParams({
         appointmentFrom: range.from,
         appointmentTo: range.to,
+        channel: "whatsapp",
       });
       const [appointmentsRes, workflowRes, clientsRes] = await Promise.all([
         fetch(`/api/admin/appointments?${appointmentsParams}`, { cache: "no-store" }),
@@ -426,6 +427,13 @@ export default function AgendaPage() {
               Visualize o dia, confirme consultas, prepare mensagens e mantenha
               cada retorno conectado ao cuidado da paciente.
             </p>
+            <Link
+              href="/dashboard/agenda/disponibilidade"
+              className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#D9E4D3] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#607A56] transition hover:bg-[#EAF0E4]"
+            >
+              <CalendarDays className="h-4 w-4" />
+              Disponibilidade
+            </Link>
             <div className="mt-6 flex flex-wrap gap-2">
               {statusFilters.map((item) => (
                 <button

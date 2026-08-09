@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { createInternalSessionAssertion, INTERNAL_SESSION_HEADER, verifySessionToken } from "@/lib/auth/session";
 import { writeAuditLog } from "@/lib/security/audit";
+import { verifyCronSecret } from "@/lib/security/cron";
 
 const COOKIE_NAME = "bruna_nutri_admin_session";
 const SECURITY_PATH = "/dashboard/settings/security";
@@ -40,6 +41,13 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   }
 
   if (isPortalApi) {
+    return noStore(NextResponse.next(), true);
+  }
+
+  const isCronRoute =
+    pathname === "/api/admin/appointment-workflows/process-due" ||
+    pathname === "/api/admin/payments/notify-overdue";
+  if (isAdminApi && isCronRoute && verifyCronSecret(request)) {
     return noStore(NextResponse.next(), true);
   }
 

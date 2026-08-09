@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/admin/appointment-workflows/process-due",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/admin/payments/notify-overdue",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

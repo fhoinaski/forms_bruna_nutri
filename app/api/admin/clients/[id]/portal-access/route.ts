@@ -9,6 +9,8 @@ import {
   getClientPortalAccess,
   setClientPortalAccessActive,
 } from "@/lib/repositories/client-portal";
+import { sendEmail } from "@/lib/email/client";
+import { portalAccessEmail } from "@/lib/email/templates";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,6 +60,33 @@ export async function POST(
   }
 
   const result = await createOrRotateClientPortalCode(id);
+  let emailSent = false;
+  let emailError: string | null = null;
+
+  try {
+    await sendEmail({
+      to: client.email,
+      subject: "Acesso ao portal - Bruna Flores Nutri",
+      text: `Seu acesso ao portal da Bruna Flores Nutri foi liberado. Codigo: ${result.code}. Acesse: ${portalLoginUrl()}`,
+      html: portalAccessEmail({
+        clientName: client.name,
+        code: result.code,
+        loginUrl: portalLoginUrl(),
+      }),
+    });
+    emailSent = true;
+    await writeAuditLog({
+      action: "email_sent",
+      adminId: admin.sub,
+      entityType: "client_portal_access",
+      entityId: result.accessId,
+      ipHash: getRequestFingerprint(req).ipHash,
+      metadata: { channel: "email", reason: "portal_access" },
+    });
+  } catch (error) {
+    emailError = error instanceof Error ? error.message : "Falha ao enviar e-mail.";
+  }
+
   await writeAuditLog({
     action: "client_portal_code_rotated",
     adminId: admin.sub,
@@ -65,7 +94,7 @@ export async function POST(
     entityId: id,
     ipHash: getRequestFingerprint(req).ipHash,
   });
-  return NextResponse.json({ code: result.code, login_url: portalLoginUrl() });
+  return NextResponse.json({ code: result.code, login_url: portalLoginUrl(), email_sent: emailSent, email_error: emailError });
 }
 
 export async function PATCH(

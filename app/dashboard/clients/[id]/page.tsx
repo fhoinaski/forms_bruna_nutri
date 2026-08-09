@@ -1056,7 +1056,15 @@ export default function ClientDetailPage() {
           )}
 
           {activeTab === "plano-alimentar" && planView === "dieta" && (
-            <MealPlanEditor clientId={id} onSaved={reloadTimeline} />
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <Link href={`/dashboard/clients/${id}/print`} target="_blank" className="brand-btn-secondary w-full sm:w-auto">
+                  <Printer className="h-4 w-4" />
+                  Imprimir plano alimentar
+                </Link>
+              </div>
+              <MealPlanEditor clientId={id} onSaved={reloadTimeline} />
+            </div>
           )}
 
           {activeTab === "resumo" && summaryView === "portal" && (

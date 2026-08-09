@@ -14,6 +14,7 @@
     "migrate:d1:status": "node scripts/migrate-d1.mjs --status",
     "schema:runtime-check": "node scripts/check-runtime-ddl.mjs",
     "seed:templates": "tsx db/seed-templates.ts",
+    "seed:recipes": "tsx db/seed-recipes.ts",
     "create-admin": "node scripts/create-admin.mjs",
     "backup:d1": "node scripts/backup-d1.mjs",
     "restore:d1": "node scripts/restore-d1.mjs",
@@ -45,6 +46,7 @@
     "react-dom": "^19.2.1",
     "react-hook-form": "^7.73.1",
     "recharts": "^3.10.1",
+    "resend": "^6.18.1",
     "tailwind-merge": "^3.3.1",
     "uuid": "^14.0.0",
     "zod": "^4.3.6"

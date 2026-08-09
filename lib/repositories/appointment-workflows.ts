@@ -7,7 +7,7 @@ export type AppointmentWorkflowStep =
   | "preparo"
   | "pos_consulta";
 
-export type AppointmentWorkflowStatus = "pendente" | "enviado" | "dispensado";
+export type AppointmentWorkflowStatus = "pendente" | "processando" | "enviado" | "dispensado";
 
 export interface AppointmentWorkflowItem {
   id: string;
@@ -40,6 +40,7 @@ interface AppointmentForWorkflow {
   ends_at: string | null;
   location: string | null;
   client_name: string | null;
+  client_email: string | null;
 }
 
 function addHours(date: Date, hours: number) {
@@ -96,7 +97,7 @@ async function getAppointmentForWorkflow(appointmentId: string) {
   return (
     await d1Query<AppointmentForWorkflow>(
       `SELECT a.id, a.client_id, a.title, a.appointment_type, a.starts_at, a.ends_at,
-              a.location, c.name as client_name
+              a.location, c.name as client_name, c.email as client_email
        FROM appointments a
        LEFT JOIN clients c ON c.id = a.client_id
        WHERE a.id = ?1
@@ -112,20 +113,24 @@ export async function createStandardWorkflowForAppointment(appointmentId: string
   const now = new Date().toISOString();
 
   for (const item of workflowPlan(appointment)) {
-    await d1Execute(
-      `INSERT OR IGNORE INTO appointment_workflow_items
-        (id, appointment_id, step_type, channel, due_at, status, message, created_at, updated_at)
-       VALUES (?1, ?2, ?3, 'whatsapp', ?4, 'pendente', ?5, ?6, ?7)`,
-      [
-        crypto.randomUUID(),
-        appointment.id,
-        item.step,
-        item.dueAt,
-        item.message,
-        now,
-        now,
-      ]
-    );
+    const channels = appointment.client_email ? ["whatsapp", "email"] : ["whatsapp"];
+    for (const channel of channels) {
+      await d1Execute(
+        `INSERT OR IGNORE INTO appointment_workflow_items
+          (id, appointment_id, step_type, channel, due_at, status, message, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'pendente', ?6, ?7, ?8)`,
+        [
+          crypto.randomUUID(),
+          appointment.id,
+          item.step,
+          channel,
+          item.dueAt,
+          item.message,
+          now,
+          now,
+        ]
+      );
+    }
   }
   return true;
 }
@@ -151,6 +156,7 @@ export async function listAppointmentWorkflowItems(filters: {
   appointmentFrom?: string;
   appointmentTo?: string;
   status?: AppointmentWorkflowStatus;
+  channel?: string;
   appointmentId?: string;
 }) {
   const conditions: string[] = [];
@@ -176,6 +182,10 @@ export async function listAppointmentWorkflowItems(filters: {
   if (filters.status) {
     conditions.push(`w.status = ?${index++}`);
     params.push(filters.status);
+  }
+  if (filters.channel) {
+    conditions.push(`w.channel = ?${index++}`);
+    params.push(filters.channel);
   }
   if (filters.appointmentId) {
     conditions.push(`w.appointment_id = ?${index++}`);
@@ -248,6 +258,28 @@ export async function updateAppointmentWorkflowItem(
   }
 
   return item ?? null;
+}
+
+export async function claimPendingAppointmentWorkflowItem(id: string) {
+  const now = new Date().toISOString();
+  const rows = await d1Query<{ id: string }>(
+    `UPDATE appointment_workflow_items
+     SET status = 'processando', updated_at = ?1
+     WHERE id = ?2 AND status = 'pendente'
+     RETURNING id`,
+    [now, id]
+  );
+  return Boolean(rows[0]);
+}
+
+export async function resetAppointmentWorkflowItemToPending(id: string) {
+  const now = new Date().toISOString();
+  await d1Execute(
+    `UPDATE appointment_workflow_items
+     SET status = 'pendente', completed_at = NULL, updated_at = ?1
+     WHERE id = ?2 AND status = 'processando'`,
+    [now, id]
+  );
 }
 
 export function workflowStepLabel(step: AppointmentWorkflowStep) {

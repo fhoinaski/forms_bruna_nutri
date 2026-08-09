@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import {
   Archive,
   CheckCircle2,
@@ -473,6 +474,10 @@ export default function ProtocolTemplatesPage() {
                 </button>
               ))}
             </div>
+            <Link href="/dashboard/templates/receitas" className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-[#D9E4D3] px-5 py-2 text-sm font-semibold text-[#607A56] transition-colors hover:bg-[#EAF0E4]">
+              <Utensils className="h-4 w-4" />
+              Abrir biblioteca de receitas
+            </Link>
           </div>
 
           <aside className="border-t border-[#EDE1D6] bg-[#FBF7F1] p-6 lg:border-l lg:border-t-0">

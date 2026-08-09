@@ -1,0 +1,79 @@
+import tacoData from "@/lib/nutrition/data/taco.json";
+import { estimateFoodMacros, findBestFoodReference, normalize, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
+
+type TacoRow = {
+  numero: number | string;
+  descricao: string;
+  grupo: string;
+  energia_kcal: unknown;
+  proteina_g: unknown;
+  carboidrato_g: unknown;
+  lipidios_g: unknown;
+};
+
+type TacoFile = TacoRow[] | { alimentos?: TacoRow[] };
+
+function tacoRows(): TacoRow[] {
+  const data = tacoData as TacoFile;
+  return Array.isArray(data) ? data : data.alimentos ?? [];
+}
+
+export function coerceTacoNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return 0;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === "na" || normalized === "tr") return 0;
+  const parsed = Number(normalized.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toReferenceFood(row: TacoRow): MacroReferenceFood {
+  return {
+    numero: row.numero,
+    descricao: row.descricao,
+    grupo: row.grupo,
+    energia_kcal: coerceTacoNumber(row.energia_kcal),
+    proteina_g: coerceTacoNumber(row.proteina_g),
+    carboidrato_g: coerceTacoNumber(row.carboidrato_g),
+    lipidios_g: coerceTacoNumber(row.lipidios_g),
+  };
+}
+
+const TACO_REFERENCES: MacroReferenceFood[] = tacoRows().map(toReferenceFood);
+
+export function searchTacoFoods(query: string, limit = 15): MacroReferenceFood[] {
+  const normalizedQuery = normalize(query);
+  if (normalizedQuery.length < 2) return [];
+
+  return TACO_REFERENCES
+    .map((food) => {
+      const normalizedDescription = normalize(food.descricao);
+      const exact = normalizedDescription === normalizedQuery;
+      const contains = normalizedDescription.includes(normalizedQuery);
+      if (!exact && !contains) return null;
+      return {
+        food,
+        score: exact ? 0 : 1,
+        distance: Math.abs(normalizedDescription.length - normalizedQuery.length),
+        length: normalizedDescription.length,
+      };
+    })
+    .filter((item): item is { food: MacroReferenceFood; score: number; distance: number; length: number } => item !== null)
+    .sort((a, b) => a.score - b.score || a.distance - b.distance || a.length - b.length)
+    .slice(0, Math.max(1, Math.min(limit, 15)))
+    .map((item) => item.food);
+}
+
+export function findBestTacoFood(food: string): MacroReferenceFood | null {
+  return findBestFoodReference(food, TACO_REFERENCES);
+}
+
+export function getTacoFoodByNumber(numero: number | string): MacroReferenceFood | null {
+  const normalizedNumber = String(numero);
+  return TACO_REFERENCES.find((food) => String(food.numero) === normalizedNumber) ?? null;
+}
+
+export function estimateFoodMacrosFromTaco(food: string, quantity?: string | number | null, unit?: string | null): MacroTotals {
+  const reference = findBestTacoFood(food);
+  return estimateFoodMacros(food, quantity, unit, reference ? [reference] : []);
+}

@@ -19,6 +19,7 @@ const filtersSchema = z.object({
   appointmentFrom: z.string().datetime().optional(),
   appointmentTo: z.string().datetime().optional(),
   status: statusSchema.optional(),
+  channel: z.string().max(40).optional(),
   appointmentId: z.string().max(100).optional(),
 });
 
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
     appointmentFrom: req.nextUrl.searchParams.get("appointmentFrom") ?? undefined,
     appointmentTo: req.nextUrl.searchParams.get("appointmentTo") ?? undefined,
     status: req.nextUrl.searchParams.get("status") ?? undefined,
+    channel: req.nextUrl.searchParams.get("channel") ?? undefined,
     appointmentId: req.nextUrl.searchParams.get("appointmentId") ?? undefined,
   });
   if (!parsed.success) return NextResponse.json({ message: "Filtros invalidos." }, { status: 400 });

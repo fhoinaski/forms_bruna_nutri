@@ -88,6 +88,11 @@ type PortalSummary = {
   } | null;
 };
 
+type AvailableDay = {
+  date: string;
+  slots: string[];
+};
+
 function formatDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Data a confirmar";
@@ -111,6 +116,15 @@ function firstName(name: string) {
   return name.trim().split(/\s+/)[0] ?? name;
 }
 
+function localDateKey(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 export default function ClientPortalPage() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -119,6 +133,10 @@ export default function ClientPortalPage() {
   const [submitting, setSubmitting] = useState(false);
   const [taskUpdating, setTaskUpdating] = useState<string | null>(null);
   const [appointmentUpdating, setAppointmentUpdating] = useState<string | null>(null);
+  const [availableDays, setAvailableDays] = useState<AvailableDay[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState("");
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleMessage, setScheduleMessage] = useState("");
   const [error, setError] = useState("");
 
   async function loadPortal() {
@@ -135,6 +153,24 @@ export default function ClientPortalPage() {
   useEffect(() => {
     void loadPortal();
   }, []);
+
+  useEffect(() => {
+    if (!data) {
+      setAvailableDays([]);
+      return;
+    }
+    const today = new Date();
+    const future = new Date(today);
+    future.setDate(future.getDate() + 14);
+    const params = new URLSearchParams({
+      from: localDateKey(today),
+      to: localDateKey(future),
+    });
+    void fetch(`/api/portal/appointments?${params}`, { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<{ days: AvailableDay[] }> : { days: [] })
+      .then((result) => setAvailableDays(result.days))
+      .catch(() => setAvailableDays([]));
+  }, [data]);
 
   const pendingTasks = useMemo(
     () => data?.tasks.filter((task) => task.status === "pendente") ?? [],
@@ -185,6 +221,27 @@ export default function ClientPortalPage() {
     const response = await fetch(`/api/portal/appointments/${appointmentId}/confirm`, { method: "POST" });
     if (response.ok) await loadPortal();
     setAppointmentUpdating(null);
+  }
+
+  async function scheduleAppointment() {
+    if (!selectedSlot) return;
+    setScheduling(true);
+    setScheduleMessage("");
+    const response = await fetch("/api/portal/appointments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ starts_at: selectedSlot }),
+    });
+    const result = await response.json().catch(() => ({} as { message?: string }));
+    if (!response.ok) {
+      setScheduleMessage(result.message ?? "Nao foi possivel marcar esse horario.");
+      setScheduling(false);
+      return;
+    }
+    setSelectedSlot("");
+    setScheduleMessage("Consulta marcada. Ela ja aparece na sua agenda.");
+    await loadPortal();
+    setScheduling(false);
   }
 
   if (loading) {
@@ -382,6 +439,59 @@ export default function ClientPortalPage() {
                 </div>
               ) : (
                 <p className="text-sm text-[#75675E]">Nenhuma consulta futura cadastrada no momento.</p>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-[#E6D5C5] bg-white/75 p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-[#C58D73]" />
+                <h2 className="font-serif text-xl font-semibold">Marcar consulta</h2>
+              </div>
+              {nextAppointment ? (
+                <p className="text-sm leading-6 text-[#75675E]">
+                  Voce ja possui uma consulta futura. Para remarcar, fale com a Bruna pelo canal combinado.
+                </p>
+              ) : availableDays.some((day) => day.slots.length > 0) ? (
+                <div className="space-y-4">
+                  <div className="max-h-72 space-y-4 overflow-y-auto pr-1">
+                    {availableDays.filter((day) => day.slots.length > 0).map((day) => (
+                      <div key={day.date}>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#9A8B80]">
+                          {new Date(`${day.date}T00:00:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" })}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {day.slots.map((slot) => (
+                            <button
+                              key={slot}
+                              type="button"
+                              onClick={() => setSelectedSlot(slot)}
+                              className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                                selectedSlot === slot
+                                  ? "border-[#607A56] bg-[#607A56] text-white"
+                                  : "border-[#D9E4D3] bg-[#FBF7F1] text-[#607A56] hover:bg-[#EAF0E4]"
+                              }`}
+                            >
+                              {new Date(slot).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void scheduleAppointment()}
+                    disabled={!selectedSlot || scheduling}
+                    className="w-full rounded-full bg-[#607A56] px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[#4F6847] disabled:cursor-not-allowed disabled:bg-[#A9BCA1]"
+                  >
+                    {scheduling ? "Marcando..." : "Confirmar horario"}
+                  </button>
+                  {scheduleMessage && <p className="text-sm text-[#607A56]">{scheduleMessage}</p>}
+                </div>
+              ) : (
+                <p className="text-sm leading-6 text-[#75675E]">
+                  Nenhum horario disponivel nos proximos dias. Fale com a Bruna para alinhar uma data.
+                </p>
               )}
             </div>
 

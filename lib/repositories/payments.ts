@@ -4,6 +4,7 @@ export interface Payment {
   id: string;
   client_id: string | null;
   client_name: string | null;
+  client_email: string | null;
   description: string;
   amount_cents: number;
   due_date: string | null;
@@ -17,6 +18,7 @@ export interface Payment {
   installment_total: number | null;
   category: string | null;
   notes: string | null;
+  overdue_notified_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -86,7 +88,7 @@ export async function getPayments(filters: PaymentFilters = {}): Promise<Payment
   const { clause, params } = buildWhere(filters);
 
   return d1Query<Payment>(
-    `SELECT p.*, c.name as client_name
+    `SELECT p.*, c.name as client_name, c.email as client_email
      FROM payments p
      LEFT JOIN clients c ON c.id = p.client_id
      ${clause}
@@ -94,6 +96,48 @@ export async function getPayments(filters: PaymentFilters = {}): Promise<Payment
        CASE WHEN p.status = 'vencido' THEN 0 WHEN p.status = 'pendente' THEN 1 ELSE 2 END,
        COALESCE(p.due_date, p.created_at) ASC`,
     params
+  );
+}
+
+export async function getUnnotifiedOverduePayments(limit = 100): Promise<Payment[]> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return d1Query<Payment>(
+    `SELECT p.*, c.name as client_name, c.email as client_email
+     FROM payments p
+     LEFT JOIN clients c ON c.id = p.client_id
+     WHERE p.status IN ('pendente', 'vencido')
+       AND p.due_date IS NOT NULL
+       AND p.due_date < ?1
+       AND p.overdue_notified_at IS NULL
+       AND c.email IS NOT NULL
+       AND c.email != ''
+     ORDER BY p.due_date ASC
+     LIMIT ?2`,
+    [today.toISOString().slice(0, 10), Math.min(Math.max(limit, 1), 250)]
+  );
+}
+
+export async function claimOverduePaymentNotification(id: string) {
+  const rows = await d1Query<{ id: string }>(
+    `UPDATE payments
+     SET overdue_notified_at = ?1, updated_at = ?1
+     WHERE id = ?2
+       AND overdue_notified_at IS NULL
+       AND status IN ('pendente', 'vencido')
+     RETURNING id`,
+    [new Date().toISOString(), id]
+  );
+  return Boolean(rows[0]);
+}
+
+export async function resetOverduePaymentNotification(id: string) {
+  await d1Execute(
+    `UPDATE payments
+     SET overdue_notified_at = NULL, updated_at = ?1
+     WHERE id = ?2`,
+    [new Date().toISOString(), id]
   );
 }
 

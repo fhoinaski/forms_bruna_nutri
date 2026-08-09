@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
-import { deleteMealPlan, updateMealPlan } from "@/lib/repositories/meal-plans";
+import { deleteMealPlan, getClientMealPlans, updateMealPlan } from "@/lib/repositories/meal-plans";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
@@ -21,6 +21,7 @@ const mealSchema = z.object({
   name: z.string().min(1).max(200),
   suggested_time: z.string().max(30).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
+  source_recipe_id: z.string().max(80).nullable().optional(),
   items: z.array(itemSchema).max(80),
 }).strict();
 
@@ -65,6 +66,8 @@ export async function PUT(
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
   }
 
+  const previousPlan = (await getClientMealPlans(id)).find((item) => item.id === planId) ?? null;
+  const previousRecipeIds = new Set(previousPlan?.meals.map((meal) => meal.source_recipe_id).filter(Boolean) ?? []);
   const plan = await updateMealPlan(planId, id, parsed.data);
   if (!plan) return NextResponse.json({ message: "Plano não encontrado." }, { status: 404 });
 
@@ -83,6 +86,17 @@ export async function PUT(
     ipHash: getRequestFingerprint(req).ipHash,
     metadata: { clientId: id, status: parsed.data.status, version: plan.version },
   });
+
+  const addedRecipeMeals = parsed.data.meals.filter((meal) => meal.source_recipe_id && !previousRecipeIds.has(meal.source_recipe_id));
+  for (const meal of addedRecipeMeals) {
+    await addTimelineEvent({
+      client_id: id,
+      type: "meal_plan_recipe_added",
+      title: "Receita adicionada ao plano alimentar",
+      description: `${meal.name} foi inserida como copia no plano do cliente.`,
+      metadata: { planId, sourceRecipeId: meal.source_recipe_id, mealName: meal.name },
+    });
+  }
 
   return NextResponse.json(plan);
 }
