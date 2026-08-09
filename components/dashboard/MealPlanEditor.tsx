@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Beef, CheckCircle2, Flame, Plus, Save, Trash2, Utensils, Wheat } from "lucide-react";
+import { Beef, CheckCircle2, Flame, Plus, Save, Sparkles, Trash2, Utensils, Wheat } from "lucide-react";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
   PROTOCOL_TEMPLATE_TARGET_GROUPS,
@@ -11,7 +11,7 @@ import { estimateFoodMacros, roundedMacros, sumMacros, type MacroReferenceFood }
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 
 type MealPlanStatus = "draft" | "active" | "archived";
-type MealItem = { food: string; quantity?: string | null; unit?: string | null; notes?: string | null };
+type MealItem = { food: string; quantity?: string | null; unit?: string | null; notes?: string | null; ai_suggested?: boolean; taco_number?: number | string | null };
 type Meal = { name: string; suggested_time?: string | null; notes?: string | null; source_recipe_id?: string | null; items: MealItem[] };
 type Substitution = { base_food: string; option_food: string; quantity?: string | null; unit?: string | null; notes?: string | null };
 type Supplement = { name: string; dosage?: string | null; unit?: string | null; instructions?: string | null; notes?: string | null };
@@ -24,6 +24,18 @@ type RecipeLibraryItem = {
   ingredients: Array<{ taco_number: number; food_name: string; grams: number }>;
   source_note: string | null;
   per_portion_kcal: number;
+};
+type RecipeDraft = {
+  mealIndex: number;
+  title: string;
+  mealGroup: RecipeMealGroup;
+  tags: string;
+  error: string;
+};
+type TemplateDraft = {
+  title: string;
+  targetGroup: ProtocolTemplateTargetGroup;
+  error: string;
 };
 type MealPlan = {
   id: string;
@@ -57,6 +69,12 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   const [recipeMealGroup, setRecipeMealGroup] = useState("");
   const [recipes, setRecipes] = useState<RecipeLibraryItem[]>([]);
   const [recipesLoading, setRecipesLoading] = useState(false);
+  const [recipeDraft, setRecipeDraft] = useState<RecipeDraft | null>(null);
+  const [recipeSaving, setRecipeSaving] = useState(false);
+  const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null);
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiLoadingMeal, setAiLoadingMeal] = useState<number | null>(null);
 
   const loadPlans = useCallback(async (preferredPlanId?: string) => {
     const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, { cache: "no-store" });
@@ -71,6 +89,13 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   useEffect(() => {
     void loadPlans();
   }, [loadPlans]);
+
+  useEffect(() => {
+    fetch("/api/admin/settings/ai", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((settings: { has_api_key?: boolean } | null) => setAiEnabled(Boolean(settings?.has_api_key)))
+      .catch(() => setAiEnabled(false));
+  }, []);
 
   useEffect(() => {
     if (!plan) return;
@@ -280,6 +305,14 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     };
   }, [recipeMealGroup, recipeSearch, recipeSelectorOpen]);
 
+  const knownFoodReferences = useMemo(() => {
+    const byKey = new Map<string, FoodSuggestion>();
+    for (const suggestion of Object.values(foodSuggestions).flat()) {
+      byKey.set(String(suggestion.numero ?? suggestion.descricao), suggestion);
+    }
+    return Array.from(byKey.values());
+  }, [foodSuggestions]);
+
   function insertRecipe(recipe: RecipeLibraryItem) {
     if (!plan) return;
     const mealIndex = plan.meals.length;
@@ -311,13 +344,187 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     setMessage(`Receita "${recipe.title}" inserida como copia. Salve o plano para registrar no prontuario.`);
   };
 
-  const knownFoodReferences = useMemo(() => {
-    const byKey = new Map<string, FoodSuggestion>();
-    for (const suggestion of Object.values(foodSuggestions).flat()) {
-      byKey.set(String(suggestion.numero ?? suggestion.descricao), suggestion);
+  function inferMealGroup(mealName: string): RecipeMealGroup {
+    const normalized = mealName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (normalized.includes("almoco")) return "almoco";
+    if (normalized.includes("jantar")) return "jantar";
+    if (normalized.includes("sobremesa")) return "sobremesa";
+    if (normalized.includes("bebida") || normalized.includes("suco") || normalized.includes("vitamina")) return "bebida";
+    if (normalized.includes("cafe") || normalized.includes("manha")) return "cafe_da_manha";
+    return "lanche";
+  }
+
+  function parseGrams(quantity?: string | null, unit?: string | null) {
+    const numeric = Number(String(quantity ?? "").replace(",", ".").replace(/[^\d.]/g, ""));
+    if (!Number.isFinite(numeric) || numeric <= 0) return 100;
+    const normalizedUnit = String(unit ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (!normalizedUnit || normalizedUnit.includes("g") || normalizedUnit.includes("grama")) return numeric;
+    return numeric;
+  }
+
+  function findTacoReference(mealIndex: number, itemIndex: number, food: string) {
+    const key = `${mealIndex}:${itemIndex}`;
+    const normalizedFood = food.trim().toLowerCase();
+    return foodSuggestions[key]?.find((suggestion) => suggestion.descricao.trim().toLowerCase() === normalizedFood)
+      ?? knownFoodReferences.find((suggestion) => suggestion.descricao.trim().toLowerCase() === normalizedFood)
+      ?? foodSuggestions[key]?.[0]
+      ?? null;
+  }
+
+  function openSaveMealAsRecipe(mealIndex: number) {
+    if (!plan) return;
+    const meal = plan.meals[mealIndex];
+    setRecipeDraft({
+      mealIndex,
+      title: meal.name || `Receita do plano - refeicao ${mealIndex + 1}`,
+      mealGroup: inferMealGroup(meal.name),
+      tags: [plan.target_group, "plano personalizado"].filter(Boolean).join(", "),
+      error: "",
+    });
+  }
+
+  async function saveMealAsRecipe() {
+    if (!plan || !recipeDraft) return;
+    const meal = plan.meals[recipeDraft.mealIndex];
+    const missingFoods: string[] = [];
+    const ingredients = meal.items
+      .map((item, itemIndex) => {
+        if (!item.food.trim()) return null;
+        if (item.taco_number) {
+          return {
+            taco_number: Number(item.taco_number),
+            food_name: item.food,
+            grams: parseGrams(item.quantity, item.unit),
+          };
+        }
+        const reference = findTacoReference(recipeDraft.mealIndex, itemIndex, item.food);
+        if (!reference) {
+          missingFoods.push(item.food);
+          return null;
+        }
+        return {
+          taco_number: Number(reference.numero),
+          food_name: reference.descricao,
+          grams: parseGrams(item.quantity, item.unit),
+        };
+      })
+      .filter((item): item is { taco_number: number; food_name: string; grams: number } => Boolean(item));
+
+    if (!ingredients.length || missingFoods.length) {
+      setRecipeDraft({
+        ...recipeDraft,
+        error: missingFoods.length
+          ? `Confira estes alimentos na busca TACO antes de salvar: ${missingFoods.join(", ")}.`
+          : "Adicione ao menos um alimento reconhecido pela TACO nesta refeicao.",
+      });
+      return;
     }
-    return Array.from(byKey.values());
-  }, [foodSuggestions]);
+
+    setRecipeSaving(true);
+    try {
+      const response = await fetch("/api/admin/recipes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: recipeDraft.title.trim(),
+          description: `Receita criada a partir da refeicao "${meal.name}" do plano "${plan.title}".`,
+          meal_group: recipeDraft.mealGroup,
+          servings: 1,
+          portion_grams: ingredients.reduce((sum, ingredient) => sum + ingredient.grams, 0),
+          preparation_steps: meal.notes || null,
+          ingredients,
+          tags: recipeDraft.tags.split(/[,\n]/).map((tag) => tag.trim()).filter(Boolean),
+          source_note: "Criada a partir de uma refeicao personalizada. Revise preparo, porcao e adequacao clinica antes de reutilizar.",
+          is_active: true,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? "Nao foi possivel salvar a receita.");
+      setRecipeDraft(null);
+      setMessage("Receita salva na biblioteca. Ela ja pode ser inserida em outros planos.");
+    } catch (cause) {
+      setRecipeDraft({ ...recipeDraft, error: cause instanceof Error ? cause.message : "Nao foi possivel salvar a receita." });
+    } finally {
+      setRecipeSaving(false);
+    }
+  }
+
+  function openSavePlanAsTemplate() {
+    if (!plan) return;
+    const planTargetGroup = PROTOCOL_TEMPLATE_TARGET_GROUPS.find((group) => group === plan.target_group);
+    setTemplateDraft({
+      title: `${plan.title} - modelo`,
+      targetGroup: planTargetGroup ?? targetGroup,
+      error: "",
+    });
+  }
+
+  async function savePlanAsTemplate() {
+    if (!plan || !templateDraft) return;
+    setTemplateSaving(true);
+    try {
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/${plan.id}/save-as-template`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: templateDraft.title.trim(), targetGroup: templateDraft.targetGroup }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? "Nao foi possivel salvar o modelo.");
+      setTemplateDraft(null);
+      setMessage("Novo modelo de dieta criado na biblioteca. O plano do paciente e o modelo original nao foram alterados.");
+    } catch (cause) {
+      setTemplateDraft({ ...templateDraft, error: cause instanceof Error ? cause.message : "Nao foi possivel salvar o modelo." });
+    } finally {
+      setTemplateSaving(false);
+    }
+  }
+
+  async function suggestMealWithAi(mealIndex: number) {
+    if (!plan) return;
+    const meal = plan.meals[mealIndex];
+    const instructions = window.prompt("Pedido opcional para a IA (ex: menos carboidrato, sem laticinio):") ?? "";
+    setAiLoadingMeal(mealIndex);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/ai/suggest-meal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: "meal",
+          targetGroup: plan.target_group ?? targetGroup,
+          mealName: meal.name,
+          instructions,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? "Nao foi possivel sugerir a refeicao.");
+      const suggested = result.resolvedMeals?.[0];
+      if (!suggested) throw new Error("A IA nao retornou uma refeicao valida.");
+      setPlan({
+        ...plan,
+        meals: plan.meals.map((current, index) => index === mealIndex ? {
+          ...current,
+          name: suggested.mealName || current.name,
+          notes: suggested.notes ?? current.notes,
+          source_recipe_id: suggested.source_recipe_id ?? current.source_recipe_id,
+          items: suggested.items.map((item: MealItem) => ({
+            food: item.food,
+            quantity: item.quantity,
+            unit: item.unit,
+            notes: item.notes,
+            ai_suggested: true,
+            taco_number: item.taco_number ?? null,
+          })),
+        } : current),
+      });
+      setMessage("Sugestao aplicada no formulario. Revise, edite ou remova itens antes de salvar.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Nao foi possivel sugerir a refeicao.");
+    } finally {
+      setAiLoadingMeal(null);
+    }
+  }
 
   const mealMacros = useMemo(() => plan?.meals.map((meal) => roundedMacros(sumMacros(
     meal.items.filter((item) => item.food.trim()).map((item) => estimateFoodMacros(item.food, item.quantity, item.unit, knownFoodReferences))
@@ -336,6 +543,11 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               Use um modelo como ponto de partida, ajuste alimentos, quantidades, suplementos e substituições, depois ative no portal.
             </p>
           </div>
+          {!aiEnabled && (
+            <p className="mt-2 text-xs text-[#8C5F50]">
+                Para usar Sugerir com IA, configure a chave em <a href="/dashboard/settings/ai" className="font-semibold underline">Inteligencia artificial</a>.
+            </p>
+          )}
           <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,220px)_auto] xl:shrink-0">
             <select value={targetGroup} onChange={(event) => setTargetGroup(event.target.value as ProtocolTemplateTargetGroup)} className="brand-input">
               {PROTOCOL_TEMPLATE_TARGET_GROUPS.map((group) => <option key={group} value={group}>{PROTOCOL_TEMPLATE_GROUP_LABELS[group]}</option>)}
@@ -411,9 +623,19 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#EAF0E4] text-[#607A56]"><Utensils className="h-4 w-4" /></div>
                     <div className="min-w-0"><p className="text-sm font-semibold text-[#3A3028]">{meal.name || `Refeição ${mealIndex + 1}`}</p><p className="text-xs text-[#75675E]">{meal.items.filter((item) => item.food.trim()).length} alimento(s) · {mealMacros[mealIndex]?.kcal ?? 0} kcal estimadas</p></div>
                   </div>
-                  <button type="button" onClick={() => setPlan({ ...plan, meals: plan.meals.filter((_, index) => index !== mealIndex) })} className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-lg text-red-600 hover:bg-red-50 sm:self-auto" aria-label={`Remover ${meal.name || "refeição"}`} title="Remover refeição">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                    <button type="button" onClick={() => void suggestMealWithAi(mealIndex)} disabled={!aiEnabled || aiLoadingMeal === mealIndex} title={aiEnabled ? "Sugerir itens com IA" : "Configure a IA em Dashboard > Inteligencia artificial"} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#8C5F50] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
+                      <Sparkles className="h-4 w-4" />
+                      {aiLoadingMeal === mealIndex ? "Sugerindo..." : "Sugerir com IA"}
+                    </button>
+                    <button type="button" onClick={() => openSaveMealAsRecipe(mealIndex)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]">
+                      <Save className="h-4 w-4" />
+                      Salvar como receita
+                    </button>
+                    <button type="button" onClick={() => setPlan({ ...plan, meals: plan.meals.filter((_, index) => index !== mealIndex) })} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-red-600 hover:bg-red-50" aria-label={`Remover ${meal.name || "refeição"}`} title="Remover refeição">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
                 <div className="p-4">
                 <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_130px]">
@@ -441,6 +663,11 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                           className="brand-input"
                           placeholder="Digite para buscar na TACO"
                         />
+                        {item.ai_suggested && (
+                          <span className="mt-1 inline-flex rounded-full bg-[#FFF7F3] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">
+                            sugerido por IA
+                          </span>
+                        )}
                         {activeFoodField === `${mealIndex}:${itemIndex}` && (foodSuggestions[`${mealIndex}:${itemIndex}`]?.length ?? 0) > 0 && (
                           <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 overflow-y-auto rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
                             {foodSuggestions[`${mealIndex}:${itemIndex}`].map((suggestion) => (
@@ -457,7 +684,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                               >
                                 <span className="block text-sm font-medium text-[#3A3028]">{suggestion.descricao}</span>
                                 <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">
-                                  {suggestion.grupo} · {Math.round(suggestion.energia_kcal)} kcal/100g
+                                  {suggestion.grupo} · {Math.round(suggestion.energia_kcal)} kcal/100g{suggestion.fonte === "complementar" ? " · TBCA/USDA" : ""}
                                 </span>
                               </button>
                             ))}
@@ -504,6 +731,10 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               {deleting ? "Excluindo..." : "Excluir plano"}
             </button>
             <div className="flex flex-col gap-3 sm:flex-row">
+              <button type="button" onClick={openSavePlanAsTemplate} disabled={saving || deleting || plan.meals.length === 0} className="brand-btn-secondary w-full sm:w-auto">
+                <Save className="h-4 w-4" />
+                Salvar como modelo
+              </button>
               <button type="button" onClick={() => void save()} disabled={saving || deleting} className="brand-btn-secondary w-full sm:w-auto">
                 <Save className="h-4 w-4" />
                 {saving ? "Salvando..." : "Salvar rascunho"}
@@ -563,6 +794,83 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                   {!recipes.length && <p className="text-sm text-[#8C6E52]">Nenhuma receita encontrada.</p>}
                 </div>
               )}
+            </div>
+          </section>
+        </div>
+      )}
+      {recipeDraft && plan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+          <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
+            <div className="shrink-0 border-b border-[#EDE1D6] px-5 py-4">
+              <p className="brand-kicker">Salvar na biblioteca</p>
+              <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Salvar refeicao como receita</h2>
+              <p className="mt-1 text-xs leading-5 text-[#75675E]">Cria uma receita nova a partir dos alimentos desta refeicao. O plano do paciente nao sera alterado.</p>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
+              <div>
+                <label className="brand-label">Titulo da receita</label>
+                <input value={recipeDraft.title} onChange={(event) => setRecipeDraft({ ...recipeDraft, title: event.target.value })} className="brand-input" />
+              </div>
+              <div>
+                <label className="brand-label">Grupo da refeicao</label>
+                <select value={recipeDraft.mealGroup} onChange={(event) => setRecipeDraft({ ...recipeDraft, mealGroup: event.target.value as RecipeMealGroup })} className="brand-input">
+                  {RECIPE_MEAL_GROUPS.map((group) => <option key={group} value={group}>{RECIPE_MEAL_GROUP_LABELS[group]}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="brand-label">Tags</label>
+                <input value={recipeDraft.tags} onChange={(event) => setRecipeDraft({ ...recipeDraft, tags: event.target.value })} className="brand-input" placeholder="Separe por virgulas" />
+              </div>
+              <div className="rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">Ingredientes que serao copiados</p>
+                <ul className="mt-2 space-y-1 text-sm text-[#75675E]">
+                  {plan.meals[recipeDraft.mealIndex]?.items.filter((item) => item.food.trim()).map((item, index) => (
+                    <li key={`${item.food}-${index}`}>{item.food} - {item.quantity || "100"} {item.unit || "g"}</li>
+                  ))}
+                </ul>
+              </div>
+              {recipeDraft.error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{recipeDraft.error}</p>}
+            </div>
+            <div className="grid shrink-0 gap-3 border-t border-[#EDE1D6] px-5 py-3 sm:flex sm:justify-end">
+              <button type="button" onClick={() => setRecipeDraft(null)} className="brand-btn-secondary w-full sm:w-auto">Cancelar</button>
+              <button type="button" onClick={() => void saveMealAsRecipe()} disabled={recipeSaving || !recipeDraft.title.trim()} className="brand-btn-primary w-full sm:w-auto">
+                <Save className="h-4 w-4" />
+                {recipeSaving ? "Salvando..." : "Salvar receita"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {templateDraft && plan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+          <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
+            <div className="shrink-0 border-b border-[#EDE1D6] px-5 py-4">
+              <p className="brand-kicker">Promover para biblioteca</p>
+              <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Salvar plano como modelo</h2>
+              <p className="mt-1 text-xs leading-5 text-[#75675E]">Isto cria um modelo novo de dieta. Nao altera o plano do paciente nem o modelo original usado como ponto de partida.</p>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
+              <div>
+                <label className="brand-label">Titulo do novo modelo</label>
+                <input value={templateDraft.title} onChange={(event) => setTemplateDraft({ ...templateDraft, title: event.target.value })} className="brand-input" />
+              </div>
+              <div>
+                <label className="brand-label">Grupo alvo</label>
+                <select value={templateDraft.targetGroup} onChange={(event) => setTemplateDraft({ ...templateDraft, targetGroup: event.target.value as ProtocolTemplateTargetGroup })} className="brand-input">
+                  {PROTOCOL_TEMPLATE_TARGET_GROUPS.map((group) => <option key={group} value={group}>{PROTOCOL_TEMPLATE_GROUP_LABELS[group]}</option>)}
+                </select>
+              </div>
+              <div className="rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-3 text-sm text-[#75675E]">
+                <p><strong className="text-[#3A3028]">{plan.meals.length}</strong> refeicao(oes), <strong className="text-[#3A3028]">{plan.substitutions.length}</strong> substituicao(oes) e vinculos com receitas serao copiados.</p>
+              </div>
+              {templateDraft.error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{templateDraft.error}</p>}
+            </div>
+            <div className="grid shrink-0 gap-3 border-t border-[#EDE1D6] px-5 py-3 sm:flex sm:justify-end">
+              <button type="button" onClick={() => setTemplateDraft(null)} className="brand-btn-secondary w-full sm:w-auto">Cancelar</button>
+              <button type="button" onClick={() => void savePlanAsTemplate()} disabled={templateSaving || !templateDraft.title.trim()} className="brand-btn-primary w-full sm:w-auto">
+                <Save className="h-4 w-4" />
+                {templateSaving ? "Salvando..." : "Criar modelo novo"}
+              </button>
             </div>
           </section>
         </div>

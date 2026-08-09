@@ -11,6 +11,7 @@ export interface MacroReferenceFood {
   numero?: number | string;
   descricao: string;
   grupo?: string;
+  fonte?: "taco" | "complementar";
   energia_kcal: number;
   proteina_g: number;
   carboidrato_g: number;

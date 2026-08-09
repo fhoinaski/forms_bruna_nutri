@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { estimateFoodMacros, estimateMacrosFromLine, roundedMacros, sumMacros } from "@/lib/nutrition/macros";
-import { coerceTacoNumber, estimateFoodMacrosFromTaco, searchTacoFoods } from "@/lib/nutrition/taco";
+import { coerceTacoNumber, estimateFoodMacrosFromTaco, getTacoFoodByNumber, searchTacoFoods } from "@/lib/nutrition/taco";
 
 describe("live macro estimation", () => {
   it("calculates an exact TACO food from grams", () => {
@@ -54,5 +54,19 @@ describe("live macro estimation", () => {
     const results = foods.map((food) => roundedMacros(estimateFoodMacrosFromTaco(food, 100, "g")));
     expect(results.every((result) => result.recognizedItems === 1)).toBe(true);
     expect(results.every((result) => result.kcal > 0)).toBe(true);
+  });
+
+  it("searches complementary TBCA/USDA foods together with official TACO foods", () => {
+    const [whey] = searchTacoFoods("whey protein");
+    const lookup = getTacoFoodByNumber(1054);
+    const macros = roundedMacros(estimateFoodMacrosFromTaco("Suplemento, proteína, em pó (whey protein)", 30, "g"));
+
+    expect(whey.descricao).toBe("Suplemento, proteína, em pó (whey protein)");
+    expect(whey.fonte).toBe("complementar");
+    expect(lookup?.descricao).toBe(whey.descricao);
+    expect(macros.kcal).toBe(116);
+    expect(macros.protein).toBe(24);
+    expect(macros.carbs).toBe(2.4);
+    expect(macros.fat).toBe(2.3);
   });
 });

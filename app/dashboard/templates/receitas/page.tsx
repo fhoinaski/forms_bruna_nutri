@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Archive, Edit3, Plus, Save, Search, Utensils, X } from "lucide-react";
+import { AlertTriangle, Archive, Edit3, Plus, Save, Search, Sparkles, Utensils, X } from "lucide-react";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 
 type RecipeIngredient = {
   taco_number: number;
   food_name: string;
   grams: number;
+  ai_suggested?: boolean;
 };
 
 type FoodSuggestion = {
@@ -15,6 +16,7 @@ type FoodSuggestion = {
   descricao: string;
   grupo: string;
   energia_kcal: number;
+  fonte?: "taco" | "complementar";
 };
 
 type Recipe = {
@@ -81,6 +83,8 @@ export default function RecipesPage() {
   const [form, setForm] = useState<RecipeForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiSuggesting, setAiSuggesting] = useState(false);
 
   const loadRecipes = useCallback(async () => {
     setLoading(true);
@@ -99,6 +103,13 @@ export default function RecipesPage() {
     const timer = window.setTimeout(() => void loadRecipes(), 250);
     return () => window.clearTimeout(timer);
   }, [loadRecipes]);
+
+  useEffect(() => {
+    fetch("/api/admin/settings/ai", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((settings: { has_api_key?: boolean } | null) => setAiEnabled(Boolean(settings?.has_api_key)))
+      .catch(() => setAiEnabled(false));
+  }, []);
 
   const stats = useMemo(() => ({
     total: recipes.length,
@@ -142,6 +153,43 @@ export default function RecipesPage() {
     if (!confirm(`Arquivar a receita "${recipe.title}"?`)) return;
     const response = await fetch(`/api/admin/recipes/${recipe.id}`, { method: "DELETE" });
     if (response.ok) await loadRecipes();
+  }
+
+  async function suggestRecipeIngredients(currentForm: RecipeForm) {
+    setAiSuggesting(true);
+    setError("");
+    try {
+      const instructions = window.prompt("Pedido opcional para a IA (ex: mais proteina, sem laticinio):") ?? "";
+      const response = await fetch("/api/admin/ai/suggest-meal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: "recipe",
+          recipeTitle: currentForm.title,
+          mealGroup: currentForm.meal_group,
+          instructions,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? "Nao foi possivel sugerir ingredientes.");
+      const suggested = result.resolvedMeals?.[0];
+      if (!suggested) throw new Error("A IA nao retornou ingredientes validos.");
+      setForm({
+        ...currentForm,
+        title: currentForm.title || suggested.mealName,
+        ingredients: suggested.items.map((item: { taco_number?: number | string; food: string; quantity: string }) => ({
+          taco_number: Number(item.taco_number),
+          food_name: item.food,
+          grams: Number(String(item.quantity).replace(",", ".").match(/[\d.]+/)?.[0] ?? 100),
+          ai_suggested: true,
+        })),
+        source_note: "Ingredientes sugeridos por IA a partir da TACO. Revisar preparo, porcao e adequacao antes de salvar.",
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Nao foi possivel sugerir ingredientes.");
+    } finally {
+      setAiSuggesting(false);
+    }
   }
 
   return (
@@ -231,22 +279,28 @@ export default function RecipesPage() {
           form={form}
           error={error}
           saving={saving}
+          aiEnabled={aiEnabled}
+          aiSuggesting={aiSuggesting}
           setForm={setForm}
           onClose={() => setForm(null)}
           onSave={() => void saveRecipe()}
+          onSuggest={() => void suggestRecipeIngredients(form)}
         />
       )}
     </div>
   );
 }
 
-function RecipeModal({ form, error, saving, setForm, onClose, onSave }: {
+function RecipeModal({ form, error, saving, aiEnabled, aiSuggesting, setForm, onClose, onSave, onSuggest }: {
   form: RecipeForm;
   error: string;
   saving: boolean;
+  aiEnabled: boolean;
+  aiSuggesting: boolean;
   setForm: (form: RecipeForm | null) => void;
   onClose: () => void;
   onSave: () => void;
+  onSuggest: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
@@ -256,8 +310,19 @@ function RecipeModal({ form, error, saving, setForm, onClose, onSave }: {
             <p className="brand-kicker">{form.id ? "Editar receita" : "Nova receita"}</p>
             <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Receita da biblioteca</h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" title="Fechar"><X className="h-5 w-5" /></button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={onSuggest} disabled={!aiEnabled || aiSuggesting || !form.title.trim()} title={aiEnabled ? "Sugerir ingredientes com IA" : "Configure a IA em Dashboard > Inteligencia artificial"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#EAD8C2] px-3 text-xs font-semibold text-[#8C5F50] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
+              <Sparkles className="h-4 w-4" />
+              {aiSuggesting ? "Sugerindo..." : "Sugerir com IA"}
+            </button>
+            <button type="button" onClick={onClose} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" title="Fechar"><X className="h-5 w-5" /></button>
+          </div>
         </div>
+        {!aiEnabled && (
+          <p className="shrink-0 border-b border-[#EDE1D6] bg-[#FFF7F3] px-5 py-2 text-xs text-[#8C5F50]">
+            Para usar Sugerir com IA, configure a chave em <a href="/dashboard/settings/ai" className="font-semibold underline">Inteligencia artificial</a>.
+          </p>
+        )}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2"><label className="brand-label">Titulo</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="brand-input" /></div>
@@ -326,7 +391,7 @@ function IngredientRow({ ingredient, onChange, onRemove }: {
   }, [ingredient.food_name, open]);
 
   return (
-    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_110px_auto]">
+    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_110px_auto_auto]">
       <div className="relative min-w-0">
         <input
           value={ingredient.food_name}
@@ -351,13 +416,23 @@ function IngredientRow({ ingredient, onChange, onRemove }: {
                 className="block w-full rounded-lg px-3 py-2 text-left hover:bg-[#FAF7F2]"
               >
                 <span className="block text-sm font-medium text-[#3A3028]">{suggestion.descricao}</span>
-                <span className="text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">TACO {suggestion.numero} · {suggestion.grupo}</span>
+                <span className="text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">TACO {suggestion.numero} · {suggestion.grupo}{suggestion.fonte === "complementar" ? " · TBCA/USDA" : ""}</span>
               </button>
             ))}
           </div>
         )}
       </div>
+      {ingredient.ai_suggested && (
+        <span className="inline-flex min-h-11 items-center rounded-xl bg-[#FFF7F3] px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50] md:hidden">
+          sugerido por IA
+        </span>
+      )}
       <input type="number" min={1} value={ingredient.grams} onChange={(event) => onChange({ ...ingredient, grams: Number(event.target.value) })} className="brand-input" placeholder="g" />
+      {ingredient.ai_suggested && (
+        <span className="hidden min-h-11 items-center rounded-xl bg-[#FFF7F3] px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50] md:inline-flex">
+          IA
+        </span>
+      )}
       <button type="button" onClick={onRemove} className="inline-flex min-h-11 items-center justify-center rounded-xl px-3 text-red-600 hover:bg-red-50"><X className="h-4 w-4" /></button>
     </div>
   );

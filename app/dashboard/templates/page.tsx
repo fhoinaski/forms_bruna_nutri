@@ -330,6 +330,8 @@ export default function ProtocolTemplatesPage() {
   const [includeInactive, setIncludeInactive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiSuggesting, setAiSuggesting] = useState(false);
 
   const stats = useMemo(() => ({
     total: templates.length,
@@ -367,6 +369,13 @@ export default function ProtocolTemplatesPage() {
 
   useEffect(() => {
     setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/admin/settings/ai", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((settings: { has_api_key?: boolean } | null) => setAiEnabled(Boolean(settings?.has_api_key)))
+      .catch(() => setAiEnabled(false));
   }, []);
 
   useEffect(() => {
@@ -439,6 +448,39 @@ export default function ProtocolTemplatesPage() {
     if (!confirm(`Excluir o modelo "${template.title}"?`)) return;
     const response = await fetch(`/api/admin/protocol-templates/${template.id}`, { method: "DELETE" });
     if (response.ok) await loadTemplates();
+  }
+
+  async function suggestDietTemplate(currentForm: TemplateForm) {
+    setAiSuggesting(true);
+    setError("");
+    try {
+      const instructions = window.prompt("Pedido opcional para a IA (ex: mais pratico, sem laticinio):") ?? "";
+      const response = await fetch("/api/admin/ai/suggest-meal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: "template",
+          targetGroup: currentForm.target_group,
+          instructions,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? "Nao foi possivel sugerir o modelo.");
+      const meals = result.resolvedMeals ?? [];
+      if (!meals.length) throw new Error("A IA nao retornou refeicoes validas.");
+      setForm({
+        ...currentForm,
+        type: "DIETA",
+        mealsText: meals.map((meal: { mealName: string; items: Array<{ food: string; quantity: string; unit: string }>; notes?: string | null }) =>
+          `${meal.mealName}: ${meal.items.map((item) => `${item.food} - ${item.quantity} ${item.unit}`).join(", ")}${meal.notes ? ` | ${meal.notes}` : ""}`
+        ).join("\n"),
+        notesText: [currentForm.notesText, "Modelo sugerido por IA com base em TACO/receitas. Revisar antes de salvar e usar clinicamente."].filter(Boolean).join("\n"),
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Nao foi possivel sugerir o modelo.");
+    } finally {
+      setAiSuggesting(false);
+    }
   }
 
   return (
@@ -584,10 +626,13 @@ export default function ProtocolTemplatesPage() {
         <TemplateEditModal
           form={form}
           saving={saving}
+          aiEnabled={aiEnabled}
+          aiSuggesting={aiSuggesting}
           error={error}
           setForm={setForm}
           onClose={() => setForm(null)}
           onSave={() => void saveTemplate()}
+          onSuggest={() => void suggestDietTemplate(form)}
         />,
         document.body
       )}
@@ -640,17 +685,23 @@ function TemplateViewModal({
 function TemplateEditModal({
   form,
   saving,
+  aiEnabled,
+  aiSuggesting,
   error,
   setForm,
   onClose,
   onSave,
+  onSuggest,
 }: {
   form: TemplateForm;
   saving: boolean;
+  aiEnabled: boolean;
+  aiSuggesting: boolean;
   error: string;
   setForm: (form: TemplateForm | null) => void;
   onClose: () => void;
   onSave: () => void;
+  onSuggest: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
@@ -662,10 +713,21 @@ function TemplateEditModal({
               Modelo de {PROTOCOL_TEMPLATE_TYPE_LABELS[form.type].toLowerCase()}
             </h2>
           </div>
-          <button type="button" onClick={onClose} className="shrink-0 rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" title="Fechar">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={onSuggest} disabled={!aiEnabled || aiSuggesting || form.type !== "DIETA"} title={aiEnabled ? "Sugerir modelo com IA" : "Configure a IA em Dashboard > Inteligencia artificial"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#EAD8C2] px-3 text-xs font-semibold text-[#8C5F50] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
+              <Sparkles className="h-4 w-4" />
+              {aiSuggesting ? "Sugerindo..." : "Sugerir com IA"}
+            </button>
+            <button type="button" onClick={onClose} className="shrink-0 rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" title="Fechar">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
+        {!aiEnabled && (
+          <p className="shrink-0 border-b border-[#EDE1D6] bg-[#FFF7F3] px-5 py-2 text-xs text-[#8C5F50]">
+            Para usar Sugerir com IA, configure a chave em <a href="/dashboard/settings/ai" className="font-semibold underline">Inteligencia artificial</a>.
+          </p>
+        )}
 
         <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="grid gap-4 p-5 md:grid-cols-2">

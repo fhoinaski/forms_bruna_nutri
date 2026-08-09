@@ -1,4 +1,5 @@
 import tacoData from "@/lib/nutrition/data/taco.json";
+import tacoComplementarData from "@/lib/nutrition/data/taco-complementar.json";
 import { estimateFoodMacros, findBestFoodReference, normalize, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
 
 type TacoRow = {
@@ -13,8 +14,8 @@ type TacoRow = {
 
 type TacoFile = TacoRow[] | { alimentos?: TacoRow[] };
 
-function tacoRows(): TacoRow[] {
-  const data = tacoData as TacoFile;
+function tacoRows(dataFile: TacoFile): TacoRow[] {
+  const data = dataFile;
   return Array.isArray(data) ? data : data.alimentos ?? [];
 }
 
@@ -27,11 +28,12 @@ export function coerceTacoNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function toReferenceFood(row: TacoRow): MacroReferenceFood {
+function toReferenceFood(row: TacoRow, fonte: "taco" | "complementar"): MacroReferenceFood {
   return {
     numero: row.numero,
     descricao: row.descricao,
     grupo: row.grupo,
+    fonte,
     energia_kcal: coerceTacoNumber(row.energia_kcal),
     proteina_g: coerceTacoNumber(row.proteina_g),
     carboidrato_g: coerceTacoNumber(row.carboidrato_g),
@@ -39,7 +41,10 @@ function toReferenceFood(row: TacoRow): MacroReferenceFood {
   };
 }
 
-const TACO_REFERENCES: MacroReferenceFood[] = tacoRows().map(toReferenceFood);
+const TACO_REFERENCES: MacroReferenceFood[] = [
+  ...tacoRows(tacoData as TacoFile).map((row) => toReferenceFood(row, "taco")),
+  ...tacoRows(tacoComplementarData as TacoFile).map((row) => toReferenceFood(row, "complementar")),
+];
 
 export function searchTacoFoods(query: string, limit = 15): MacroReferenceFood[] {
   const normalizedQuery = normalize(query);
