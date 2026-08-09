@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Archive, Edit3, Plus, Save, Search, Sparkles, Utensils, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { AlertTriangle, Archive, Edit3, Eye, Plus, Save, Search, Sparkles, Trash2, Utensils, X } from "lucide-react";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 
 type RecipeIngredient = {
@@ -81,6 +82,10 @@ export default function RecipesPage() {
   const [mealGroup, setMealGroup] = useState("");
   const [includeInactive, setIncludeInactive] = useState(true);
   const [form, setForm] = useState<RecipeForm | null>(null);
+  const [viewRecipe, setViewRecipe] = useState<Recipe | null>(null);
+  const [deleteRecipe, setDeleteRecipe] = useState<Recipe | null>(null);
+  const [portalReady, setPortalReady] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [aiEnabled, setAiEnabled] = useState(false);
@@ -110,6 +115,23 @@ export default function RecipesPage() {
       .then((settings: { has_api_key?: boolean } | null) => setAiEnabled(Boolean(settings?.has_api_key)))
       .catch(() => setAiEnabled(false));
   }, []);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!form && !viewRecipe && !deleteRecipe) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [form, viewRecipe, deleteRecipe]);
 
   const stats = useMemo(() => ({
     total: recipes.length,
@@ -149,10 +171,21 @@ export default function RecipesPage() {
     }
   }
 
-  async function archive(recipe: Recipe) {
-    if (!confirm(`Arquivar a receita "${recipe.title}"?`)) return;
-    const response = await fetch(`/api/admin/recipes/${recipe.id}`, { method: "DELETE" });
-    if (response.ok) await loadRecipes();
+  async function archiveRecipe() {
+    if (!deleteRecipe) return;
+    setDeleting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/recipes/${deleteRecipe.id}`, { method: "DELETE" });
+      const data = response.ok ? null : await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.message ?? "Nao foi possivel arquivar a receita.");
+      setDeleteRecipe(null);
+      await loadRecipes();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Nao foi possivel arquivar a receita.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function suggestRecipeIngredients(currentForm: RecipeForm) {
@@ -250,10 +283,13 @@ export default function RecipesPage() {
             <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#8C5F50]">{RECIPE_MEAL_GROUP_LABELS[recipe.meal_group]} · {recipe.servings} porcao(oes)</p>
             {recipe.description && <p className="mt-3 text-sm leading-6 text-[#75675E]">{recipe.description}</p>}
             {recipe.source_note && (
-              <p className="mt-3 rounded-xl border border-[#F0D4C7] bg-[#FFF7F3] px-3 py-2 text-xs leading-5 text-[#8C5F50]">
-                <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
-                {recipe.source_note}
-              </p>
+              <details className="mt-3 rounded-xl border border-[#F0D4C7] bg-[#FFF7F3] px-3 py-2 text-xs leading-5 text-[#8C5F50]">
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 font-semibold">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Nota de fonte
+                </summary>
+                <p className="mt-2">{recipe.source_note}</p>
+              </details>
             )}
             <div className="mt-4 grid grid-cols-4 gap-2 text-center text-xs">
               <Macro label="Kcal" value={Math.round(recipe.per_portion_kcal)} />
@@ -261,12 +297,16 @@ export default function RecipesPage() {
               <Macro label="Carb." value={recipe.per_portion_carbs_g.toFixed(1)} />
               <Macro label="Gord." value={recipe.per_portion_fat_g.toFixed(1)} />
             </div>
-            <div className="mt-auto flex gap-2 pt-5">
-              <button type="button" onClick={() => setForm(recipeToForm(recipe))} className="brand-btn-secondary flex-1">
+            <div className="mt-auto grid grid-cols-[1fr_1fr_auto] gap-2 pt-5">
+              <button type="button" onClick={() => setViewRecipe(recipe)} className="brand-btn-secondary">
+                <Eye className="h-4 w-4" />
+                Ver
+              </button>
+              <button type="button" onClick={() => setForm(recipeToForm(recipe))} className="brand-btn-secondary">
                 <Edit3 className="h-4 w-4" />
                 Editar
               </button>
-              <button type="button" onClick={() => void archive(recipe)} className="inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm font-semibold text-[#9A5C4E] hover:bg-[#FFF5F3]">
+              <button type="button" onClick={() => setDeleteRecipe(recipe)} className="inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm font-semibold text-[#9A5C4E] hover:bg-[#FFF5F3]" title="Arquivar receita" aria-label={`Arquivar ${recipe.title}`}>
                 <Archive className="h-4 w-4" />
               </button>
             </div>
@@ -274,7 +314,30 @@ export default function RecipesPage() {
         ))}
       </section>
 
-      {form && (
+      {portalReady && viewRecipe && createPortal(
+        <RecipeViewModal
+          recipe={viewRecipe}
+          onClose={() => setViewRecipe(null)}
+          onEdit={() => {
+            setForm(recipeToForm(viewRecipe));
+            setViewRecipe(null);
+          }}
+        />,
+        document.body
+      )}
+
+      {portalReady && deleteRecipe && createPortal(
+        <ConfirmArchiveModal
+          recipe={deleteRecipe}
+          deleting={deleting}
+          error={error}
+          onCancel={() => setDeleteRecipe(null)}
+          onConfirm={() => void archiveRecipe()}
+        />,
+        document.body
+      )}
+
+      {portalReady && form && createPortal(
         <RecipeModal
           form={form}
           error={error}
@@ -285,9 +348,99 @@ export default function RecipesPage() {
           onClose={() => setForm(null)}
           onSave={() => void saveRecipe()}
           onSuggest={() => void suggestRecipeIngredients(form)}
-        />
+        />,
+        document.body
       )}
     </div>
+  );
+}
+
+function RecipeViewModal({ recipe, onClose, onEdit }: {
+  recipe: Recipe;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+      <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-5 py-4">
+          <div className="min-w-0">
+            <p className="brand-kicker">Visualizar receita</p>
+            <h2 className="break-words font-serif text-2xl font-semibold text-[#3A3028]">{recipe.title}</h2>
+            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#8C5F50]">
+              {RECIPE_MEAL_GROUP_LABELS[recipe.meal_group]} - {recipe.servings} porcao(oes)
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" title="Fechar"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div className="space-y-4">
+              {recipe.description && <ReadBox title="Descricao" value={recipe.description} />}
+              <ReadBox title="Ingredientes" value={recipe.ingredients.map((item) => `${item.food_name} - ${item.grams} g`).join("\n")} />
+              <ReadBox title="Modo de preparo" value={recipe.preparation_steps || "Sem preparo cadastrado."} />
+              {recipe.source_note && <ReadBox title="Nota de fonte" value={recipe.source_note} />}
+              {recipe.tags.length > 0 && <ReadBox title="Tags" value={recipe.tags.join(", ")} />}
+            </div>
+            <aside className="rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] p-4">
+              <p className="brand-kicker mb-3">Macros por porcao</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Macro label="Kcal" value={Math.round(recipe.per_portion_kcal)} />
+                <Macro label="Prot." value={recipe.per_portion_protein_g.toFixed(1)} />
+                <Macro label="Carb." value={recipe.per_portion_carbs_g.toFixed(1)} />
+                <Macro label="Gord." value={recipe.per_portion_fat_g.toFixed(1)} />
+              </div>
+              <p className="mt-4 text-xs leading-5 text-[#75675E]">
+                Receita salva como biblioteca. Ao inserir em plano alimentar, os ingredientes sao copiados como snapshot para o paciente.
+              </p>
+            </aside>
+          </div>
+        </div>
+        <div className="grid shrink-0 gap-3 border-t border-[#EDE1D6] px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex sm:justify-end">
+          <button type="button" onClick={onClose} className="brand-btn-secondary w-full sm:w-auto">Fechar</button>
+          <button type="button" onClick={onEdit} className="brand-btn-primary w-full sm:w-auto"><Edit3 className="h-4 w-4" />Editar receita</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ConfirmArchiveModal({ recipe, deleting, error, onCancel, onConfirm }: {
+  recipe: Recipe;
+  deleting: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+      <section className="w-full max-w-md overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
+        <div className="border-b border-[#EDE1D6] px-5 py-4">
+          <p className="brand-kicker">Arquivar receita</p>
+          <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Confirmar arquivamento</h2>
+          <p className="mt-2 text-sm leading-6 text-[#75675E]">
+            A receita <strong className="text-[#3A3028]">{recipe.title}</strong> deixara de aparecer como ativa para novos usos. Planos ja criados nao serao alterados.
+          </p>
+        </div>
+        {error && <p className="mx-5 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+        <div className="grid gap-3 px-5 py-4 sm:flex sm:justify-end">
+          <button type="button" onClick={onCancel} disabled={deleting} className="brand-btn-secondary w-full sm:w-auto">Cancelar</button>
+          <button type="button" onClick={onConfirm} disabled={deleting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-[#F2CDC7] px-5 py-2 text-sm font-semibold text-[#9A5C4E] transition hover:bg-[#FFF5F3] disabled:opacity-50">
+            <Trash2 className="h-4 w-4" />
+            {deleting ? "Arquivando..." : "Arquivar receita"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ReadBox({ title, value }: { title: string; value: string }) {
+  return (
+    <section className="rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] p-4">
+      <p className="text-sm font-semibold text-[#3A3028]">{title}</p>
+      <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-[#75675E]">{value}</p>
+    </section>
   );
 }
 

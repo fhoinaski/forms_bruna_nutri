@@ -44,7 +44,9 @@ const seed = JSON.parse(readFileSync(seedPath, "utf8")) as RecipeSeedFile;
 
 function sourceNoteForRecipe(recipe: RecipeSeed): string | null {
   const notes: string[] = [];
-  if (seed.observacao?.trim()) notes.push(seed.observacao.trim());
+  if (recipe.ingredientes.some((ingredient) => ingredient.numero_taco === 1003)) {
+    notes.push("Tapioca representada pelo item complementar TBCA-USP de goma pronta sem manteiga e sem recheio.");
+  }
   if (recipe.titulo.toLowerCase().includes("merluza da taco")) {
     notes.push("Nesta receita, tilapia foi representada por merluza da TACO por ausencia de item especifico na tabela.");
   }

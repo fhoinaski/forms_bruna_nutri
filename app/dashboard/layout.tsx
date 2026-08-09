@@ -63,6 +63,7 @@ const breadcrumbLabels: Record<string, string> = {
   clients: "Pacientes",
   agenda: "Agenda",
   templates: "Modelos",
+  receitas: "Receitas",
   financeiro: "Financeiro",
   protocols: "Protocolos",
   oportunidades: "Oportunidades",
@@ -223,10 +224,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const profileRef = useRef<HTMLDivElement>(null);
   const hasUnreadNotifications = !!notificationSummary && notificationSummary.totalUnread > 0 && notificationSummary.signature !== seenNotificationSignature;
 
-  const breadcrumbs = useMemo(() => pathname.split("/").filter(Boolean).map((segment, index, parts) => ({
-    label: breadcrumbLabels[segment] ?? (index === parts.length - 1 ? "Prontuário" : segment),
-    href: `/${parts.slice(0, index + 1).join("/")}`,
-  })), [pathname]);
+  const breadcrumbs = useMemo(() => pathname.split("/").filter(Boolean).map((segment, index, parts) => {
+    const isClientDetail = parts[index - 1] === "clients" && index === parts.length - 1;
+    const fallbackLabel = segment.replaceAll("-", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+    return {
+      label: breadcrumbLabels[segment] ?? (isClientDetail ? "Prontuário" : fallbackLabel),
+      href: `/${parts.slice(0, index + 1).join("/")}`,
+    };
+  }), [pathname]);
 
   useEffect(() => {
     const close = (event: MouseEvent) => {

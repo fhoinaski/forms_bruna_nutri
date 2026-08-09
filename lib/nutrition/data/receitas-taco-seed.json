@@ -144,9 +144,9 @@
       "modo_preparo": "Peneire a goma de tapioca. Aqueça frigideira antiaderente e espalhe a goma, formando um disco. Quando soltar, vire e recheie com o queijo. Em outra frigideira, frite o ovo na manteiga e coloque sobre o queijo. Dobre ao meio e sirva.",
       "ingredientes": [
         {
-          "numero_taco": 551,
-          "alimento": "Tapioca, com manteiga",
-          "grupo_taco": "Alimentos preparados",
+          "numero_taco": 1003,
+          "alimento": "Tapioca, goma, pronta (discos), sem manteiga, sem recheio",
+          "grupo_taco": "Produtos complementares",
           "porcao_g": 60
         },
         {

@@ -157,12 +157,14 @@ export default function ProtocolTemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<TemplateForm | null>(null);
   const [viewTemplate, setViewTemplate] = useState<ProtocolTemplateDetail | null>(null);
+  const [deleteTemplate, setDeleteTemplate] = useState<ProtocolTemplate | null>(null);
   const [portalReady, setPortalReady] = useState(false);
   const [filterGroup, setFilterGroup] = useState("");
   const [filterType, setFilterType] = useState("");
   const [search, setSearch] = useState("");
   const [includeInactive, setIncludeInactive] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [aiEnabled, setAiEnabled] = useState(false);
@@ -209,7 +211,7 @@ export default function ProtocolTemplatesPage() {
   }, []);
 
   useEffect(() => {
-    if (!form && !viewTemplate) return;
+    if (!form && !viewTemplate && !deleteTemplate) return;
     const previousOverflow = document.body.style.overflow;
     const previousPaddingRight = document.body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -219,7 +221,7 @@ export default function ProtocolTemplatesPage() {
       document.body.style.overflow = previousOverflow;
       document.body.style.paddingRight = previousPaddingRight;
     };
-  }, [form, viewTemplate]);
+  }, [form, viewTemplate, deleteTemplate]);
 
   function openCreate(type: ProtocolTemplateType = "DIETA") {
     setError("");
@@ -290,10 +292,21 @@ export default function ProtocolTemplatesPage() {
     }
   }
 
-  async function removeTemplate(template: ProtocolTemplate) {
-    if (!confirm(`Excluir o modelo "${template.title}"?`)) return;
-    const response = await fetch(`/api/admin/protocol-templates/${template.id}`, { method: "DELETE" });
-    if (response.ok) await loadTemplates();
+  async function removeTemplate() {
+    if (!deleteTemplate) return;
+    setDeleting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/protocol-templates/${deleteTemplate.id}`, { method: "DELETE" });
+      const data = response.ok ? null : await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.message ?? "Nao foi possivel excluir o modelo.");
+      setDeleteTemplate(null);
+      await loadTemplates();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Nao foi possivel excluir o modelo.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function suggestDietTemplate(currentForm: TemplateForm) {
@@ -418,7 +431,7 @@ export default function ProtocolTemplatesPage() {
           </div>
         ) : (
           <div className="grid gap-4 bg-[#FBF7F1] p-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((template) => <TemplateCard key={template.id} template={template} onView={(item) => void openView(item)} onEdit={(item) => void openEdit(item)} onRemove={(item) => void removeTemplate(item)} />)}
+            {filtered.map((template) => <TemplateCard key={template.id} template={template} onView={(item) => void openView(item)} onEdit={(item) => void openEdit(item)} onRemove={setDeleteTemplate} />)}
           </div>
         )}
       </section>
@@ -444,6 +457,47 @@ export default function ProtocolTemplatesPage() {
         />,
         document.body
       )}
+
+      {portalReady && deleteTemplate && createPortal(
+        <TemplateDeleteModal
+          template={deleteTemplate}
+          deleting={deleting}
+          error={error}
+          onCancel={() => setDeleteTemplate(null)}
+          onConfirm={() => void removeTemplate()}
+        />,
+        document.body
+      )}
+    </div>
+  );
+}
+
+function TemplateDeleteModal({ template, deleting, error, onCancel, onConfirm }: {
+  template: ProtocolTemplate;
+  deleting: boolean;
+  error: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+      <section className="w-full max-w-md overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
+        <div className="border-b border-[#EDE1D6] px-5 py-4">
+          <p className="brand-kicker">Excluir modelo</p>
+          <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Confirmar exclusao</h2>
+          <p className="mt-2 text-sm leading-6 text-[#75675E]">
+            O modelo <strong className="text-[#3A3028]">{template.title}</strong> sera removido da biblioteca. Planos de pacientes ja criados nao serao alterados.
+          </p>
+        </div>
+        {error && <p className="mx-5 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+        <div className="grid gap-3 px-5 py-4 sm:flex sm:justify-end">
+          <button type="button" onClick={onCancel} disabled={deleting} className="brand-btn-secondary w-full sm:w-auto">Cancelar</button>
+          <button type="button" onClick={onConfirm} disabled={deleting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-[#F2CDC7] px-5 py-2 text-sm font-semibold text-[#9A5C4E] transition hover:bg-[#FFF5F3] disabled:opacity-50">
+            <Trash2 className="h-4 w-4" />
+            {deleting ? "Excluindo..." : "Excluir modelo"}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
