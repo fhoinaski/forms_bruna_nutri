@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Beef, Flame, Plus, Save, Sparkles, Trash2, Utensils, Wheat } from "lucide-react";
 import { estimateFoodMacros, roundedMacros, sumMacros, type MacroReferenceFood } from "@/lib/nutrition/macros";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
@@ -103,6 +104,24 @@ export function MealItemsEditor({
   const [recipeDraft, setRecipeDraft] = useState<RecipeDraft | null>(null);
   const [recipeSaving, setRecipeSaving] = useState(false);
   const [aiLoadingMeal, setAiLoadingMeal] = useState<number | null>(null);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!recipeSelectorOpen && !recipeDraft) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [recipeSelectorOpen, recipeDraft]);
 
   useEffect(() => {
     const foodsToPrime = meals.flatMap((meal, mealIndex) =>
@@ -503,7 +522,7 @@ export function MealItemsEditor({
         </div>
       )}
 
-      {recipeSelectorOpen && (
+      {portalReady && recipeSelectorOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
           <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-5 py-4">
@@ -536,10 +555,11 @@ export function MealItemsEditor({
               )}
             </div>
           </section>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {recipeDraft && (
+      {portalReady && recipeDraft && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
           <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
             <div className="shrink-0 border-b border-[#EDE1D6] px-5 py-4">
@@ -580,7 +600,8 @@ export function MealItemsEditor({
               </button>
             </div>
           </section>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

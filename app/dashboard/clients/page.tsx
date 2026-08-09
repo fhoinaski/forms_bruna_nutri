@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   CalendarDays,
@@ -11,9 +13,11 @@ import {
   Phone,
   Search,
   ShieldCheck,
+  Save,
   UserCheck,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { BrandMetricCard } from "@/components/brand/BrandMetricCard";
@@ -40,6 +44,14 @@ interface ApiResponse {
   pageSize: number;
   totalPages: number;
   metrics: Metrics;
+}
+
+interface ClientForm {
+  name: string;
+  email: string;
+  phone: string;
+  birth_date: string;
+  notes: string;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -158,12 +170,34 @@ function ClientCard({ client }: { client: Client }) {
 }
 
 export default function ClientsPage() {
+  const router = useRouter();
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [searchTrigger, setSearchTrigger] = useState(0);
+  const [portalReady, setPortalReady] = useState(false);
+  const [clientForm, setClientForm] = useState<ClientForm | null>(null);
+  const [creatingClient, setCreatingClient] = useState(false);
+  const [createError, setCreateError] = useState("");
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!clientForm) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [clientForm]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -211,6 +245,38 @@ export default function ClientsPage() {
     setSearchTrigger((k) => k + 1);
   };
 
+  const openNewClient = () => {
+    setCreateError("");
+    setClientForm({ name: "", email: "", phone: "", birth_date: "", notes: "" });
+  };
+
+  async function createManualClient() {
+    if (!clientForm) return;
+    setCreatingClient(true);
+    setCreateError("");
+    try {
+      const response = await fetch("/api/admin/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: clientForm.name,
+          email: clientForm.email || null,
+          phone: clientForm.phone || null,
+          birth_date: clientForm.birth_date || null,
+          notes: clientForm.notes || null,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Nao foi possivel cadastrar o paciente.");
+      setClientForm(null);
+      router.push(`/dashboard/clients/${data.id}`);
+    } catch (cause) {
+      setCreateError(cause instanceof Error ? cause.message : "Nao foi possivel cadastrar o paciente.");
+    } finally {
+      setCreatingClient(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 animate-fade-up">
       <section className="overflow-hidden rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
@@ -224,7 +290,21 @@ export default function ClientsPage() {
               Encontre prontuários, acompanhe status, abra planos alimentares e
               mantenha o histórico clínico organizado para cada atendimento.
             </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-4">
+              <button
+                type="button"
+                onClick={openNewClient}
+                className="group rounded-2xl border border-[#D9E4D3] bg-[#F5FAF0] p-4 text-left transition hover:border-[#7F9A74]/55 hover:bg-[#EAF0E4]"
+              >
+                <UserPlus className="h-5 w-5 text-[#607A56]" />
+                <span className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#3A3028]">
+                  Novo paciente
+                  <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-[#75675E]">
+                  Cadastre manualmente sem formulario publico.
+                </span>
+              </button>
               <Link
                 href="/dashboard/oportunidades"
                 className="group rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] p-4 transition hover:border-[#7F9A74]/45 hover:bg-[#F5FAF0]"
@@ -542,6 +622,114 @@ export default function ClientsPage() {
             </div>
           </div>
         )}
+      </section>
+
+      {portalReady && clientForm && createPortal(
+        <NewClientModal
+          form={clientForm}
+          saving={creatingClient}
+          error={createError}
+          setForm={setClientForm}
+          onClose={() => setClientForm(null)}
+          onSave={() => void createManualClient()}
+        />,
+        document.body
+      )}
+    </div>
+  );
+}
+
+function NewClientModal({
+  form,
+  saving,
+  error,
+  setForm,
+  onClose,
+  onSave,
+}: {
+  form: ClientForm;
+  saving: boolean;
+  error: string;
+  setForm: (form: ClientForm | null) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+      <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-5 py-4">
+          <div className="min-w-0">
+            <p className="brand-kicker">Cadastro manual</p>
+            <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Novo paciente</h2>
+            <p className="mt-1 text-xs leading-5 text-[#75675E]">
+              Cria um prontuario vazio para preencher anamnese, plano alimentar, agenda e portal depois.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" title="Fechar">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="brand-label">Nome completo</label>
+              <input
+                value={form.name}
+                onChange={(event) => setForm({ ...form, name: event.target.value })}
+                className="brand-input"
+                placeholder="Nome do paciente"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="brand-label">Telefone / WhatsApp</label>
+              <input
+                value={form.phone}
+                onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                className="brand-input"
+                placeholder="(00) 00000-0000"
+              />
+            </div>
+            <div>
+              <label className="brand-label">E-mail</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(event) => setForm({ ...form, email: event.target.value })}
+                className="brand-input"
+                placeholder="paciente@email.com"
+              />
+            </div>
+            <div>
+              <label className="brand-label">Data de nascimento</label>
+              <input
+                type="date"
+                value={form.birth_date}
+                onChange={(event) => setForm({ ...form, birth_date: event.target.value })}
+                className="brand-input"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="brand-label">Observacoes iniciais</label>
+              <textarea
+                value={form.notes}
+                onChange={(event) => setForm({ ...form, notes: event.target.value })}
+                className="brand-input min-h-28 resize-y"
+                placeholder="Origem do contato, objetivo inicial, combinados ou observacoes administrativas."
+              />
+            </div>
+            {error && <p className="md:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+          </div>
+        </div>
+
+        <div className="grid shrink-0 gap-3 border-t border-[#EDE1D6] px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex sm:justify-end">
+          <button type="button" onClick={onClose} disabled={saving} className="brand-btn-secondary w-full sm:w-auto">Cancelar</button>
+          <button type="button" onClick={onSave} disabled={saving || !form.name.trim()} className="brand-btn-primary w-full sm:w-auto">
+            <Save className="h-4 w-4" />
+            {saving ? "Salvando..." : "Criar paciente"}
+          </button>
+        </div>
       </section>
     </div>
   );

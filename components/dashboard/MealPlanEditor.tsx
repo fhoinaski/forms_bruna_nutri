@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
 import { MealItemsEditor, cleanMealsForSave, type Meal } from "@/components/dashboard/MealItemsEditor";
 import {
@@ -42,6 +43,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null);
   const [templateSaving, setTemplateSaving] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
 
   const loadPlans = useCallback(async (preferredPlanId?: string) => {
     const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, { cache: "no-store" });
@@ -63,6 +65,23 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       .then((settings: { has_api_key?: boolean } | null) => setAiEnabled(Boolean(settings?.has_api_key)))
       .catch(() => setAiEnabled(false));
   }, []);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!templateDraft) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [templateDraft]);
 
   function selectPlan(id: string) {
     setSelectedPlanId(id);
@@ -316,7 +335,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         </section>
       )}
 
-      {templateDraft && plan && (
+      {portalReady && templateDraft && plan && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
           <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
             <div className="shrink-0 border-b border-[#EDE1D6] px-5 py-4">
@@ -348,7 +367,8 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               </button>
             </div>
           </section>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
