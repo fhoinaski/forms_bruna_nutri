@@ -22,6 +22,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { addDays, format, isValid, parseISO } from "date-fns";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
 type AppointmentStatus = "agendado" | "confirmado" | "realizado" | "cancelado";
 type AppointmentType = "primeira_consulta" | "consulta" | "retorno" | "avaliacao" | "online" | "outro";
@@ -436,9 +437,12 @@ export default function AgendaPage() {
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="p-6 sm:p-7">
             <p className="brand-kicker mb-3">Agenda clinica</p>
-            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">
-              Rotina de atendimentos
-            </h1>
+            <div className="flex items-start gap-3">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">
+                Rotina de atendimentos
+              </h1>
+              <HelpPopover topicKey="agenda" />
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
               Visualize o dia, confirme consultas, prepare mensagens e mantenha
               cada retorno conectado ao cuidado da paciente.

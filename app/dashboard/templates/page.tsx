@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Archive, BookOpenText, CheckCircle2, Edit3, Eye, Filter, LibraryBig, Plus, Save, Search, Sparkles, Trash2, Utensils, X } from "lucide-react";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 import { EditableList } from "@/components/dashboard/MealPlanEditor";
 import { MealItemsEditor, cleanMealsForSave, emptyMeal, type Meal } from "@/components/dashboard/MealItemsEditor";
 import {
@@ -347,7 +348,10 @@ export default function ProtocolTemplatesPage() {
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="p-6 sm:p-7">
             <p className="brand-kicker mb-3">Modelos profissionais</p>
-            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">Dietas, protocolos e substituicoes</h1>
+            <div className="flex items-start gap-3">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">Dietas, protocolos e substituicoes</h1>
+              <HelpPopover topicKey="templates" />
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
               Organize modelos-base com refeicoes, alimentos, suplementos e substituicoes estruturados para reaproveitar com seguranca no prontuario.
             </p>

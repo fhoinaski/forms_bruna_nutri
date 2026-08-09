@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Archive, BookOpenText, Edit3, Eye, Plus, Save, Search, X } from "lucide-react";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
 type EducationCategory = "geral" | "patologia";
 
@@ -196,7 +197,10 @@ export default function PatientEducationCardsPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="brand-kicker mb-3">Educação do paciente</p>
-            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">Fichas de orientação</h1>
+            <div className="flex items-start gap-3">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">Fichas de orientação</h1>
+              <HelpPopover topicKey="templates/educacao" />
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
               Edite materiais educativos gerais e por patologia para apoiar comunicação, protocolos e acompanhamento sem depender de deploy.
             </p>

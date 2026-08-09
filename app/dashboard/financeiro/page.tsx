@@ -12,6 +12,7 @@ import {
   Trash2,
   WalletCards,
 } from "lucide-react";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
 type PaymentStatus = "pendente" | "pago" | "vencido" | "cancelado";
 type PaymentMethod = "pix" | "cartao" | "dinheiro" | "transferencia" | "outro";
@@ -259,9 +260,12 @@ export default function FinanceiroPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="brand-kicker mb-3">Financeiro</p>
-            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028]">
-              Gestao de cobrancas
-            </h1>
+            <div className="flex items-start gap-3">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028]">
+                Gestao de cobrancas
+              </h1>
+              <HelpPopover topicKey="financeiro" />
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
               Acompanhe valores recebidos, pendencias e vencimentos ligados aos
               atendimentos, com uma leitura simples para a rotina do consultorio.

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { BrandBadge } from "@/components/brand/BrandBadge";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 import { BrandMetricCard } from "@/components/brand/BrandMetricCard";
 
 function formatDateSafe(value: string | null, fmt = "dd/MM/yyyy"): string {
@@ -368,9 +369,12 @@ export default function DashboardPage() {
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="p-6 sm:p-7">
             <p className="brand-kicker mb-3">Painel clinico</p>
-            <h1 className="max-w-3xl font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">
-              Centro de trabalho da nutricao
-            </h1>
+            <div className="flex max-w-3xl items-start gap-3">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">
+                Centro de trabalho da nutricao
+              </h1>
+              <HelpPopover topicKey="dashboard" />
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
               Acompanhe agenda, pacientes, pre-consultas, tarefas, financeiro e conteudo
               em uma visao unica para decidir o proximo passo com rapidez.

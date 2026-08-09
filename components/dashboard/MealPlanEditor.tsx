@@ -49,6 +49,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null);
+  const [deleteDraft, setDeleteDraft] = useState<{ planId: string; title: string; status: MealPlanStatus } | null>(null);
   const [templateSaving, setTemplateSaving] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
@@ -79,7 +80,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   }, []);
 
   useEffect(() => {
-    if (!templateDraft) return;
+    if (!templateDraft && !deleteDraft) return;
     const previousOverflow = document.body.style.overflow;
     const previousPaddingRight = document.body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -89,7 +90,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       document.body.style.overflow = previousOverflow;
       document.body.style.paddingRight = previousPaddingRight;
     };
-  }, [templateDraft]);
+  }, [templateDraft, deleteDraft]);
 
   function selectPlan(id: string) {
     setSelectedPlanId(id);
@@ -166,22 +167,18 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     }
   }
 
-  async function removePlan() {
-    if (!plan) return;
-    const warning = plan.status === "active"
-      ? `O plano "${plan.title}" esta ativo no portal. Deseja realmente exclui-lo?`
-      : `Deseja excluir o plano "${plan.title}"? Esta acao nao pode ser desfeita.`;
-    if (!window.confirm(warning)) return;
-
+  async function confirmRemovePlan() {
+    if (!deleteDraft) return;
     setDeleting(true);
     setError("");
     setMessage("");
     try {
-      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/${plan.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/${deleteDraft.planId}`, { method: "DELETE" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message ?? "Nao foi possivel excluir o plano.");
       setSelectedPlanId("");
       setPlan(null);
+      setDeleteDraft(null);
       await loadPlans();
       setMessage("Plano alimentar excluido.");
       onSaved?.();
@@ -327,7 +324,12 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
           />
 
           <div className="flex flex-col gap-3 border-t border-[#EDE1D6] pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <button type="button" onClick={() => void removePlan()} disabled={deleting || saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50">
+            <button
+              type="button"
+              onClick={() => setDeleteDraft({ planId: plan.id, title: plan.title, status: plan.status })}
+              disabled={deleting || saving}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+            >
               <Trash2 className="h-4 w-4" />
               {deleting ? "Excluindo..." : "Excluir plano"}
             </button>
@@ -378,6 +380,39 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               <button type="button" onClick={() => void savePlanAsTemplate()} disabled={templateSaving || !templateDraft.title.trim()} className="brand-btn-primary w-full sm:w-auto">
                 <Save className="h-4 w-4" />
                 {templateSaving ? "Salvando..." : "Criar modelo novo"}
+              </button>
+            </div>
+          </section>
+        </div>,
+        document.body
+      )}
+      {portalReady && deleteDraft && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+          <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
+            <div className="shrink-0 border-b border-[#EDE1D6] px-5 py-4">
+              <p className="brand-kicker text-red-700">Excluir plano alimentar</p>
+              <h2 className="mt-1 font-serif text-2xl font-semibold text-[#3A3028]">Confirmar exclusao</h2>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
+              <p className="text-sm leading-6 text-[#75675E]">
+                Deseja excluir o plano <strong className="text-[#3A3028]">{deleteDraft.title}</strong>? Esta acao nao pode ser desfeita.
+              </p>
+              {deleteDraft.status === "active" && (
+                <p className="rounded-xl border border-[#E8C3BA] bg-[#FFF7F5] p-3 text-xs leading-5 text-[#9A5C4E]">
+                  Este plano esta ativo no portal do cliente. Ao excluir, ele deixara de aparecer para a paciente.
+                </p>
+              )}
+            </div>
+            <div className="grid shrink-0 gap-3 border-t border-[#EDE1D6] px-5 py-3 sm:flex sm:justify-end">
+              <button type="button" onClick={() => setDeleteDraft(null)} disabled={deleting} className="brand-btn-secondary w-full sm:w-auto">Cancelar</button>
+              <button
+                type="button"
+                onClick={() => void confirmRemovePlan()}
+                disabled={deleting}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-red-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? "Excluindo..." : "Excluir plano"}
               </button>
             </div>
           </section>

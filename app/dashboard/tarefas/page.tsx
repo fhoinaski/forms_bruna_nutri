@@ -13,6 +13,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
 type TaskStatus = "pendente" | "concluida" | "cancelada";
 
@@ -174,9 +175,12 @@ export default function TarefasPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="brand-kicker mb-3">Rotina clinica</p>
-            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028]">
-              Central de tarefas
-            </h1>
+            <div className="flex items-start gap-3">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028]">
+                Central de tarefas
+              </h1>
+              <HelpPopover topicKey="tarefas" />
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
               Organize retornos, ajustes de conduta, contatos com pacientes e
               pendencias de acompanhamento em uma fila unica de trabalho.

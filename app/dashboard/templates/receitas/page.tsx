@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Archive, Edit3, Eye, Plus, Save, Search, Sparkles, Trash2, Utensils, X } from "lucide-react";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 
 type RecipeIngredient = {
@@ -236,7 +237,10 @@ export default function RecipesPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="brand-kicker mb-3">Biblioteca culinaria</p>
-            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">Receitas brasileiras</h1>
+            <div className="flex items-start gap-3">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">Receitas brasileiras</h1>
+              <HelpPopover topicKey="templates/receitas" />
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
               Crie receitas reutilizaveis com ingredientes da TACO. Ao inserir no plano, os dados sao copiados para o paciente como snapshot.
             </p>

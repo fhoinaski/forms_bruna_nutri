@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   UserCheck,
 } from "lucide-react";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
 type PrivacyRequest = {
   id: string;
@@ -218,7 +219,10 @@ export default function PrivacyDashboardPage() {
       <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <p className="brand-kicker mb-2">Governança de dados</p>
-          <h1 className="font-serif text-4xl font-semibold">Privacidade e segurança</h1>
+          <div className="flex items-start gap-3">
+            <h1 className="font-serif text-4xl font-semibold">Privacidade e segurança</h1>
+            <HelpPopover topicKey="privacidade" />
+          </div>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#75675E]">
             Solicitações dos titulares, retenção, anonimização e histórico das ações sensíveis.
           </p>

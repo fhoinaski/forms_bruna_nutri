@@ -1,4 +1,4 @@
-import { d1Query, d1Execute } from "@/lib/d1/client";
+import { d1Batch, d1Query, d1Execute } from "@/lib/d1/client";
 
 export interface Client {
   id: string;
@@ -193,6 +193,35 @@ export async function updateClient(
     `UPDATE clients SET ${updates.join(", ")} WHERE id = ?${idx}`,
     params
   );
+}
+
+export async function deleteClient(id: string): Promise<Client | null> {
+  const existing = await getClientById(id);
+  if (!existing) return null;
+
+  await d1Batch([
+    { sql: "DELETE FROM appointment_workflow_items WHERE appointment_id IN (SELECT id FROM appointments WHERE client_id = ?1)", params: [id] },
+    { sql: "DELETE FROM appointments WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM payments WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM client_tasks WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM client_portal_access WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM client_evolutions WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM nutrition_records WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM client_timeline_events WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM client_protocols WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM protocol_phases WHERE protocol_id IN (SELECT id FROM protocols WHERE client_id = ?1)", params: [id] },
+    { sql: "DELETE FROM protocols WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM ai_protocol_drafts WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM meal_plan_items WHERE meal_id IN (SELECT m.id FROM meal_plan_meals m INNER JOIN meal_plans p ON p.id = m.meal_plan_id WHERE p.client_id = ?1)", params: [id] },
+    { sql: "DELETE FROM meal_plan_weekly_slots WHERE meal_plan_id IN (SELECT id FROM meal_plans WHERE client_id = ?1)", params: [id] },
+    { sql: "DELETE FROM meal_plan_meals WHERE meal_plan_id IN (SELECT id FROM meal_plans WHERE client_id = ?1)", params: [id] },
+    { sql: "DELETE FROM meal_plan_substitutions WHERE meal_plan_id IN (SELECT id FROM meal_plans WHERE client_id = ?1)", params: [id] },
+    { sql: "DELETE FROM meal_plan_supplements WHERE meal_plan_id IN (SELECT id FROM meal_plans WHERE client_id = ?1)", params: [id] },
+    { sql: "DELETE FROM meal_plans WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM clients WHERE id = ?1", params: [id] },
+  ]);
+
+  return existing;
 }
 
 export async function getClientMetrics(): Promise<ClientMetrics> {

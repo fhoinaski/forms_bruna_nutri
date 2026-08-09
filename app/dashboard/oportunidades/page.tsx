@@ -16,6 +16,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
 type Stage = "novo" | "acolhimento" | "aguardando_resposta" | "agendado" | "convertido" | "perdido";
 type Temperature = "frio" | "morno" | "quente";
@@ -186,9 +187,12 @@ export default function OpportunitiesPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="brand-kicker mb-3">Funil de relacionamento</p>
-            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028]">
-              Oportunidades de atendimento
-            </h1>
+            <div className="flex items-start gap-3">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028]">
+                Oportunidades de atendimento
+              </h1>
+              <HelpPopover topicKey="oportunidades" />
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
               Conduza cada pré-consulta com acolhimento, contexto e próximos passos
               claros, sem transformar o contato em pressão comercial.

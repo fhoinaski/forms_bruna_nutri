@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
-import { getClientById, updateClient } from "@/lib/repositories/clients";
+import { deleteClient, getClientById, updateClient } from "@/lib/repositories/clients";
+import { getRequestFingerprint } from "@/lib/security/request";
+import { writeAuditLog } from "@/lib/security/audit";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -56,5 +58,35 @@ export async function PATCH(
   }
 
   await updateClient(id, parsed.data);
+  return NextResponse.json({ success: true });
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const admin = await getAdminFromRequest(req);
+  if (!admin) {
+    return NextResponse.json({ message: "NÃ£o autorizado." }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const deleted = await deleteClient(id);
+  if (!deleted) {
+    return NextResponse.json({ message: "Cliente nÃ£o encontrado." }, { status: 404 });
+  }
+
+  await writeAuditLog({
+    action: "client_deleted",
+    adminId: admin.sub,
+    entityType: "client",
+    entityId: id,
+    ipHash: getRequestFingerprint(req).ipHash,
+    metadata: {
+      hadEmail: Boolean(deleted.email),
+      sourceSubmissionId: deleted.source_submission_id,
+    },
+  });
+
   return NextResponse.json({ success: true });
 }

@@ -14,6 +14,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
 type BlogStatus = "draft" | "published" | "archived";
 
@@ -229,9 +230,12 @@ export default function DashboardBlogPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="brand-kicker mb-3">Conteudo e autoridade</p>
-            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028]">
-              Blog editorial
-            </h1>
+            <div className="flex items-start gap-3">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028]">
+                Blog editorial
+              </h1>
+              <HelpPopover topicKey="blog" />
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
               Revise, edite, publique e acompanhe artigos para fortalecer SEO,
               buscas e respostas de agentes de IA sobre nutrição materno-infantil.

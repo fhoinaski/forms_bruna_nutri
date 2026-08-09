@@ -2,80 +2,80 @@
   {
     "id": "edu-geral-rotulos-nutricionais",
     "slug": "como-ler-rotulos-nutricionais",
-    "title": "Como ler r?tulos nutricionais",
+    "title": "Como ler rótulos nutricionais",
     "category": "geral",
-    "summary": "Guia para interpretar por??o, lista de ingredientes, %VD e nomes alternativos de a??car antes da compra.",
+    "summary": "Guia para interpretar porção, lista de ingredientes, %VD e nomes alternativos de açúcar antes da compra.",
     "sections": {
-      "o_que_e": "O r?tulo ajuda a comparar alimentos e entender o que realmente est? sendo consumido.",
-      "dica": "Comece pela por??o, depois leia a lista de ingredientes e observe a??cares, s?dio, gorduras e fibras.",
-      "fato_importante": "A lista de ingredientes aparece em ordem decrescente: o primeiro item ? o que est? em maior quantidade.",
+      "o_que_e": "O rótulo ajuda a comparar alimentos e entender o que realmente está sendo consumido.",
+      "dica": "Comece pela porção, depois leia a lista de ingredientes e observe açúcares, sódio, gorduras e fibras.",
+      "fato_importante": "A lista de ingredientes aparece em ordem decrescente: o primeiro item é o que está em maior quantidade.",
       "nomes_alternativos_acucar": [
         "sacarose",
         "xarope de glicose",
         "maltodextrina",
         "dextrose",
         "frutose",
-        "a??car invertido",
+        "açúcar invertido",
         "melado",
         "xarope de milho"
       ],
       "pontos_de_atencao": [
-        "Por??o informada pode ser menor que o consumo real",
-        "%VD ? refer?ncia geral, n?o meta individual",
-        "Produtos com muitos ingredientes e aditivos merecem aten??o"
+        "Porção informada pode ser menor que o consumo real",
+        "%VD é referência geral, não meta individual",
+        "Produtos com muitos ingredientes e aditivos merecem atenção"
       ]
     }
   },
   {
     "id": "edu-geral-prato-ideal",
     "slug": "prato-ideal-por-refeicao",
-    "title": "Prato ideal por refei??o",
+    "title": "Prato ideal por refeição",
     "category": "geral",
-    "summary": "Modelo visual simples: metade do prato com vegetais, um quarto com prote?na, um quarto com carboidrato e uma fonte de gordura boa.",
+    "summary": "Modelo visual simples: metade do prato com vegetais, um quarto com proteína, um quarto com carboidrato e uma fonte de gordura boa.",
     "sections": {
-      "o_que_e": "Uma forma pr?tica de montar refei??es equilibradas sem depender de contagem r?gida.",
+      "o_que_e": "Uma forma prática de montar refeições equilibradas sem depender de contagem rígida.",
       "alimentos_recomendados": [
         "1/2 prato de vegetais",
-        "1/4 prato de prote?na",
+        "1/4 prato de proteína",
         "1/4 prato de carboidrato",
         "Gordura boa em pequena quantidade"
       ],
       "dica": "Use esse modelo como ponto de partida e ajuste conforme objetivo, fome, rotina, fase de vida e conduta profissional.",
-      "fato_importante": "O prato ideal n?o precisa ser perfeito todos os dias; ele orienta propor??o e variedade."
+      "fato_importante": "O prato ideal não precisa ser perfeito todos os dias; ele orienta proporção e variedade."
     }
   },
   {
     "id": "edu-geral-grupos-alimentares",
     "slug": "grupos-alimentares-e-funcao-no-corpo",
-    "title": "Grupos alimentares e fun??o no corpo",
+    "title": "Grupos alimentares e função no corpo",
     "category": "geral",
-    "summary": "Explica a fun??o de carboidratos, prote?nas, gorduras, frutas, vegetais e l?quidos na rotina alimentar.",
+    "summary": "Explica a função de carboidratos, proteínas, gorduras, frutas, vegetais e líquidos na rotina alimentar.",
     "sections": {
-      "o_que_e": "Cada grupo alimentar contribui com energia, constru??o, regula??o, saciedade e prote??o metab?lica.",
+      "o_que_e": "Cada grupo alimentar contribui com energia, construção, regulação, saciedade e proteção metabólica.",
       "nutrientes_chave": [
         "Carboidratos: energia",
-        "Prote?nas: constru??o e reparo",
-        "Gorduras: horm?nios, saciedade e absor??o de vitaminas",
-        "Vitaminas e minerais: regula??o",
+        "Proteínas: construção e reparo",
+        "Gorduras: hormônios, saciedade e absorção de vitaminas",
+        "Vitaminas e minerais: regulação",
         "Fibras: intestino e saciedade"
       ],
       "dica": "Quanto mais variado e colorido o prato, maior a chance de cobrir necessidades importantes.",
-      "fato_importante": "Nenhum grupo precisa ser demonizado; a estrat?gia depende do contexto cl?nico."
+      "fato_importante": "Nenhum grupo precisa ser demonizado; a estratégia depende do contexto clínico."
     }
   },
   {
     "id": "edu-geral-hidratacao-diaria",
     "slug": "hidratacao-diaria",
-    "title": "Hidrata??o di?ria",
+    "title": "Hidratação diária",
     "category": "geral",
-    "summary": "Orienta??o pr?tica de hidrata??o usando 35 ml/kg como refer?ncia inicial ajust?vel.",
+    "summary": "Orientação prática de hidratação usando 35 ml/kg como referência inicial ajustável.",
     "sections": {
-      "o_que_e": "A ?gua participa da digest?o, circula??o, temperatura corporal, intestino e disposi??o.",
-      "dica": "Como refer?ncia simples, pode-se estimar cerca de 35 ml por kg de peso ao dia, ajustando para clima, atividade f?sica, gesta??o, lacta??o e condi??es cl?nicas.",
-      "fato_importante": "Sede, urina muito escura, constipa??o e dor de cabe?a podem sinalizar baixa ingest?o h?drica.",
+      "o_que_e": "A água participa da digestão, circulação, temperatura corporal, intestino e disposição.",
+      "dica": "Como referência simples, pode-se estimar cerca de 35 ml por kg de peso ao dia, ajustando para clima, atividade física, gestação, lactação e condições clínicas.",
+      "fato_importante": "Sede, urina muito escura, constipação e dor de cabeça podem sinalizar baixa ingestão hídrica.",
       "o_que_evitar": [
-        "Trocar ?gua por refrigerantes ou bebidas a?ucaradas",
-        "Esperar sentir muita sede para beber ?gua"
+        "Trocar água por refrigerantes ou bebidas açucaradas",
+        "Esperar sentir muita sede para beber água"
       ]
     }
   },
@@ -84,79 +84,79 @@
     "slug": "fibras-onde-encontrar-e-por-que-importam",
     "title": "Fibras: onde encontrar e por que importam",
     "category": "geral",
-    "summary": "Diferen?a entre fibras sol?veis e insol?veis e como elas ajudam intestino, saciedade e glicemia.",
+    "summary": "Diferença entre fibras solúveis e insolúveis e como elas ajudam intestino, saciedade e glicemia.",
     "sections": {
-      "o_que_e": "Fibras s?o carboidratos n?o digeridos completamente, importantes para intestino, saciedade e controle metab?lico.",
+      "o_que_e": "Fibras são carboidratos não digeridos completamente, importantes para intestino, saciedade e controle metabólico.",
       "nutrientes_chave": [
-        "Fibra sol?vel: ajuda saciedade, colesterol e controle glic?mico",
-        "Fibra insol?vel: auxilia tr?nsito intestinal e volume fecal"
+        "Fibra solúvel: ajuda saciedade, colesterol e controle glicêmico",
+        "Fibra insolúvel: auxilia trânsito intestinal e volume fecal"
       ],
       "alimentos_recomendados": [
         "Aveia",
-        "Feij?es e lentilha",
+        "Feijões e lentilha",
         "Frutas com casca",
         "Verduras",
         "Legumes",
-        "Sementes como chia e linha?a"
+        "Sementes como chia e linhaça"
       ],
-      "dica": "Aumente fibras aos poucos e junto com ?gua para reduzir gases e desconforto.",
-      "fato_importante": "Baixo consumo de fibras pode piorar constipa??o e dificultar saciedade."
+      "dica": "Aumente fibras aos poucos e junto com água para reduzir gases e desconforto.",
+      "fato_importante": "Baixo consumo de fibras pode piorar constipação e dificultar saciedade."
     }
   },
   {
     "id": "edu-geral-acucares-escondidos",
     "slug": "acucares-escondidos-nos-alimentos",
-    "title": "A??cares escondidos nos alimentos",
+    "title": "Açúcares escondidos nos alimentos",
     "category": "geral",
-    "summary": "Ajuda a reconhecer a??car em produtos industrializados mesmo quando ele aparece com outros nomes.",
+    "summary": "Ajuda a reconhecer açúcar em produtos industrializados mesmo quando ele aparece com outros nomes.",
     "sections": {
-      "o_que_e": "A??car pode aparecer no r?tulo com nomes diferentes e em produtos que n?o parecem doces.",
+      "o_que_e": "Açúcar pode aparecer no rótulo com nomes diferentes e em produtos que não parecem doces.",
       "o_que_evitar": [
-        "Bebidas ado?adas",
-        "Cereais a?ucarados",
+        "Bebidas adoçadas",
+        "Cereais açucarados",
         "Molhos prontos",
         "Iogurtes com calda ou saborizados",
         "Barras com xarope ou cobertura"
       ],
-      "dica": "Leia a lista de ingredientes e procure nomes como xarope, maltodextrina, dextrose, sacarose e a??car invertido.",
-      "fato_importante": "Reduzir a??car escondido costuma melhorar qualidade alimentar sem exigir restri??o extrema."
+      "dica": "Leia a lista de ingredientes e procure nomes como xarope, maltodextrina, dextrose, sacarose e açúcar invertido.",
+      "fato_importante": "Reduzir açúcar escondido costuma melhorar qualidade alimentar sem exigir restrição extrema."
     }
   },
   {
     "id": "edu-geral-porcoes-na-mao",
     "slug": "porcoes-na-mao",
-    "title": "Por??es na m?o",
+    "title": "Porções na mão",
     "category": "geral",
-    "summary": "M?todo visual: palma para prote?na, punho para carboidrato, polegar para gordura e duas m?os em concha para vegetais.",
+    "summary": "Método visual: palma para proteína, punho para carboidrato, polegar para gordura e duas mãos em concha para vegetais.",
     "sections": {
-      "o_que_e": "Uma estrat?gia simples para estimar por??es fora de casa ou quando n?o h? balan?a.",
-      "dica": "Use a palma para prote?na, o punho para carboidrato, o polegar para gordura e duas m?os em concha para vegetais.",
-      "fato_importante": "? uma refer?ncia educativa, n?o substitui prescri??o individual quando h? necessidade cl?nica espec?fica.",
+      "o_que_e": "Uma estratégia simples para estimar porções fora de casa ou quando não há balança.",
+      "dica": "Use a palma para proteína, o punho para carboidrato, o polegar para gordura e duas mãos em concha para vegetais.",
+      "fato_importante": "É uma referência educativa, não substitui prescrição individual quando há necessidade clínica específica.",
       "exemplos": [
         "Palma: frango, peixe, ovos, tofu",
         "Punho: arroz, batata, mandioca, massa",
         "Polegar: azeite, pasta de amendoim, castanhas",
-        "Duas m?os em concha: saladas e legumes"
+        "Duas mãos em concha: saladas e legumes"
       ]
     }
   },
   {
     "id": "edu-geral-substituicoes-inteligentes",
     "slug": "substituicoes-inteligentes",
-    "title": "Substitui??es inteligentes",
+    "title": "Substituições inteligentes",
     "category": "geral",
-    "summary": "Tabela educativa de trocas simples para melhorar saciedade, fibras, prote?na e qualidade da rotina.",
+    "summary": "Tabela educativa de trocas simples para melhorar saciedade, fibras, proteína e qualidade da rotina.",
     "sections": {
-      "o_que_e": "Substitui??es ajudam a ajustar qualidade alimentar sem transformar a rotina em uma dieta r?gida.",
-      "dica": "Troque pensando em fun??o: mais fibras, mais prote?na, menos a??car adicionado ou melhor gordura.",
+      "o_que_e": "Substituições ajudam a ajustar qualidade alimentar sem transformar a rotina em uma dieta rígida.",
+      "dica": "Troque pensando em função: mais fibras, mais proteína, menos açúcar adicionado ou melhor gordura.",
       "substituicoes": [
         {
           "em_vez_de": "Refrigerante",
-          "troque_por": "?gua com g?s e lim?o ou ch? gelado sem a??car"
+          "troque_por": "Água com gás e limão ou chá gelado sem açúcar"
         },
         {
-          "em_vez_de": "P?o branco sempre",
-          "troque_por": "P?o integral ou p?o com fonte de prote?na junto"
+          "em_vez_de": "Pão branco sempre",
+          "troque_por": "Pão integral ou pão com fonte de proteína junto"
         },
         {
           "em_vez_de": "Doce isolado no lanche",
@@ -164,10 +164,10 @@
         },
         {
           "em_vez_de": "Tempero pronto",
-          "troque_por": "Alho, cebola, lim?o, ervas e especiarias"
+          "troque_por": "Alho, cebola, limão, ervas e especiarias"
         }
       ],
-      "fato_importante": "A melhor substitui??o ? aquela que a pessoa consegue repetir na vida real."
+      "fato_importante": "A melhor substituição é aquela que a pessoa consegue repetir na vida real."
     }
   },
   {
@@ -175,38 +175,38 @@
     "slug": "fome-real-x-fome-emocional",
     "title": "Fome real x fome emocional",
     "category": "geral",
-    "summary": "Ajuda o paciente a diferenciar sinais f?sicos de fome de vontade de comer ligada a emo??o, estresse ou h?bito.",
+    "summary": "Ajuda o paciente a diferenciar sinais físicos de fome de vontade de comer ligada a emoção, estresse ou hábito.",
     "sections": {
-      "o_que_e": "Fome real costuma crescer aos poucos e melhora com comida. Fome emocional tende a surgir r?pido, com desejo espec?fico e ligada a emo??es.",
+      "o_que_e": "Fome real costuma crescer aos poucos e melhora com comida. Fome emocional tende a surgir rápido, com desejo específico e ligada a emoções.",
       "sintomas": [
-        "Vontade urgente de um alimento espec?fico",
-        "Comer no autom?tico",
-        "Culpa ap?s comer",
-        "Busca por comida em momentos de estresse, ansiedade ou cansa?o"
+        "Vontade urgente de um alimento específico",
+        "Comer no automático",
+        "Culpa após comer",
+        "Busca por comida em momentos de estresse, ansiedade ou cansaço"
       ],
-      "dica": "Antes de comer, pergunte: ? fome f?sica, vontade, cansa?o, ansiedade ou h?bito?",
-      "fato_importante": "O objetivo n?o ? culpa, mas consci?ncia para escolher melhor o pr?ximo passo."
+      "dica": "Antes de comer, pergunte: é fome física, vontade, cansaço, ansiedade ou hábito?",
+      "fato_importante": "O objetivo não é culpa, mas consciência para escolher melhor o próximo passo."
     }
   },
   {
     "id": "edu-geral-lista-compras-saudavel",
     "slug": "como-organizar-lista-de-compras-saudavel",
-    "title": "Como organizar lista de compras saud?vel",
+    "title": "Como organizar lista de compras saudável",
     "category": "geral",
-    "summary": "Modelo para organizar compras por grupos e facilitar refei??es pr?ticas durante a semana.",
+    "summary": "Modelo para organizar compras por grupos e facilitar refeições práticas durante a semana.",
     "sections": {
-      "o_que_e": "Uma lista organizada reduz improviso, desperd?cio e depend?ncia de ultraprocessados.",
+      "o_que_e": "Uma lista organizada reduz improviso, desperdício e dependência de ultraprocessados.",
       "alimentos_recomendados": [
-        "Prote?nas",
+        "Proteínas",
         "Carboidratos base",
         "Legumes e verduras",
         "Frutas",
-        "Latic?nios ou alternativas",
+        "Laticínios ou alternativas",
         "Temperos naturais",
-        "Lanches pr?ticos"
+        "Lanches práticos"
       ],
-      "dica": "Planeje 2 ou 3 refei??es-chave da semana antes de comprar.",
-      "fato_importante": "Comprar com lista ajuda a alinhar rotina, or?amento e ades?o ao plano alimentar."
+      "dica": "Planeje 2 ou 3 refeições-chave da semana antes de comprar.",
+      "fato_importante": "Comprar com lista ajuda a alinhar rotina, orçamento e adesão ao plano alimentar."
     }
   },
   {

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { BrandMetricCard } from "@/components/brand/BrandMetricCard";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
 interface Client {
   id: string;
@@ -283,9 +284,12 @@ export default function ClientsPage() {
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_330px]">
           <div className="p-6 sm:p-7">
             <p className="brand-kicker mb-3">Pacientes</p>
-            <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">
-              Gestão clínica de pacientes
-            </h1>
+            <div className="flex items-start gap-3">
+              <h1 className="font-serif text-4xl font-semibold leading-tight text-[#3A3028] sm:text-5xl">
+                Gestão clínica de pacientes
+              </h1>
+              <HelpPopover topicKey="clients" />
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[#75675E]">
               Encontre prontuários, acompanhe status, abra planos alimentares e
               mantenha o histórico clínico organizado para cada atendimento.

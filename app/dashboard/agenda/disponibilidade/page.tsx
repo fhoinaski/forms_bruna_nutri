@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Ban, CalendarDays, Plus, Trash2 } from "lucide-react";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
 type Rule = {
   id: string;
@@ -151,7 +152,10 @@ export default function AvailabilityPage() {
           Voltar para agenda
         </Link>
         <p className="brand-kicker mb-2">Agenda online</p>
-        <h1 className="font-serif text-4xl font-semibold">Disponibilidade para autoagendamento</h1>
+        <div className="flex items-start gap-3">
+          <h1 className="font-serif text-4xl font-semibold">Disponibilidade para autoagendamento</h1>
+          <HelpPopover topicKey="agenda/disponibilidade" />
+        </div>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75675E]">
           Defina janelas recorrentes de atendimento e bloqueios pontuais. A paciente só verá horários livres, sem dados de outras consultas.
         </p>

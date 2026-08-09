@@ -734,6 +734,9 @@ export default function ClientDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingClient, setDeletingClient] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   // Protocols
   const [protocols, setProtocols] = useState<ClientProtocol[]>([]);
@@ -868,6 +871,21 @@ export default function ClientDetailPage() {
   const reloadClientProtocols = async () => {
     const response = await fetch(`/api/admin/clients/${id}/protocols`);
     if (response.ok) setProtocols(await response.json() as ClientProtocol[]);
+  };
+
+  const deleteCurrentClient = async () => {
+    setDeletingClient(true);
+    setDeleteError("");
+    try {
+      const response = await fetch(`/api/admin/clients/${id}`, { method: "DELETE" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message ?? "Nao foi possivel excluir o paciente.");
+      router.push("/dashboard/clients");
+      router.refresh();
+    } catch (cause) {
+      setDeleteError(cause instanceof Error ? cause.message : "Nao foi possivel excluir o paciente.");
+      setDeletingClient(false);
+    }
   };
 
   const startProtocol = async (personalized: boolean) => {
@@ -1053,6 +1071,14 @@ export default function ClientDetailPage() {
           <Printer className="w-3.5 h-3.5" />
           Relatório imprimível
         </Link>
+        <button
+          type="button"
+          onClick={() => setDeleteDialogOpen(true)}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#E8C3BA] px-4 py-2 text-xs font-semibold text-[#9A5C4E] transition-colors hover:bg-[#F6E6E0] sm:w-auto"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Excluir paciente
+        </button>
       </div>
 
       {/* Patient workspace */}
@@ -1755,6 +1781,47 @@ export default function ClientDetailPage() {
         </div>
         </Tabs>
       </div>
+      {deleteDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-4 py-6 backdrop-blur-sm">
+          <section className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
+            <div className="border-b border-[#EDE1D6] px-5 py-4">
+              <p className="brand-kicker text-[#9A5C4E]">Exclusao definitiva</p>
+              <h2 className="mt-1 font-serif text-2xl font-semibold text-[#3A3028]">Excluir paciente</h2>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
+              <p className="text-sm leading-6 text-[#75675E]">
+                Esta acao remove <strong className="text-[#3A3028]">{data.name}</strong> da base de pacientes e apaga prontuario, portal, protocolos, tarefas, evolucoes, planos alimentares, consultas e financeiro vinculados ao cadastro.
+              </p>
+              <p className="rounded-xl border border-[#E8C3BA] bg-[#FFF7F5] p-3 text-xs leading-5 text-[#9A5C4E]">
+                Se essa pessoa voltar no futuro, ela podera preencher uma nova pre-consulta ou ser cadastrada novamente no sistema.
+              </p>
+              {deleteError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</p>}
+            </div>
+            <div className="grid gap-3 border-t border-[#EDE1D6] px-5 py-3 sm:flex sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteDialogOpen(false);
+                  setDeleteError("");
+                }}
+                disabled={deletingClient}
+                className="brand-btn-secondary w-full sm:w-auto"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteCurrentClient()}
+                disabled={deletingClient}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[#9A5C4E] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#82483D] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deletingClient ? "Excluindo..." : "Excluir definitivamente"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

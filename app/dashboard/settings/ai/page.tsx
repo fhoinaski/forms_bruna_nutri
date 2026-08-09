@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Bot, Save, ShieldCheck } from "lucide-react";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
 type AIProvider = "openai" | "anthropic" | "google";
 
@@ -128,7 +129,10 @@ export default function AISettingsPage() {
             <Bot className="h-7 w-7" />
           </div>
           <p className="brand-kicker mb-2">Configuração dinâmica</p>
-          <h1 className="font-serif text-3xl font-semibold text-[#3A2B1F]">Inteligência Artificial</h1>
+          <div className="flex items-start justify-center gap-3 sm:justify-start">
+            <h1 className="font-serif text-3xl font-semibold text-[#3A2B1F]">Inteligência Artificial</h1>
+            <HelpPopover topicKey="settings/ai" />
+          </div>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#75675E]">
             Configure provedor, chave, modelo e prompts usados pelo agente de protocolos sem depender de variáveis estáticas no deploy.
           </p>

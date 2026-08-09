@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Eye, EyeOff, AlertTriangle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { HelpPopover } from "@/components/dashboard/HelpPopover";
 import { MfaPanel } from "@/components/security/MfaPanel";
 
 function PasswordInput({
@@ -121,9 +122,12 @@ export default function SecurityPage() {
           <div className="w-14 h-14 bg-[#EAD8C2] rounded-full flex items-center justify-center mx-auto mb-4">
             <ShieldCheck className="w-7 h-7 text-[#7A9A74]" />
           </div>
-          <h1 className="font-serif text-2xl font-semibold text-[#3A2B1F] mb-1">
-            Segurança da conta
-          </h1>
+          <div className="mb-1 flex items-start justify-center gap-3">
+            <h1 className="font-serif text-2xl font-semibold text-[#3A2B1F]">
+              Segurança da conta
+            </h1>
+            <HelpPopover topicKey="settings/security" />
+          </div>
           <p className="text-sm text-[#A8927D]">Bruna Flores Nutri</p>
         </div>
 
