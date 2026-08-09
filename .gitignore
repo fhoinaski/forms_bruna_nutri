@@ -11,3 +11,6 @@ backups/
 *.sqlite3
 .env*
 !.env.example
+
+.vercel
+lib/clinical/data/source/
