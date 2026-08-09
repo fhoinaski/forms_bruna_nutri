@@ -15,6 +15,15 @@ const DEFAULT_VALUES: Partial<FormResponseInput> = {
   tipoAtendimento: "",
   objetivo: "",
   sintomas: "",
+  child_name: "",
+  child_age: "",
+  child_weight_kg: "",
+  child_height_cm: "",
+  child_birth_date: "",
+  child_breastfeeding: "",
+  child_food_repertoire: "",
+  child_feeding_difficulties: "",
+  child_school_routine: "",
   anticoncepcional: undefined,
   gestante: undefined,
   semComer: undefined,
@@ -28,12 +37,22 @@ const DEFAULT_VALUES: Partial<FormResponseInput> = {
   companyWebsite: "",
 };
 
-const REQUIRED_FIELDS = ["nome", "whatsapp", "email", "privacyAccepted"] as const;
+const BASE_REQUIRED_FIELDS = ["nome", "whatsapp", "email", "privacyAccepted"] as const;
+const PEDIATRIC_REQUIRED_FIELDS = ["child_name", "child_age"] as const;
 const FORM_FIELD_ORDER = [
   "tipoAtendimento",
   "nome",
   "idade",
   "nascimento",
+  "child_name",
+  "child_age",
+  "child_weight_kg",
+  "child_height_cm",
+  "child_birth_date",
+  "child_breastfeeding",
+  "child_food_repertoire",
+  "child_feeding_difficulties",
+  "child_school_routine",
   "whatsapp",
   "email",
   "profissao",
@@ -70,6 +89,7 @@ const FORM_FIELD_ORDER = [
 const AUTOSAVE_SECTIONS: Array<{ id: string; fields: readonly (keyof FormResponseInput)[] }> = [
   { id: "tipo_atendimento", fields: ["tipoAtendimento"] },
   { id: "sobre_voce", fields: ["nome", "idade", "nascimento", "whatsapp", "email", "profissao", "cidade"] },
+  { id: "crianca", fields: ["child_name", "child_age", "child_weight_kg", "child_height_cm", "child_birth_date", "child_breastfeeding", "child_food_repertoire", "child_feeding_difficulties", "child_school_routine"] },
   { id: "momento_atual", fields: ["motivacao", "objetivo", "incomodo"] },
   { id: "historico_saude", fields: ["diagnostico", "medicacao", "anticoncepcional", "gestante", "sintomas"] },
   { id: "suplementacao", fields: ["suplementos", "suplementosNegativo"] },
@@ -122,6 +142,16 @@ function flattenDraft(draft: unknown): Partial<FormResponseInput> {
   }, {});
 }
 
+function isPediatricProfile(value: string | null | undefined) {
+  const normalized = (value ?? "").toLowerCase();
+  return normalized.includes("infantil") || normalized.includes("tea") || normalized.includes("introdu") || normalized.includes("seletividade");
+}
+
+function isPregnancyProfile(value: string | null | undefined) {
+  const normalized = (value ?? "").toLowerCase();
+  return normalized.includes("gesta") || normalized.includes("parto");
+}
+
 export default function FormularioPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -135,7 +165,7 @@ export default function FormularioPage() {
     defaultValues: DEFAULT_VALUES,
   });
 
-  const requiredValues = useWatch({ control, name: REQUIRED_FIELDS });
+  const requiredValues = useWatch({ control, name: [...BASE_REQUIRED_FIELDS, ...PEDIATRIC_REQUIRED_FIELDS] });
   const autosaveValues = useWatch({ control, name: AUTOSAVE_FIELD_NAMES });
   const tipoAtendimento = useWatch({ control, name: "tipoAtendimento" });
   const objetivo = useWatch({ control, name: "objetivo" });
@@ -149,11 +179,24 @@ export default function FormularioPage() {
   const intestinoFreq = useWatch({ control, name: "intestinoFreq" });
   const desconforto = useWatch({ control, name: "desconforto" });
   const disposicao = useWatch({ control, name: "disposicao" });
+  const isPediatric = isPediatricProfile(tipoAtendimento);
+  const isPregnancy = isPregnancyProfile(tipoAtendimento);
 
   useEffect(() => {
-    const filledCount = requiredValues.filter(hasFilledValue).length;
-    setProgress(Math.min(100, Math.round((filledCount / REQUIRED_FIELDS.length) * 100)));
-  }, [requiredValues]);
+    if (!isPediatric) {
+      return;
+    }
+
+    setValue("anticoncepcional", undefined, { shouldValidate: false, shouldDirty: false });
+    setValue("gestante", undefined, { shouldValidate: false, shouldDirty: false });
+    setValue("semComer", undefined, { shouldValidate: false, shouldDirty: false });
+    setValue("comerEmocao", undefined, { shouldValidate: false, shouldDirty: false });
+  }, [isPediatric, setValue]);
+
+  useEffect(() => {
+    const activeRequiredValues = isPediatric ? requiredValues : requiredValues.slice(0, BASE_REQUIRED_FIELDS.length);
+    setProgress(Math.min(100, Math.round((activeRequiredValues.filter(hasFilledValue).length / activeRequiredValues.length) * 100)));
+  }, [isPediatric, requiredValues]);
 
   useEffect(() => {
     try {
@@ -412,6 +455,45 @@ export default function FormularioPage() {
           </Section>
 
           {/* Seção 2 */}
+          {isPediatric && (
+            <Section number="1.1" title="Dados da criança">
+              <div className="mb-5 rounded-2xl border border-[#D9E4D3] bg-[#F4F8F1] px-4 py-3 text-sm leading-6 text-[#5F554D]">
+                Preencha os dados da criança para que a avaliação considere fase de crescimento, rotina familiar e sinais alimentares importantes.
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                <Field label="Nome da criança" required error={errors.child_name?.message}>
+                  <Input {...register("child_name")} placeholder="Nome da criança" />
+                </Field>
+                <Field label="Idade da criança" required error={errors.child_age?.message}>
+                  <Input {...register("child_age")} placeholder="Ex: 2 anos e 4 meses" />
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
+                <Field label="Peso atual">
+                  <Input {...register("child_weight_kg")} inputMode="decimal" placeholder="Ex: 13,5 kg" />
+                </Field>
+                <Field label="Estatura atual">
+                  <Input {...register("child_height_cm")} inputMode="decimal" placeholder="Ex: 92 cm" />
+                </Field>
+                <Field label="Nascimento da criança">
+                  <Input {...register("child_birth_date")} type="date" />
+                </Field>
+              </div>
+              <Field label="Aleitamento / fórmula / mamadeiras" className="mb-5">
+                <Textarea {...register("child_breastfeeding")} placeholder="Conte se mama no peito, usa fórmula, mamadeira, horários e aceitação." />
+              </Field>
+              <Field label="Repertório alimentar atual" className="mb-5">
+                <Textarea {...register("child_food_repertoire")} placeholder="Alimentos aceitos, recusados, texturas, marcas, preparações e rotina das refeições." />
+              </Field>
+              <Field label="Dificuldades percebidas na alimentação" className="mb-5">
+                <Textarea {...register("child_feeding_difficulties")} placeholder="Engasgos, seletividade, náuseas, recusa, preferências sensoriais, alergias ou outras observações." />
+              </Field>
+              <Field label="Rotina familiar, escola e cuidadores">
+                <Textarea {...register("child_school_routine")} placeholder="Quem oferece as refeições, horários, escola/creche, lancheira e contexto familiar." />
+              </Field>
+            </Section>
+          )}
+
           <Section number="2" title="Seu momento atual">
             <Field label="O que te motivou a buscar acompanhamento agora?" className="mb-5">
               <Textarea {...register("motivacao")} placeholder="Conte um pouco sobre o que te trouxe até aqui..." />
@@ -450,25 +532,30 @@ export default function FormularioPage() {
             <Field label="Faz uso de medicação contínua? Qual?" className="mb-5">
               <Input {...register("medicacao")} placeholder="Nome dos medicamentos" />
             </Field>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-              <Field label="Usa anticoncepcional?">
-                <RadioGroup 
-                  options={["Sim", "Não"]} 
-                  value={anticoncepcional} 
-                  onChange={(v) => setValue("anticoncepcional", v)} 
-                />
-              </Field>
-              <Field label="Gestante ou amamentando?">
-                <RadioGroup 
-                  options={["Sim", "Não"]} 
-                  value={gestante} 
-                  onChange={(v) => setValue("gestante", v)} 
-                />
-              </Field>
-            </div>
-            <Field label="Você apresenta com frequência: (marque vários)">
+            {!isPediatric && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                <Field label="Usa anticoncepcional?">
+                  <RadioGroup
+                    options={["Sim", "Não"]}
+                    value={anticoncepcional}
+                    onChange={(v) => setValue("anticoncepcional", v)}
+                  />
+                </Field>
+                <Field label="Gestante ou amamentando?">
+                  <RadioGroup
+                    options={["Sim", "Não"]}
+                    value={gestante}
+                    onChange={(v) => setValue("gestante", v)}
+                  />
+                </Field>
+              </div>
+            )}
+            <Field label={isPediatric ? "A criança apresenta com frequência: (marque vários)" : "Você apresenta com frequência: (marque vários)"}>
               <div className="flex flex-wrap gap-2 mt-2">
-                {["Cansaço", "Inchaço", "Queda de cabelo", "Ansiedade", "Compulsão", "Intestino preso"].map((tag) => (
+                {(isPediatric
+                  ? ["Seletividade", "Recusa alimentar", "Engasgos", "Constipação", "Dor abdominal", "Alergias"]
+                  : ["Cansaço", "Inchaço", "Queda de cabelo", "Ansiedade", "Compulsão", "Intestino preso"]
+                ).map((tag) => (
                   <Tag 
                     key={tag} 
                     active={(sintomas || "").includes(tag)}
@@ -493,27 +580,35 @@ export default function FormularioPage() {
 
           {/* Seção 5 */}
           <Section number="5" title="Rotina e comportamento alimentar">
-            <Field label="Como é sua rotina diária?" className="mb-5">
-              <Textarea {...register("rotina")} placeholder="Horário que acorda, trabalha, dorme..." />
+            <Field label={isPediatric ? "Como é a rotina diária da criança?" : "Como é sua rotina diária?"} className="mb-5">
+              <Textarea
+                {...register("rotina")}
+                placeholder={isPediatric ? "Horários de escola, sono, cuidadores e refeições..." : "Horário que acorda, trabalha, dorme..."}
+              />
             </Field>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-              <Field label="Fica muito tempo sem comer?">
-                <RadioGroup 
-                  options={["Sim", "Não", "Às vezes"]} 
-                  value={semComer} 
-                  onChange={(v) => setValue("semComer", v)} 
-                />
-              </Field>
-              <Field label="Come mais por fome ou emoção?">
-                <RadioGroup 
-                  options={["Fome", "Emoção", "Os dois"]} 
-                  value={comerEmocao} 
-                  onChange={(v) => setValue("comerEmocao", v)} 
-                />
-              </Field>
-            </div>
-            <Field label="Como avalia sua fome ao longo do dia?">
-              <Textarea {...register("fomeDia")} placeholder="Intensa de manhã, fraca à tarde..." />
+            {!isPediatric && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                <Field label="Fica muito tempo sem comer?">
+                  <RadioGroup
+                    options={["Sim", "Não", "Às vezes"]}
+                    value={semComer}
+                    onChange={(v) => setValue("semComer", v)}
+                  />
+                </Field>
+                <Field label="Come mais por fome ou emoção?">
+                  <RadioGroup
+                    options={["Fome", "Emoção", "Os dois"]}
+                    value={comerEmocao}
+                    onChange={(v) => setValue("comerEmocao", v)}
+                  />
+                </Field>
+              </div>
+            )}
+            <Field label={isPediatric ? "Como é o apetite e a aceitação ao longo do dia?" : "Como avalia sua fome ao longo do dia?"}>
+              <Textarea
+                {...register("fomeDia")}
+                placeholder={isPediatric ? "Melhores horários, recusas, preferências e sinais de fome/saciedade..." : "Intensa de manhã, fraca à tarde..."}
+              />
             </Field>
           </Section>
 

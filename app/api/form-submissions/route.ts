@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = result.data;
-    const { nome, email, whatsapp, privacyAccepted: _, companyWebsite: __, ...rest } = data;
+    const { nome, email, whatsapp, child_name, child_age, privacyAccepted: _, companyWebsite: __, ...rest } = data;
 
     const answers: Record<string, string> = {};
     for (const [key, value] of Object.entries(rest)) {
@@ -55,6 +55,8 @@ export async function POST(req: NextRequest) {
       patient_name: nome,
       patient_email: email || null,
       patient_phone: whatsapp || null,
+      child_name: child_name || null,
+      child_age: child_age || null,
       form_type: "pre_consulta",
       answers,
     });
