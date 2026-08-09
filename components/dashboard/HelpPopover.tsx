@@ -5,10 +5,30 @@ import Link from "next/link";
 import { CircleHelp, X } from "lucide-react";
 import { dashboardHelpTopics, type HelpTopicKey } from "@/lib/help/content";
 
+const topicAnchors: Record<HelpTopicKey, string> = {
+  dashboard: "",
+  clients: "clients",
+  agenda: "agenda",
+  "agenda/disponibilidade": "configurar-disponibilidade",
+  templates: "templates",
+  "templates/receitas": "recipes",
+  "templates/educacao": "educacao",
+  financeiro: "financeiro",
+  oportunidades: "qualificar-oportunidade",
+  tarefas: "tarefas",
+  protocols: "protocols",
+  privacidade: "privacidade",
+  blog: "",
+  "settings/ai": "ia",
+  "settings/security": "seguranca",
+};
+
 export function HelpPopover({ topicKey }: { topicKey: HelpTopicKey }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const topic = dashboardHelpTopics[topicKey];
+  const anchor = topicAnchors[topicKey];
+  const guideHref = anchor ? `/dashboard/ajuda#${anchor}` : "/dashboard/ajuda";
 
   useEffect(() => {
     if (!open) return;
@@ -63,7 +83,7 @@ export function HelpPopover({ topicKey }: { topicKey: HelpTopicKey }) {
           <div className="p-4">
             <p className="text-sm leading-6 text-[#75675E]">{topic.body}</p>
             <Link
-              href="/dashboard/ajuda"
+              href={guideHref}
               onClick={() => setOpen(false)}
               className="mt-4 inline-flex text-xs font-semibold uppercase tracking-[0.12em] text-[#607A56] hover:text-[#B47F6A]"
             >
