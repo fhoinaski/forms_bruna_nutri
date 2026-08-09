@@ -29,6 +29,7 @@ export interface NutritionRecord {
   current_weight_kg: string | null;
   height_cm: string | null;
   bmi: string | null;
+  pre_pregnancy_weight_kg: string | null;
   waist_cm: string | null;
   anthropometry_notes: string | null;
   pediatric_growth_notes: string | null;
@@ -73,6 +74,7 @@ const FIELDS: (keyof NutritionRecordInput)[] = [
   "current_weight_kg",
   "height_cm",
   "bmi",
+  "pre_pregnancy_weight_kg",
   "waist_cm",
   "anthropometry_notes",
   "pediatric_growth_notes",
@@ -138,6 +140,7 @@ async function buildInitialRecord(clientId: string): Promise<NutritionRecordInpu
     current_weight_kg: answer(answers, ["peso", "pesoAtual"]),
     height_cm: answer(answers, ["altura"]),
     bmi: null,
+    pre_pregnancy_weight_kg: answer(answers, ["pesoPreGestacional", "pesoAntesGestacao"]),
     waist_cm: answer(answers, ["cintura", "circunferenciaCintura"]),
     anthropometry_notes: null,
     pediatric_growth_notes: answer(answers, ["crescimento", "curvaCrescimento", "pediatra"]),

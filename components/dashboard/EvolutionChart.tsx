@@ -19,20 +19,45 @@ export interface AnthropometricHistoryItem {
   body_fat_percentage?: number | null;
 }
 
+export interface GrowthReferenceLineItem {
+  measured_at?: string | null;
+  created_at?: string | null;
+  p3?: number | null;
+  p50?: number | null;
+  p97?: number | null;
+}
+
 function chartDate(value?: string | null) {
   if (!value) return "Sem data";
   const date = parseISO(value);
   return isValid(date) ? format(date, "dd/MM/yy") : "Sem data";
 }
 
-export function EvolutionChart({ history }: { history: AnthropometricHistoryItem[] }) {
+export function EvolutionChart({
+  history,
+  referenceLines = [],
+}: {
+  history: AnthropometricHistoryItem[];
+  referenceLines?: GrowthReferenceLineItem[];
+}) {
+  const referencesByDate = new Map(
+    referenceLines.map((item) => [chartDate(item.measured_at ?? item.created_at), item])
+  );
   const data = [...history]
     .sort((a, b) => new Date(a.measured_at ?? a.created_at ?? 0).getTime() - new Date(b.measured_at ?? b.created_at ?? 0).getTime())
-    .map((item) => ({
-      date: chartDate(item.measured_at ?? item.created_at),
-      weight: item.weight ?? undefined,
-      bodyFat: item.body_fat_percentage ?? undefined,
-    }));
+    .map((item) => {
+      const date = chartDate(item.measured_at ?? item.created_at);
+      const reference = referencesByDate.get(date);
+      return {
+        date,
+        weight: item.weight ?? undefined,
+        bodyFat: item.body_fat_percentage ?? undefined,
+        p3: reference?.p3 ?? undefined,
+        p50: reference?.p50 ?? undefined,
+        p97: reference?.p97 ?? undefined,
+      };
+    });
+  const hasReferences = data.some((item) => item.p3 !== undefined || item.p50 !== undefined || item.p97 !== undefined);
 
   if (!data.some((item) => item.weight !== undefined || item.bodyFat !== undefined)) {
     return (
@@ -53,6 +78,13 @@ export function EvolutionChart({ history }: { history: AnthropometricHistoryItem
           <Tooltip contentStyle={{ border: "1px solid #EDE1D6", borderRadius: 8, background: "#FFFDFC", fontSize: 12 }} labelStyle={{ color: "#3A3028", fontWeight: 600 }} />
           <Legend iconType="circle" wrapperStyle={{ fontSize: 12, color: "#75675E", paddingTop: 12 }} />
           <Line yAxisId="weight" type="monotone" dataKey="weight" name="Peso (kg)" stroke="#7F9A74" strokeWidth={2.5} dot={{ r: 4, fill: "#7F9A74", strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls />
+          {hasReferences && (
+            <>
+              <Line yAxisId="weight" type="monotone" dataKey="p3" name="P3 referencia" stroke="#D9C4B2" strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls />
+              <Line yAxisId="weight" type="monotone" dataKey="p50" name="P50 referencia" stroke="#A8927D" strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls />
+              <Line yAxisId="weight" type="monotone" dataKey="p97" name="P97 referencia" stroke="#D9C4B2" strokeWidth={1.5} strokeDasharray="4 4" dot={false} connectNulls />
+            </>
+          )}
           <Line yAxisId="fat" type="monotone" dataKey="bodyFat" name="Gordura (%)" stroke="#C9937B" strokeWidth={2.5} dot={{ r: 4, fill: "#C9937B", strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls />
         </LineChart>
       </ResponsiveContainer>

@@ -39,6 +39,7 @@ const UpdateSchema = z.object({
   current_weight_kg: shortField,
   height_cm: shortField,
   bmi: shortField,
+  pre_pregnancy_weight_kg: shortField,
   waist_cm: shortField,
   anthropometry_notes: textField,
   pediatric_growth_notes: textField,

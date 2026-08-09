@@ -13,6 +13,7 @@
     "migrate:d1:check": "node scripts/migrate-d1.mjs --check",
     "migrate:d1:status": "node scripts/migrate-d1.mjs --status",
     "schema:runtime-check": "node scripts/check-runtime-ddl.mjs",
+    "build:who-reference": "node scripts/build-who-growth-reference.mjs",
     "seed:templates": "tsx db/seed-templates.ts",
     "seed:recipes": "tsx db/seed-recipes.ts",
     "create-admin": "node scripts/create-admin.mjs",

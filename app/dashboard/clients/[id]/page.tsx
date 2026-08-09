@@ -86,12 +86,45 @@ interface NutritionRecord {
   restrictions: string | null; food_preferences: string | null; food_aversions: string | null;
   eating_routine: string | null; intestinal_health: string | null; sleep_routine: string | null;
   stress_context: string | null; physical_activity: string | null; hydration: string | null;
-  current_weight_kg: string | null; height_cm: string | null; bmi: string | null; waist_cm: string | null;
+  current_weight_kg: string | null; height_cm: string | null; bmi: string | null; pre_pregnancy_weight_kg: string | null; waist_cm: string | null;
   anthropometry_notes: string | null; pediatric_growth_notes: string | null;
   target_weight_kg: string | null; target_notes: string | null; exams: string | null; assessment: string | null;
   goals: string | null; care_plan: string | null; risk_flags: string | null;
   family_context: string | null; private_notes: string | null;
   created_at: string; updated_at: string;
+}
+
+interface ClinicalGrowthResponse {
+  pediatric: {
+    applicable: boolean;
+    sex: string | null;
+    age: { days: number; months: number; years: number } | null;
+    results: Array<{
+      indicator: string;
+      label: string;
+      value: number;
+      zScore: number;
+      cautionLabel: string;
+      technicalKey: string | null;
+      technicalRule: string | null;
+    }>;
+    chartReferenceLines: Array<{
+      measured_at?: string | null;
+      created_at?: string | null;
+      p3: number | null;
+      p50: number | null;
+      p97: number | null;
+    }>;
+  };
+  gestational: {
+    applicable: boolean;
+    prePregnancyBmi: number | null;
+    prePregnancyClassification: { category: string; label: string; interpretation: string } | null;
+    recommendedTotalGain: { ganho_min_kg: number; ganho_max_kg: number; observacao?: string } | null;
+    weeklyGainRate: number | null;
+    weeklyGainClassification: { classification: string; label: string; p25: number; p75: number } | null;
+    referenceNote: string;
+  };
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -412,6 +445,7 @@ const ANTHROPOMETRY_FIELDS: { key: keyof NutritionRecord; label: string; placeho
   { key: "current_weight_kg", label: "Peso atual (kg)", placeholder: "Ex: 68,5" },
   { key: "height_cm", label: "Altura (cm)", placeholder: "Ex: 165" },
   { key: "bmi", label: "IMC", placeholder: "Ex: 25,2" },
+  { key: "pre_pregnancy_weight_kg", label: "Peso pre-gestacional (kg)", placeholder: "Ex: 62,0" },
   { key: "waist_cm", label: "Cintura (cm)", placeholder: "Ex: 82" },
   { key: "target_weight_kg", label: "Peso/meta clinica", placeholder: "Ex: manter ganho adequado" },
 ];
@@ -674,6 +708,8 @@ export default function ClientDetailPage() {
   const [evolutions, setEvolutions] = useState<ClientEvolution[]>([]);
   const [evolutionsLoading, setEvolutionsLoading] = useState(false);
   const [showEvolutionForm, setShowEvolutionForm] = useState(false);
+  const [clinicalGrowth, setClinicalGrowth] = useState<ClinicalGrowthResponse | null>(null);
+  const [clinicalGrowthLoading, setClinicalGrowthLoading] = useState(false);
 
   // Timeline
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -752,6 +788,13 @@ export default function ClientDetailPage() {
       fetch(`/api/admin/clients/${id}/evolutions`)
         .then((r) => r.json()).then((d: ClientEvolution[]) => setEvolutions(d ?? []))
         .catch(() => null).finally(() => setEvolutionsLoading(false));
+    }
+    if (activeTab === "antropometria" && !clinicalGrowth) {
+      setClinicalGrowthLoading(true);
+      fetch(`/api/admin/clients/${id}/clinical-growth`)
+        .then((r) => r.ok ? r.json() as Promise<ClinicalGrowthResponse> : null)
+        .then((result) => result && setClinicalGrowth(result))
+        .catch(() => null).finally(() => setClinicalGrowthLoading(false));
     }
     if (activeTab === "evolucao" && evolutionView === "timeline" && timeline.length === 0) {
       setTimelineLoading(true);
@@ -876,6 +919,7 @@ export default function ClientDetailPage() {
     if (!confirm("Remover este registro de evolução?")) return;
     await fetch(`/api/admin/client-evolutions/${evolutionId}`, { method: "DELETE" });
     setEvolutions((prev) => prev.filter((e) => e.id !== evolutionId));
+    setClinicalGrowth(null);
   };
 
   const reloadEvolutions = () => {
@@ -883,6 +927,7 @@ export default function ClientDetailPage() {
     fetch(`/api/admin/clients/${id}/evolutions`)
       .then((r) => r.json()).then((d: ClientEvolution[]) => setEvolutions(d ?? []))
       .catch(() => null).finally(() => setEvolutionsLoading(false));
+    setClinicalGrowth(null);
     setShowEvolutionForm(false);
   };
 
@@ -939,6 +984,10 @@ export default function ClientDetailPage() {
 
   if (loading) return <div className="text-center py-20 text-[#A8927D] text-sm">Carregando...</div>;
   if (!data) return null;
+
+  const hasClinicalGrowth =
+    Boolean(clinicalGrowth?.pediatric.applicable && clinicalGrowth.pediatric.results.length) ||
+    Boolean(clinicalGrowth?.gestational.applicable);
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-16 animate-fade-up">
@@ -1422,7 +1471,70 @@ export default function ClientDetailPage() {
 
               <section className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-4 sm:p-5">
                 <div className="mb-4"><p className="brand-kicker">Histórico antropométrico</p><h3 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">Curva de evolução corporal</h3></div>
-                <EvolutionChart history={evolutions} />
+                {(clinicalGrowthLoading || hasClinicalGrowth) && (
+                  <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {clinicalGrowthLoading && (
+                      <div className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-4 text-sm text-[#8C6E52]">
+                        Calculando referencias clinicas...
+                      </div>
+                    )}
+
+                    {clinicalGrowth?.pediatric.applicable && clinicalGrowth.pediatric.results.length > 0 && (
+                      <div className="rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] p-4">
+                        <p className="brand-kicker">Crescimento pediatrico OMS</p>
+                        <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Z-scores e pontos de atencao</h3>
+                        <div className="mt-3 space-y-2">
+                          {clinicalGrowth.pediatric.results.map((result) => (
+                            <div key={result.indicator} className="rounded-lg bg-[#FBF7F1] p-3">
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-sm font-semibold text-[#3A3028]">{result.label}</p>
+                                <span className="w-fit rounded-full bg-[#E8F0E3] px-2.5 py-1 text-xs font-semibold text-[#607A56]">
+                                  Z {result.zScore.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-xs leading-5 text-[#75675E]">{result.cautionLabel}</p>
+                              {result.technicalRule && (
+                                <p className="mt-1 text-[11px] text-[#A8927D]">Regra tecnica: {result.technicalRule}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {clinicalGrowth?.gestational.applicable && (
+                      <div className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-4">
+                        <p className="brand-kicker">Ganho gestacional IOM/OMS</p>
+                        <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Monitoramento da gestacao</h3>
+                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div className="rounded-lg bg-[#FBF7F1] p-3">
+                            <p className="brand-label mb-1">IMC pre-gestacional</p>
+                            <p className="text-sm font-semibold text-[#3A3028]">
+                              {clinicalGrowth.gestational.prePregnancyBmi?.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) ?? "Nao calculado"}
+                            </p>
+                            <p className="mt-1 text-xs text-[#75675E]">{clinicalGrowth.gestational.prePregnancyClassification?.label ?? "Informe peso pre-gestacional e altura."}</p>
+                          </div>
+                          <div className="rounded-lg bg-[#FBF7F1] p-3">
+                            <p className="brand-label mb-1">Ganho total recomendado</p>
+                            <p className="text-sm font-semibold text-[#3A3028]">
+                              {clinicalGrowth.gestational.recommendedTotalGain
+                                ? `${clinicalGrowth.gestational.recommendedTotalGain.ganho_min_kg}-${clinicalGrowth.gestational.recommendedTotalGain.ganho_max_kg} kg`
+                                : "Sem faixa calculada"}
+                            </p>
+                          </div>
+                          <div className="rounded-lg bg-[#FBF7F1] p-3 sm:col-span-2">
+                            <p className="brand-label mb-1">Taxa semanal observada</p>
+                            <p className="text-sm font-semibold text-[#3A3028]">
+                              {clinicalGrowth.gestational.weeklyGainRate !== null ? `${clinicalGrowth.gestational.weeklyGainRate} kg/semana` : "Registre ao menos duas evolucoes com peso."}
+                            </p>
+                            <p className="mt-1 text-xs text-[#75675E]">{clinicalGrowth.gestational.weeklyGainClassification?.label ?? clinicalGrowth.gestational.referenceNote}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <EvolutionChart history={evolutions} referenceLines={clinicalGrowth?.pediatric.chartReferenceLines ?? []} />
               </section>
 
               {showEvolutionForm && (
