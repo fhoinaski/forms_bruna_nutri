@@ -3,7 +3,9 @@ import { expect, test } from "@playwright/test";
 test("home presents the public offer and navigates to the pre-consultation form", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: /nutri[cç][aã]o para fam/i })).toBeVisible();
+  await expect(page.getByTestId("home-hero-title")).toHaveText(
+    /nutrição para uma vida mais\s+leve\s+e saudável\./i,
+  );
   const preConsultLink = page.locator("section").first().getByRole("link", { name: /preencher pr[eé]-consulta/i });
   await expect(preConsultLink).toBeVisible();
 

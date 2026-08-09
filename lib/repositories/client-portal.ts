@@ -3,7 +3,7 @@ import { d1Execute, d1Query } from "@/lib/d1/client";
 import type { Client } from "@/lib/repositories/clients";
 import type { Appointment } from "@/lib/repositories/appointments";
 import type { ClientTask } from "@/lib/repositories/client-tasks";
-import type { NutritionRecord } from "@/lib/repositories/nutrition-records";
+import { getExistingNutritionRecord, type NutritionRecord } from "@/lib/repositories/nutrition-records";
 import type { Payment } from "@/lib/repositories/payments";
 import { getActiveMealPlan, type MealPlanPayload } from "@/lib/repositories/meal-plans";
 
@@ -168,10 +168,7 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
       [clientId]
     ),
     getPortalProtocols(clientId),
-    d1Query<Pick<NutritionRecord, "goals" | "care_plan" | "hydration" | "physical_activity" | "sleep_routine">>(
-      "SELECT goals, care_plan, hydration, physical_activity, sleep_routine FROM nutrition_records WHERE client_id = ?1 LIMIT 1",
-      [clientId]
-    ),
+    getExistingNutritionRecord(clientId),
     getActiveMealPlan(clientId),
     d1Query<Pick<Payment, "id" | "description" | "amount_cents" | "due_date" | "status" | "payment_link" | "receipt_url" | "installment_number" | "installment_total">>(
       `SELECT id, description, amount_cents, due_date, status, payment_link, receipt_url, installment_number, installment_total
@@ -188,7 +185,13 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
     appointments,
     tasks,
     protocols,
-    carePlan: carePlan[0] ?? null,
+    carePlan: carePlan ? {
+      goals: carePlan.goals,
+      care_plan: carePlan.care_plan,
+      hydration: carePlan.hydration,
+      physical_activity: carePlan.physical_activity,
+      sleep_routine: carePlan.sleep_routine,
+    } : null,
     mealPlan,
     payments,
   };

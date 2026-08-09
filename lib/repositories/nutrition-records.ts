@@ -2,6 +2,7 @@ import { d1Execute, d1Query } from "@/lib/d1/client";
 import { calculateBmiValue, formatClinicalNumber } from "@/lib/clinical/anthropometry";
 import { getClientById } from "@/lib/repositories/clients";
 import { getSubmissionById } from "@/lib/repositories/submissions";
+import { decryptNullableText, encryptNullableText } from "@/lib/security/encrypted-fields";
 
 export interface NutritionRecord {
   id: string;
@@ -86,6 +87,19 @@ const FIELDS: (keyof NutritionRecordInput)[] = [
   "private_notes",
 ];
 
+function decryptNutritionRecord(row: NutritionRecord | undefined): NutritionRecord | null {
+  if (!row) return null;
+  const decrypted = { ...row };
+  for (const field of FIELDS) {
+    decrypted[field] = decryptNullableText(row[field]) as never;
+  }
+  return decrypted;
+}
+
+function encryptNutritionField(value: string | null | undefined): string | null {
+  return encryptNullableText(value);
+}
+
 function answer(answers: Record<string, unknown>, keys: string[]): string | null {
   const values = keys
     .map((key) => answers[key])
@@ -155,7 +169,7 @@ export async function getExistingNutritionRecord(clientId: string): Promise<Nutr
     "SELECT * FROM nutrition_records WHERE client_id = ?1 LIMIT 1",
     [clientId]
   );
-  return rows[0] ?? null;
+  return decryptNutritionRecord(rows[0]);
 }
 
 export async function createNutritionRecord(
@@ -168,14 +182,15 @@ export async function createNutritionRecord(
     `INSERT OR IGNORE INTO nutrition_records
       (id, client_id, ${FIELDS.join(", ")}, created_at, updated_at)
      VALUES (?1, ?2, ${FIELDS.map((_, index) => `?${index + 3}`).join(", ")}, ?${FIELDS.length + 3}, ?${FIELDS.length + 4})`,
-    [id, clientId, ...FIELDS.map((field) => input[field] ?? null), now, now]
+    [id, clientId, ...FIELDS.map((field) => encryptNutritionField(input[field])), now, now]
   );
   const record = await d1Query<NutritionRecord>(
     "SELECT * FROM nutrition_records WHERE client_id = ?1 LIMIT 1",
     [clientId]
   );
-  if (!record[0]) throw new Error("Nao foi possivel criar o prontuario nutricional.");
-  return record[0];
+  const decrypted = decryptNutritionRecord(record[0]);
+  if (!decrypted) throw new Error("Nao foi possivel criar o prontuario nutricional.");
+  return decrypted;
 }
 
 export async function updateNutritionRecord(
@@ -198,7 +213,7 @@ export async function updateNutritionRecord(
   for (const field of FIELDS) {
     if (normalizedInput[field] !== undefined) {
       updates.push(`${field} = ?${index++}`);
-      params.push(normalizedInput[field] ?? null);
+      params.push(encryptNutritionField(normalizedInput[field]));
     }
   }
   updates.push(`updated_at = ?${index++}`);
@@ -213,5 +228,7 @@ export async function updateNutritionRecord(
     "SELECT * FROM nutrition_records WHERE client_id = ?1 LIMIT 1",
     [clientId]
   );
-  return rows[0];
+  const decrypted = decryptNutritionRecord(rows[0]);
+  if (!decrypted) throw new Error("Nao foi possivel carregar o prontuario nutricional.");
+  return decrypted;
 }

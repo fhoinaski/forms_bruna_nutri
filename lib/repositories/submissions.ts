@@ -1,4 +1,5 @@
 import { d1Query, d1Execute } from "@/lib/d1/client";
+import { decryptJsonValue, encryptJsonValue } from "@/lib/security/encrypted-fields";
 
 export interface Submission {
   id: string;
@@ -129,7 +130,7 @@ export async function createSubmission(
       input.child_name || null,
       input.child_age || null,
       input.form_type || "pre_consulta",
-      JSON.stringify(cleanAnswers),
+      encryptJsonValue(cleanAnswers),
       now,
       now,
     ]
@@ -163,10 +164,7 @@ export async function getSubmissions(
   );
 
   const items: SubmissionSummary[] = rows.map((row) => {
-    let answers: Record<string, unknown> = {};
-    try {
-      answers = JSON.parse(row.answers_json) as Record<string, unknown>;
-    } catch {}
+    const answers = decryptJsonValue<Record<string, unknown>>(row.answers_json, {});
     return {
       id: row.id,
       patient_name: row.patient_name,
@@ -202,10 +200,7 @@ export async function getSubmissionById(
   if (!rows[0]) return null;
 
   const row = rows[0];
-  let answers: Record<string, string> = {};
-  try {
-    answers = JSON.parse(row.answers_json);
-  } catch {}
+  const answers = decryptJsonValue<Record<string, string>>(row.answers_json, {});
 
   const { answers_json: _, ...rest } = row;
   return { ...rest, answers };
@@ -281,10 +276,7 @@ export async function getSubmissionsForExport(
   );
 
   return rows.map((row) => {
-    let answers: Record<string, unknown> = {};
-    try {
-      answers = JSON.parse(row.answers_json) as Record<string, unknown>;
-    } catch {}
+    const answers = decryptJsonValue<Record<string, unknown>>(row.answers_json, {});
     const { answers_json: _, ...rest } = row;
     return { ...rest, answers };
   });

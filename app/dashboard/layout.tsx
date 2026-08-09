@@ -108,7 +108,7 @@ function Sidebar({ collapsed, mobile = false, onClose }: {
   return (
     <div className="flex h-full flex-col bg-[#FFFDFC]">
       <div className={`flex h-20 items-center border-b border-[#EDE1D6] ${collapsed ? "justify-center px-2" : "gap-3 px-5"}`}>
-        <Image src="/brand/bruna-flores-nutri-simbolo.svg" alt="" width={42} height={52} className="h-12 w-10 object-contain" />
+        <Image src="/brand/bruna-flores-nutri-simbolo.webp" alt="" width={42} height={52} sizes="42px" className="h-12 w-10 object-contain" />
         {!collapsed && (
           <div className="min-w-0">
             <p className="truncate font-serif text-base font-semibold text-[#3A3028]">Bruna Flores</p>

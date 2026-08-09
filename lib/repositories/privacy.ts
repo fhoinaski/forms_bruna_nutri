@@ -1,4 +1,7 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
+import { decryptJsonValue, encryptJsonValue } from "@/lib/security/encrypted-fields";
+import { getClientEvolutions } from "@/lib/repositories/client-evolutions";
+import { getExistingNutritionRecord } from "@/lib/repositories/nutrition-records";
 
 export const PRIVACY_POLICY_VERSION = "2026-08-04";
 export const PRE_CONSULTATION_FORM_VERSION = "2026-08-04";
@@ -135,9 +138,9 @@ export async function anonymizePrivacyRequestData(request: PrivacyRequest) {
     await d1Execute("DELETE FROM lead_opportunities WHERE submission_id = ?1", [submission.id]);
     await d1Execute(
       `UPDATE form_submissions SET patient_name = 'Titular anonimizado', patient_email = NULL,
-       patient_phone = NULL, child_name = NULL, child_age = NULL, answers_json = '{}',
-       notes = NULL, status = 'arquivado', updated_at = ?1 WHERE id = ?2`,
-      [new Date().toISOString(), submission.id]
+       patient_phone = NULL, child_name = NULL, child_age = NULL, answers_json = ?1,
+       notes = NULL, status = 'arquivado', updated_at = ?2 WHERE id = ?3`,
+      [encryptJsonValue({}), new Date().toISOString(), submission.id]
     );
   }
   return { clients: clients.length, submissions: submissions.length };
@@ -147,19 +150,23 @@ export async function exportPrivacyRequestData(request: PrivacyRequest) {
   if (request.verification_status !== "verificada") throw new Error("A identidade precisa ser verificada antes da exportacao.");
   const email = request.email.toLowerCase();
   const clients = await d1Query<Record<string, unknown>>("SELECT * FROM clients WHERE lower(email) = ?1", [email]);
-  const submissions = await d1Query<Record<string, unknown>>("SELECT * FROM form_submissions WHERE lower(patient_email) = ?1", [email]);
+  const submissions = (await d1Query<Record<string, unknown>>("SELECT * FROM form_submissions WHERE lower(patient_email) = ?1", [email])).map((submission) => ({
+    ...submission,
+    answers: typeof submission.answers_json === "string" ? decryptJsonValue<Record<string, unknown>>(submission.answers_json, {}) : {},
+    answers_json: undefined,
+  }));
   const opportunities = await d1Query<Record<string, unknown>>("SELECT o.* FROM lead_opportunities o INNER JOIN form_submissions s ON s.id = o.submission_id WHERE lower(s.patient_email) = ?1", [email]);
   const clinicalRecords = [];
   for (const client of clients) {
     const clientId = String(client.id);
-    const [appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecords, protocols, personalizedProtocols, timeline] = await Promise.all([
+    const [appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecord, protocols, personalizedProtocols, timeline] = await Promise.all([
       d1Query<Record<string, unknown>>("SELECT * FROM appointments WHERE client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>("SELECT w.* FROM appointment_workflow_items w INNER JOIN appointments a ON a.id = w.appointment_id WHERE a.client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>("SELECT * FROM payments WHERE client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>("SELECT * FROM client_tasks WHERE client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>("SELECT id, client_id, is_active, last_used_at, created_at, updated_at FROM client_portal_access WHERE client_id = ?1", [clientId]),
-      d1Query<Record<string, unknown>>("SELECT * FROM client_evolutions WHERE client_id = ?1", [clientId]),
-      d1Query<Record<string, unknown>>("SELECT * FROM nutrition_records WHERE client_id = ?1", [clientId]),
+      getClientEvolutions(clientId),
+      getExistingNutritionRecord(clientId),
       d1Query<Record<string, unknown>>("SELECT * FROM client_protocols WHERE client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>(
         `SELECT p.*, (SELECT json_group_array(json_object('title', pp.title, 'days', pp.days, 'objective', pp.objective, 'actions', pp.actions_json, 'notes', pp.notes)) FROM protocol_phases pp WHERE pp.protocol_id = p.id) as phases
@@ -168,7 +175,7 @@ export async function exportPrivacyRequestData(request: PrivacyRequest) {
       ),
       d1Query<Record<string, unknown>>("SELECT * FROM client_timeline_events WHERE client_id = ?1", [clientId]),
     ]);
-    clinicalRecords.push({ clientId, appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecords, protocols, personalizedProtocols, timeline });
+    clinicalRecords.push({ clientId, appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecords: nutritionRecord ? [nutritionRecord] : [], protocols, personalizedProtocols, timeline });
   }
   return { generatedAt: new Date().toISOString(), requestId: request.id, clients, submissions, opportunities, clinicalRecords };
 }

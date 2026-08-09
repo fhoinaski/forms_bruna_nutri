@@ -41,10 +41,11 @@ export function PublicHeader() {
             aria-label="Ir para a página inicial de Bruna Flores Nutri"
           >
             <Image
-              src="/brand/bruna-flores-nutri-simbolo.svg"
+              src="/brand/bruna-flores-nutri-simbolo.webp"
               alt=""
               width={40}
               height={44}
+              sizes="40px"
               className="h-11 w-10 object-contain drop-shadow-[0_10px_18px_rgba(58,48,40,0.1)]"
             />
             <div className="hidden sm:block">
@@ -52,7 +53,7 @@ export function PublicHeader() {
                 Bruna Flores Nutri
               </p>
               <p className="text-[9px] uppercase leading-none tracking-[0.2em] text-[#75675E]">
-                Nutricionista
+                Nutricionista · {siteConfig.professionalRegistration}
               </p>
             </div>
           </Link>

@@ -204,7 +204,7 @@ export default function ClientPortalPage() {
         <section className="mx-auto grid min-h-screen max-w-6xl grid-cols-1 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="flex flex-col justify-between px-6 py-8 sm:px-10 lg:px-12">
             <div className="flex items-center gap-3">
-              <Image src="/brand/bruna-flores-nutri-simbolo.svg" alt="" width={44} height={58} className="h-14 w-11 object-contain" />
+              <Image src="/brand/bruna-flores-nutri-simbolo.webp" alt="" width={44} height={58} sizes="44px" className="h-14 w-11 object-contain" />
               <div>
                 <p className="font-serif text-xl font-semibold">Bruna Flores Nutri</p>
                 <p className="text-xs uppercase tracking-[0.18em] text-[#607A56]">Portal do cliente</p>
@@ -262,7 +262,7 @@ export default function ClientPortalPage() {
       <header className="border-b border-[#E8D9CA] bg-white/70 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
           <div className="flex items-center gap-3">
-            <Image src="/brand/bruna-flores-nutri-simbolo.svg" alt="" width={38} height={50} className="h-12 w-10 object-contain" />
+            <Image src="/brand/bruna-flores-nutri-simbolo.webp" alt="" width={38} height={50} sizes="38px" className="h-12 w-10 object-contain" />
             <div>
               <p className="font-serif text-lg font-semibold">Portal Bruna Flores</p>
               <p className="text-xs text-[#607A56]">Area de acompanhamento</p>

@@ -1,7 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
-import { useWatch } from "react-hook-form";
+import { FieldErrors, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormResponseSchema, FormResponseInput } from "@/validators/form";
 import { useState, useEffect } from "react";
@@ -10,43 +9,183 @@ import Image from "next/image";
 import { ArrowLeft, CheckCircle2, Clock3, HeartHandshake, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
+const AUTOSAVE_KEY = "bruna-nutri-preconsulta-draft-v1";
+
+const DEFAULT_VALUES: Partial<FormResponseInput> = {
+  tipoAtendimento: "",
+  objetivo: "",
+  sintomas: "",
+  anticoncepcional: undefined,
+  gestante: undefined,
+  semComer: undefined,
+  comerEmocao: undefined,
+  descansada: undefined,
+  estresse: undefined,
+  intestinoFreq: undefined,
+  desconforto: undefined,
+  disposicao: "5",
+  privacyAccepted: false as true,
+  companyWebsite: "",
+};
+
+const REQUIRED_FIELDS = ["nome", "whatsapp", "email", "privacyAccepted"] as const;
+const FORM_FIELD_ORDER = [
+  "tipoAtendimento",
+  "nome",
+  "idade",
+  "nascimento",
+  "whatsapp",
+  "email",
+  "profissao",
+  "cidade",
+  "motivacao",
+  "objetivo",
+  "incomodo",
+  "diagnostico",
+  "medicacao",
+  "anticoncepcional",
+  "gestante",
+  "sintomas",
+  "suplementos",
+  "suplementosNegativo",
+  "rotina",
+  "semComer",
+  "comerEmocao",
+  "fomeDia",
+  "sonoHoras",
+  "descansada",
+  "estresse",
+  "atividadeFisica",
+  "intestinoFreq",
+  "desconforto",
+  "naoGosta",
+  "favoritos",
+  "diaAlimentar",
+  "expectativas",
+  "disposicao",
+  "espacoLivre",
+  "privacyAccepted",
+] as const satisfies readonly (keyof FormResponseInput)[];
+
+const AUTOSAVE_SECTIONS: Array<{ id: string; fields: readonly (keyof FormResponseInput)[] }> = [
+  { id: "tipo_atendimento", fields: ["tipoAtendimento"] },
+  { id: "sobre_voce", fields: ["nome", "idade", "nascimento", "whatsapp", "email", "profissao", "cidade"] },
+  { id: "momento_atual", fields: ["motivacao", "objetivo", "incomodo"] },
+  { id: "historico_saude", fields: ["diagnostico", "medicacao", "anticoncepcional", "gestante", "sintomas"] },
+  { id: "suplementacao", fields: ["suplementos", "suplementosNegativo"] },
+  { id: "rotina_comportamento", fields: ["rotina", "semComer", "comerEmocao", "fomeDia"] },
+  { id: "estilo_vida", fields: ["sonoHoras", "descansada", "estresse", "atividadeFisica"] },
+  { id: "saude_intestinal", fields: ["intestinoFreq", "desconforto"] },
+  { id: "preferencias", fields: ["naoGosta", "favoritos"] },
+  { id: "rotina_essencial", fields: ["diaAlimentar"] },
+  { id: "expectativas", fields: ["expectativas", "disposicao"] },
+  { id: "espaco_livre", fields: ["espacoLivre", "privacyAccepted"] },
+];
+
+const AUTOSAVE_FIELD_NAMES = AUTOSAVE_SECTIONS.flatMap((section) => section.fields);
+
+function hasFilledValue(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value.trim().length > 0;
+  return value !== undefined && value !== null;
+}
+
+function isDefaultValue(field: keyof FormResponseInput, value: unknown) {
+  return Object.prototype.hasOwnProperty.call(DEFAULT_VALUES, field) && DEFAULT_VALUES[field] === value;
+}
+
+function buildDraftBySection(values: Partial<FormResponseInput>) {
+  return AUTOSAVE_SECTIONS.reduce<Record<string, Partial<FormResponseInput>>>((draft, section) => {
+    const sectionValues = section.fields.reduce<Partial<FormResponseInput>>((acc, field) => {
+      const value = values[field];
+      if (hasFilledValue(value) && !isDefaultValue(field, value)) {
+        acc[field] = value as never;
+      }
+      return acc;
+    }, {});
+
+    if (Object.keys(sectionValues).length > 0) {
+      draft[section.id] = sectionValues;
+    }
+
+    return draft;
+  }, {});
+}
+
+function flattenDraft(draft: unknown): Partial<FormResponseInput> {
+  if (!draft || typeof draft !== "object") return {};
+  return Object.values(draft as Record<string, unknown>).reduce<Partial<FormResponseInput>>((acc, section) => {
+    if (section && typeof section === "object") {
+      Object.assign(acc, section);
+    }
+    return acc;
+  }, {});
+}
+
 export default function FormularioPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [submitError, setSubmitError] = useState("");
+  const [draftStatus, setDraftStatus] = useState<"restored" | "saved" | "cleared" | "">("");
+  const [draftReady, setDraftReady] = useState(false);
 
-  const { control, register, handleSubmit, setValue, formState: { errors } } = useForm<FormResponseInput>({
+  const { control, register, handleSubmit, setValue, getValues, reset, setFocus, formState: { errors } } = useForm<FormResponseInput>({
     resolver: zodResolver(FormResponseSchema),
-    defaultValues: {
-      tipoAtendimento: "",
-      objetivo: "",
-      sintomas: "",
-      anticoncepcional: undefined,
-      gestante: undefined,
-      semComer: undefined,
-      comerEmocao: undefined,
-      descansada: undefined,
-      estresse: undefined,
-      intestinoFreq: undefined,
-      desconforto: undefined,
-      disposicao: "5",
-      privacyAccepted: false as true,
-      companyWebsite: "",
-    }
+    defaultValues: DEFAULT_VALUES,
   });
 
-  const watchAllFields = useWatch({ control }) as FormResponseInput;
+  const requiredValues = useWatch({ control, name: REQUIRED_FIELDS });
+  const autosaveValues = useWatch({ control, name: AUTOSAVE_FIELD_NAMES });
+  const tipoAtendimento = useWatch({ control, name: "tipoAtendimento" });
+  const objetivo = useWatch({ control, name: "objetivo" });
+  const sintomas = useWatch({ control, name: "sintomas" });
+  const anticoncepcional = useWatch({ control, name: "anticoncepcional" });
+  const gestante = useWatch({ control, name: "gestante" });
+  const semComer = useWatch({ control, name: "semComer" });
+  const comerEmocao = useWatch({ control, name: "comerEmocao" });
+  const descansada = useWatch({ control, name: "descansada" });
+  const estresse = useWatch({ control, name: "estresse" });
+  const intestinoFreq = useWatch({ control, name: "intestinoFreq" });
+  const desconforto = useWatch({ control, name: "desconforto" });
+  const disposicao = useWatch({ control, name: "disposicao" });
 
   useEffect(() => {
-    // Calculando progresso simples baseado no total de campos (aprox. 30 chaves)
-    const values = Object.values(watchAllFields);
-    const filledCount = values.filter(v => v !== undefined && v !== "").length;
-    const totalFields = 32;
-    setProgress(Math.min(100, Math.round((filledCount / totalFields) * 100)));
-  }, [watchAllFields]);
+    const filledCount = requiredValues.filter(hasFilledValue).length;
+    setProgress(Math.min(100, Math.round((filledCount / REQUIRED_FIELDS.length) * 100)));
+  }, [requiredValues]);
+
+  useEffect(() => {
+    try {
+      const rawDraft = window.localStorage.getItem(AUTOSAVE_KEY);
+      if (rawDraft) {
+        const restored = flattenDraft(JSON.parse(rawDraft));
+        reset({ ...DEFAULT_VALUES, ...restored });
+        setDraftStatus("restored");
+      }
+    } catch {
+      window.localStorage.removeItem(AUTOSAVE_KEY);
+    } finally {
+      setDraftReady(true);
+    }
+  }, [reset]);
+
+  useEffect(() => {
+    if (!draftReady || isSuccess) return;
+    const timer = window.setTimeout(() => {
+      const draft = buildDraftBySection(getValues());
+      if (Object.keys(draft).length > 0) {
+        window.localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(draft));
+        setDraftStatus("saved");
+      }
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [autosaveValues, draftReady, getValues, isSuccess]);
 
   const onSubmit = async (data: FormResponseInput) => {
     setIsSubmitting(true);
+    setSubmitError("");
     try {
       const res = await fetch("/api/form-submissions", {
         method: "POST",
@@ -54,17 +193,44 @@ export default function FormularioPage() {
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Erro ao enviar resposta");
+      window.localStorage.removeItem(AUTOSAVE_KEY);
       setIsSuccess(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
-      alert("Ocorreu um erro ao enviar. Tente novamente.");
+      setSubmitError("Não foi possível enviar agora. Confira sua conexão e tente novamente.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const onInvalid = (formErrors: FieldErrors<FormResponseInput>) => {
+    setSubmitError("Revise os campos destacados antes de enviar.");
+    const firstField = FORM_FIELD_ORDER.find((field) => formErrors[field]);
+    if (!firstField) return;
+
+    window.requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>(`[name="${firstField}"], #${firstField}`);
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => {
+        try {
+          setFocus(firstField);
+        } catch {
+          element?.focus();
+        }
+      }, 250);
+    });
+  };
+
+  const clearDraft = () => {
+    window.localStorage.removeItem(AUTOSAVE_KEY);
+    reset(DEFAULT_VALUES);
+    setSubmitError("");
+    setDraftStatus("cleared");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleMultiTagToggle = (field: "sintomas", value: string) => {
-    const current = watchAllFields[field] || "";
+    const current = sintomas || "";
     const selected = new Set(current ? current.split(", ") : []);
     if (selected.has(value)) {
       selected.delete(value);
@@ -78,10 +244,11 @@ export default function FormularioPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#FBF7F1] p-8 text-center">
         <Image
-          src="/brand/bruna-flores-nutri-simbolo.svg"
+          src="/brand/bruna-flores-nutri-simbolo.webp"
           alt=""
           width={80}
           height={96}
+          sizes="80px"
           className="mb-6 h-24 w-20 object-contain"
         />
         <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-[#EAF0E4] text-[#607A56] shadow-sm">
@@ -158,13 +325,31 @@ export default function FormularioPage() {
               <p className="mt-2 text-right text-xs font-semibold text-[#607A56]">
                 {progress}% preenchido
               </p>
+              <div className="mt-4 rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-3">
+                <p className="text-xs leading-5 text-[#75675E]">
+                  {draftStatus === "restored"
+                    ? "Rascunho restaurado neste dispositivo."
+                    : draftStatus === "saved"
+                      ? "Rascunho salvo automaticamente."
+                      : draftStatus === "cleared"
+                        ? "Rascunho removido. Você pode recomeçar."
+                        : "Suas respostas serão salvas automaticamente neste dispositivo."}
+                </p>
+                <button
+                  type="button"
+                  onClick={clearDraft}
+                  className="mt-3 text-xs font-semibold text-[#8C5F50] underline underline-offset-4 transition hover:text-[#607A56]"
+                >
+                  Limpar e recomeçar
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
       <div className="mx-auto max-w-3xl px-5 py-12 pb-24">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-8">
 
           {/* Tipo de atendimento */}
           <Section number="0" title="Tipo de atendimento">
@@ -183,7 +368,7 @@ export default function FormularioPage() {
                 ].map((tag) => (
                   <Tag
                     key={tag}
-                    active={watchAllFields.tipoAtendimento === tag}
+                    active={tipoAtendimento === tag}
                     onClick={() =>
                       setValue("tipoAtendimento", tag, { shouldValidate: true })
                     }
@@ -244,7 +429,7 @@ export default function FormularioPage() {
                 ].map((tag) => (
                   <Tag 
                     key={tag} 
-                    active={watchAllFields.objetivo === tag}
+                    active={objetivo === tag}
                     onClick={() => setValue("objetivo", tag, { shouldValidate: true })}
                   >
                     {tag}
@@ -269,14 +454,14 @@ export default function FormularioPage() {
               <Field label="Usa anticoncepcional?">
                 <RadioGroup 
                   options={["Sim", "Não"]} 
-                  value={watchAllFields.anticoncepcional} 
+                  value={anticoncepcional} 
                   onChange={(v) => setValue("anticoncepcional", v)} 
                 />
               </Field>
               <Field label="Gestante ou amamentando?">
                 <RadioGroup 
                   options={["Sim", "Não"]} 
-                  value={watchAllFields.gestante} 
+                  value={gestante} 
                   onChange={(v) => setValue("gestante", v)} 
                 />
               </Field>
@@ -286,7 +471,7 @@ export default function FormularioPage() {
                 {["Cansaço", "Inchaço", "Queda de cabelo", "Ansiedade", "Compulsão", "Intestino preso"].map((tag) => (
                   <Tag 
                     key={tag} 
-                    active={(watchAllFields.sintomas || "").includes(tag)}
+                    active={(sintomas || "").includes(tag)}
                     onClick={() => handleMultiTagToggle("sintomas", tag)}
                   >
                     {tag}
@@ -315,14 +500,14 @@ export default function FormularioPage() {
               <Field label="Fica muito tempo sem comer?">
                 <RadioGroup 
                   options={["Sim", "Não", "Às vezes"]} 
-                  value={watchAllFields.semComer} 
+                  value={semComer} 
                   onChange={(v) => setValue("semComer", v)} 
                 />
               </Field>
               <Field label="Come mais por fome ou emoção?">
                 <RadioGroup 
                   options={["Fome", "Emoção", "Os dois"]} 
-                  value={watchAllFields.comerEmocao} 
+                  value={comerEmocao} 
                   onChange={(v) => setValue("comerEmocao", v)} 
                 />
               </Field>
@@ -341,7 +526,7 @@ export default function FormularioPage() {
               <Field label="Acorda descansada?" className="md:col-span-2">
                 <RadioGroup 
                   options={["Sim", "Não", "Às vezes"]} 
-                  value={watchAllFields.descansada} 
+                  value={descansada} 
                   onChange={(v) => setValue("descansada", v)} 
                 />
               </Field>
@@ -349,7 +534,7 @@ export default function FormularioPage() {
             <Field label="Nível de estresse" className="mb-5">
               <RadioGroup 
                 options={["Baixo", "Moderado", "Alto"]} 
-                value={watchAllFields.estresse} 
+                value={estresse} 
                 onChange={(v) => setValue("estresse", v)} 
               />
             </Field>
@@ -363,14 +548,14 @@ export default function FormularioPage() {
             <Field label="Frequência intestinal" className="mb-5">
               <RadioGroup 
                 options={["1x ou menos", "2-3x", "Todo dia", "Mais de 1x/dia"]} 
-                value={watchAllFields.intestinoFreq} 
+                value={intestinoFreq} 
                 onChange={(v) => setValue("intestinoFreq", v)} 
               />
             </Field>
             <Field label="Sente estufamento/desconforto?">
               <RadioGroup 
                 options={["Sempre", "Às vezes", "Raramente", "Não"]} 
-                value={watchAllFields.desconforto} 
+                value={desconforto} 
                 onChange={(v) => setValue("desconforto", v)} 
               />
             </Field>
@@ -409,7 +594,7 @@ export default function FormularioPage() {
                   {...register("disposicao")} 
                 />
                 <span className="text-xs text-[#A9978A]">10</span>
-                <span className="font-serif text-2xl text-[#75675E] w-8 text-center">{watchAllFields.disposicao}</span>
+                <span className="font-serif text-2xl text-[#75675E] w-8 text-center">{disposicao}</span>
               </div>
             </Field>
           </Section>
@@ -444,6 +629,11 @@ export default function FormularioPage() {
           </div>
 
           <div className="text-center pt-8">
+            {submitError && (
+              <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm leading-6 text-red-700">
+                {submitError}
+              </div>
+            )}
             <button 
               type="submit" 
               disabled={isSubmitting}

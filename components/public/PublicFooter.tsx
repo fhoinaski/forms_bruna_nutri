@@ -12,10 +12,11 @@ export function PublicFooter() {
           <div>
             <div className="mb-5 flex items-center gap-3">
               <Image
-                src="/brand/bruna-flores-nutri-simbolo.svg"
+                src="/brand/bruna-flores-nutri-simbolo.webp"
                 alt=""
                 width={40}
                 height={48}
+                sizes="40px"
                 className="h-12 w-10 object-contain"
               />
               <div>
@@ -23,7 +24,7 @@ export function PublicFooter() {
                   Bruna Flores Nutri
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.2em] text-[#607A56]">
-                  Nutricionista em Florianópolis e online
+                  Nutricionista em Florianópolis e online · {siteConfig.professionalRegistration}
                 </p>
               </div>
             </div>

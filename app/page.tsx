@@ -295,7 +295,7 @@ export default function HomePage() {
         <div className="relative z-10 mx-auto flex min-h-[94vh] max-w-7xl flex-col justify-end px-5 pb-10 pt-28 lg:px-8 lg:pb-14">
           <div className="max-w-3xl">
             <p className="brand-kicker mb-5">Nutricionista em Florianópolis e online</p>
-            <h1 className="max-w-4xl font-serif text-5xl font-semibold leading-[0.95] text-[#3A3028] sm:text-6xl lg:text-7xl">
+            <h1 data-testid="home-hero-title" className="max-w-4xl font-serif text-5xl font-semibold leading-[0.95] text-[#3A3028] sm:text-6xl lg:text-7xl">
               Nutrição para uma vida mais
               <span className="brand-script-line relative z-10 italic text-[#7F9A74]">
                 {" "}
@@ -344,10 +344,11 @@ export default function HomePage() {
           <div className="relative overflow-hidden rounded-[1.5rem] border border-[#EDE1D6] bg-[#FFFDFC] p-8 shadow-[0_22px_58px_rgba(58,48,40,0.07)]">
             <div className="absolute right-0 top-0 h-32 w-32 rounded-bl-full bg-[#EAF0E4]" />
             <Image
-              src="/brand/bruna-flores-nutri-simbolo.svg"
+              src="/brand/bruna-flores-nutri-simbolo.webp"
               alt=""
               width={96}
               height={112}
+              sizes="96px"
               className="relative z-10 h-28 w-24 object-contain"
             />
             <p className="brand-kicker relative z-10 mt-8">Sobre a Bruna</p>

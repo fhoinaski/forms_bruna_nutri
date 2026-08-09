@@ -1,5 +1,6 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
 import { type AIProvider } from "@/db/schema";
+import { decryptNullableText, encryptNullableText } from "@/lib/security/encrypted-fields";
 
 export interface AISettings {
   id: "default";
@@ -43,6 +44,13 @@ export function maskApiKey(apiKey: string | null): string | null {
   return `${apiKey.slice(0, 3)}-...${apiKey.slice(-4)}`;
 }
 
+function decryptAISettings(settings: AISettings): AISettings {
+  return {
+    ...settings,
+    api_key: decryptNullableText(settings.api_key),
+  };
+}
+
 export function isMaskedApiKey(value: string | null | undefined): boolean {
   if (!value) return false;
   return value.includes("...");
@@ -71,7 +79,7 @@ export async function getAISettings(): Promise<AISettings> {
       updated_at: new Date().toISOString(),
     };
   }
-  return settings;
+  return decryptAISettings(settings);
 }
 
 export async function getPublicAISettings(): Promise<PublicAISettings> {
@@ -112,7 +120,7 @@ export async function updateAISettings(data: UpdateAISettingsInput): Promise<AIS
   }
   if (data.api_key !== undefined && !isMaskedApiKey(data.api_key)) {
     updates.push(`api_key = ?${idx++}`);
-    params.push(data.api_key?.trim() || null);
+    params.push(encryptNullableText(data.api_key?.trim() || null));
   }
 
   if (updates.length) {
