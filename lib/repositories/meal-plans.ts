@@ -62,6 +62,7 @@ type SupplementRow = MealPlanSupplementPayload & { id: string; meal_plan_id: str
 type DietTemplateMealRow = Omit<MealPlanMealPayload, "items"> & { id: string; template_id: string; sort_order: number };
 type DietTemplateItemRow = MealPlanItemPayload & { id: string; meal_id: string; sort_order: number };
 type DietTemplateSubstitutionRow = MealPlanSubstitutionPayload & { id: string; template_id: string; sort_order: number };
+type DietTemplateSupplementRow = MealPlanSupplementPayload & { id: string; template_id: string; sort_order: number };
 
 function groupBy<T>(rows: T[], keyOf: (row: T) => string): Map<string, T[]> {
   const grouped = new Map<string, T[]>();
@@ -182,8 +183,9 @@ function extractSubstitutions(content: Record<string, unknown>): MealPlanSubstit
 async function getRelationalDietTemplates(templateIds: string[]): Promise<Map<string, {
   meals: MealPlanMealPayload[];
   substitutions: MealPlanSubstitutionPayload[];
+  supplements: MealPlanSupplementPayload[];
 }>> {
-  const grouped = new Map<string, { meals: MealPlanMealPayload[]; substitutions: MealPlanSubstitutionPayload[] }>();
+  const grouped = new Map<string, { meals: MealPlanMealPayload[]; substitutions: MealPlanSubstitutionPayload[]; supplements: MealPlanSupplementPayload[] }>();
   if (!templateIds.length) return grouped;
 
   const ids = JSON.stringify(templateIds);
@@ -203,14 +205,20 @@ async function getRelationalDietTemplates(templateIds: string[]): Promise<Map<st
       sql: "SELECT s.* FROM diet_template_substitutions s JOIN json_each(?1) ids ON s.template_id = ids.value ORDER BY s.template_id, s.sort_order ASC",
       params: [ids],
     },
+    {
+      sql: "SELECT s.* FROM diet_template_supplements s JOIN json_each(?1) ids ON s.template_id = ids.value ORDER BY s.template_id, s.sort_order ASC",
+      params: [ids],
+    },
   ]);
 
   const meals = (results[0]?.results ?? []) as DietTemplateMealRow[];
   const items = (results[1]?.results ?? []) as DietTemplateItemRow[];
   const substitutions = (results[2]?.results ?? []) as DietTemplateSubstitutionRow[];
+  const supplements = (results[3]?.results ?? []) as DietTemplateSupplementRow[];
   const itemsByMeal = groupBy(items, (item) => item.meal_id);
   const mealsByTemplate = groupBy(meals, (meal) => meal.template_id);
   const substitutionsByTemplate = groupBy(substitutions, (item) => item.template_id);
+  const supplementsByTemplate = groupBy(supplements, (item) => item.template_id);
 
   for (const templateId of templateIds) {
     grouped.set(templateId, {
@@ -229,6 +237,7 @@ async function getRelationalDietTemplates(templateIds: string[]): Promise<Map<st
         })),
       })),
       substitutions: (substitutionsByTemplate.get(templateId) ?? []).map(({ id, base_food, option_food, quantity, unit, notes }) => ({ id, base_food, option_food, quantity, unit, notes })),
+      supplements: (supplementsByTemplate.get(templateId) ?? []).map(({ id, name, dosage, unit, instructions, notes }) => ({ id, name, dosage, unit, instructions, notes })),
     });
   }
 
@@ -311,15 +320,21 @@ export async function createMealPlanFromTemplates(input: {
 }): Promise<MealPlanPayload> {
   const templates = await getAllTemplates({ targetGroup: input.targetGroup });
   const dietTemplates = templates.filter((template) => template.type === "DIETA");
-  const relationalDietTemplates = await getRelationalDietTemplates(dietTemplates.map((template) => template.id));
+  const relationalTemplates = await getRelationalDietTemplates(templates.map((template) => template.id));
   const meals = dietTemplates.flatMap((template) => {
-    const relational = relationalDietTemplates.get(template.id);
+    const relational = relationalTemplates.get(template.id);
     return relational?.meals.length ? relational.meals : extractMeals(parseJson(template.content));
   });
-  const supplements = templates.filter((template) => template.type === "SUPLEMENTACAO").flatMap((template) => extractSupplements(parseJson(template.content)));
+  const supplements = templates.filter((template) => template.type === "SUPLEMENTACAO").flatMap((template) => {
+    const relational = relationalTemplates.get(template.id);
+    return relational?.supplements.length ? relational.supplements : extractSupplements(parseJson(template.content));
+  });
   const substitutions = [
-    ...dietTemplates.flatMap((template) => relationalDietTemplates.get(template.id)?.substitutions ?? []),
-    ...templates.filter((template) => template.type === "SUBSTITUICAO").flatMap((template) => extractSubstitutions(parseJson(template.content))),
+    ...dietTemplates.flatMap((template) => relationalTemplates.get(template.id)?.substitutions ?? []),
+    ...templates.filter((template) => template.type === "SUBSTITUICAO").flatMap((template) => {
+      const relational = relationalTemplates.get(template.id);
+      return relational?.substitutions.length ? relational.substitutions : extractSubstitutions(parseJson(template.content));
+    }),
   ];
 
   return createMealPlan({
@@ -345,36 +360,6 @@ export async function saveMealPlanAsDietTemplate(input: {
 
   const templateId = crypto.randomUUID();
   const now = new Date().toISOString();
-  const content = {
-    origem: "Plano personalizado promovido para biblioteca. Editar este modelo nao altera o plano original do paciente.",
-    refeicoes: plan.meals.map((meal) => ({
-      nome: meal.name,
-      horario: meal.suggested_time,
-      observacao: meal.notes,
-      source_recipe_id: meal.source_recipe_id,
-      itens: meal.items.map((item) => ({
-        alimento: item.food,
-        quantidade: item.quantity,
-        unidade: item.unit,
-        observacao: item.notes,
-      })),
-    })),
-    substituicoes: plan.substitutions.map((item) => ({
-      base_food: item.base_food,
-      option_food: item.option_food,
-      quantity: item.quantity,
-      unit: item.unit,
-      notes: item.notes,
-    })),
-    suplementos: plan.supplements.map((item) => ({
-      nome: item.name,
-      dosagem: item.dosage,
-      unidade: item.unit,
-      instrucoes: item.instructions,
-      observacao: item.notes,
-    })),
-    orientacoes: plan.notes ? [plan.notes] : [],
-  };
 
   const mealRows: Record<string, unknown>[] = [];
   const itemRows: Record<string, unknown>[] = [];
@@ -415,13 +400,24 @@ export async function saveMealPlanAsDietTemplate(input: {
     order,
     now,
   }));
+  const supplementRows = plan.supplements.filter((item) => item.name.trim()).map((item, order) => ({
+    id: crypto.randomUUID(),
+    templateId,
+    name: item.name,
+    dosage: item.dosage ?? null,
+    unit: item.unit ?? null,
+    instructions: item.instructions ?? null,
+    notes: item.notes ?? null,
+    order,
+    now,
+  }));
 
   const statements: D1Statement[] = [
     {
       sql: `INSERT INTO protocol_templates
-        (id, type, target_group, title, content, is_active, created_at, updated_at)
-        VALUES (?1, 'DIETA', ?2, ?3, ?4, 1, ?5, ?6)`,
-      params: [templateId, input.targetGroup, input.title, JSON.stringify(content, null, 2), now, now],
+        (id, type, target_group, title, content, notes, is_active, created_at, updated_at)
+        VALUES (?1, 'DIETA', ?2, ?3, '', ?4, 1, ?5, ?6)`,
+      params: [templateId, input.targetGroup, input.title, plan.notes ?? "Modelo criado a partir de um plano personalizado. Revisar antes de reutilizar.", now, now],
     },
   ];
   if (mealRows.length) statements.push({
@@ -438,6 +434,11 @@ export async function saveMealPlanAsDietTemplate(input: {
     sql: `INSERT INTO diet_template_substitutions (id, template_id, base_food, option_food, quantity, unit, notes, sort_order, created_at, updated_at)
           SELECT json_extract(value,'$.id'), json_extract(value,'$.templateId'), json_extract(value,'$.baseFood'), json_extract(value,'$.optionFood'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(substitutionRows)],
+  });
+  if (supplementRows.length) statements.push({
+    sql: `INSERT INTO diet_template_supplements (id, template_id, name, dosage, unit, instructions, notes, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.templateId'), json_extract(value,'$.name'), json_extract(value,'$.dosage'), json_extract(value,'$.unit'), json_extract(value,'$.instructions'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    params: [JSON.stringify(supplementRows)],
   });
 
   await d1Batch(statements);

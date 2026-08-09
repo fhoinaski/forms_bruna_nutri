@@ -2,6 +2,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Conteudo inicial para acelerar a rotina clinica. Todo modelo e apenas ponto
+// de partida e deve ser revisado pela nutricionista antes de virar prescricao.
+
 type TemplateType = "DIETA" | "SUPLEMENTACAO" | "SUBSTITUICAO";
 type TargetGroup =
   | "EMAGRECIMENTO"
@@ -16,15 +19,24 @@ type TargetGroup =
   | "ENDURANCE"
   | "RESISTENCIA_INSULINA";
 
-type TemplateSeed = {
+type Meal = {
+  name: string;
+  suggested_time?: string;
+  notes?: string;
+  items: Array<{ food: string; quantity: string; unit: string; notes?: string }>;
+};
+type Substitution = { base_food: string; option_food: string; quantity?: string; unit?: string; notes?: string };
+type Supplement = { name: string; dosage?: string; unit?: string; instructions?: string; notes?: string };
+type Seed = {
   id: string;
   type: TemplateType;
   target_group: TargetGroup;
   title: string;
-  content: unknown;
+  notes: string;
+  meals?: Meal[];
+  substitutions?: Substitution[];
+  supplements?: Supplement[];
 };
-
-type CoreTargetGroup = Exclude<TargetGroup, "SOP" | "VEGETARIANO_ESTRITO" | "ENDURANCE" | "RESISTENCIA_INSULINA">;
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const envPath = join(root, ".env.local");
@@ -38,393 +50,6 @@ if (existsSync(envPath)) {
     if (!process.env[key]) process.env[key] = value;
   }
 }
-
-const substitutions = {
-  observacao: "Trocar apenas por alimentos do mesmo grupo, respeitando porcao e contexto clinico.",
-  carboidratos_cereais: {
-    porcao_referencia: "1 porcao aproximada de 120-160 kcal",
-    opcoes: ["arroz cozido", "batata cozida", "mandioca", "macarrao", "aveia", "pao integral", "quinoa"],
-  },
-  proteinas: {
-    porcao_referencia: "1 porcao com cerca de 20-25g de proteina",
-    opcoes: ["frango", "peixe", "ovos", "carne magra", "tofu", "grao-de-bico", "lentilha"],
-  },
-  frutas: {
-    porcao_referencia: "1 unidade media ou 1 xicara",
-    opcoes: ["maca", "banana", "laranja", "mamao", "pera", "morango", "melao"],
-  },
-  vegetais: {
-    porcao_referencia: "a vontade, salvo restricao individual",
-    opcoes: ["alface", "rucula", "tomate", "cenoura", "brocolis", "abobrinha", "couve-flor"],
-  },
-  gorduras_boas: {
-    porcao_referencia: "1 porcao pequena",
-    opcoes: ["azeite", "abacate", "castanhas", "pasta de amendoim", "chia", "linhaca"],
-  },
-};
-
-const dietBase = {
-  ADULTO_SAUDAVEL: {
-    nome: "Adulto saudavel - manutencao",
-    objetivo: "Organizar refeicoes equilibradas e sustentaveis.",
-    refeicoes: {
-      cafe_da_manha: ["carboidrato integral", "laticinio ou proteina", "fruta"],
-      lanche_manha: ["fruta", "gordura boa opcional"],
-      almoco: ["carboidrato", "proteina", "leguminosa", "vegetais", "gordura boa"],
-      lanche_tarde: ["laticinio ou fruta", "carboidrato leve"],
-      jantar: ["proteina", "vegetais", "carboidrato conforme rotina"],
-      ceia: ["fruta ou laticinio se necessario"],
-    },
-  },
-  EMAGRECIMENTO: {
-    nome: "Emagrecimento - deficit calorico",
-    objetivo: "Aumentar saciedade, preservar massa magra e reduzir densidade calorica.",
-    refeicoes: {
-      cafe_da_manha: ["proteina", "carboidrato integral controlado", "fruta"],
-      lanche_manha: ["fruta com casca ou bagaco"],
-      almoco: ["proteina magra", "vegetais em maior volume", "carboidrato reduzido", "gordura boa"],
-      lanche_tarde: ["iogurte natural ou fruta"],
-      jantar: ["proteina magra", "vegetais", "carboidrato opcional conforme evolucao"],
-      ceia: ["cha sem acucar ou pequena porcao proteica se necessario"],
-    },
-  },
-  HIPERTROFIA: {
-    nome: "Hipertrofia - ganho de massa",
-    objetivo: "Distribuir proteina e energia ao longo do dia para apoiar treino e recuperacao.",
-    refeicoes: {
-      cafe_da_manha: ["2 porcoes de carboidrato", "proteina", "fruta", "gordura boa"],
-      lanche_manha: ["fruta", "proteina", "carboidrato"],
-      almoco: ["carboidrato ampliado", "proteina", "leguminosa", "vegetais"],
-      lanche_tarde: ["laticinio ou proteina", "carboidrato", "fruta"],
-      jantar: ["carboidrato", "proteina", "vegetais"],
-      ceia: ["proteina lenta ou laticinio", "gordura boa opcional"],
-    },
-  },
-  IDOSO: {
-    nome: "Idoso - suporte a massa magra",
-    objetivo: "Priorizar proteina, fibras, calcio, vitamina D e hidratacao.",
-    refeicoes: {
-      cafe_da_manha: ["carboidrato integral", "laticinio", "fruta macia"],
-      lanche_manha: ["fruta", "sementes moidas se tolerado"],
-      almoco: ["carboidrato", "proteina macia", "leguminosa bem cozida", "vegetais cozidos"],
-      lanche_tarde: ["laticinio", "fruta"],
-      jantar: ["proteina macia", "carboidrato leve", "vegetais cozidos"],
-      ceia: ["laticinio ou preparacao proteica leve"],
-    },
-  },
-  GESTANTE: {
-    nome: "Gestante - seguranca alimentar",
-    objetivo: "Apoiar necessidades aumentadas e reduzir riscos alimentares.",
-    refeicoes: {
-      cafe_da_manha: ["carboidrato integral", "laticinio", "fruta rica em vitamina C"],
-      lanche_manha: ["fruta", "castanhas"],
-      almoco: ["carboidrato", "proteina bem cozida", "leguminosa", "folhosos higienizados", "gordura boa"],
-      lanche_tarde: ["laticinio", "fruta"],
-      jantar: ["carboidrato leve", "proteina bem cozida", "vegetais"],
-      ceia: ["laticinio se tolerado"],
-    },
-    atencao_especial: ["evitar carnes e ovos crus", "evitar alcool", "higienizar vegetais", "individualizar suplementacao"],
-  },
-  CRIANCA: {
-    nome: "Crianca - rotina familiar",
-    objetivo: "Construir variedade, autonomia e vinculo positivo com comida.",
-    refeicoes: {
-      cafe_da_manha: ["carboidrato", "laticinio ou proteina", "fruta"],
-      lanche_manha: ["fruta ou vegetal aceito"],
-      almoco: ["carboidrato", "proteina em tamanho adequado", "leguminosa", "vegetais coloridos"],
-      lanche_tarde: ["laticinio ou fruta", "carboidrato pequeno"],
-      jantar: ["versao reduzida do almoco"],
-      ceia: ["laticinio se fizer parte da rotina"],
-    },
-    atencao_especial: ["nao usar comida como premio ou punicao", "oferecer agua", "evitar pressao nas refeicoes"],
-  },
-  TEA: {
-    nome: "TEA - suporte alimentar respeitoso",
-    objetivo: "Respeitar perfil sensorial, previsibilidade e progresso gradual.",
-    refeicoes: {
-      cafe_da_manha: ["carboidrato aceito", "proteina ou laticinio aceito", "exposicao pequena a fruta"],
-      lanche_manha: ["alimento de textura conhecida"],
-      almoco: ["carboidrato aceito", "proteina no formato tolerado", "vegetal separado no prato"],
-      lanche_tarde: ["opcao aceita + novidade opcional muito pequena"],
-      jantar: ["semelhante ao almoco, mantendo previsibilidade"],
-      ceia: ["opcao conforme rotina sensorial"],
-    },
-    atencao_especial: ["nunca forcar recusa", "evitar misturas se houver aversao", "considerar equipe multidisciplinar"],
-  },
-} satisfies Record<CoreTargetGroup, unknown>;
-
-const supplementBase = {
-  ADULTO_SAUDAVEL: ["Vitamina D conforme exames", "Omega-3 conforme consumo alimentar", "Multivitaminico apenas se necessario"],
-  EMAGRECIMENTO: ["Proteina para meta proteica", "Fibra com agua", "Omega-3 conforme indicacao"],
-  HIPERTROFIA: ["Proteina conforme meta", "Creatina monohidratada", "Carboidrato esportivo conforme treino"],
-  IDOSO: ["Vitamina D conforme exames", "B12 conforme dosagem", "Proteina complementar se ingestao baixa"],
-  GESTANTE: ["Acido folico conforme prescricao", "Ferro conforme exames", "DHA conforme orientacao", "Prenatal conforme obstetra"],
-  CRIANCA: ["Vitamina D conforme idade/exames", "Ferro apenas com deficiencia confirmada", "Polivitaminico infantil se dieta muito restrita"],
-  TEA: ["Polivitaminico se seletividade importante", "Vitamina D conforme exames", "Omega-3 se indicado e aceito sensorialmente", "Zinco apenas com deficiencia"],
-} satisfies Record<CoreTargetGroup, string[]>;
-
-const seeds: TemplateSeed[] = Object.keys(dietBase).flatMap((groupKey) => {
-  const group = groupKey as CoreTargetGroup;
-  return [
-    {
-      id: `tpl-${group.toLowerCase()}-dieta-base`,
-      type: "DIETA",
-      target_group: group,
-      title: `Dieta base - ${group.replaceAll("_", " ").toLowerCase()}`,
-      content: dietBase[group],
-    },
-    {
-      id: `tpl-${group.toLowerCase()}-suplementacao-base`,
-      type: "SUPLEMENTACAO",
-      target_group: group,
-      title: `Suplementação base - ${group.replaceAll("_", " ").toLowerCase()}`,
-      content: {
-        objetivo: "Usar apenas após avaliação clínica, exames e revisão profissional.",
-        suplementos_sugeridos: supplementBase[group].map((item) => ({ nutriente: item, conduta: "Individualizar dose, apresentação e duração." })),
-      },
-    },
-    {
-      id: `tpl-${group.toLowerCase()}-substituicoes-base`,
-      type: "SUBSTITUICAO",
-      target_group: group,
-      title: `Substituições base - ${group.replaceAll("_", " ").toLowerCase()}`,
-      content: substitutions,
-    },
-  ];
-});
-
-seeds.push(
-  {
-    id: "tpl_sop_dieta_01",
-    type: "DIETA",
-    target_group: "SOP",
-    title: "Dieta Padrão - Síndrome do Ovário Policístico (Anti-inflamatória)",
-    content: {
-      refeicoes: [
-        { nome: "Café da Manhã", itens: [
-          { alimento: "Ovos inteiros cozidos", quantidade: 150, unidade: "g" },
-          { alimento: "Abacate", quantidade: 50, unidade: "g" },
-          { alimento: "Semente de abóbora", quantidade: 15, unidade: "g" },
-        ] },
-        { nome: "Almoço", itens: [
-          { alimento: "Peito de frango grelhado", quantidade: 120, unidade: "g" },
-          { alimento: "Quinoa cozida", quantidade: 100, unidade: "g" },
-          { alimento: "Brócolis cozido", quantidade: 100, unidade: "g" },
-          { alimento: "Azeite de oliva extravirgem", quantidade: 10, unidade: "g" },
-        ] },
-        { nome: "Lanche da Tarde", itens: [
-          { alimento: "Leite de amêndoas", quantidade: 200, unidade: "ml" },
-          { alimento: "Whey Protein Isolado", quantidade: 30, unidade: "g" },
-          { alimento: "Morango", quantidade: 100, unidade: "g" },
-        ] },
-        { nome: "Jantar", itens: [
-          { alimento: "Filé de salmão assado", quantidade: 120, unidade: "g" },
-          { alimento: "Aspargos refogados", quantidade: 100, unidade: "g" },
-          { alimento: "Semente de girassol", quantidade: 10, unidade: "g" },
-        ] },
-      ],
-    },
-  },
-  {
-    id: "tpl_sop_supl_01",
-    type: "SUPLEMENTACAO",
-    target_group: "SOP",
-    title: "Suplementação - SOP",
-    content: {
-      suplementos: [
-        { nome: "Mio-inositol", dosagem: 2, unidade: "g", indicacao: "Uso diário pela manhã" },
-        { nome: "D-Chiro Inositol", dosagem: 50, unidade: "mg", indicacao: "Junto ao Mio-inositol" },
-        { nome: "Vitamina D3", dosagem: 2000, unidade: "UI", indicacao: "Junto à principal refeição" },
-        { nome: "Zinco Quelato", dosagem: 15, unidade: "mg", indicacao: "Antes de dormir" },
-      ],
-    },
-  },
-  {
-    id: "tpl_sop_subs_01",
-    type: "SUBSTITUICAO",
-    target_group: "SOP",
-    title: "Substituições - SOP",
-    content: {
-      grupos: [
-        {
-          base: { alimento: "Quinoa cozida", quantidade: 100, unidade: "g" },
-          opcoes: [
-            { alimento: "Arroz negro cozido", quantidade: 100, unidade: "g" },
-            { alimento: "Arroz integral cozido", quantidade: 100, unidade: "g" },
-            { alimento: "Grão de bico cozido", quantidade: 80, unidade: "g" },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    id: "tpl_veg_dieta_01",
-    type: "DIETA",
-    target_group: "VEGETARIANO_ESTRITO",
-    title: "Dieta Padrão - Vegetariano Estrito (Vegano)",
-    content: {
-      refeicoes: [
-        { nome: "Café da Manhã", itens: [
-          { alimento: "Tofu mexido com açafrão", quantidade: 150, unidade: "g" },
-          { alimento: "Pão de forma integral", quantidade: 50, unidade: "g" },
-          { alimento: "Kiwi", quantidade: 100, unidade: "g" },
-        ] },
-        { nome: "Almoço", itens: [
-          { alimento: "Lentilha cozida", quantidade: 150, unidade: "g" },
-          { alimento: "Arroz integral cozido", quantidade: 100, unidade: "g" },
-          { alimento: "Proteína texturizada de soja (PTS)", quantidade: 50, unidade: "g" },
-          { alimento: "Couve refogada (fonte de cálcio/ferro)", quantidade: 100, unidade: "g" },
-          { alimento: "Laranja (vitamina C para absorção do ferro)", quantidade: 100, unidade: "g" },
-        ] },
-        { nome: "Lanche da Tarde", itens: [
-          { alimento: "Proteína isolada de ervilha", quantidade: 30, unidade: "g" },
-          { alimento: "Banana prata", quantidade: 100, unidade: "g" },
-          { alimento: "Pasta de amendoim", quantidade: 15, unidade: "g" },
-        ] },
-        { nome: "Jantar", itens: [
-          { alimento: "Grão de bico cozido", quantidade: 150, unidade: "g" },
-          { alimento: "Legumes assados (abóbora, cenoura)", quantidade: 150, unidade: "g" },
-          { alimento: "Semente de gergelim triturada", quantidade: 15, unidade: "g" },
-        ] },
-      ],
-    },
-  },
-  {
-    id: "tpl_veg_supl_01",
-    type: "SUPLEMENTACAO",
-    target_group: "VEGETARIANO_ESTRITO",
-    title: "Suplementação - Vegetariano Estrito",
-    content: {
-      suplementos: [
-        { nome: "Vitamina B12 (Metilcobalamina)", dosagem: 500, unidade: "mcg", indicacao: "Uso diário em jejum" },
-        { nome: "Creatina Monohidratada", dosagem: 5, unidade: "g", indicacao: "Uso diário" },
-        { nome: "Ferro Quelato", dosagem: 40, unidade: "mg", indicacao: "Avaliar via ferritina sérica" },
-      ],
-    },
-  },
-  {
-    id: "tpl_veg_subs_01",
-    type: "SUBSTITUICAO",
-    target_group: "VEGETARIANO_ESTRITO",
-    title: "Substituições - Vegetariano Estrito",
-    content: {
-      grupos: [
-        {
-          base: { alimento: "Lentilha cozida", quantidade: 150, unidade: "g" },
-          opcoes: [
-            { alimento: "Grão de bico cozido", quantidade: 150, unidade: "g" },
-            { alimento: "Feijão preto cozido", quantidade: 150, unidade: "g" },
-            { alimento: "Ervilha cozida", quantidade: 150, unidade: "g" },
-          ],
-        },
-        {
-          base: { alimento: "Tofu", quantidade: 150, unidade: "g" },
-          opcoes: [
-            { alimento: "Tempeh", quantidade: 100, unidade: "g" },
-            { alimento: "PTS hidratada", quantidade: 100, unidade: "g" },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    id: "tpl_endurance_dieta_01",
-    type: "DIETA",
-    target_group: "ENDURANCE",
-    title: "Dieta Padrão - Alta Performance (Endurance)",
-    content: {
-      refeicoes: [
-        { nome: "Pré-treino (1h antes)", itens: [
-          { alimento: "Pão francês", quantidade: 100, unidade: "g" },
-          { alimento: "Geleia de fruta", quantidade: 40, unidade: "g" },
-          { alimento: "Suco de uva integral", quantidade: 300, unidade: "ml" },
-        ] },
-        { nome: "Intra-treino (a cada 45 min)", itens: [
-          { alimento: "Gel de carboidrato", quantidade: 30, unidade: "g" },
-        ] },
-        { nome: "Pós-treino imediato", itens: [
-          { alimento: "Whey Protein Concentrado", quantidade: 30, unidade: "g" },
-          { alimento: "Doce de leite", quantidade: 50, unidade: "g" },
-        ] },
-        { nome: "Almoço (reposição de glicogênio)", itens: [
-          { alimento: "Macarrão cozido", quantidade: 300, unidade: "g" },
-          { alimento: "Patinho moído", quantidade: 120, unidade: "g" },
-          { alimento: "Molho de tomate", quantidade: 100, unidade: "g" },
-        ] },
-      ],
-    },
-  },
-  {
-    id: "tpl_endurance_supl_01",
-    type: "SUPLEMENTACAO",
-    target_group: "ENDURANCE",
-    title: "Suplementação - Endurance",
-    content: {
-      suplementos: [
-        { nome: "Palatinose", dosagem: 20, unidade: "g", indicacao: "Misturar na garrafa intra-treino" },
-        { nome: "Cápsula de sal (Eletrólitos)", dosagem: 1, unidade: "unidade", indicacao: "A cada 60 min de treino intenso" },
-        { nome: "Suco de beterraba concentrado (Nitrato)", dosagem: 400, unidade: "ml", indicacao: "2 horas antes da prova/treino longo" },
-      ],
-    },
-  },
-  {
-    id: "tpl_endurance_subs_01",
-    type: "SUBSTITUICAO",
-    target_group: "ENDURANCE",
-    title: "Substituições - Endurance",
-    content: {
-      grupos: [
-        {
-          base: { alimento: "Pão francês", quantidade: 100, unidade: "g" },
-          opcoes: [
-            { alimento: "Tapioca (goma)", quantidade: 100, unidade: "g" },
-            { alimento: "Creme de arroz", quantidade: 80, unidade: "g" },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    id: "tpl_res_insul_dieta_01",
-    type: "DIETA",
-    target_group: "RESISTENCIA_INSULINA",
-    title: "Dieta Padrão - Controle Glicêmico",
-    content: {
-      refeicoes: [
-        { nome: "Café da Manhã", itens: [
-          { alimento: "Ovos inteiros", quantidade: 150, unidade: "g" },
-          { alimento: "Abacate", quantidade: 50, unidade: "g" },
-          { alimento: "Farelo de aveia", quantidade: 20, unidade: "g" },
-        ] },
-        { nome: "Almoço", itens: [
-          { alimento: "Salada de folhas verdes", quantidade: 150, unidade: "g" },
-          { alimento: "Peito de frango grelhado", quantidade: 130, unidade: "g" },
-          { alimento: "Feijão preto cozido", quantidade: 80, unidade: "g" },
-          { alimento: "Arroz integral cozido", quantidade: 60, unidade: "g" },
-        ] },
-        { nome: "Jantar", itens: [
-          { alimento: "Filé de tilápia", quantidade: 150, unidade: "g" },
-          { alimento: "Abobrinha e berinjela refogadas", quantidade: 150, unidade: "g" },
-          { alimento: "Azeite de oliva", quantidade: 10, unidade: "g" },
-        ] },
-      ],
-    },
-  },
-  {
-    id: "tpl_res_insul_supl_01",
-    type: "SUPLEMENTACAO",
-    target_group: "RESISTENCIA_INSULINA",
-    title: "Suplementação - Resistência à Insulina",
-    content: {
-      suplementos: [
-        { nome: "Coenzima Q10", dosagem: 100, unidade: "mg", indicacao: "Junto ao almoço" },
-        { nome: "Magnésio Dimalato", dosagem: 250, unidade: "mg", indicacao: "Antes de dormir" },
-        { nome: "Ácido Alfa Lipóico", dosagem: 300, unidade: "mg", indicacao: "Junto à principal refeição" },
-        { nome: "Picolinato de Cromo", dosagem: 200, unidade: "mcg", indicacao: "Uso diário" },
-      ],
-    },
-  }
-);
 
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const databaseId = process.env.CLOUDFLARE_D1_DATABASE_ID;
@@ -446,18 +71,187 @@ async function query(sql: string, params: unknown[] = []) {
   }
 }
 
+function groupLabel(group: TargetGroup) {
+  return group.replaceAll("_", " ").toLowerCase();
+}
+
+function meal(name: string, items: Meal["items"], notes = "", suggested_time = ""): Meal {
+  return { name, suggested_time, notes, items };
+}
+
+function commonSubstitutions(): Substitution[] {
+  return [
+    { base_food: "Arroz cozido", option_food: "Batata inglesa cozida", quantity: "150", unit: "g", notes: "Troca de carboidrato conforme preferencia e rotina." },
+    { base_food: "Peito de frango grelhado", option_food: "Ovos cozidos", quantity: "2", unit: "un", notes: "Ajustar por meta proteica individual." },
+    { base_food: "Banana", option_food: "Maca", quantity: "1", unit: "un", notes: "Troca de fruta mantendo porcao semelhante." },
+    { base_food: "Azeite de oliva", option_food: "Abacate", quantity: "50", unit: "g", notes: "Troca de fonte de gordura." },
+  ];
+}
+
+const genericMeals: Record<Exclude<TargetGroup, "SOP" | "VEGETARIANO_ESTRITO" | "ENDURANCE" | "RESISTENCIA_INSULINA">, Meal[]> = {
+  ADULTO_SAUDAVEL: [
+    meal("Cafe da manha", [{ food: "Pao de forma integral", quantity: "50", unit: "g" }, { food: "Ovo de galinha inteiro cozido", quantity: "100", unit: "g" }, { food: "Banana prata", quantity: "80", unit: "g" }]),
+    meal("Almoco", [{ food: "Arroz integral cozido", quantity: "120", unit: "g" }, { food: "Feijao carioca cozido", quantity: "100", unit: "g" }, { food: "Peito de frango grelhado", quantity: "120", unit: "g" }, { food: "Brocolis cozido", quantity: "100", unit: "g" }]),
+    meal("Jantar", [{ food: "Batata doce cozida", quantity: "150", unit: "g" }, { food: "File de tilapia grelhado", quantity: "130", unit: "g" }, { food: "Abobrinha cozida", quantity: "120", unit: "g" }]),
+  ],
+  EMAGRECIMENTO: [
+    meal("Cafe da manha", [{ food: "Iogurte natural", quantity: "170", unit: "g" }, { food: "Aveia em flocos", quantity: "25", unit: "g" }, { food: "Morango", quantity: "100", unit: "g" }]),
+    meal("Almoco", [{ food: "Peito de frango grelhado", quantity: "130", unit: "g" }, { food: "Arroz integral cozido", quantity: "80", unit: "g" }, { food: "Feijao preto cozido", quantity: "70", unit: "g" }, { food: "Salada de folhas verdes", quantity: "120", unit: "g" }]),
+    meal("Jantar", [{ food: "Ovo de galinha inteiro cozido", quantity: "100", unit: "g" }, { food: "Brocolis cozido", quantity: "150", unit: "g" }, { food: "Azeite de oliva", quantity: "8", unit: "g" }]),
+  ],
+  HIPERTROFIA: [
+    meal("Cafe da manha", [{ food: "Pao frances", quantity: "100", unit: "g" }, { food: "Ovo de galinha inteiro cozido", quantity: "150", unit: "g" }, { food: "Banana prata", quantity: "100", unit: "g" }]),
+    meal("Almoco", [{ food: "Arroz branco cozido", quantity: "180", unit: "g" }, { food: "Feijao carioca cozido", quantity: "120", unit: "g" }, { food: "Patinho moido", quantity: "150", unit: "g" }, { food: "Cenoura cozida", quantity: "100", unit: "g" }]),
+    meal("Lanche pos-treino", [{ food: "Whey protein", quantity: "30", unit: "g" }, { food: "Banana prata", quantity: "100", unit: "g" }, { food: "Aveia em flocos", quantity: "40", unit: "g" }]),
+  ],
+  IDOSO: [
+    meal("Cafe da manha", [{ food: "Leite integral", quantity: "200", unit: "ml" }, { food: "Aveia em flocos", quantity: "30", unit: "g" }, { food: "Mamao formosa", quantity: "120", unit: "g" }]),
+    meal("Almoco", [{ food: "Arroz branco cozido", quantity: "100", unit: "g" }, { food: "Feijao carioca cozido", quantity: "100", unit: "g" }, { food: "Frango cozido", quantity: "120", unit: "g" }, { food: "Abobora cozida", quantity: "120", unit: "g" }]),
+    meal("Jantar", [{ food: "File de tilapia grelhado", quantity: "120", unit: "g" }, { food: "Batata inglesa cozida", quantity: "130", unit: "g" }, { food: "Chuchu cozido", quantity: "120", unit: "g" }]),
+  ],
+  GESTANTE: [
+    meal("Cafe da manha", [{ food: "Pao de forma integral", quantity: "50", unit: "g" }, { food: "Queijo minas frescal", quantity: "40", unit: "g" }, { food: "Laranja", quantity: "120", unit: "g" }]),
+    meal("Almoco", [{ food: "Arroz integral cozido", quantity: "120", unit: "g" }, { food: "Feijao preto cozido", quantity: "100", unit: "g" }, { food: "Peito de frango grelhado", quantity: "130", unit: "g" }, { food: "Couve refogada", quantity: "80", unit: "g" }]),
+    meal("Jantar", [{ food: "Macarrao cozido", quantity: "120", unit: "g" }, { food: "Carne bovina cozida", quantity: "120", unit: "g" }, { food: "Brocolis cozido", quantity: "100", unit: "g" }]),
+  ],
+  CRIANCA: [
+    meal("Cafe da manha", [{ food: "Pao de forma", quantity: "30", unit: "g" }, { food: "Ovo de galinha inteiro cozido", quantity: "50", unit: "g" }, { food: "Banana prata", quantity: "60", unit: "g" }]),
+    meal("Almoco", [{ food: "Arroz branco cozido", quantity: "70", unit: "g" }, { food: "Feijao carioca cozido", quantity: "60", unit: "g" }, { food: "Frango cozido", quantity: "70", unit: "g" }, { food: "Cenoura cozida", quantity: "50", unit: "g" }]),
+    meal("Lanche", [{ food: "Iogurte natural", quantity: "120", unit: "g" }, { food: "Maca", quantity: "80", unit: "g" }]),
+  ],
+  TEA: [
+    meal("Cafe da manha", [{ food: "Pao de forma", quantity: "40", unit: "g" }, { food: "Queijo minas frescal", quantity: "30", unit: "g" }, { food: "Banana prata", quantity: "60", unit: "g" }], "Manter previsibilidade visual e separar alimentos se houver aversao a mistura."),
+    meal("Almoco", [{ food: "Arroz branco cozido", quantity: "80", unit: "g" }, { food: "Frango cozido", quantity: "80", unit: "g" }, { food: "Cenoura cozida", quantity: "40", unit: "g" }], "Apresentar novidade em porcao minima, sem pressao."),
+    meal("Lanche", [{ food: "Iogurte natural", quantity: "120", unit: "g" }, { food: "Granola", quantity: "15", unit: "g" }]),
+  ],
+};
+
+const specializedMeals: Record<"SOP" | "VEGETARIANO_ESTRITO" | "ENDURANCE" | "RESISTENCIA_INSULINA", Meal[]> = {
+  SOP: [
+    meal("Cafe da manha", [{ food: "Ovo de galinha inteiro cozido", quantity: "150", unit: "g" }, { food: "Abacate", quantity: "50", unit: "g" }, { food: "Semente de abobora", quantity: "15", unit: "g" }]),
+    meal("Almoco", [{ food: "Peito de frango grelhado", quantity: "120", unit: "g" }, { food: "Quinoa cozida", quantity: "100", unit: "g" }, { food: "Brocolis cozido", quantity: "100", unit: "g" }, { food: "Azeite de oliva", quantity: "10", unit: "g" }]),
+    meal("Lanche da tarde", [{ food: "Whey protein", quantity: "30", unit: "g" }, { food: "Morango", quantity: "100", unit: "g" }]),
+    meal("Jantar", [{ food: "File de salmao assado", quantity: "120", unit: "g" }, { food: "Aspargos refogados", quantity: "100", unit: "g" }, { food: "Semente de girassol", quantity: "10", unit: "g" }]),
+  ],
+  VEGETARIANO_ESTRITO: [
+    meal("Cafe da manha", [{ food: "Tofu", quantity: "150", unit: "g" }, { food: "Pao de forma integral", quantity: "50", unit: "g" }, { food: "Kiwi", quantity: "100", unit: "g" }]),
+    meal("Almoco", [{ food: "Lentilha cozida", quantity: "150", unit: "g" }, { food: "Arroz integral cozido", quantity: "100", unit: "g" }, { food: "Proteina texturizada de soja", quantity: "50", unit: "g" }, { food: "Couve refogada", quantity: "100", unit: "g" }]),
+    meal("Lanche da tarde", [{ food: "Proteina isolada de ervilha", quantity: "30", unit: "g" }, { food: "Banana prata", quantity: "100", unit: "g" }, { food: "Pasta de amendoim", quantity: "15", unit: "g" }]),
+  ],
+  ENDURANCE: [
+    meal("Pre-treino", [{ food: "Pao frances", quantity: "100", unit: "g" }, { food: "Geleia de fruta", quantity: "40", unit: "g" }, { food: "Suco de uva integral", quantity: "300", unit: "ml" }]),
+    meal("Intra-treino", [{ food: "Gel de carboidrato", quantity: "30", unit: "g" }]),
+    meal("Pos-treino imediato", [{ food: "Whey protein", quantity: "30", unit: "g" }, { food: "Doce de leite", quantity: "50", unit: "g" }]),
+    meal("Almoco", [{ food: "Macarrao cozido", quantity: "300", unit: "g" }, { food: "Patinho moido", quantity: "120", unit: "g" }, { food: "Molho de tomate", quantity: "100", unit: "g" }]),
+  ],
+  RESISTENCIA_INSULINA: [
+    meal("Cafe da manha", [{ food: "Ovo de galinha inteiro cozido", quantity: "150", unit: "g" }, { food: "Abacate", quantity: "50", unit: "g" }, { food: "Farelo de aveia", quantity: "20", unit: "g" }]),
+    meal("Almoco", [{ food: "Salada de folhas verdes", quantity: "150", unit: "g" }, { food: "Peito de frango grelhado", quantity: "130", unit: "g" }, { food: "Feijao preto cozido", quantity: "80", unit: "g" }, { food: "Arroz integral cozido", quantity: "60", unit: "g" }]),
+    meal("Jantar", [{ food: "File de tilapia grelhado", quantity: "150", unit: "g" }, { food: "Abobrinha cozida", quantity: "150", unit: "g" }, { food: "Azeite de oliva", quantity: "10", unit: "g" }]),
+  ],
+};
+
+const supplements: Record<TargetGroup, Supplement[]> = {
+  ADULTO_SAUDAVEL: [{ name: "Vitamina D", dosage: "conforme exames", instructions: "Avaliar necessidade antes de prescrever." }],
+  EMAGRECIMENTO: [{ name: "Proteina complementar", dosage: "conforme meta", instructions: "Usar apenas se a alimentacao nao atingir a meta proteica." }],
+  HIPERTROFIA: [{ name: "Creatina monohidratada", dosage: "3-5", unit: "g", instructions: "Uso diario, se nao houver contraindicao." }],
+  IDOSO: [{ name: "Vitamina B12", dosage: "conforme exames", instructions: "Avaliar dosagem e sinais clinicos." }],
+  GESTANTE: [{ name: "Acido folico", dosage: "conforme prescricao", instructions: "Alinhar com acompanhamento obstetrico." }],
+  CRIANCA: [{ name: "Vitamina D", dosage: "conforme idade/exames", instructions: "Individualizar e alinhar com pediatra quando necessario." }],
+  TEA: [{ name: "Polivitaminico", dosage: "conforme avaliacao", instructions: "Considerar seletividade alimentar e aceitacao sensorial." }],
+  SOP: [{ name: "Mio-inositol", dosage: "2", unit: "g", instructions: "Uso diario conforme avaliacao." }, { name: "Vitamina D3", dosage: "2000", unit: "UI", instructions: "Ajustar conforme exames." }],
+  VEGETARIANO_ESTRITO: [{ name: "Vitamina B12", dosage: "500", unit: "mcg", instructions: "Monitorar exames." }, { name: "Creatina monohidratada", dosage: "3-5", unit: "g", instructions: "Uso diario se indicado." }],
+  ENDURANCE: [{ name: "Carboidrato esportivo", dosage: "30-60", unit: "g/h", instructions: "Ajustar conforme duracao e tolerancia do treino." }],
+  RESISTENCIA_INSULINA: [{ name: "Magnesio", dosage: "conforme avaliacao", instructions: "Avaliar exames, dieta e rotina antes de indicar." }],
+};
+
+const notes: Record<TargetGroup, string> = {
+  ADULTO_SAUDAVEL: "Organizar refeicoes equilibradas e sustentaveis. Ajustar quantidades por rotina, exames e objetivo.",
+  EMAGRECIMENTO: "Aumentar saciedade e preservar massa magra. Evitar condutas restritivas sem acompanhamento.",
+  HIPERTROFIA: "Distribuir energia e proteina ao longo do dia para apoiar treino e recuperacao.",
+  IDOSO: "Priorizar proteina, fibras, hidratacao e consistencia segura conforme mastigacao/degluticao.",
+  GESTANTE: "Atenção: evitar carnes e ovos crus, alcool e alimentos de risco. Suplementacao deve ser individualizada e alinhada ao obstetra.",
+  CRIANCA: "Atenção: respeitar apetite, fase alimentar e familia. Nao usar comida como premio ou punicao.",
+  TEA: "Atenção: respeitar perfil sensorial, previsibilidade e recusa. Nao forcar exposicoes.",
+  SOP: "Foco em saciedade, qualidade de carboidratos, proteina adequada e suporte anti-inflamatorio.",
+  VEGETARIANO_ESTRITO: "Monitorar B12, ferro, zinco, calcio, vitamina D e proteina total.",
+  ENDURANCE: "Ajustar carboidrato, sodio e hidratacao conforme volume, intensidade e tolerancia gastrointestinal.",
+  RESISTENCIA_INSULINA: "Priorizar controle glicemico, fibras, proteina e qualidade de carboidratos.",
+};
+
+const groups = Object.keys(notes) as TargetGroup[];
+
+const seeds: Seed[] = groups.flatMap((group) => {
+  const meals = group in specializedMeals
+    ? specializedMeals[group as keyof typeof specializedMeals]
+    : genericMeals[group as keyof typeof genericMeals];
+  return [
+    { id: `tpl-${group.toLowerCase()}-dieta-base`, type: "DIETA", target_group: group, title: `Dieta base - ${groupLabel(group)}`, notes: notes[group], meals, substitutions: commonSubstitutions() },
+    { id: `tpl-${group.toLowerCase()}-suplementacao-base`, type: "SUPLEMENTACAO", target_group: group, title: `Suplementacao base - ${groupLabel(group)}`, notes: notes[group], supplements: supplements[group] },
+    { id: `tpl-${group.toLowerCase()}-substituicoes-base`, type: "SUBSTITUICAO", target_group: group, title: `Substituicoes base - ${groupLabel(group)}`, notes: "Trocas devem preservar grupo alimentar, porcao e contexto clinico.", substitutions: commonSubstitutions() },
+  ];
+});
+
+async function replaceMeals(templateId: string, meals: Meal[]) {
+  await query("DELETE FROM diet_template_items WHERE meal_id IN (SELECT id FROM diet_template_meals WHERE template_id = ?1)", [templateId]);
+  await query("DELETE FROM diet_template_meals WHERE template_id = ?1", [templateId]);
+  const now = new Date().toISOString();
+  for (const [mealIndex, row] of meals.entries()) {
+    const mealId = crypto.randomUUID();
+    await query(
+      `INSERT INTO diet_template_meals (id, template_id, name, suggested_time, notes, source_recipe_id, sort_order, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, ?8)`,
+      [mealId, templateId, row.name, row.suggested_time ?? null, row.notes ?? null, mealIndex, now, now]
+    );
+    for (const [itemIndex, item] of row.items.entries()) {
+      await query(
+        `INSERT INTO diet_template_items (id, meal_id, food, quantity, unit, notes, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
+        [crypto.randomUUID(), mealId, item.food, item.quantity, item.unit, item.notes ?? null, itemIndex, now, now]
+      );
+    }
+  }
+}
+
+async function replaceSubstitutions(templateId: string, rows: Substitution[]) {
+  await query("DELETE FROM diet_template_substitutions WHERE template_id = ?1", [templateId]);
+  const now = new Date().toISOString();
+  for (const [index, item] of rows.entries()) {
+    await query(
+      `INSERT INTO diet_template_substitutions (id, template_id, base_food, option_food, quantity, unit, notes, sort_order, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+      [crypto.randomUUID(), templateId, item.base_food, item.option_food, item.quantity ?? null, item.unit ?? null, item.notes ?? null, index, now, now]
+    );
+  }
+}
+
+async function replaceSupplements(templateId: string, rows: Supplement[]) {
+  await query("DELETE FROM diet_template_supplements WHERE template_id = ?1", [templateId]);
+  const now = new Date().toISOString();
+  for (const [index, item] of rows.entries()) {
+    await query(
+      `INSERT INTO diet_template_supplements (id, template_id, name, dosage, unit, instructions, notes, sort_order, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+      [crypto.randomUUID(), templateId, item.name, item.dosage ?? null, item.unit ?? null, item.instructions ?? null, item.notes ?? null, index, now, now]
+    );
+  }
+}
+
 async function main() {
   for (const seed of seeds) {
     const now = new Date().toISOString();
     await query(
       `INSERT OR REPLACE INTO protocol_templates
-        (id, type, target_group, title, content, is_active, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, 1, COALESCE((SELECT created_at FROM protocol_templates WHERE id = ?1), ?6), ?7)`,
-      [seed.id, seed.type, seed.target_group, seed.title, JSON.stringify(seed.content, null, 2), now, now]
+        (id, type, target_group, title, content, notes, is_active, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, '', ?5, 1, COALESCE((SELECT created_at FROM protocol_templates WHERE id = ?1), ?6), ?7)`,
+      [seed.id, seed.type, seed.target_group, seed.title, seed.notes, now, now]
     );
+    await replaceMeals(seed.id, seed.meals ?? []);
+    await replaceSubstitutions(seed.id, seed.substitutions ?? []);
+    await replaceSupplements(seed.id, seed.supplements ?? []);
   }
 
-  console.log(`${seeds.length} modelo(s) de protocolo inserido(s)/atualizado(s).`);
+  console.log(`${seeds.length} modelo(s) estruturado(s) inserido(s)/atualizado(s).`);
 }
 
 main().catch((error) => {

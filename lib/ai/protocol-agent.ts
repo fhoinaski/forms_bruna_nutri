@@ -5,6 +5,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogle } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import {
+  getTemplateDetail,
   getTemplatesByGroup,
   type ProtocolTemplate,
   type ProtocolTemplateTargetGroup,
@@ -84,18 +85,42 @@ async function getRestrictiveTemplates(input: GenerateProtocolInput): Promise<{
   }
 }
 
-function buildTemplateKnowledgeBase(targetGroup: ProtocolTemplateTargetGroup, templates: ProtocolTemplate[]): string {
+async function buildTemplateKnowledgeBase(targetGroup: ProtocolTemplateTargetGroup, templates: ProtocolTemplate[]): Promise<string> {
   if (!templates.length) {
     return `Grupo alvo inferido: ${targetGroup}. Nenhum modelo ativo encontrado no banco; use apenas regras gerais conservadoras e sinalize necessidade de revisao profissional.`;
   }
 
+  const sections = await Promise.all(templates.map(async (template) => {
+    const detail = await getTemplateDetail(template.id);
+    const meals = detail.meals.map((meal) => [
+      `Refeicao: ${meal.name}${meal.suggested_time ? ` (${meal.suggested_time})` : ""}`,
+      meal.notes ? `Observacao: ${meal.notes}` : "",
+      ...meal.items.map((item) => `- ${item.food}${item.quantity ? ` | ${item.quantity}` : ""}${item.unit ? ` ${item.unit}` : ""}${item.notes ? ` | ${item.notes}` : ""}`),
+    ].filter(Boolean).join("\n"));
+    const substitutions = detail.substitutions.map((item) =>
+      `- ${item.base_food} -> ${item.option_food}${item.quantity ? ` | ${item.quantity}` : ""}${item.unit ? ` ${item.unit}` : ""}${item.notes ? ` | ${item.notes}` : ""}`
+    );
+    const supplements = detail.supplements.map((item) =>
+      `- ${item.name}${item.dosage ? ` | ${item.dosage}` : ""}${item.unit ? ` ${item.unit}` : ""}${item.instructions ? ` | ${item.instructions}` : ""}${item.notes ? ` | ${item.notes}` : ""}`
+    );
+
+    const relationalText = [
+      template.notes ? `Orientacoes: ${template.notes}` : "",
+      meals.length ? ["Refeicoes:", ...meals].join("\n") : "",
+      substitutions.length ? ["Substituicoes:", ...substitutions].join("\n") : "",
+      supplements.length ? ["Suplementacao:", ...supplements].join("\n") : "",
+    ].filter(Boolean).join("\n\n");
+
+    return [
+      `## ${template.type} | ${template.title}`,
+      relationalText || template.content || "Modelo sem conteudo estruturado.",
+    ].join("\n");
+  }));
+
   return [
     `Grupo alvo inferido: ${targetGroup}.`,
     "Modelos ativos retornados do banco D1:",
-    ...templates.map((template) => [
-      `## ${template.type} | ${template.title}`,
-      template.content,
-    ].join("\n")),
+    ...sections,
   ].join("\n\n");
 }
 
@@ -382,7 +407,7 @@ export async function generateProtocolDraft(
 ): Promise<GenerateProtocolResult> {
   const settings = await getAISettings();
   const { targetGroup, templates } = await getRestrictiveTemplates(input);
-  const templateKnowledgeBase = buildTemplateKnowledgeBase(targetGroup, templates);
+  const templateKnowledgeBase = await buildTemplateKnowledgeBase(targetGroup, templates);
 
   if (!settings.api_key) {
     throw new Error("API Key de IA nao configurada. Acesse Dashboard > Sistema > IA e salve uma chave valida antes de gerar protocolos.");

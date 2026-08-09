@@ -9,24 +9,53 @@ import { writeAuditLog } from "@/lib/security/audit";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const mealItemSchema = z.object({
+  food: z.string().min(1).max(200),
+  quantity: z.string().max(80).nullable().optional(),
+  unit: z.string().max(40).nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+  source_recipe_id: z.string().nullable().optional(),
+});
+
+const mealSchema = z.object({
+  name: z.string().min(1).max(120),
+  suggested_time: z.string().max(40).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  source_recipe_id: z.string().nullable().optional(),
+  items: z.array(mealItemSchema).default([]),
+});
+
+const substitutionSchema = z.object({
+  base_food: z.string().min(1).max(200),
+  option_food: z.string().min(1).max(200),
+  quantity: z.string().max(80).nullable().optional(),
+  unit: z.string().max(40).nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+const supplementSchema = z.object({
+  name: z.string().min(1).max(160),
+  dosage: z.string().max(80).nullable().optional(),
+  unit: z.string().max(40).nullable().optional(),
+  instructions: z.string().max(500).nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
 const templateSchema = z.object({
   type: z.enum(PROTOCOL_TEMPLATE_TYPES),
   target_group: z.enum(PROTOCOL_TEMPLATE_TARGET_GROUPS),
-  title: z.string().min(1, "Título é obrigatório.").max(200),
-  content: z.string().min(2, "JSON do conteúdo é obrigatório.").max(100000).refine((value) => {
-    try {
-      JSON.parse(value);
-      return true;
-    } catch {
-      return false;
-    }
-  }, "Content precisa ser um JSON válido."),
+  title: z.string().min(1, "Titulo e obrigatorio.").max(200),
+  content: z.string().max(100000).optional(),
+  notes: z.string().max(10000).nullable().optional(),
+  meals: z.array(mealSchema).optional(),
+  substitutions: z.array(substitutionSchema).optional(),
+  supplements: z.array(supplementSchema).optional(),
   is_active: z.boolean().optional(),
 }).strict();
 
 export async function GET(req: NextRequest) {
   const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
+  if (!admin) return NextResponse.json({ message: "Nao autorizado." }, { status: 401 });
 
   const url = new URL(req.url);
   const includeInactive = url.searchParams.get("includeInactive") === "true";
@@ -44,14 +73,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
+  if (!admin) return NextResponse.json({ message: "Nao autorizado." }, { status: 401 });
 
   const parsed = templateSchema.safeParse(await req.json());
   if (!parsed.success) {
-    return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
+    return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados invalidos." }, { status: 400 });
   }
 
-  const id = await createTemplate(parsed.data);
+  const id = await createTemplate({ ...parsed.data, content: parsed.data.content ?? "" });
   await writeAuditLog({
     action: "protocol_template_created",
     adminId: admin.sub,
