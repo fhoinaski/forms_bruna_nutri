@@ -1,4 +1,5 @@
 import type { AssistantPageContext } from "@/lib/ai/context/assistant-page-context";
+import { getSaoPauloDateKey } from "@/lib/utils/timezone";
 
 /**
  * Sugestoes contextuais por tela (secao 6/7 do pedido de UX) — no maximo
@@ -21,7 +22,7 @@ export type QuickAction =
 function todayIsoDate(offsetDays: number): string {
   const date = new Date();
   date.setDate(date.getDate() + offsetDays);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+  return getSaoPauloDateKey(date);
 }
 
 export function resolveQuickActionDate(action: Extract<QuickAction, { kind: "deterministic"; action: "day_overview" }>): string {

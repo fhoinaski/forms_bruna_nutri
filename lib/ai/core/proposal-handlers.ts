@@ -1,5 +1,5 @@
 import type { ProposedAction, ProposedActionKind } from "@/lib/ai/schemas/action.schema";
-import { parseBrDateTimeToIso, parseBrDateToIsoDate } from "@/lib/ai/schemas/br-datetime";
+import { extractIsoDateTime, parseBrDateTimeToIso, parseBrDateToIsoDate } from "@/lib/ai/schemas/br-datetime";
 import { getClientById, getClients } from "@/lib/repositories/clients";
 import { createClient } from "@/lib/repositories/clients";
 import { createAppointment } from "@/lib/repositories/appointments";
@@ -51,7 +51,12 @@ type ProposalHandler<K extends ProposedActionKind> = (
 // ── new_appointment ─────────────────────────────────────────────────────
 
 const executeNewAppointment: ProposalHandler<"new_appointment"> = async (action) => {
-  const startsAtIso = parseBrDateTimeToIso(action.fields.starts_at_display);
+  const client = await getClientById(action.clientId);
+  if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
+
+  const startsAtIso =
+    parseBrDateTimeToIso(action.fields.starts_at_display)
+    ?? extractIsoDateTime(action.fields.starts_at_display);
   if (!startsAtIso) throw new ProposalExecutionError("Data e hora da proposta são inválidas.", 422);
   const endsAtIso = slotEnd(startsAtIso);
 

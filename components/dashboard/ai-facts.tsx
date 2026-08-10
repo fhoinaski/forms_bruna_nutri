@@ -77,7 +77,7 @@ function AvailableSlotsFacts({ data, onPickSlot }: { data: AvailableSlotsResult;
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap gap-1.5">
-        {data.slots.map((iso) => (
+        {data.slots.map((iso, index) => (
           <button
             key={iso}
             type="button"
@@ -85,7 +85,7 @@ function AvailableSlotsFacts({ data, onPickSlot }: { data: AvailableSlotsResult;
             disabled={!onPickSlot}
             className="rounded-full border border-[#D9E4D3] bg-white px-2.5 py-1 text-xs font-semibold text-[#4F6847] transition hover:bg-[#EAF0E4] disabled:cursor-default disabled:opacity-70"
           >
-            {formatDateTimeBR(iso)}
+            {data.slotsDisplay[index] ?? formatDateTimeBR(iso)}
           </button>
         ))}
       </div>

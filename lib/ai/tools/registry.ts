@@ -205,11 +205,11 @@ defineTool({
 
 defineTool({
   name: PROPOSE_NEW_APPOINTMENT_TOOL_NAME,
-  description: "Registra uma proposta de nova consulta na agenda para o cliente atual, para revisao humana antes de criar de verdade.",
+  description: "Registra uma proposta de nova consulta na agenda (cliente atual ou client_id informado), para revisao humana antes de criar de verdade.",
   inputSchema: proposeNewAppointmentInputSchema,
   risk: "sensitive",
   profiles: ADMIN,
-  contextRequirement: "client",
+  contextRequirement: "none",
   execute: async (input) => input,
 });
 

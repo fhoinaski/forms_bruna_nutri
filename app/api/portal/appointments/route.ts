@@ -12,6 +12,7 @@ import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
+import { getSaoPauloDateKey } from "@/lib/utils/timezone";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,8 +28,8 @@ function defaultRange(req: NextRequest) {
   const future = new Date(today);
   future.setDate(future.getDate() + 14);
   return {
-    from: from ?? today.toISOString().slice(0, 10),
-    to: to ?? future.toISOString().slice(0, 10),
+    from: from ?? getSaoPauloDateKey(today),
+    to: to ?? getSaoPauloDateKey(future),
   };
 }
 

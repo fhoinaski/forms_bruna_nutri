@@ -1,5 +1,6 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
 import type { Appointment } from "@/lib/repositories/appointments";
+import { getSaoPauloDateKey } from "@/lib/utils/timezone";
 
 export type AvailabilityRule = {
   id: string;
@@ -51,17 +52,12 @@ function parseDateInput(value: string) {
 }
 
 function dateKey(date: Date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+  return getSaoPauloDateKey(date);
 }
 
 function weekdayNumber(date: Date) {
-  const label = date.toLocaleString("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" });
-  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(label);
+  const key = dateKey(date);
+  return new Date(`${key}T00:00:00${SAO_PAULO_OFFSET}`).getUTCDay();
 }
 
 function localDateTime(date: string, time: string) {

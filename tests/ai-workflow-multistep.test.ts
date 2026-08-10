@@ -106,6 +106,7 @@ describe("workflow 3 e teste 7: horarios disponiveis quinta a tarde, resultado g
     const result = await executeGetAvailableSlots({ fromDate: "2026-08-13", toDate: "2026-08-13", periodOfDay: "tarde" });
 
     expect(result.slots).toEqual(["2026-08-13T17:00:00.000Z"]);
+    expect(result.slotsDisplay).toEqual(["13/08 às 14:00"]);
     expect(result.totalFound).toBe(1);
     expect(result.truncated).toBe(false);
   });
@@ -119,6 +120,7 @@ describe("workflow 3 e teste 7: horarios disponiveis quinta a tarde, resultado g
     const result = await executeGetAvailableSlots({ fromDate: "2026-08-13", toDate: "2026-08-20" });
 
     expect(result.slots).toHaveLength(20);
+    expect(result.slotsDisplay).toHaveLength(20);
     expect(result.totalFound).toBe(45);
     expect(result.truncated).toBe(true);
   });

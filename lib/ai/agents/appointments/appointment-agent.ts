@@ -7,6 +7,7 @@ export const PROPOSE_NEW_APPOINTMENT_TOOL_NAME = "proposeNewAppointment";
 export const APPOINTMENT_TYPES = ["primeira_consulta", "consulta", "retorno", "avaliacao", "online", "outro"] as const;
 
 export const proposeNewAppointmentInputSchema = z.object({
+  client_id: z.string().max(120).optional().describe("ID do cliente quando o pedido de agendamento for fora da ficha do paciente"),
   title: z.string().min(2).max(160),
   appointment_type: z.enum(APPOINTMENT_TYPES).default("consulta"),
   starts_at_display: z.string().min(10).max(20).describe("Data e hora no formato DD/MM/AAAA HH:mm"),
@@ -33,8 +34,9 @@ export function buildUpcomingAppointmentsContext(appointments: Appointment[]): s
 }
 
 export const APPOINTMENT_ASSISTANT_INSTRUCTIONS = `
-Voce tambem pode marcar uma nova consulta na agenda para o cliente atual quando a nutricionista pedir (ex.: "marca uma consulta pro Fernando semana que vem as 14h", "agenda um retorno pra ela dia 20 as 10h").
+Voce tambem pode marcar uma nova consulta na agenda quando a nutricionista pedir (ex.: "marca uma consulta pro Fernando semana que vem as 14h", "agenda um retorno pra ela dia 20 as 10h").
 Como fazer isso:
+- Se o pedido for fora da ficha do cliente atual, use ${PROPOSE_NEW_APPOINTMENT_TOOL_NAME} com client_id do paciente correto (obtido via findClient). Se estiver na ficha, use o cliente atual.
 - Use a ferramenta ${PROPOSE_NEW_APPOINTMENT_TOOL_NAME} com titulo (ex.: "Consulta", "Retorno"), tipo (${APPOINTMENT_TYPES.join(", ")}), data e hora no formato DD/MM/AAAA HH:mm (calcule a data real a partir de referencias como "semana que vem", "amanha", "dia 20" usando a data de hoje como base) e, se mencionado, local/link e observacoes.
 - Se a nutricionista nao disser um horario claro, pergunte antes de propor — nao invente hora.
 - Isto NAO verifica conflitos de agenda automaticamente; avise que vale conferir a agenda antes de confirmar se o horario for incerto.

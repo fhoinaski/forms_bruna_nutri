@@ -8,6 +8,46 @@ afterEach(() => {
 
 const ctx = { adminId: "admin-1" };
 
+describe("executeProposedAction — new_appointment", () => {
+  it("aceita horário vindo com ISO no texto e cria consulta", async () => {
+    vi.doMock("@/lib/repositories/clients", () => ({
+      getClientById: vi.fn().mockResolvedValue({ id: "client-1", name: "Fernando" }),
+      getClients: vi.fn(),
+      createClient: vi.fn(),
+    }));
+    const createAppointment = vi.fn().mockResolvedValue("appt-1");
+    vi.doMock("@/lib/repositories/appointments", () => ({ createAppointment }));
+    vi.doMock("@/lib/repositories/availability", () => ({
+      hasAppointmentConflict: vi.fn().mockResolvedValue(false),
+      slotEnd: vi.fn().mockImplementation((startsAt: string) => {
+        const start = new Date(startsAt);
+        return new Date(start.getTime() + 60 * 60_000).toISOString();
+      }),
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    const action: ProposedAction = {
+      kind: "new_appointment",
+      clientId: "client-1",
+      fields: {
+        title: "Consulta nutricional",
+        appointment_type: "consulta",
+        starts_at_display: "11/08 às 15:00 (2026-08-11T18:00:00.000Z)",
+        location: "",
+        notes: "",
+      },
+      risk: "sensitive",
+      requiresConfirmation: true,
+    };
+    const result = await executeProposedAction(action, ctx);
+    expect(result.data).toEqual({ appointmentId: "appt-1" });
+    expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({
+      client_id: "client-1",
+      starts_at: "2026-08-11T18:00:00.000Z",
+      ends_at: "2026-08-11T19:00:00.000Z",
+    }));
+  });
+});
+
 describe("executeProposedAction — new_task", () => {
   it("teste 10: entidade relacionada inexistente (cliente) é rejeitada", async () => {
     vi.doMock("@/lib/repositories/clients", () => ({ getClientById: vi.fn().mockResolvedValue(null), getClients: vi.fn(), createClient: vi.fn() }));

@@ -14,6 +14,7 @@ import {
   Sparkles,
   Utensils,
 } from "lucide-react";
+import { getSaoPauloDateKey } from "@/lib/utils/timezone";
 
 type Appointment = {
   id: string;
@@ -129,12 +130,7 @@ function firstName(name: string) {
 }
 
 function localDateKey(date: Date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+  return getSaoPauloDateKey(date);
 }
 
 export default function ClientPortalPage() {

@@ -39,6 +39,19 @@ describe("workflow: agendar consulta (encontrar cliente -> checar agenda -> prop
     expect(action).toBeNull();
   });
 
+  it("produz proposta quando o pedido traz client_id fora da ficha do paciente", () => {
+    const action = buildProposedAction(
+      "proposeNewAppointment",
+      { client_id: "client-2", title: "Retorno", appointment_type: "retorno", starts_at_display: "20/08/2026 15:00" },
+      {}
+    );
+    expect(action).not.toBeNull();
+    expect(action?.kind).toBe("new_appointment");
+    if (action?.kind === "new_appointment") {
+      expect(action.clientId).toBe("client-2");
+    }
+  });
+
   it("rejects an incomplete appointment proposal (sem data/hora) before it ever reaches the tool", () => {
     const tool = getToolDefinition("proposeNewAppointment");
     const result = tool!.inputSchema.safeParse({ title: "Retorno" });

@@ -47,6 +47,11 @@ describe("timezone: parseBrDateTimeToIso nunca depende do fuso horario local do 
     const { parseBrDateTimeToIso } = await import("../lib/ai/schemas/br-datetime");
     expect(parseBrDateTimeToIso("13/13/2026 15:00")).toBeNull();
   });
+
+  it("aceita formato com 'às' (comum no texto da interface)", async () => {
+    const { parseBrDateTimeToIso } = await import("../lib/ai/schemas/br-datetime");
+    expect(parseBrDateTimeToIso("13/08/2026 às 15:00")).toBe("2026-08-13T18:00:00.000Z");
+  });
 });
 
 // ── Fila 2: kind inventada nunca passa pelo schema (secao 23) ───────────

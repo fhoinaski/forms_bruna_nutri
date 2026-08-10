@@ -36,8 +36,23 @@ function hourInSaoPaulo(iso: string): number {
 
 export interface AvailableSlotsResult {
   slots: string[];
+  slotsDisplay: string[];
   totalFound: number;
   truncated: boolean;
+}
+
+function formatSlotDateTime(iso: string): string {
+  const date = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(iso));
+  const time = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(iso));
+  return `${date} às ${time}`;
 }
 
 export async function executeGetAvailableSlots(input: GetAvailableSlotsInput): Promise<AvailableSlotsResult> {
@@ -52,8 +67,10 @@ export async function executeGetAvailableSlots(input: GetAvailableSlotsInput): P
     });
   }
 
+  const limitedSlots = allSlots.slice(0, MAX_SLOTS_RETURNED);
   return {
-    slots: allSlots.slice(0, MAX_SLOTS_RETURNED),
+    slots: limitedSlots,
+    slotsDisplay: limitedSlots.map((iso) => formatSlotDateTime(iso)),
     totalFound: allSlots.length,
     truncated: allSlots.length > MAX_SLOTS_RETURNED,
   };
@@ -63,6 +80,7 @@ export const AVAILABILITY_LOOKUP_ASSISTANT_INSTRUCTIONS = `
 Voce tem a ferramenta ${GET_AVAILABLE_SLOTS_TOOL_NAME} para "quais horarios tem livre quinta a tarde", "acha um horario para a proxima semana". Informe fromDate/toDate no formato AAAA-MM-DD (intervalo maximo de 30 dias) e periodOfDay (manha/tarde/noite) quando a pessoa mencionar um periodo do dia.
 Regras importantes:
 - Os horarios retornados sao os UNICOS validos — nunca invente, arredonde ou sugira um horario que a ferramenta nao tenha retornado.
+- Ao listar os horarios em texto, copie exatamente os valores de \`slotsDisplay\` retornados pela ferramenta (mesma data/hora, mesmo fuso America/Sao_Paulo). Nao reconverta para outro fuso.
 - Se vier truncado, informe que a lista foi limitada aos primeiros horarios e sugira estreitar o intervalo se precisar ver mais.
 - Depois de mostrar os horarios, se a pessoa escolher um, use a ferramenta de proposta de consulta com esse horario exato — nao aproxime.
 `.trim();

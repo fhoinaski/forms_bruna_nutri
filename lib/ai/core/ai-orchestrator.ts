@@ -68,6 +68,7 @@ import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
 import { getClientProtocols } from "@/lib/repositories/client-protocols";
 import { getAppointments } from "@/lib/repositories/appointments";
 import { getPreAnalysisBySubmissionId } from "@/lib/repositories/pre-analyses";
+import { getSaoPauloDateKey } from "@/lib/utils/timezone";
 
 /**
  * Onde a logica que antes vivia inline em app/api/admin/ai/chat/route.ts
@@ -194,9 +195,13 @@ export async function runAssistantTurn(
 ): Promise<AssistantResponseEnvelope> {
   const { client, submission, adminUser } = context;
   const settings = await getAISettings();
+  const saoPauloDateKey = getSaoPauloDateKey(new Date());
+  const [year, month, day] = saoPauloDateKey.split("-");
+  const saoPauloDateBr = `${day}/${month}/${year}`;
 
   const systemPromptParts: string[] = [
     settings.chat_system_prompt?.trim() || DEFAULT_CHAT_SYSTEM_PROMPT,
+    `DATA DE REFERENCIA OBRIGATORIA PARA TERMOS RELATIVOS ("hoje", "amanha", "proxima semana"): ${saoPauloDateKey} (${saoPauloDateBr}), fuso America/Sao_Paulo. Nunca assuma outra data.`,
     buildSystemUsageKnowledgeBase(),
     NAVIGATION_ASSISTANT_INSTRUCTIONS,
     CLIENT_CREATION_ASSISTANT_INSTRUCTIONS,
@@ -205,6 +210,7 @@ export async function runAssistantTurn(
     SCHEDULE_LOOKUP_ASSISTANT_INSTRUCTIONS,
     EVOLUTION_SUMMARY_ASSISTANT_INSTRUCTIONS,
     AVAILABILITY_LOOKUP_ASSISTANT_INSTRUCTIONS,
+    APPOINTMENT_ASSISTANT_INSTRUCTIONS,
     `Voce pode encadear varias ferramentas de LEITURA (buscar cliente, ver agenda, ver evolucao, ver horarios) livremente no mesmo turno para responder um pedido com varias partes — isso e automatico e nao precisa de confirmacao. Mas ao chamar qualquer ferramenta de PROPOSTA (proposeXxx), pare: nao chame outra ferramenta depois dela nem tente aplicar a mudanca sozinha — o sistema sempre exige confirmacao humana explicita antes de qualquer proposta sensivel ou clinica virar realidade.`,
     `Se uma busca de cliente (${FIND_CLIENT_TOOL_NAME}) retornar mais de um resultado parecido, NAO escolha um arbitrariamente: liste as opcoes encontradas (so nome, nunca telefone/e-mail/outros dados) e peca para a pessoa confirmar qual e antes de continuar.`,
   ];
@@ -217,6 +223,7 @@ export async function runAssistantTurn(
     GET_PATIENTS_WITH_PENDENCIES_TOOL_NAME,
     GET_CLIENT_EVOLUTION_SUMMARY_TOOL_NAME,
     GET_AVAILABLE_SLOTS_TOOL_NAME,
+    PROPOSE_NEW_APPOINTMENT_TOOL_NAME,
     PROPOSE_NEW_CLIENT_TOOL_NAME,
     PROPOSE_NEW_RECIPE_TOOL_NAME,
   ];
@@ -254,8 +261,7 @@ export async function runAssistantTurn(
     }
 
     const appointments = await getAppointments({ clientId: client.id });
-    systemPromptParts.push(APPOINTMENT_ASSISTANT_INSTRUCTIONS, buildUpcomingAppointmentsContext(appointments));
-    activeToolNames.push(PROPOSE_NEW_APPOINTMENT_TOOL_NAME);
+    systemPromptParts.push(buildUpcomingAppointmentsContext(appointments));
 
     systemPromptParts.push(TASK_ASSISTANT_INSTRUCTIONS);
     activeToolNames.push(PROPOSE_NEW_TASK_TOOL_NAME);

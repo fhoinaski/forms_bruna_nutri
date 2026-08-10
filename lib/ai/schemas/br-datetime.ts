@@ -15,10 +15,17 @@
 const SAO_PAULO_OFFSET = "-03:00";
 
 export function parseBrDateTimeToIso(text: string): string | null {
-  const match = text.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})$/);
+  const match = text.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s*[A-Za-zÀ-ÿ]{1,3}\s*|[ T])(\d{2}):(\d{2})$/);
   if (!match) return null;
   const [, day, month, year, hour, minute] = match;
   const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:00${SAO_PAULO_OFFSET}`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+export function extractIsoDateTime(text: string): string | null {
+  const match = text.match(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z\b/);
+  if (!match) return null;
+  const date = new Date(match[0]);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 

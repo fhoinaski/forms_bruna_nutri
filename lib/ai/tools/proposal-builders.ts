@@ -115,12 +115,13 @@ const BUILDERS: Record<string, ProposalBuilder> = {
   },
 
   [PROPOSE_NEW_APPOINTMENT_TOOL_NAME]: (input, ctx) => {
-    if (!ctx.clientId) return null;
     const typed = input as ProposeNewAppointmentInput;
+    const resolvedClientId = ctx.clientId ?? typed.client_id?.trim();
+    if (!resolvedClientId) return null;
     if (!typed.title || !typed.starts_at_display) return null;
     return {
       kind: "new_appointment",
-      clientId: ctx.clientId,
+      clientId: resolvedClientId,
       fields: {
         title: typed.title,
         appointment_type: typed.appointment_type,

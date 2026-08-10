@@ -15,6 +15,7 @@ import { useAssistantPageContext, type AssistantPageContext } from "@/lib/ai/con
 import { getQuickActionsForContext, resolveQuickActionDate, type QuickAction } from "@/components/dashboard/ai-quick-actions";
 import { FactsCard, formatDateTimeBR } from "@/components/dashboard/ai-facts";
 import type { AssistantFactsPayload, AssistantOption } from "@/lib/ai/core/ai-response";
+import { getSaoPauloDateKey } from "@/lib/utils/timezone";
 
 const INTRO_SHOWN_KEY = "bruna_nutri_ai_chat_intro_shown";
 const DAILY_BRIEFING_SHOWN_KEY_PREFIX = "bruna_nutri_daily_briefing_shown_";
@@ -31,7 +32,7 @@ type DailyBriefing = {
 };
 
 function todaySaoPauloKey(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  return getSaoPauloDateKey(new Date());
 }
 
 function buildDailyBriefingMarkdown(hoje: DailyBriefing): string {
