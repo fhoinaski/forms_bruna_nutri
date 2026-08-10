@@ -43,12 +43,29 @@ type ProposalStatus = "pending" | "applying" | "applied" | "discarded" | "error"
 
 type ProposedRecipeIngredient = { food_name: string; grams: number; taco_number: number | null };
 
+const NEW_PROTOCOL_FIELD_LABELS: Record<string, string> = {
+  title: "Título",
+  category: "Categoria",
+  description: "Descrição",
+  professional_notes: "Notas profissionais",
+};
+
+const NEW_BLOG_POST_FIELD_LABELS: Record<string, string> = {
+  title: "Título",
+  excerpt: "Resumo",
+  content_markdown: "Conteúdo (Markdown)",
+  category: "Categoria",
+  tags: "Tags (separadas por vírgula)",
+};
+
 type ChatProposal =
   | { kind: "nutrition_record"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
   | { kind: "pre_analysis"; submissionId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
   | { kind: "client_protocol"; clientId: string; clientProtocolId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
   | { kind: "new_client"; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
-  | { kind: "new_recipe"; title: string; applyLabel: string; fields: ProposedField[]; ingredients: ProposedRecipeIngredient[]; status: ProposalStatus; error?: string };
+  | { kind: "new_recipe"; title: string; applyLabel: string; fields: ProposedField[]; ingredients: ProposedRecipeIngredient[]; status: ProposalStatus; error?: string }
+  | { kind: "new_protocol"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
+  | { kind: "new_blog_post"; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string };
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -136,6 +153,37 @@ function buildProposal(update: Record<string, unknown>): ChatProposal | null {
         { key: "servings", label: "Porções", value: String(update.servings), included: true },
         { key: "preparation_steps", label: "Modo de preparo", value: (update.preparation_steps as string) || "", included: true },
       ],
+    };
+  }
+  if (update.kind === "new_protocol") {
+    const fields = update.fields as Record<string, string>;
+    return {
+      kind: "new_protocol",
+      clientId: update.clientId as string,
+      title: "Proposta de novo protocolo",
+      applyLabel: "Criar protocolo",
+      status: "pending",
+      fields: Object.entries(fields).map(([key, value]) => ({
+        key,
+        label: NEW_PROTOCOL_FIELD_LABELS[key] ?? key,
+        value,
+        included: true,
+      })),
+    };
+  }
+  if (update.kind === "new_blog_post") {
+    const fields = update.fields as Record<string, string>;
+    return {
+      kind: "new_blog_post",
+      title: "Proposta de rascunho de post",
+      applyLabel: "Salvar rascunho no blog",
+      status: "pending",
+      fields: Object.entries(fields).filter(([, value]) => value).map(([key, value]) => ({
+        key,
+        label: NEW_BLOG_POST_FIELD_LABELS[key] ?? key,
+        value,
+        included: true,
+      })),
     };
   }
   return null;
@@ -365,6 +413,55 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
         router.push("/dashboard/templates/receitas");
       }
 
+      if (proposal.kind === "new_protocol") {
+        const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
+        const title = byKey("title");
+        if (!title?.trim()) throw new Error("O título é obrigatório para criar o protocolo.");
+        const response = await fetch(`/api/admin/clients/${proposal.clientId}/protocols`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "create_personalized",
+            title,
+            category: byKey("category") || null,
+            description: byKey("description") || null,
+            professionalNotes: byKey("professional_notes") || null,
+            createTasks: false,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Não foi possível criar o protocolo.");
+        if (context?.clientId === proposal.clientId) router.refresh();
+        else router.push(`/dashboard/clients/${proposal.clientId}`);
+      }
+
+      if (proposal.kind === "new_blog_post") {
+        const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
+        const title = byKey("title");
+        const excerpt = byKey("excerpt");
+        const contentMarkdown = byKey("content_markdown");
+        if (!title?.trim() || !excerpt?.trim() || !contentMarkdown?.trim()) {
+          throw new Error("Título, resumo e conteúdo são obrigatórios para salvar o rascunho.");
+        }
+        const tags = (byKey("tags") || "").split(",").map((tag) => tag.trim()).filter(Boolean);
+        const response = await fetch("/api/admin/blog-posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            excerpt,
+            content_markdown: contentMarkdown,
+            category: byKey("category") || null,
+            tags,
+            status: "draft",
+            ai_generated: true,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar o rascunho.");
+        router.push("/dashboard/blog");
+      }
+
       updateProposal(messageIndex, (current) => ({ ...current, status: "applied" }));
     } catch (cause) {
       updateProposal(messageIndex, (current) => ({
@@ -415,18 +512,18 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
               <div className="space-y-3">
                 <p className="text-sm leading-6 text-[#75675E]">
                   {context?.clientId
-                    ? `Olá! Posso te ajudar a usar o sistema, organizar o prontuário, revisar o plano alimentar e atualizar notas de protocolo de ${clientName || "este cliente"}. Descreva o caso, anexe um exame em PDF ou imagem se ajudar, e eu monto uma proposta — você revisa e confirma antes de qualquer coisa ser salva.`
+                    ? `Olá! Posso te ajudar a usar o sistema, organizar o prontuário, revisar o plano alimentar, criar um protocolo novo e atualizar notas de protocolo de ${clientName || "este cliente"}. Descreva o caso, anexe um exame em PDF ou imagem se ajudar, e eu monto uma proposta — você revisa e confirma antes de qualquer coisa ser salva.`
                     : context?.submissionId
                       ? "Olá! Posso te ajudar a usar o sistema e também a montar a pré-análise deste formulário a partir das respostas do paciente. Peça um resumo do caso e eu monto uma proposta — você revisa e confirma antes de salvar."
-                      : "Olá! Posso explicar como usar o sistema, te levar direto para onde você precisa, cadastrar um paciente novo e até criar uma receita na biblioteca — diga algo como \"vou atender a Fulana agora\", \"abre o cliente Beltrano\" ou \"cria uma receita baixa caloria para emagrecimento\". Não dou orientação clínica."}
+                      : "Olá! Posso explicar como usar o sistema, te levar direto para onde você precisa, cadastrar um paciente novo, criar uma receita na biblioteca e até escrever um rascunho de post pro blog — diga algo como \"vou atender a Fulana agora\", \"abre o cliente Beltrano\", \"cria uma receita baixa caloria para emagrecimento\" ou \"escreve um post sobre alimentação saudável\". Não dou orientação clínica."}
                 </p>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">Perguntas rápidas</p>
                 <div className="flex flex-wrap gap-2">
                   {(context?.clientId
-                    ? ["Preencher o prontuário com base no que vou descrever agora", "Atualizar as notas do protocolo atual", ...SUGGESTED_CHAT_PROMPTS]
+                    ? ["Preencher o prontuário com base no que vou descrever agora", "Criar um protocolo novo para esse cliente", "Atualizar as notas do protocolo atual", ...SUGGESTED_CHAT_PROMPTS]
                     : context?.submissionId
                       ? ["Montar um resumo de pré-análise com base nas respostas", ...SUGGESTED_CHAT_PROMPTS]
-                      : ["Abrir a ficha de um cliente pelo nome", "Cadastrar um novo paciente", "Criar uma receita baixa caloria para emagrecimento", ...SUGGESTED_CHAT_PROMPTS]
+                      : ["Abrir a ficha de um cliente pelo nome", "Cadastrar um novo paciente", "Criar uma receita baixa caloria para emagrecimento", "Escrever um rascunho de post pro blog", ...SUGGESTED_CHAT_PROMPTS]
                   ).map((prompt) => (
                     <button
                       key={prompt}
@@ -575,7 +672,11 @@ function ProposalCard({ proposal, onToggleField, onEditField, onDiscard, onApply
           ? "Cliente cadastrado. Abrindo a ficha..."
           : proposal.kind === "new_recipe"
             ? "Receita salva na biblioteca. Abrindo a lista..."
-            : "Alterações salvas com os campos selecionados."}
+            : proposal.kind === "new_protocol"
+              ? "Protocolo criado."
+              : proposal.kind === "new_blog_post"
+                ? "Rascunho salvo no blog. Abrindo a lista..."
+                : "Alterações salvas com os campos selecionados."}
       </p>
     );
   }

@@ -44,6 +44,18 @@ import {
   proposeNewRecipeInputSchema,
   type ProposeNewRecipeOutput,
 } from "@/lib/ai/recipe-creation-assistant";
+import {
+  PROPOSE_NEW_PROTOCOL_TOOL_NAME,
+  PROTOCOL_CREATION_ASSISTANT_INSTRUCTIONS,
+  proposeNewClientProtocolInputSchema,
+  type ProposeNewClientProtocolInput,
+} from "@/lib/ai/protocol-creation-assistant";
+import {
+  BLOG_CREATION_ASSISTANT_INSTRUCTIONS,
+  PROPOSE_NEW_BLOG_POST_TOOL_NAME,
+  proposeNewBlogPostInputSchema,
+  type ProposeNewBlogPostInput,
+} from "@/lib/ai/blog-creation-assistant";
 import { DIET_REVIEW_ASSISTANT_INSTRUCTIONS, buildActiveMealPlanContext } from "@/lib/ai/diet-review-assistant";
 import { ALLOWED_ATTACHMENT_MEDIA_TYPES, MAX_ATTACHMENT_BASE64_LENGTH } from "@/lib/ai/chat-attachments";
 import { DEFAULT_CHAT_SYSTEM_PROMPT, getAISettings } from "@/lib/repositories/ai-settings";
@@ -129,7 +141,12 @@ export async function POST(req: NextRequest) {
       buildSystemUsageKnowledgeBase(),
     ];
 
-    systemPromptParts.push(NAVIGATION_ASSISTANT_INSTRUCTIONS, CLIENT_CREATION_ASSISTANT_INSTRUCTIONS, RECIPE_CREATION_ASSISTANT_INSTRUCTIONS);
+    systemPromptParts.push(
+      NAVIGATION_ASSISTANT_INSTRUCTIONS,
+      CLIENT_CREATION_ASSISTANT_INSTRUCTIONS,
+      RECIPE_CREATION_ASSISTANT_INSTRUCTIONS,
+      BLOG_CREATION_ASSISTANT_INSTRUCTIONS
+    );
     const tools: ToolSet = {
       [FIND_CLIENT_TOOL_NAME]: {
         description: "Busca clientes pelo nome para descobrir o id antes de navegar ate a ficha dele.",
@@ -151,6 +168,11 @@ export async function POST(req: NextRequest) {
         inputSchema: proposeNewRecipeInputSchema,
         execute: executeProposeNewRecipe,
       },
+      [PROPOSE_NEW_BLOG_POST_TOOL_NAME]: {
+        description: "Registra uma proposta de rascunho de post novo para o blog do site (titulo, resumo, conteudo em markdown, categoria e tags), para revisao humana antes de salvar.",
+        inputSchema: proposeNewBlogPostInputSchema,
+        execute: async (input: ProposeNewBlogPostInput) => input,
+      },
     };
 
     if (client) {
@@ -164,6 +186,13 @@ export async function POST(req: NextRequest) {
         description: "Registra uma proposta de preenchimento/atualizacao de campos do prontuario nutricional do cliente atual, para revisao humana antes de salvar.",
         inputSchema: proposeNutritionRecordInputSchema,
         execute: async (input: Record<string, string | undefined>) => input,
+      };
+
+      systemPromptParts.push(PROTOCOL_CREATION_ASSISTANT_INSTRUCTIONS);
+      tools[PROPOSE_NEW_PROTOCOL_TOOL_NAME] = {
+        description: "Registra uma proposta de criacao de um protocolo personalizado simples (titulo, categoria, descricao, notas) para o cliente atual, para revisao humana antes de criar de verdade.",
+        inputSchema: proposeNewClientProtocolInputSchema,
+        execute: async (input: ProposeNewClientProtocolInput) => input,
       };
 
       const protocols = await getClientProtocols(client.id);
@@ -211,7 +240,7 @@ export async function POST(req: NextRequest) {
       system: systemPromptParts.join("\n\n"),
       messages,
       stopWhen: stepCountIs(4),
-      maxOutputTokens: 4000,
+      maxOutputTokens: 6000,
       tools,
     });
 
@@ -221,6 +250,8 @@ export async function POST(req: NextRequest) {
       || call.toolName === PROPOSE_PRE_ANALYSIS_TOOL_NAME
       || call.toolName === PROPOSE_NEW_CLIENT_TOOL_NAME
       || call.toolName === PROPOSE_NEW_RECIPE_TOOL_NAME
+      || call.toolName === PROPOSE_NEW_PROTOCOL_TOOL_NAME
+      || call.toolName === PROPOSE_NEW_BLOG_POST_TOOL_NAME
     );
     const navigateCall = result.toolCalls?.find((call) => call.toolName === NAVIGATE_TOOL_NAME);
     const navigateResult = navigateCall ? await resolveNavigationPath(navigateCall.input as NavigateInput) : null;
@@ -272,6 +303,30 @@ export async function POST(req: NextRequest) {
           servings: output.servings,
           preparation_steps: output.preparation_steps,
           ingredients: output.ingredients,
+        };
+      }
+    }
+
+    if (proposalCall?.toolName === PROPOSE_NEW_PROTOCOL_TOOL_NAME && client) {
+      const input = proposalCall.input as ProposeNewClientProtocolInput;
+      const fields = Object.fromEntries(
+        Object.entries(input).filter(([, value]) => value?.trim())
+      );
+      if (fields.title) proposedUpdate = { kind: "new_protocol", clientId: client.id, fields };
+    }
+
+    if (proposalCall?.toolName === PROPOSE_NEW_BLOG_POST_TOOL_NAME) {
+      const input = proposalCall.input as ProposeNewBlogPostInput;
+      if (input.title && input.excerpt && input.content_markdown) {
+        proposedUpdate = {
+          kind: "new_blog_post",
+          fields: {
+            title: input.title,
+            excerpt: input.excerpt,
+            content_markdown: input.content_markdown,
+            category: input.category ?? "",
+            tags: (input.tags ?? []).join(", "),
+          },
         };
       }
     }
