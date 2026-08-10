@@ -630,13 +630,17 @@ export const guideCategories: GuideCategory[] = [
         id: "assistente-chat-flutuante",
         title: "Assistente de chat flutuante",
         summary:
-          "O botão redondo no canto inferior direito, disponível em qualquer tela do dashboard, abre um chat que explica como usar o sistema.",
+          "O botão redondo no canto inferior direito, disponível em qualquer tela do dashboard, abre um chat que explica como usar o sistema e, em algumas telas, também ajuda a preencher dados — sempre com revisão antes de salvar.",
         steps: [
           "Clique no botão para abrir e digite sua dúvida, ou escolha uma das perguntas rápidas sugeridas.",
-          "As respostas vêm do mesmo conteúdo da Central de Ajuda — se a dúvida não estiver coberta, ele avisa em vez de inventar um passo que não existe.",
+          "As respostas de uso do sistema vêm do mesmo conteúdo da Central de Ajuda — se a dúvida não estiver coberta, ele avisa em vez de inventar um passo que não existe.",
+          "Com a ficha de um cliente aberta, o assistente sabe qual paciente está em tela: descreva o caso ou dite observações e ele propõe o preenchimento dos campos de texto do prontuário (histórico, queixa, rotina, plano de cuidado etc.) e também pode atualizar as notas profissionais de um protocolo já atribuído ao cliente.",
+          "Com um formulário de pré-consulta aberto (tela da submissão), peça um resumo do caso e ele propõe o preenchimento da pré-análise (resumo, pontos de atenção, objetivo, restrições e notas) com base nas respostas do paciente.",
+          "Em qualquer um desses casos, a proposta aparece campo a campo dentro do próprio chat, já editável. Revise, corrija ou desmarque o que não quiser usar e só então clique no botão de aplicar — nada é salvo sem essa confirmação.",
         ],
         cautions: [
-          "O assistente só orienta sobre o uso do sistema — nunca sobre conduta clínica, diagnóstico ou dados de um paciente específico.",
+          "O assistente nunca dá conduta clínica, diagnóstico ou decide tratamento — ele só ajuda a redigir/organizar o que a nutricionista já sabe do caso.",
+          "Nenhuma alteração é salva sozinha: até você clicar em aplicar, a proposta fica só na tela do chat e pode ser descartada sem efeito nenhum.",
           "Também depende da chave de IA configurada acima; sem ela, o chat avisa e leva direto para esta tela.",
         ],
       },

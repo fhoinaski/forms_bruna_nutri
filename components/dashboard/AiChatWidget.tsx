@@ -2,10 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Bot, Send, Sparkles, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bot, Check, Send, Sparkles, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import { SUGGESTED_CHAT_PROMPTS } from "@/lib/ai/system-chat-knowledge";
+import { NUTRITION_TEXT_FIELD_LABELS, type NutritionRecordTextFieldKey } from "@/lib/clinical/nutrition-record-fields";
+import { PRE_ANALYSIS_FIELD_LABELS, type PreAnalysisFieldKey } from "@/lib/clinical/pre-analysis-fields";
 
 const INTRO_SHOWN_KEY = "bruna_nutri_ai_chat_intro_shown";
 
@@ -27,17 +30,80 @@ const markdownComponents: Components = {
   ),
 };
 
+type ProposedField = { key: string; label: string; value: string; included: boolean };
+type ProposalStatus = "pending" | "applying" | "applied" | "discarded" | "error";
+
+type ChatProposal =
+  | { kind: "nutrition_record"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
+  | { kind: "pre_analysis"; submissionId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
+  | { kind: "client_protocol"; clientId: string; clientProtocolId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string };
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  proposal?: ChatProposal;
 };
 
-export function AiChatWidget() {
+function buildProposal(update: Record<string, unknown>): ChatProposal | null {
+  if (update.kind === "nutrition_record") {
+    const fields = update.fields as Record<string, string>;
+    return {
+      kind: "nutrition_record",
+      clientId: update.clientId as string,
+      title: "Proposta para o prontuário",
+      applyLabel: "Aplicar no prontuário",
+      status: "pending",
+      fields: Object.entries(fields).map(([key, value]) => ({
+        key,
+        label: NUTRITION_TEXT_FIELD_LABELS[key as NutritionRecordTextFieldKey] ?? key,
+        value,
+        included: true,
+      })),
+    };
+  }
+  if (update.kind === "pre_analysis") {
+    const fields = update.fields as Record<string, string>;
+    return {
+      kind: "pre_analysis",
+      submissionId: update.submissionId as string,
+      title: "Proposta de pré-análise",
+      applyLabel: "Aplicar na pré-análise",
+      status: "pending",
+      fields: Object.entries(fields).map(([key, value]) => ({
+        key,
+        label: PRE_ANALYSIS_FIELD_LABELS[key as PreAnalysisFieldKey] ?? key,
+        value,
+        included: true,
+      })),
+    };
+  }
+  if (update.kind === "client_protocol") {
+    return {
+      kind: "client_protocol",
+      clientId: update.clientId as string,
+      clientProtocolId: update.clientProtocolId as string,
+      title: "Proposta para o protocolo do cliente",
+      applyLabel: "Aplicar no protocolo",
+      status: "pending",
+      fields: [{
+        key: "professionalNotes",
+        label: "Notas profissionais do protocolo",
+        value: update.professionalNotes as string,
+        included: true,
+      }],
+    };
+  }
+  return null;
+}
+
+export function AiChatWidget({ context }: { context?: { clientId?: string; submissionId?: string } } = {}) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [clientName, setClientName] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -46,6 +112,15 @@ export function AiChatWidget() {
     window.localStorage.setItem(INTRO_SHOWN_KEY, "1");
     setOpen(true);
   }, []);
+
+  useEffect(() => {
+    setClientName("");
+    if (!context?.clientId) return;
+    fetch(`/api/admin/clients/${context.clientId}`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { name?: string } | null) => setClientName(data?.name ?? ""))
+      .catch(() => setClientName(""));
+  }, [context?.clientId]);
 
   useEffect(() => {
     if (!open) return;
@@ -79,15 +154,110 @@ export function AiChatWidget() {
       const response = await fetch("/api/admin/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages }),
+        body: JSON.stringify({
+          messages: nextMessages.map(({ role, content: messageContent }) => ({ role, content: messageContent })),
+          context,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "Não foi possível responder agora.");
-      setMessages([...nextMessages, { role: "assistant", content: data.reply }]);
+      const proposal = data.proposedUpdate ? buildProposal(data.proposedUpdate) : null;
+      const assistantMessage: ChatMessage = { role: "assistant", content: data.reply, proposal: proposal ?? undefined };
+      setMessages([...nextMessages, assistantMessage]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível responder agora.");
     } finally {
       setSending(false);
+    }
+  }
+
+  function updateProposal(messageIndex: number, updater: (proposal: ChatProposal) => ChatProposal) {
+    setMessages((current) => current.map((message, index) => {
+      if (index !== messageIndex || !message.proposal) return message;
+      return { ...message, proposal: updater(message.proposal) };
+    }));
+  }
+
+  function toggleProposalField(messageIndex: number, fieldKey: string) {
+    updateProposal(messageIndex, (proposal) => ({
+      ...proposal,
+      fields: proposal.fields.map((field) => field.key === fieldKey ? { ...field, included: !field.included } : field),
+    }));
+  }
+
+  function editProposalField(messageIndex: number, fieldKey: string, value: string) {
+    updateProposal(messageIndex, (proposal) => ({
+      ...proposal,
+      fields: proposal.fields.map((field) => field.key === fieldKey ? { ...field, value } : field),
+    }));
+  }
+
+  function discardProposal(messageIndex: number) {
+    updateProposal(messageIndex, (proposal) => ({ ...proposal, status: "discarded" }));
+  }
+
+  async function applyProposal(messageIndex: number, proposal: ChatProposal) {
+    updateProposal(messageIndex, (current) => ({ ...current, status: "applying", error: undefined }));
+    const includedEntries = proposal.fields.filter((field) => field.included);
+    if (!includedEntries.length) {
+      updateProposal(messageIndex, (current) => ({ ...current, status: "error", error: "Selecione ao menos um campo para aplicar." }));
+      return;
+    }
+
+    try {
+      if (proposal.kind === "nutrition_record") {
+        const payload = Object.fromEntries(includedEntries.map((field) => [field.key, field.value]));
+        const response = await fetch(`/api/admin/clients/${proposal.clientId}/nutrition-record`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar no prontuário.");
+        if (context?.clientId === proposal.clientId) router.refresh();
+      }
+
+      if (proposal.kind === "pre_analysis") {
+        const currentResponse = await fetch(`/api/admin/submissions/${proposal.submissionId}/pre-analysis`, { cache: "no-store" });
+        const currentData = currentResponse.ok ? await currentResponse.json() : null;
+        const merged = {
+          summary: currentData?.summary ?? null,
+          attention_points: currentData?.attention_points ?? null,
+          main_goal: currentData?.main_goal ?? null,
+          restrictions: currentData?.restrictions ?? null,
+          professional_notes: currentData?.professional_notes ?? null,
+          priority: currentData?.priority ?? "normal",
+        };
+        for (const field of includedEntries) (merged as Record<string, string>)[field.key] = field.value;
+        const response = await fetch(`/api/admin/submissions/${proposal.submissionId}/pre-analysis`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(merged),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar a pré-análise.");
+        if (context?.submissionId === proposal.submissionId) router.refresh();
+      }
+
+      if (proposal.kind === "client_protocol") {
+        const notes = includedEntries.find((field) => field.key === "professionalNotes")?.value;
+        const response = await fetch(`/api/admin/clients/${proposal.clientId}/protocols/${proposal.clientProtocolId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ professionalNotes: notes }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar o protocolo.");
+        if (context?.clientId === proposal.clientId) router.refresh();
+      }
+
+      updateProposal(messageIndex, (current) => ({ ...current, status: "applied" }));
+    } catch (cause) {
+      updateProposal(messageIndex, (current) => ({
+        ...current,
+        status: "error",
+        error: cause instanceof Error ? cause.message : "Não foi possível salvar.",
+      }));
     }
   }
 
@@ -112,7 +282,13 @@ export function AiChatWidget() {
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EAF0E4] text-[#607A56]"><Bot className="h-4 w-4" /></span>
               <div>
                 <p className="text-sm font-semibold text-[#3A3028]">Assistente do sistema</p>
-                <p className="text-[11px] text-[#8A7B70]">Ajuda a usar o dashboard</p>
+                <p className="text-[11px] text-[#8A7B70]">
+                  {context?.clientId
+                    ? `Vendo a ficha de ${clientName || "este cliente"}`
+                    : context?.submissionId
+                      ? "Vendo este formulário de pré-consulta"
+                      : "Ajuda a usar o dashboard"}
+                </p>
               </div>
             </div>
             <button type="button" onClick={() => setOpen(false)} aria-label="Fechar" className="rounded-full p-1 text-[#8C6E52] hover:bg-white">
@@ -124,11 +300,20 @@ export function AiChatWidget() {
             {messages.length === 0 && (
               <div className="space-y-3">
                 <p className="text-sm leading-6 text-[#75675E]">
-                  Olá! Sou o assistente do sistema — posso explicar como usar qualquer tela ou funcionalidade do dashboard. Não dou orientação clínica, só ajudo a usar o sistema.
+                  {context?.clientId
+                    ? `Olá! Posso te ajudar a usar o sistema, organizar o prontuário e atualizar notas de protocolo de ${clientName || "este cliente"}. Descreva o caso ou o que quer registrar e eu monto uma proposta — você revisa e confirma antes de qualquer coisa ser salva.`
+                    : context?.submissionId
+                      ? "Olá! Posso te ajudar a usar o sistema e também a montar a pré-análise deste formulário a partir das respostas do paciente. Peça um resumo do caso e eu monto uma proposta — você revisa e confirma antes de salvar."
+                      : "Olá! Sou o assistente do sistema — posso explicar como usar qualquer tela ou funcionalidade do dashboard. Não dou orientação clínica, só ajudo a usar o sistema."}
                 </p>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">Perguntas rápidas</p>
                 <div className="flex flex-wrap gap-2">
-                  {SUGGESTED_CHAT_PROMPTS.map((prompt) => (
+                  {(context?.clientId
+                    ? ["Preencher o prontuário com base no que vou descrever agora", "Atualizar as notas do protocolo atual", ...SUGGESTED_CHAT_PROMPTS]
+                    : context?.submissionId
+                      ? ["Montar um resumo de pré-análise com base nas respostas", ...SUGGESTED_CHAT_PROMPTS]
+                      : SUGGESTED_CHAT_PROMPTS
+                  ).map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
@@ -142,18 +327,28 @@ export function AiChatWidget() {
               </div>
             )}
             {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 ${
-                  message.role === "user"
-                    ? "ml-auto whitespace-pre-wrap bg-[#7F9A74] text-white"
-                    : "bg-[#F4F8F1] text-[#3A3028]"
-                }`}
-              >
-                {message.role === "assistant" ? (
-                  <ReactMarkdown components={markdownComponents}>{message.content}</ReactMarkdown>
-                ) : (
-                  message.content
+              <div key={index} className="space-y-2">
+                <div
+                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 ${
+                    message.role === "user"
+                      ? "ml-auto whitespace-pre-wrap bg-[#7F9A74] text-white"
+                      : "bg-[#F4F8F1] text-[#3A3028]"
+                  }`}
+                >
+                  {message.role === "assistant" ? (
+                    <ReactMarkdown components={markdownComponents}>{message.content}</ReactMarkdown>
+                  ) : (
+                    message.content
+                  )}
+                </div>
+                {message.proposal && (
+                  <ProposalCard
+                    proposal={message.proposal}
+                    onToggleField={(fieldKey) => toggleProposalField(index, fieldKey)}
+                    onEditField={(fieldKey, value) => editProposalField(index, fieldKey, value)}
+                    onDiscard={() => discardProposal(index)}
+                    onApply={() => void applyProposal(index, message.proposal!)}
+                  />
                 )}
               </div>
             ))}
@@ -204,5 +399,61 @@ export function AiChatWidget() {
         </div>
       )}
     </>
+  );
+}
+
+function ProposalCard({ proposal, onToggleField, onEditField, onDiscard, onApply }: {
+  proposal: ChatProposal;
+  onToggleField: (fieldKey: string) => void;
+  onEditField: (fieldKey: string, value: string) => void;
+  onDiscard: () => void;
+  onApply: () => void;
+}) {
+  if (!proposal.fields.length) return null;
+
+  if (proposal.status === "discarded") {
+    return <p className="rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] px-3 py-2 text-xs text-[#8A7B70]">Proposta descartada.</p>;
+  }
+  if (proposal.status === "applied") {
+    return (
+      <p className="flex items-center gap-1.5 rounded-xl border border-[#D9E4D3] bg-[#F4F8F1] px-3 py-2 text-xs font-semibold text-[#4F6847]">
+        <Check className="h-3.5 w-3.5" /> Alterações salvas com os campos selecionados.
+      </p>
+    );
+  }
+
+  const applying = proposal.status === "applying";
+
+  return (
+    <div className="max-w-[92%] space-y-3 rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">{proposal.title} — revise antes de aplicar</p>
+      <div className="space-y-3">
+        {proposal.fields.map((field) => (
+          <label key={field.key} className="block">
+            <span className="mb-1 flex items-center gap-2 text-xs font-semibold text-[#3A3028]">
+              <input type="checkbox" checked={field.included} onChange={() => onToggleField(field.key)} className="h-3.5 w-3.5 accent-[#7F9A74]" />
+              {field.label}
+            </span>
+            <textarea
+              value={field.value}
+              onChange={(event) => onEditField(field.key, event.target.value)}
+              disabled={!field.included || applying}
+              className="w-full min-h-16 resize-y rounded-lg border border-[#EDE1D6] bg-white px-2 py-1.5 text-xs leading-5 text-[#3A3028] outline-none focus:border-[#7F9A74] disabled:opacity-50"
+            />
+          </label>
+        ))}
+      </div>
+      {proposal.status === "error" && proposal.error && (
+        <p className="rounded-lg border border-[#F0D4C7] bg-[#FFF7F3] px-2.5 py-1.5 text-xs text-[#8C5F50]">{proposal.error}</p>
+      )}
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onDiscard} disabled={applying} className="rounded-full border border-[#EDE1D6] px-3 py-1.5 text-xs font-semibold text-[#75675E] transition hover:bg-[#FBF7F1] disabled:opacity-50">
+          Descartar
+        </button>
+        <button type="button" onClick={onApply} disabled={applying} className="rounded-full bg-[#7F9A74] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#607A56] disabled:cursor-not-allowed disabled:opacity-60">
+          {applying ? "Aplicando..." : proposal.applyLabel}
+        </button>
+      </div>
+    </div>
   );
 }
