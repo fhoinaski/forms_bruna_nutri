@@ -247,3 +247,10 @@ export async function getClientMetrics(): Promise<ClientMetrics> {
     novosMes: novosMesRow[0]?.c ?? 0,
   };
 }
+
+export async function getClientsCreatedBetween(start: string, end: string): Promise<Pick<Client, "id" | "name" | "created_at">[]> {
+  return d1Query<Pick<Client, "id" | "name" | "created_at">>(
+    "SELECT id, name, created_at FROM clients WHERE created_at >= ?1 AND created_at <= ?2 ORDER BY created_at DESC",
+    [start, end]
+  );
+}

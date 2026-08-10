@@ -71,6 +71,17 @@ import {
   proposeNewClientTaskInputSchema,
   type ProposeNewClientTaskInput,
 } from "@/lib/ai/task-assistant";
+import {
+  GET_SYSTEM_OVERVIEW_TOOL_NAME,
+  LIST_OPPORTUNITIES_TOOL_NAME,
+  SYSTEM_OVERVIEW_ASSISTANT_INSTRUCTIONS,
+  executeGetSystemOverview,
+  executeListOpportunities,
+  getSystemOverviewInputSchema,
+  listOpportunitiesInputSchema,
+  type OpportunityStage,
+  type OpportunityTemperature,
+} from "@/lib/ai/system-overview-assistant";
 import { DEFAULT_CHAT_SYSTEM_PROMPT, getAISettings } from "@/lib/repositories/ai-settings";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getAppointments } from "@/lib/repositories/appointments";
@@ -159,7 +170,8 @@ export async function POST(req: NextRequest) {
       NAVIGATION_ASSISTANT_INSTRUCTIONS,
       CLIENT_CREATION_ASSISTANT_INSTRUCTIONS,
       RECIPE_CREATION_ASSISTANT_INSTRUCTIONS,
-      BLOG_CREATION_ASSISTANT_INSTRUCTIONS
+      BLOG_CREATION_ASSISTANT_INSTRUCTIONS,
+      SYSTEM_OVERVIEW_ASSISTANT_INSTRUCTIONS
     );
     const tools: ToolSet = {
       [FIND_CLIENT_TOOL_NAME]: {
@@ -168,9 +180,19 @@ export async function POST(req: NextRequest) {
         execute: executeFindClient,
       },
       [NAVIGATE_TOOL_NAME]: {
-        description: "Navega o sistema ate a tela pedida (ficha de um cliente, lista de clientes, agenda, biblioteca de protocolos/modelos/receitas, tarefas ou financeiro).",
+        description: "Navega o sistema ate a tela pedida (ficha de um cliente, lista de clientes, agenda, biblioteca de protocolos/modelos/receitas, tarefas, financeiro ou oportunidades).",
         inputSchema: navigateInputSchema,
         execute: async (input: NavigateInput) => input,
+      },
+      [GET_SYSTEM_OVERVIEW_TOOL_NAME]: {
+        description: "Le numeros gerais e atuais do consultorio (clientes, protocolos, tarefas, consultas hoje, financeiro, blog, oportunidades) para responder perguntas com dados reais.",
+        inputSchema: getSystemOverviewInputSchema,
+        execute: executeGetSystemOverview,
+      },
+      [LIST_OPPORTUNITIES_TOOL_NAME]: {
+        description: "Lista as oportunidades comerciais (funil de pre-consulta ate agendamento), com etapa, temperatura e proxima acao combinada.",
+        inputSchema: listOpportunitiesInputSchema,
+        execute: async (input: { stage?: OpportunityStage; temperature?: OpportunityTemperature }) => executeListOpportunities(input),
       },
       [PROPOSE_NEW_CLIENT_TOOL_NAME]: {
         description: "Registra uma proposta de cadastro de um novo cliente/paciente com os dados informados, para revisao humana antes de criar de verdade.",

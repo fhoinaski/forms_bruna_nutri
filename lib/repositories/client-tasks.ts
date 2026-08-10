@@ -215,6 +215,17 @@ export async function getUpcomingClientTasks(limit = 5): Promise<ClientTaskWithC
   );
 }
 
+export async function getTasksDueOn(dateKey: string): Promise<ClientTaskWithClient[]> {
+  return d1Query<ClientTaskWithClient>(
+    `SELECT t.*, c.name as client_name, c.phone as client_phone
+     FROM client_tasks t
+     LEFT JOIN clients c ON c.id = t.client_id
+     WHERE t.status = 'pendente' AND t.due_date = ?1
+     ORDER BY c.name ASC`,
+    [dateKey]
+  );
+}
+
 export async function updateClientTaskStatus(
   id: string,
   status: string

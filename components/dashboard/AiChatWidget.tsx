@@ -13,6 +13,53 @@ import { NEW_CLIENT_FIELD_LABELS, type NewClientFieldKey } from "@/lib/clinical/
 import { ALLOWED_ATTACHMENT_MEDIA_TYPES, MAX_ATTACHMENT_RAW_BYTES, type AllowedAttachmentMediaType } from "@/lib/ai/chat-attachments";
 
 const INTRO_SHOWN_KEY = "bruna_nutri_ai_chat_intro_shown";
+const DAILY_BRIEFING_SHOWN_KEY_PREFIX = "bruna_nutri_daily_briefing_shown_";
+
+type DailyBriefingAppointment = { id: string; title: string; starts_at: string; client_name: string | null; appointment_type: string };
+type DailyBriefingPerson = { id: string; name?: string; patient_name?: string; created_at: string };
+type DailyBriefingTask = { id: string; title: string; client_name: string | null; due_date: string | null };
+type DailyBriefing = {
+  dateKey: string;
+  agendamentos: DailyBriefingAppointment[];
+  novosClientes: DailyBriefingPerson[];
+  novasSubmissoes: DailyBriefingPerson[];
+  tarefas: DailyBriefingTask[];
+};
+
+function todaySaoPauloKey(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+function buildDailyBriefingMarkdown(hoje: DailyBriefing): string {
+  const formatTime = (iso: string) => new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(new Date(iso));
+  const sections: string[] = ["## Bom dia! Aqui está o resumo de hoje"];
+
+  sections.push(
+    hoje.agendamentos.length
+      ? `**Consultas hoje (${hoje.agendamentos.length}):**\n` + hoje.agendamentos
+          .map((appointment) => `- ${formatTime(appointment.starts_at)} — ${appointment.client_name ?? "sem cliente vinculado"} (${appointment.title})`)
+          .join("\n")
+      : "**Consultas hoje:** nenhuma agendada."
+  );
+
+  if (hoje.novosClientes.length) {
+    sections.push(`**Novos pacientes cadastrados hoje (${hoje.novosClientes.length}):**\n` + hoje.novosClientes.map((client) => `- ${client.name}`).join("\n"));
+  }
+
+  if (hoje.novasSubmissoes.length) {
+    sections.push(`**Novas pré-consultas recebidas hoje (${hoje.novasSubmissoes.length}):**\n` + hoje.novasSubmissoes.map((submission) => `- ${submission.patient_name}`).join("\n"));
+  }
+
+  if (hoje.tarefas.length) {
+    sections.push(`**Tarefas com prazo hoje (${hoje.tarefas.length}):**\n` + hoje.tarefas.map((task) => `- ${task.title}${task.client_name ? ` (${task.client_name})` : ""}`).join("\n"));
+  }
+
+  if (!hoje.agendamentos.length && !hoje.novosClientes.length && !hoje.novasSubmissoes.length && !hoje.tarefas.length) {
+    sections.push("Sem novidades além disso — dia tranquilo. Se precisar de algo, é só perguntar.");
+  }
+
+  return sections.join("\n\n");
+}
 
 // So a janela mais recente da conversa e enviada a cada chamada — a
 // interface guarda o historico inteiro, mas o custo/latencia da IA e o
@@ -278,9 +325,24 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (window.localStorage.getItem(INTRO_SHOWN_KEY)) return;
+    const dailyKey = `${DAILY_BRIEFING_SHOWN_KEY_PREFIX}${todaySaoPauloKey()}`;
+    if (window.localStorage.getItem(dailyKey)) {
+      if (!window.localStorage.getItem(INTRO_SHOWN_KEY)) {
+        window.localStorage.setItem(INTRO_SHOWN_KEY, "1");
+        setOpen(true);
+      }
+      return;
+    }
+    window.localStorage.setItem(dailyKey, "1");
     window.localStorage.setItem(INTRO_SHOWN_KEY, "1");
-    setOpen(true);
+    fetch("/api/admin/dashboard-metrics", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { hoje?: DailyBriefing } | null) => {
+        if (!data?.hoje) return;
+        setMessages([{ role: "assistant", content: buildDailyBriefingMarkdown(data.hoje) }]);
+        setOpen(true);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

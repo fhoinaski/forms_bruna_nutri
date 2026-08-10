@@ -265,6 +265,13 @@ export async function getDashboardMetrics(
   };
 }
 
+export async function getSubmissionsCreatedBetween(start: string, end: string): Promise<Pick<Submission, "id" | "patient_name" | "created_at">[]> {
+  return d1Query<Pick<Submission, "id" | "patient_name" | "created_at">>(
+    "SELECT id, patient_name, created_at FROM form_submissions WHERE created_at >= ?1 AND created_at <= ?2 ORDER BY created_at DESC",
+    [start, end]
+  );
+}
+
 export async function getSubmissionsForExport(
   filters: SubmissionFilters = {}
 ): Promise<SubmissionWithAnswers[]> {

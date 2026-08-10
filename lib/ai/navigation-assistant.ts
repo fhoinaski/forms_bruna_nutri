@@ -28,6 +28,7 @@ export const NAVIGATION_DESTINATIONS = [
   "recipes_library",
   "tasks",
   "financeiro",
+  "opportunities",
 ] as const;
 
 export type NavigationDestination = typeof NAVIGATION_DESTINATIONS[number];
@@ -57,6 +58,7 @@ const STATIC_DESTINATION_PATHS: Partial<Record<NavigationDestination, string>> =
   recipes_library: "/dashboard/templates/receitas",
   tasks: "/dashboard/tarefas",
   financeiro: "/dashboard/financeiro",
+  opportunities: "/dashboard/oportunidades",
 };
 
 /**
