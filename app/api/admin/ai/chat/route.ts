@@ -58,8 +58,22 @@ import {
 } from "@/lib/ai/blog-creation-assistant";
 import { DIET_REVIEW_ASSISTANT_INSTRUCTIONS, buildActiveMealPlanContext } from "@/lib/ai/diet-review-assistant";
 import { ALLOWED_ATTACHMENT_MEDIA_TYPES, MAX_ATTACHMENT_BASE64_LENGTH } from "@/lib/ai/chat-attachments";
+import {
+  APPOINTMENT_ASSISTANT_INSTRUCTIONS,
+  PROPOSE_NEW_APPOINTMENT_TOOL_NAME,
+  buildUpcomingAppointmentsContext,
+  proposeNewAppointmentInputSchema,
+  type ProposeNewAppointmentInput,
+} from "@/lib/ai/appointment-assistant";
+import {
+  PROPOSE_NEW_TASK_TOOL_NAME,
+  TASK_ASSISTANT_INSTRUCTIONS,
+  proposeNewClientTaskInputSchema,
+  type ProposeNewClientTaskInput,
+} from "@/lib/ai/task-assistant";
 import { DEFAULT_CHAT_SYSTEM_PROMPT, getAISettings } from "@/lib/repositories/ai-settings";
 import { getAdminFromRequest } from "@/lib/auth/session";
+import { getAppointments } from "@/lib/repositories/appointments";
 import { getClientById } from "@/lib/repositories/clients";
 import { getClientProtocols } from "@/lib/repositories/client-protocols";
 import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
@@ -204,6 +218,21 @@ export async function POST(req: NextRequest) {
           execute: async (input: { clientProtocolId: string; professionalNotes: string }) => input,
         };
       }
+
+      const appointments = await getAppointments({ clientId: client.id });
+      systemPromptParts.push(APPOINTMENT_ASSISTANT_INSTRUCTIONS, buildUpcomingAppointmentsContext(appointments));
+      tools[PROPOSE_NEW_APPOINTMENT_TOOL_NAME] = {
+        description: "Registra uma proposta de nova consulta na agenda para o cliente atual, para revisao humana antes de criar de verdade.",
+        inputSchema: proposeNewAppointmentInputSchema,
+        execute: async (input: ProposeNewAppointmentInput) => input,
+      };
+
+      systemPromptParts.push(TASK_ASSISTANT_INSTRUCTIONS);
+      tools[PROPOSE_NEW_TASK_TOOL_NAME] = {
+        description: "Registra uma proposta de tarefa de acompanhamento para o cliente atual, para revisao humana antes de criar de verdade.",
+        inputSchema: proposeNewClientTaskInputSchema,
+        execute: async (input: ProposeNewClientTaskInput) => input,
+      };
     }
 
     if (submission) {
@@ -252,6 +281,8 @@ export async function POST(req: NextRequest) {
       || call.toolName === PROPOSE_NEW_RECIPE_TOOL_NAME
       || call.toolName === PROPOSE_NEW_PROTOCOL_TOOL_NAME
       || call.toolName === PROPOSE_NEW_BLOG_POST_TOOL_NAME
+      || call.toolName === PROPOSE_NEW_APPOINTMENT_TOOL_NAME
+      || call.toolName === PROPOSE_NEW_TASK_TOOL_NAME
     );
     const navigateCall = result.toolCalls?.find((call) => call.toolName === NAVIGATE_TOOL_NAME);
     const navigateResult = navigateCall ? await resolveNavigationPath(navigateCall.input as NavigateInput) : null;
@@ -328,6 +359,38 @@ export async function POST(req: NextRequest) {
             tags: (input.tags ?? []).join(", "),
             seo_title: input.seo_title ?? "",
             seo_description: input.seo_description ?? "",
+          },
+        };
+      }
+    }
+
+    if (proposalCall?.toolName === PROPOSE_NEW_APPOINTMENT_TOOL_NAME && client) {
+      const input = proposalCall.input as ProposeNewAppointmentInput;
+      if (input.title && input.starts_at_display) {
+        proposedUpdate = {
+          kind: "new_appointment",
+          clientId: client.id,
+          fields: {
+            title: input.title,
+            appointment_type: input.appointment_type,
+            starts_at_display: input.starts_at_display,
+            location: input.location ?? "",
+            notes: input.notes ?? "",
+          },
+        };
+      }
+    }
+
+    if (proposalCall?.toolName === PROPOSE_NEW_TASK_TOOL_NAME && client) {
+      const input = proposalCall.input as ProposeNewClientTaskInput;
+      if (input.title) {
+        proposedUpdate = {
+          kind: "new_task",
+          clientId: client.id,
+          fields: {
+            title: input.title,
+            description: input.description ?? "",
+            due_date_display: input.due_date_display ?? "",
           },
         };
       }

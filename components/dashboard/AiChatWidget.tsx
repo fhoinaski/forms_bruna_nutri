@@ -60,6 +60,44 @@ const NEW_BLOG_POST_FIELD_LABELS: Record<string, string> = {
   seo_description: "Descrição SEO",
 };
 
+const NEW_APPOINTMENT_FIELD_LABELS: Record<string, string> = {
+  title: "Título",
+  appointment_type: "Tipo",
+  starts_at_display: "Data e hora (DD/MM/AAAA HH:mm)",
+  location: "Local ou link",
+  notes: "Observações",
+};
+
+const NEW_TASK_FIELD_LABELS: Record<string, string> = {
+  title: "Título",
+  description: "Descrição",
+  due_date_display: "Prazo (DD/MM/AAAA)",
+};
+
+const APPLIED_MESSAGES: Partial<Record<ChatProposal["kind"], string>> = {
+  new_client: "Cliente cadastrado. Abrindo a ficha...",
+  new_recipe: "Receita salva na biblioteca. Abrindo a lista...",
+  new_protocol: "Protocolo criado.",
+  new_blog_post: "Rascunho salvo no blog. Abrindo a lista...",
+  new_appointment: "Consulta agendada.",
+  new_task: "Tarefa criada.",
+};
+
+function parseBrDateTimeToIso(text: string): string | null {
+  const match = text.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const [, day, month, year, hour, minute] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function parseBrDateToIsoDate(text: string): string | null {
+  const match = text.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const [, day, month, year] = match;
+  return `${year}-${month}-${day}`;
+}
+
 type ChatProposal =
   | { kind: "nutrition_record"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
   | { kind: "pre_analysis"; submissionId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
@@ -67,7 +105,9 @@ type ChatProposal =
   | { kind: "new_client"; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
   | { kind: "new_recipe"; title: string; applyLabel: string; fields: ProposedField[]; ingredients: ProposedRecipeIngredient[]; status: ProposalStatus; error?: string }
   | { kind: "new_protocol"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
-  | { kind: "new_blog_post"; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string };
+  | { kind: "new_blog_post"; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
+  | { kind: "new_appointment"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
+  | { kind: "new_task"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string };
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -183,6 +223,38 @@ function buildProposal(update: Record<string, unknown>): ChatProposal | null {
       fields: Object.entries(fields).filter(([, value]) => value).map(([key, value]) => ({
         key,
         label: NEW_BLOG_POST_FIELD_LABELS[key] ?? key,
+        value,
+        included: true,
+      })),
+    };
+  }
+  if (update.kind === "new_appointment") {
+    const fields = update.fields as Record<string, string>;
+    return {
+      kind: "new_appointment",
+      clientId: update.clientId as string,
+      title: "Proposta de nova consulta",
+      applyLabel: "Agendar consulta",
+      status: "pending",
+      fields: Object.entries(fields).filter(([, value]) => value).map(([key, value]) => ({
+        key,
+        label: NEW_APPOINTMENT_FIELD_LABELS[key] ?? key,
+        value,
+        included: true,
+      })),
+    };
+  }
+  if (update.kind === "new_task") {
+    const fields = update.fields as Record<string, string>;
+    return {
+      kind: "new_task",
+      clientId: update.clientId as string,
+      title: "Proposta de nova tarefa",
+      applyLabel: "Criar tarefa",
+      status: "pending",
+      fields: Object.entries(fields).filter(([, value]) => value).map(([key, value]) => ({
+        key,
+        label: NEW_TASK_FIELD_LABELS[key] ?? key,
         value,
         included: true,
       })),
@@ -466,6 +538,54 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
         router.push("/dashboard/blog");
       }
 
+      if (proposal.kind === "new_appointment") {
+        const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
+        const title = byKey("title");
+        const startsAtDisplay = byKey("starts_at_display");
+        if (!title?.trim() || !startsAtDisplay?.trim()) throw new Error("Título e data/hora são obrigatórios para agendar a consulta.");
+        const startsAtIso = parseBrDateTimeToIso(startsAtDisplay);
+        if (!startsAtIso) throw new Error("Data e hora inválidas. Use o formato DD/MM/AAAA HH:mm.");
+        const response = await fetch("/api/admin/appointments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: proposal.clientId,
+            title,
+            appointment_type: byKey("appointment_type") || "consulta",
+            starts_at: startsAtIso,
+            location: byKey("location") || null,
+            notes: byKey("notes") || null,
+            status: "agendado",
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Não foi possível agendar a consulta.");
+        if (context?.clientId === proposal.clientId) router.refresh();
+      }
+
+      if (proposal.kind === "new_task") {
+        const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
+        const title = byKey("title");
+        if (!title?.trim()) throw new Error("O título é obrigatório para criar a tarefa.");
+        const dueDateDisplay = byKey("due_date_display");
+        const dueDate = dueDateDisplay ? parseBrDateToIsoDate(dueDateDisplay) : null;
+        if (dueDateDisplay && !dueDate) throw new Error("Prazo inválido. Use o formato DD/MM/AAAA.");
+        const response = await fetch("/api/admin/client-tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: proposal.clientId,
+            title,
+            description: byKey("description") || null,
+            due_date: dueDate,
+            status: "pendente",
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Não foi possível criar a tarefa.");
+        if (context?.clientId === proposal.clientId) router.refresh();
+      }
+
       updateProposal(messageIndex, (current) => ({ ...current, status: "applied" }));
     } catch (cause) {
       updateProposal(messageIndex, (current) => ({
@@ -516,15 +636,15 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
               <div className="space-y-3">
                 <p className="text-sm leading-6 text-[#75675E]">
                   {context?.clientId
-                    ? `Olá! Posso te ajudar a usar o sistema, organizar o prontuário, revisar o plano alimentar, criar um protocolo novo e atualizar notas de protocolo de ${clientName || "este cliente"}. Descreva o caso, anexe um exame em PDF ou imagem se ajudar, e eu monto uma proposta — você revisa e confirma antes de qualquer coisa ser salva.`
+                    ? `Olá! Posso te ajudar a usar o sistema, organizar o prontuário, revisar o plano alimentar, criar um protocolo novo, marcar consultas, criar tarefas e atualizar notas de protocolo de ${clientName || "este cliente"}. Descreva o caso, anexe um exame em PDF ou imagem se ajudar, e eu monto uma proposta — você revisa e confirma antes de qualquer coisa ser salva.`
                     : context?.submissionId
                       ? "Olá! Posso te ajudar a usar o sistema e também a montar a pré-análise deste formulário a partir das respostas do paciente. Peça um resumo do caso e eu monto uma proposta — você revisa e confirma antes de salvar."
-                      : "Olá! Posso explicar como usar o sistema, te levar direto para onde você precisa, cadastrar um paciente novo, criar uma receita na biblioteca e até escrever um rascunho de post pro blog — diga algo como \"vou atender a Fulana agora\", \"abre o cliente Beltrano\", \"cria uma receita baixa caloria para emagrecimento\" ou \"escreve um post sobre alimentação saudável\". Não dou orientação clínica."}
+                      : "Olá! Posso explicar como usar o sistema, te levar direto para onde você precisa (inclusive já numa aba específica da ficha), cadastrar um paciente novo, criar uma receita na biblioteca e até escrever um rascunho de post pro blog — diga algo como \"abre a antropometria do Beltrano\", \"cria uma receita baixa caloria para emagrecimento\" ou \"escreve um post sobre alimentação saudável\". Não dou orientação clínica."}
                 </p>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">Perguntas rápidas</p>
                 <div className="flex flex-wrap gap-2">
                   {(context?.clientId
-                    ? ["Preencher o prontuário com base no que vou descrever agora", "Criar um protocolo novo para esse cliente", "Atualizar as notas do protocolo atual", ...SUGGESTED_CHAT_PROMPTS]
+                    ? ["Preencher o prontuário com base no que vou descrever agora", "Marcar uma consulta para esse cliente", "Criar um protocolo novo para esse cliente", "Atualizar as notas do protocolo atual", ...SUGGESTED_CHAT_PROMPTS]
                     : context?.submissionId
                       ? ["Montar um resumo de pré-análise com base nas respostas", ...SUGGESTED_CHAT_PROMPTS]
                       : ["Abrir a ficha de um cliente pelo nome", "Cadastrar um novo paciente", "Criar uma receita baixa caloria para emagrecimento", "Escrever um rascunho de post pro blog", ...SUGGESTED_CHAT_PROMPTS]
@@ -672,15 +792,7 @@ function ProposalCard({ proposal, onToggleField, onEditField, onDiscard, onApply
     return (
       <p className="flex items-center gap-1.5 rounded-xl border border-[#D9E4D3] bg-[#F4F8F1] px-3 py-2 text-xs font-semibold text-[#4F6847]">
         <Check className="h-3.5 w-3.5" />
-        {proposal.kind === "new_client"
-          ? "Cliente cadastrado. Abrindo a ficha..."
-          : proposal.kind === "new_recipe"
-            ? "Receita salva na biblioteca. Abrindo a lista..."
-            : proposal.kind === "new_protocol"
-              ? "Protocolo criado."
-              : proposal.kind === "new_blog_post"
-                ? "Rascunho salvo no blog. Abrindo a lista..."
-                : "Alterações salvas com os campos selecionados."}
+        {APPLIED_MESSAGES[proposal.kind] ?? "Alterações salvas com os campos selecionados."}
       </p>
     );
   }
