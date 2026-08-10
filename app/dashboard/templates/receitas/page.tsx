@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Archive, Edit3, Eye, Plus, Save, Search, Sparkles, Trash2, Utensils, X } from "lucide-react";
 import { HelpPopover } from "@/components/dashboard/HelpPopover";
+import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 
 type RecipeIngredient = {
@@ -194,11 +195,10 @@ export default function RecipesPage() {
     }
   }
 
-  async function suggestRecipeIngredients(currentForm: RecipeForm) {
+  async function suggestRecipeIngredients(currentForm: RecipeForm, instructions: string) {
     setAiSuggesting(true);
     setError("");
     try {
-      const instructions = window.prompt("Pedido opcional para a IA (ex: mais proteina, sem laticinio):") ?? "";
       const response = await fetch("/api/admin/ai/suggest-meal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -222,7 +222,8 @@ export default function RecipesPage() {
           grams: Number(String(item.quantity).replace(",", ".").match(/[\d.]+/)?.[0] ?? 100),
           ai_suggested: true,
         })),
-        source_note: "Ingredientes sugeridos por IA a partir da TACO. Revisar preparo, porcao e adequacao antes de salvar.",
+        preparation_steps: suggested.notes || currentForm.preparation_steps,
+        source_note: "Ingredientes e modo de preparo sugeridos por IA a partir da TACO. Revisar preparo, porcao e adequacao antes de salvar.",
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Nao foi possivel sugerir ingredientes.");
@@ -356,7 +357,7 @@ export default function RecipesPage() {
           setForm={setForm}
           onClose={() => setForm(null)}
           onSave={() => void saveRecipe()}
-          onSuggest={() => void suggestRecipeIngredients(form)}
+          onSuggest={(instructions) => void suggestRecipeIngredients(form, instructions)}
         />,
         document.body
       )}
@@ -462,8 +463,9 @@ function RecipeModal({ form, error, saving, aiEnabled, aiSuggesting, setForm, on
   setForm: (form: RecipeForm | null) => void;
   onClose: () => void;
   onSave: () => void;
-  onSuggest: () => void;
+  onSuggest: (instructions: string) => void;
 }) {
+  const [aiModalOpen, setAiModalOpen] = useState(false);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
       <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
@@ -473,7 +475,7 @@ function RecipeModal({ form, error, saving, aiEnabled, aiSuggesting, setForm, on
             <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Receita da biblioteca</h2>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={onSuggest} disabled={!aiEnabled || aiSuggesting || !form.title.trim()} title={aiEnabled ? "Sugerir ingredientes com IA" : "Configure a IA em Dashboard > Inteligencia artificial"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#EAD8C2] px-3 text-xs font-semibold text-[#8C5F50] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={() => setAiModalOpen(true)} disabled={!aiEnabled || aiSuggesting || !form.title.trim()} title={aiEnabled ? "Sugerir ingredientes com IA" : "Configure a IA em Dashboard > Inteligencia artificial"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#EAD8C2] px-3 text-xs font-semibold text-[#8C5F50] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
               <Sparkles className="h-4 w-4" />
               {aiSuggesting ? "Sugerindo..." : "Sugerir com IA"}
             </button>
@@ -528,6 +530,15 @@ function RecipeModal({ form, error, saving, aiEnabled, aiSuggesting, setForm, on
           <button type="button" onClick={onSave} disabled={saving || !form.title.trim()} className="brand-btn-primary w-full sm:w-auto"><Save className="h-4 w-4" />{saving ? "Salvando..." : "Salvar receita"}</button>
         </div>
       </section>
+      <AiInstructionsModal
+        open={aiModalOpen}
+        description="Deixe em branco para uma sugestão livre, ou descreva um pedido (ex.: mais proteína, sem laticínio)."
+        onCancel={() => setAiModalOpen(false)}
+        onSubmit={(instructions) => {
+          setAiModalOpen(false);
+          onSuggest(instructions);
+        }}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Beef, Flame, Plus, Save, Sparkles, Trash2, Utensils, Wheat } from "lucide-react";
 import { estimateFoodMacros, roundedMacros, sumMacros, type MacroReferenceFood } from "@/lib/nutrition/macros";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
+import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
 
 export type MealItem = {
   food: string;
@@ -104,6 +105,7 @@ export function MealItemsEditor({
   const [recipeDraft, setRecipeDraft] = useState<RecipeDraft | null>(null);
   const [recipeSaving, setRecipeSaving] = useState(false);
   const [aiLoadingMeal, setAiLoadingMeal] = useState<number | null>(null);
+  const [aiModalMealIndex, setAiModalMealIndex] = useState<number | null>(null);
   const [portalReady, setPortalReady] = useState(false);
 
   useEffect(() => {
@@ -351,9 +353,9 @@ export function MealItemsEditor({
     }
   }
 
-  async function suggestMealWithAi(mealIndex: number) {
+  async function suggestMealWithAi(mealIndex: number, instructions: string) {
     const meal = meals[mealIndex];
-    const instructions = window.prompt("Pedido opcional para a IA (ex: menos carboidrato, sem laticinio):") ?? "";
+    setAiModalMealIndex(null);
     setAiLoadingMeal(mealIndex);
     onError?.("");
     onMessage?.("");
@@ -421,7 +423,7 @@ export function MealItemsEditor({
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2 self-end sm:self-auto">
-              <button type="button" onClick={() => void suggestMealWithAi(mealIndex)} disabled={!aiEnabled || aiLoadingMeal === mealIndex} title={aiEnabled ? "Sugerir itens com IA" : "Configure a IA em Dashboard > Inteligencia artificial"} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#8C5F50] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={() => setAiModalMealIndex(mealIndex)} disabled={!aiEnabled || aiLoadingMeal === mealIndex} title={aiEnabled ? "Sugerir itens com IA" : "Configure a IA em Dashboard > Inteligencia artificial"} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#8C5F50] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
                 <Sparkles className="h-4 w-4" />
                 {aiLoadingMeal === mealIndex ? "Sugerindo..." : "Sugerir com IA"}
               </button>
@@ -603,6 +605,15 @@ export function MealItemsEditor({
         </div>,
         document.body
       )}
+
+      <AiInstructionsModal
+        open={aiModalMealIndex !== null}
+        description="Deixe em branco para uma sugestão livre, ou descreva um pedido (ex.: menos carboidrato, sem laticínio)."
+        onCancel={() => setAiModalMealIndex(null)}
+        onSubmit={(instructions) => {
+          if (aiModalMealIndex !== null) void suggestMealWithAi(aiModalMealIndex, instructions);
+        }}
+      />
     </div>
   );
 }

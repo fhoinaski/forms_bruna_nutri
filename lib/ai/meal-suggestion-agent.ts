@@ -59,6 +59,9 @@ function buildPrompt(input: AiMealSuggestionContext) {
     input.context === "recipe"
       ? "Para receita nova, use apenas source taco nos ingredientes; nao use source recipe como ingrediente de receita."
       : "Pode usar source recipe quando uma receita da biblioteca for adequada.",
+    input.context === "recipe"
+      ? "No campo notes da refeicao, escreva o modo de preparo em passo a passo numerado, cobrindo pre-preparo, cozimento e montagem."
+      : "",
     "Use as ferramentas para buscar alimentos/receitas antes de escolher IDs.",
     "Retorne somente JSON valido, sem markdown, no formato:",
     requestedShape,
@@ -130,12 +133,14 @@ export async function suggestMealWithAI(input: AiMealSuggestionContext): Promise
     throw new Error("IA nao configurada. Configure a chave em Dashboard > Inteligencia artificial.");
   }
 
+  const isFullDayTemplate = context.context === "template";
+
   const result = await generateText({
     model: createConfiguredModel(settings),
     system: DEFAULT_MEAL_SUGGESTION_SYSTEM_PROMPT,
     prompt: buildPrompt(context),
-    stopWhen: stepCountIs(5),
-    maxOutputTokens: 2500,
+    stopWhen: stepCountIs(isFullDayTemplate ? 12 : 5),
+    maxOutputTokens: isFullDayTemplate ? 6000 : 2500,
     tools: {
       searchTacoFoods: {
         description: "Busca alimentos reais na tabela TACO. Use os numeros retornados como id quando escolher source taco.",
@@ -176,7 +181,17 @@ export async function suggestMealWithAI(input: AiMealSuggestionContext): Promise
     },
   });
 
-  const output = parseAiMealSuggestionJson(result.text);
+  let output: AiMealSuggestionOutput;
+  try {
+    output = parseAiMealSuggestionJson(result.text);
+  } catch {
+    throw new Error(
+      isFullDayTemplate
+        ? "A IA nao conseguiu gerar o modelo completo dessa vez. Tente novamente ou peca menos refeicoes por vez."
+        : "A IA nao conseguiu gerar uma sugestao dessa vez. Tente novamente ou simplifique o pedido."
+    );
+  }
+
   return {
     ...output,
     resolvedMeals: await resolveAndValidate(output, context),

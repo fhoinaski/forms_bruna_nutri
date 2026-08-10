@@ -7,6 +7,7 @@ import { Archive, BookOpenText, CheckCircle2, Edit3, Eye, Filter, LibraryBig, Pl
 import { HelpPopover } from "@/components/dashboard/HelpPopover";
 import { EditableList } from "@/components/dashboard/MealPlanEditor";
 import { MealItemsEditor, cleanMealsForSave, emptyMeal, type Meal } from "@/components/dashboard/MealItemsEditor";
+import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
   PROTOCOL_TEMPLATE_TARGET_GROUPS,
@@ -94,6 +95,52 @@ function legacyMealFallback(content: string): Meal[] {
         }).filter((item) => item.food.trim()),
       };
     }).filter((meal) => meal.items.length);
+  } catch {
+    return [];
+  }
+}
+
+function legacySubstitutionFallback(content: string): Substitution[] {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    const groups = parsed.grupos;
+    if (!Array.isArray(groups)) return [];
+    return groups.flatMap((group) => {
+      const row = group as Record<string, unknown>;
+      const base = row.base as Record<string, unknown> | undefined;
+      const baseFood = String(base?.alimento ?? base?.food ?? "");
+      const options = Array.isArray(row.opcoes) ? row.opcoes : [];
+      return options.map((option) => {
+        const data = option as Record<string, unknown>;
+        return {
+          base_food: baseFood,
+          option_food: String(data.alimento ?? data.food ?? ""),
+          quantity: data.quantidade === undefined ? "" : String(data.quantidade),
+          unit: data.unidade === undefined ? "" : String(data.unidade),
+          notes: "",
+        };
+      });
+    }).filter((item) => item.base_food.trim() && item.option_food.trim());
+  } catch {
+    return [];
+  }
+}
+
+function legacySupplementFallback(content: string): Supplement[] {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    const supplements = parsed.suplementos;
+    if (!Array.isArray(supplements)) return [];
+    return supplements.map((item) => {
+      const data = item as Record<string, unknown>;
+      return {
+        name: String(data.nome ?? data.name ?? ""),
+        dosage: data.dosagem === undefined ? "" : String(data.dosagem),
+        unit: data.unidade === undefined ? "" : String(data.unidade),
+        instructions: String(data.indicacao ?? data.instructions ?? ""),
+        notes: "",
+      };
+    }).filter((item) => item.name.trim());
   } catch {
     return [];
   }
@@ -242,7 +289,12 @@ export default function ProtocolTemplatesPage() {
     setForm(null);
     try {
       const detail = await loadTemplateDetail(template);
-      setViewTemplate({ ...detail, meals: detail.meals.length ? detail.meals : legacyMealFallback(detail.content) });
+      setViewTemplate({
+        ...detail,
+        meals: detail.meals.length ? detail.meals : legacyMealFallback(detail.content),
+        substitutions: detail.substitutions.length ? detail.substitutions : legacySubstitutionFallback(detail.content),
+        supplements: detail.supplements.length ? detail.supplements : legacySupplementFallback(detail.content),
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Nao foi possivel carregar o modelo.");
     }
@@ -261,8 +313,8 @@ export default function ProtocolTemplatesPage() {
         target_group: detail.target_group,
         notes: detail.notes ?? "",
         meals: detail.meals.length ? detail.meals : legacyMealFallback(detail.content),
-        substitutions: detail.substitutions,
-        supplements: detail.supplements,
+        substitutions: detail.substitutions.length ? detail.substitutions : legacySubstitutionFallback(detail.content),
+        supplements: detail.supplements.length ? detail.supplements : legacySupplementFallback(detail.content),
         is_active: Boolean(detail.is_active),
       });
     } catch (cause) {
@@ -310,12 +362,11 @@ export default function ProtocolTemplatesPage() {
     }
   }
 
-  async function suggestDietTemplate(currentForm: TemplateForm) {
+  async function suggestDietTemplate(currentForm: TemplateForm, instructions: string) {
     setAiSuggesting(true);
     setError("");
     setMessage("");
     try {
-      const instructions = window.prompt("Pedido opcional para a IA (ex: mais pratico, sem laticinio):") ?? "";
       const response = await fetch("/api/admin/ai/suggest-meal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -461,7 +512,7 @@ export default function ProtocolTemplatesPage() {
           setForm={setForm}
           onClose={() => setForm(null)}
           onSave={() => void saveTemplate()}
-          onSuggest={() => void suggestDietTemplate(form)}
+          onSuggest={(instructions) => void suggestDietTemplate(form, instructions)}
           onMessage={setMessage}
           onError={setError}
         />,
@@ -549,10 +600,11 @@ function TemplateEditModal({ form, saving, aiEnabled, aiSuggesting, error, setFo
   setForm: (form: TemplateForm | null) => void;
   onClose: () => void;
   onSave: () => void;
-  onSuggest: () => void;
+  onSuggest: (instructions: string) => void;
   onMessage: (message: string) => void;
   onError: (message: string) => void;
 }) {
+  const [aiModalOpen, setAiModalOpen] = useState(false);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
       <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
@@ -562,7 +614,7 @@ function TemplateEditModal({ form, saving, aiEnabled, aiSuggesting, error, setFo
             <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Modelo de {PROTOCOL_TEMPLATE_TYPE_LABELS[form.type].toLowerCase()}</h2>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={onSuggest} disabled={!aiEnabled || aiSuggesting || form.type !== "DIETA"} title={aiEnabled ? "Sugerir modelo com IA" : "Configure a IA em Dashboard > Inteligencia artificial"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#EAD8C2] px-3 text-xs font-semibold text-[#8C5F50] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={() => setAiModalOpen(true)} disabled={!aiEnabled || aiSuggesting || form.type !== "DIETA"} title={aiEnabled ? "Sugerir modelo com IA" : "Configure a IA em Dashboard > Inteligencia artificial"} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#EAD8C2] px-3 text-xs font-semibold text-[#8C5F50] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
               <Sparkles className="h-4 w-4" />
               {aiSuggesting ? "Sugerindo..." : "Sugerir com IA"}
             </button>
@@ -653,6 +705,15 @@ function TemplateEditModal({ form, saving, aiEnabled, aiSuggesting, error, setFo
           </button>
         </div>
       </section>
+      <AiInstructionsModal
+        open={aiModalOpen}
+        description="Deixe em branco para uma sugestão livre, ou descreva um pedido (ex.: mais prático, sem laticínio)."
+        onCancel={() => setAiModalOpen(false)}
+        onSubmit={(instructions) => {
+          setAiModalOpen(false);
+          onSuggest(instructions);
+        }}
+      />
     </div>
   );
 }
