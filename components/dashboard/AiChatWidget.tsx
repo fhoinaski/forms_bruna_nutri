@@ -153,7 +153,7 @@ type ChatProposal =
   | { kind: "new_recipe"; title: string; applyLabel: string; fields: ProposedField[]; ingredients: ProposedRecipeIngredient[]; status: ProposalStatus; error?: string }
   | { kind: "new_protocol"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
   | { kind: "new_blog_post"; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
-  | { kind: "new_appointment"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
+  | { kind: "new_appointment"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string; proposalId?: string; expiresAt?: string }
   | { kind: "new_task"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string };
 
 type ChatMessage = {
@@ -283,6 +283,8 @@ function buildProposal(update: Record<string, unknown>): ChatProposal | null {
       title: "Proposta de nova consulta",
       applyLabel: "Agendar consulta",
       status: "pending",
+      proposalId: update.proposalId as string | undefined,
+      expiresAt: update.expiresAt as string | undefined,
       fields: Object.entries(fields).filter(([, value]) => value).map(([key, value]) => ({
         key,
         label: NEW_APPOINTMENT_FIELD_LABELS[key] ?? key,
@@ -601,28 +603,45 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
       }
 
       if (proposal.kind === "new_appointment") {
-        const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
-        const title = byKey("title");
-        const startsAtDisplay = byKey("starts_at_display");
-        if (!title?.trim() || !startsAtDisplay?.trim()) throw new Error("Título e data/hora são obrigatórios para agendar a consulta.");
-        const startsAtIso = parseBrDateTimeToIso(startsAtDisplay);
-        if (!startsAtIso) throw new Error("Data e hora inválidas. Use o formato DD/MM/AAAA HH:mm.");
-        const response = await fetch("/api/admin/appointments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            client_id: proposal.clientId,
-            title,
-            appointment_type: byKey("appointment_type") || "consulta",
-            starts_at: startsAtIso,
-            location: byKey("location") || null,
-            notes: byKey("notes") || null,
-            status: "agendado",
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message ?? "Não foi possível agendar a consulta.");
-        if (context?.clientId === proposal.clientId) router.refresh();
+        if (proposal.proposalId) {
+          // Proposta persistida server-side: o corpo da confirmacao vai
+          // vazio de proposito — o servidor usa exclusivamente os
+          // parametros gravados no momento da proposta (nunca o que esta
+          // editavel na tela), revalida o horario contra conflitos reais e
+          // so entao cria a consulta. Isso impede replay (a proposta so
+          // pode ser confirmada uma vez) e impede que o horario proposto
+          // seja trocado depois de gerado.
+          const response = await fetch(`/api/admin/ai/proposals/${proposal.proposalId}/confirm`, {
+            method: "POST",
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.message ?? "Não foi possível agendar a consulta.");
+          if (context?.clientId === proposal.clientId) router.refresh();
+        } else {
+          // Compatibilidade: proposta sem id persistido (formato legado).
+          const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
+          const title = byKey("title");
+          const startsAtDisplay = byKey("starts_at_display");
+          if (!title?.trim() || !startsAtDisplay?.trim()) throw new Error("Título e data/hora são obrigatórios para agendar a consulta.");
+          const startsAtIso = parseBrDateTimeToIso(startsAtDisplay);
+          if (!startsAtIso) throw new Error("Data e hora inválidas. Use o formato DD/MM/AAAA HH:mm.");
+          const response = await fetch("/api/admin/appointments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              client_id: proposal.clientId,
+              title,
+              appointment_type: byKey("appointment_type") || "consulta",
+              starts_at: startsAtIso,
+              location: byKey("location") || null,
+              notes: byKey("notes") || null,
+              status: "agendado",
+            }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.message ?? "Não foi possível agendar a consulta.");
+          if (context?.clientId === proposal.clientId) router.refresh();
+        }
       }
 
       if (proposal.kind === "new_task") {
@@ -860,21 +879,31 @@ function ProposalCard({ proposal, onToggleField, onEditField, onDiscard, onApply
   }
 
   const applying = proposal.status === "applying";
+  // Propostas persistidas server-side (hoje, so new_appointment) sao
+  // confirmadas usando apenas os parametros gravados no momento da
+  // proposta — editar o texto aqui nao mudaria o que e de fato criado, entao
+  // os campos ficam somente para revisao, nao para edicao.
+  const isServerLockedProposal = proposal.kind === "new_appointment" && Boolean(proposal.proposalId);
 
   return (
     <div className="max-w-[92%] space-y-3 rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-3">
       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">{proposal.title} — revise antes de aplicar</p>
+      {isServerLockedProposal && (
+        <p className="rounded-lg bg-[#FBF7F1] px-2.5 py-1.5 text-[11px] leading-4 text-[#8A7B70]">
+          Estes dados foram validados pelo servidor e não podem ser editados aqui. Se algo estiver errado, descarte e peça de novo.
+        </p>
+      )}
       <div className="space-y-3">
         {proposal.fields.map((field) => (
           <label key={field.key} className="block">
             <span className="mb-1 flex items-center gap-2 text-xs font-semibold text-[#3A3028]">
-              <input type="checkbox" checked={field.included} onChange={() => onToggleField(field.key)} className="h-3.5 w-3.5 accent-[#7F9A74]" />
+              <input type="checkbox" checked={field.included} onChange={() => onToggleField(field.key)} disabled={isServerLockedProposal} className="h-3.5 w-3.5 accent-[#7F9A74]" />
               {field.label}
             </span>
             <textarea
               value={field.value}
               onChange={(event) => onEditField(field.key, event.target.value)}
-              disabled={!field.included || applying}
+              disabled={!field.included || applying || isServerLockedProposal}
               className={`w-full resize-y rounded-lg border border-[#EDE1D6] bg-white px-2 py-1.5 text-xs leading-5 text-[#3A3028] outline-none focus:border-[#7F9A74] disabled:opacity-50 ${field.key === "content_markdown" ? "min-h-56" : "min-h-16"}`}
             />
           </label>

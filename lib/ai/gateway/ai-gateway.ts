@@ -69,6 +69,8 @@ export interface GenerateOptions extends AiGatewayCallContext {
   tools?: ToolSet;
   stopWhen?: StopCondition<ToolSet> | StopCondition<ToolSet>[];
   maxOutputTokens?: number;
+  /** Tempo maximo (ms) para o turno inteiro, incluindo todas as etapas de tool-calling. */
+  timeoutMs?: number;
 }
 
 export type GenerateResult = Awaited<ReturnType<typeof generateText>>;
@@ -85,6 +87,7 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
       tools: options.tools,
       stopWhen: options.stopWhen,
       maxOutputTokens: options.maxOutputTokens ?? 4096,
+      abortSignal: options.timeoutMs ? AbortSignal.timeout(options.timeoutMs) : undefined,
     });
     await logUsage(options, {
       settings,
@@ -94,7 +97,10 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
     });
     return result;
   } catch (cause) {
-    const message = cause instanceof Error ? cause.message : "Falha ao chamar o provedor de IA.";
+    const isTimeout = cause instanceof Error && cause.name === "TimeoutError";
+    const message = isTimeout
+      ? "O assistente demorou demais para responder. Tente novamente com um pedido mais simples ou dividido em partes."
+      : cause instanceof Error ? cause.message : "Falha ao chamar o provedor de IA.";
     await logUsage(options, { settings, durationMs: Date.now() - startedAt, success: false, errorMessage: message });
     if (cause instanceof AiConfigError) throw cause;
     throw new AiProviderError(message, cause);

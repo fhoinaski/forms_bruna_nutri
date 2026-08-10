@@ -12,6 +12,10 @@ const toolRiskSchema = z.enum(["read", "low", "sensitive", "clinical"]);
 const actionEnvelopeFields = {
   risk: toolRiskSchema,
   requiresConfirmation: z.boolean(),
+  /** Id da proposta persistida server-side (lib/ai/core/proposal-store.ts) — anexado apos a criacao, nao pelo builder. */
+  proposalId: z.string().optional(),
+  /** ISO datetime — a proposta nao pode mais ser confirmada apos esse instante. */
+  expiresAt: z.string().optional(),
 };
 
 const textFieldsSchema = z.record(z.string(), z.string());

@@ -1,8 +1,9 @@
-import { stepCountIs, type ModelMessage } from "ai";
+import { hasToolCall, stepCountIs, type ModelMessage, type StopCondition, type ToolSet } from "ai";
 import { generate } from "@/lib/ai/gateway/ai-gateway";
 import type { AssistantContext } from "@/lib/ai/core/ai-context";
-import type { AssistantResponseEnvelope } from "@/lib/ai/core/ai-response";
-import { buildToolSet } from "@/lib/ai/tools/registry";
+import type { AssistantOption, AssistantResponseEnvelope, WorkflowPlanSummary } from "@/lib/ai/core/ai-response";
+import { persistProposedAction } from "@/lib/ai/core/proposal-store";
+import { buildToolSet, listRegisteredTools } from "@/lib/ai/tools/registry";
 import { buildProposedAction, PROPOSAL_TOOL_NAMES } from "@/lib/ai/tools/proposal-builders";
 import type { ProposedAction } from "@/lib/ai/schemas/action.schema";
 import { getClientConversationMemory, recordConversationTurn } from "@/lib/ai/memory/conversation-summary";
@@ -46,6 +47,18 @@ import {
   PROPOSE_PRE_ANALYSIS_TOOL_NAME,
   buildPreAnalysisContext,
 } from "@/lib/ai/pre-analysis-assistant";
+import {
+  GET_PATIENTS_WITH_PENDENCIES_TOOL_NAME,
+  SCHEDULE_LOOKUP_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/appointments/schedule-lookup-agent";
+import {
+  GET_CLIENT_EVOLUTION_SUMMARY_TOOL_NAME,
+  EVOLUTION_SUMMARY_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/clinical/evolution-summary-agent";
+import {
+  GET_AVAILABLE_SLOTS_TOOL_NAME,
+  AVAILABILITY_LOOKUP_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/appointments/availability-lookup-agent";
 import type { AllowedAttachmentMediaType } from "@/lib/ai/agents/system/chat-attachments";
 import { getNutritionRecord } from "@/lib/repositories/nutrition-records";
 import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
@@ -61,11 +74,63 @@ import { getPreAnalysisBySubmissionId } from "@/lib/repositories/pre-analyses";
  * mapeia o envelope para o shape que o frontend ja consome.
  *
  * O "orquestrador" nao e um motor de agentes proprio — o encadeamento
- * multi-etapa (achar cliente → checar agenda → propor consulta) continua
- * sendo o tool-calling nativo do AI SDK dentro de uma unica chamada
- * (`stopWhen: stepCountIs(4)`), so que agora com tools vindas do registry
- * central e risco/confirmacao resolvidos pela politica central.
+ * multi-etapa (achar cliente → checar agenda/evolucao/disponibilidade →
+ * propor uma acao) continua sendo o tool-calling nativo do AI SDK dentro de
+ * uma unica chamada, so que agora com:
+ *   - tools vindas do registry central, com risco/confirmacao resolvidos
+ *     pela politica central (nunca pelo builder ou pelo prompt);
+ *   - limites explicitos de etapas/repeticao de tool para nunca deixar o
+ *     turno rodar sem controle;
+ *   - parada obrigatoria ao primeiro tool call sensitive/clinical — depois
+ *     disso, so pode existir uma proposta aguardando confirmacao humana,
+ *     nunca mais uma escrita real automatica nem outra tool call.
  */
+
+/** Numero maximo de "etapas" (chamadas ao modelo, cada uma podendo incluir tool calls) num unico turno. */
+export const MAX_TOOL_STEPS = 6;
+/** Nenhuma tool pode ser chamada mais que isso no mesmo turno — evita a IA insistir num loop com a mesma busca. */
+export const MAX_SAME_TOOL_CALLS = 3;
+/** Tempo maximo (ms) para o turno inteiro, todas as etapas incluidas. */
+export const TURN_TIMEOUT_MS = 30_000;
+
+const SENSITIVE_OR_CLINICAL_TOOL_NAMES = listRegisteredTools()
+  .filter((tool) => tool.risk === "sensitive" || tool.risk === "clinical")
+  .map((tool) => tool.name);
+
+export function countToolCallsByName(steps: ReadonlyArray<{ toolCalls?: ReadonlyArray<{ toolName: string }> }>): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const step of steps) {
+    for (const call of step.toolCalls ?? []) {
+      counts.set(call.toolName, (counts.get(call.toolName) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/** Interrompe o loop se qualquer tool for chamada mais de MAX_SAME_TOOL_CALLS vezes no mesmo turno. */
+export const sameToolRepeatedTooOften: StopCondition<ToolSet> = ({ steps }) => {
+  const counts = countToolCallsByName(steps as ReadonlyArray<{ toolCalls?: ReadonlyArray<{ toolName: string }> }>);
+  for (const count of counts.values()) {
+    if (count > MAX_SAME_TOOL_CALLS) return true;
+  }
+  return false;
+};
+
+/**
+ * Regra de desambiguacao (secao "RESOLUCAO DE ENTIDADES"): se a busca de
+ * cliente voltou com mais de um resultado e o turno nao terminou em
+ * proposta nem navegacao, devolve opcoes estruturadas (so id + nome) em vez
+ * de deixar a IA escolher arbitrariamente ou so comentar em texto livre.
+ */
+export function resolveDisambiguationOptions(
+  findClientOutput: { found?: boolean; items?: { id: string; name: string }[] } | undefined,
+  hasProposedAction: boolean,
+  hasNavigation: boolean
+): AssistantOption[] | undefined {
+  if (hasProposedAction || hasNavigation) return undefined;
+  if (!findClientOutput?.found || !findClientOutput.items || findClientOutput.items.length <= 1) return undefined;
+  return findClientOutput.items.slice(0, 5).map((item) => ({ id: item.id, label: item.name }));
+}
 
 export interface AssistantTurnAttachment {
   name: string;
@@ -83,6 +148,17 @@ export interface AssistantTurnInput {
   attachment?: AssistantTurnAttachment;
 }
 
+function deriveIntent(toolNamesUsed: string[]): string {
+  if (toolNamesUsed.includes(PROPOSE_NEW_APPOINTMENT_TOOL_NAME)) return "agendamento";
+  if (toolNamesUsed.includes(GET_AVAILABLE_SLOTS_TOOL_NAME)) return "busca_horarios";
+  if (toolNamesUsed.includes(GET_CLIENT_EVOLUTION_SUMMARY_TOOL_NAME)) return "evolucao_paciente";
+  if (toolNamesUsed.includes(GET_PATIENTS_WITH_PENDENCIES_TOOL_NAME)) return "agenda_com_pendencias";
+  if (toolNamesUsed.some((name) => PROPOSAL_TOOL_NAMES.includes(name))) return "proposta";
+  if (toolNamesUsed.includes(NAVIGATE_TOOL_NAME)) return "navegacao";
+  if (toolNamesUsed.includes(GET_SYSTEM_OVERVIEW_TOOL_NAME) || toolNamesUsed.includes(LIST_OPPORTUNITIES_TOOL_NAME)) return "consulta_dados_sistema";
+  return "geral";
+}
+
 export async function runAssistantTurn(
   context: AssistantContext,
   input: AssistantTurnInput
@@ -97,6 +173,11 @@ export async function runAssistantTurn(
     CLIENT_CREATION_ASSISTANT_INSTRUCTIONS,
     RECIPE_CREATION_ASSISTANT_INSTRUCTIONS,
     SYSTEM_OVERVIEW_ASSISTANT_INSTRUCTIONS,
+    SCHEDULE_LOOKUP_ASSISTANT_INSTRUCTIONS,
+    EVOLUTION_SUMMARY_ASSISTANT_INSTRUCTIONS,
+    AVAILABILITY_LOOKUP_ASSISTANT_INSTRUCTIONS,
+    `Voce pode encadear varias ferramentas de LEITURA (buscar cliente, ver agenda, ver evolucao, ver horarios) livremente no mesmo turno para responder um pedido com varias partes — isso e automatico e nao precisa de confirmacao. Mas ao chamar qualquer ferramenta de PROPOSTA (proposeXxx), pare: nao chame outra ferramenta depois dela nem tente aplicar a mudanca sozinha — o sistema sempre exige confirmacao humana explicita antes de qualquer proposta sensivel ou clinica virar realidade.`,
+    `Se uma busca de cliente (${FIND_CLIENT_TOOL_NAME}) retornar mais de um resultado parecido, NAO escolha um arbitrariamente: liste as opcoes encontradas (so nome, nunca telefone/e-mail/outros dados) e peca para a pessoa confirmar qual e antes de continuar.`,
   ];
 
   const activeToolNames: string[] = [
@@ -104,6 +185,9 @@ export async function runAssistantTurn(
     NAVIGATE_TOOL_NAME,
     GET_SYSTEM_OVERVIEW_TOOL_NAME,
     LIST_OPPORTUNITIES_TOOL_NAME,
+    GET_PATIENTS_WITH_PENDENCIES_TOOL_NAME,
+    GET_CLIENT_EVOLUTION_SUMMARY_TOOL_NAME,
+    GET_AVAILABLE_SLOTS_TOOL_NAME,
     PROPOSE_NEW_CLIENT_TOOL_NAME,
     PROPOSE_NEW_RECIPE_TOOL_NAME,
   ];
@@ -113,6 +197,9 @@ export async function runAssistantTurn(
     activeToolNames.push(PROPOSE_NEW_BLOG_POST_TOOL_NAME);
   }
 
+  // O cliente so entra em contexto se currentClientId veio explicitamente
+  // nesta requisicao (resolveAssistantContext) — nunca reaproveitamos
+  // implicitamente um cliente de uma mensagem anterior da mesma conversa.
   if (client) {
     const memory = await getClientConversationMemory(adminUser.sub, client.id);
     if (memory) {
@@ -178,29 +265,85 @@ export async function runAssistantTurn(
     system: systemPromptParts.join("\n\n"),
     messages,
     tools,
-    stopWhen: stepCountIs(4),
+    // Read/analise pode encadear varias etapas; ao primeiro tool call
+    // sensitive/clinical, o loop para na hora (nunca continua para outra
+    // tool nem tenta aplicar a proposta sozinho). MAX_TOOL_STEPS e o teto
+    // absoluto; sameToolRepeatedTooOften evita a mesma tool em loop.
+    stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall(...SENSITIVE_OR_CLINICAL_TOOL_NAMES), sameToolRepeatedTooOften],
     maxOutputTokens: 6000,
+    timeoutMs: TURN_TIMEOUT_MS,
   });
+
+  const allToolCalls = result.steps?.flatMap((step) => step.toolCalls ?? []) ?? result.toolCalls ?? [];
+  const toolNamesUsed = allToolCalls.map((call) => call.toolName);
 
   const proposalCall = result.toolCalls?.find((call) => PROPOSAL_TOOL_NAMES.includes(call.toolName));
   const navigateCall = result.toolCalls?.find((call) => call.toolName === NAVIGATE_TOOL_NAME);
   const navigateResult = navigateCall ? await resolveNavigationPath(navigateCall.input as NavigateInput) : null;
+  const navigation = navigateResult ? { path: navigateResult.path, clientName: navigateResult.clientName } : undefined;
 
   let proposedAction: ProposedAction | undefined;
   if (proposalCall) {
     const toolOutput = proposalCall.toolName === PROPOSE_NEW_RECIPE_TOOL_NAME
       ? result.toolResults?.find((toolResult) => toolResult.toolName === PROPOSE_NEW_RECIPE_TOOL_NAME)?.output
       : undefined;
-    proposedAction =
-      buildProposedAction(
-        proposalCall.toolName,
-        proposalCall.input,
-        { clientId: client?.id, submissionId: submission?.id },
-        toolOutput
-      ) ?? undefined;
+    const built = buildProposedAction(
+      proposalCall.toolName,
+      proposalCall.input,
+      { clientId: client?.id, submissionId: submission?.id },
+      toolOutput
+    );
+    if (built) {
+      proposedAction = await persistProposedAction(adminUser.sub, proposalCall.toolName, built, {
+        clientId: client?.id,
+        submissionId: submission?.id,
+      });
+    }
   }
 
-  const navigation = navigateResult ? { path: navigateResult.path, clientName: navigateResult.clientName } : undefined;
+  // Desambiguacao: se a ultima busca de cliente do turno voltou com mais de
+  // um resultado e o turno nao terminou em proposta/navegacao, presume-se
+  // que o proprio LLM ficou sem saber qual escolher — devolve as opcoes de
+  // forma estruturada (so id + nome) em vez de deixar so no texto livre.
+  const findClientResults = result.toolResults?.filter((toolResult) => toolResult.toolName === FIND_CLIENT_TOOL_NAME) ?? [];
+  const lastFindClientResult = findClientResults[findClientResults.length - 1];
+  const options = resolveDisambiguationOptions(
+    lastFindClientResult?.output as { found?: boolean; items?: { id: string; name: string }[] } | undefined,
+    Boolean(proposedAction),
+    Boolean(navigation)
+  );
+
+  // Deteccao de "loop cortado pelo limite de seguranca": o modelo estava no
+  // meio de tool calls (finishReason "tool-calls") quando um dos limites
+  // (etapas ou repeticao da mesma tool) foi atingido, sem chegar a compor
+  // uma resposta final nem uma proposta. Em vez de devolver algo vazio ou
+  // confuso, paramos com uma mensagem clara pedindo para refinar o pedido.
+  const toolCallCounts = countToolCallsByName(
+    (result.steps ?? []) as ReadonlyArray<{ toolCalls?: ReadonlyArray<{ toolName: string }> }>
+  );
+  const hitSameToolCap = Array.from(toolCallCounts.values()).some((count) => count > MAX_SAME_TOOL_CALLS);
+  const hitStepCap = (result.steps?.length ?? 0) >= MAX_TOOL_STEPS;
+  const loopWasCutShort =
+    result.finishReason === "tool-calls" && !result.text?.trim() && !proposedAction && (hitStepCap || hitSameToolCap);
+
+  const warnings: string[] = [];
+  if (loopWasCutShort) {
+    warnings.push("Limite de etapas do assistente atingido nesta pergunta.");
+  }
+
+  const status: WorkflowPlanSummary["status"] = options?.length
+    ? "needs_disambiguation"
+    : loopWasCutShort
+      ? "stopped_loop_limit"
+      : proposedAction
+        ? "proposed"
+        : "completed";
+
+  const plan: WorkflowPlanSummary = {
+    intent: deriveIntent(toolNamesUsed),
+    requiredCapabilities: Array.from(new Set(toolNamesUsed)),
+    status,
+  };
 
   const lastUserMessage = [...input.messages].reverse().find((message) => message.role === "user");
   await recordConversationTurn(adminUser.sub, client?.id ?? null, {
@@ -209,9 +352,18 @@ export async function runAssistantTurn(
     navigatedTo: navigation?.path,
   });
 
+  const message = loopWasCutShort
+    ? "Não consegui concluir esse pedido em poucas etapas. Pode refinar a pergunta ou dividir em partes menores?"
+    : options?.length
+      ? result.text || "Encontrei mais de uma pessoa com esse nome — qual delas você quis dizer?"
+      : result.text || (proposedAction ? "Preparei uma proposta. Revise os campos abaixo antes de aplicar." : "");
+
   return {
-    message: result.text || (proposedAction ? "Preparei uma proposta. Revise os campos abaixo antes de aplicar." : ""),
+    message,
     proposedAction,
     navigation,
+    options,
+    warnings: warnings.length ? warnings : undefined,
+    plan,
   };
 }

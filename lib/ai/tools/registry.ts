@@ -57,6 +57,21 @@ import {
   PROPOSE_NEW_BLOG_POST_TOOL_NAME,
   proposeNewBlogPostInputSchema,
 } from "@/lib/ai/agents/content/blog-creation-agent";
+import {
+  GET_PATIENTS_WITH_PENDENCIES_TOOL_NAME,
+  executeGetPatientsWithPendenciesForDate,
+  getPatientsWithPendenciesInputSchema,
+} from "@/lib/ai/agents/appointments/schedule-lookup-agent";
+import {
+  GET_CLIENT_EVOLUTION_SUMMARY_TOOL_NAME,
+  executeGetClientEvolutionSummary,
+  getClientEvolutionSummaryInputSchema,
+} from "@/lib/ai/agents/clinical/evolution-summary-agent";
+import {
+  GET_AVAILABLE_SLOTS_TOOL_NAME,
+  executeGetAvailableSlots,
+  getAvailableSlotsInputSchema,
+} from "@/lib/ai/agents/appointments/availability-lookup-agent";
 
 /**
  * Requisito de contexto para uma tool poder ser oferecida ao LLM na
@@ -216,6 +231,36 @@ defineTool({
   profiles: ADMIN,
   contextRequirement: "submission",
   execute: async (input) => input,
+});
+
+defineTool({
+  name: GET_PATIENTS_WITH_PENDENCIES_TOOL_NAME,
+  description: "Cruza a agenda de uma data com as tarefas pendentes de cada paciente com consulta nesse dia — ja limitado em tamanho.",
+  inputSchema: getPatientsWithPendenciesInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  execute: executeGetPatientsWithPendenciesForDate,
+});
+
+defineTool({
+  name: GET_CLIENT_EVOLUTION_SUMMARY_TOOL_NAME,
+  description: "Le a evolucao de peso/IMC de um cliente (identificado pelo id) desde a ultima consulta realizada, com todos os numeros ja calculados.",
+  inputSchema: getClientEvolutionSummaryInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  execute: executeGetClientEvolutionSummary,
+});
+
+defineTool({
+  name: GET_AVAILABLE_SLOTS_TOOL_NAME,
+  description: "Le os horarios realmente disponiveis na agenda num intervalo de datas (ate 30 dias), com filtro opcional por periodo do dia — a IA nunca inventa horario, so usa o que esta ferramenta retorna.",
+  inputSchema: getAvailableSlotsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  execute: executeGetAvailableSlots,
 });
 
 export function getToolDefinition(name: string): ToolDefinition<any, unknown> | undefined {
