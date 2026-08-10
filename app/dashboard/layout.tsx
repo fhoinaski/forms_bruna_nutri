@@ -32,6 +32,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AiChatWidget } from "@/components/dashboard/AiChatWidget";
+import { AssistantPageContextProvider } from "@/lib/ai/context/assistant-page-context";
 
 const jost = Jost({ subsets: ["latin"], variable: "--font-sans" });
 const cormorant = Cormorant_Garamond({
@@ -329,15 +330,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return <>{children}</>;
   }
 
-  const clientDetailMatch = pathname.match(/^\/dashboard\/clients\/([^/]+)$/);
-  const submissionDetailMatch = pathname.match(/^\/dashboard\/submissions\/([^/]+)$/);
-  const chatContext = clientDetailMatch
-    ? { clientId: clientDetailMatch[1] }
-    : submissionDetailMatch
-      ? { submissionId: submissionDetailMatch[1] }
-      : undefined;
-
   return (
+    <AssistantPageContextProvider>
     <div className={`${jost.variable} ${cormorant.variable} dashboard-shell min-h-screen bg-[#FBF7F1] font-sans text-[#3A3028]`}>
       <aside className={`fixed inset-y-0 left-0 z-30 hidden border-r border-[#EDE1D6] transition-[width] duration-200 lg:block ${collapsed ? "w-20" : "w-64"}`}>
         <Sidebar collapsed={collapsed} badges={notificationSummary?.badges} />
@@ -417,7 +411,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
         <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
-      <AiChatWidget context={chatContext} />
+      <AiChatWidget />
     </div>
+    </AssistantPageContextProvider>
   );
 }

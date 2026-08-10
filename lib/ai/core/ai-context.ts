@@ -13,6 +13,17 @@ export interface AssistantContextInput {
   submissionId?: string;
   currentPage?: string;
   conversationId?: string;
+  /**
+   * Hints adicionais de tela (agenda/protocolos/receitas) — secao 2 do
+   * pedido de UX. So identificadores, NUNCA resolvidos eagerly aqui: ao
+   * contrario de client/submission (que ja tinham tools dependendo do
+   * registro completo), estes so viram uteis quando uma tool especifica
+   * precisar deles, e essa tool sempre revalida existencia/posse no banco —
+   * o hint em si nunca e tratado como autorizacao (secao 3).
+   */
+  appointmentId?: string;
+  protocolId?: string;
+  recipeId?: string;
 }
 
 /**
@@ -28,6 +39,9 @@ export interface AssistantContext {
   conversationId?: string;
   client: Client | null;
   submission: SubmissionWithAnswers | null;
+  appointmentId?: string;
+  protocolId?: string;
+  recipeId?: string;
 }
 
 export async function resolveAssistantContext(
@@ -47,5 +61,8 @@ export async function resolveAssistantContext(
     conversationId: input.conversationId,
     client,
     submission,
+    appointmentId: input.appointmentId,
+    protocolId: input.protocolId,
+    recipeId: input.recipeId,
   };
 }

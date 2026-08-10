@@ -85,19 +85,6 @@ class FakeProposalsDb {
   }
 }
 
-function mockDbBackedRepo(db: FakeProposalsDb) {
-  vi.doMock("@/lib/repositories/ai-action-proposals", () => ({
-    claimAiActionProposal: (id: string, adminId: string) => db.claim(id, adminId),
-    cancelAiActionProposal: (id: string, adminId: string) => db.cancel(id, adminId),
-    finalizeAiActionProposal: (id: string, status: "completed" | "failed") => db.finalize(id, status),
-    getAiActionProposal: (id: string, adminId: string) => db.get(id, adminId),
-    markAiActionProposalExpired: vi.fn(),
-    isAiActionProposalExpired: () => false,
-    getProposalExecution: (id: string) => db.getExecution(id),
-    recordProposalExecution: (id: string, kind: string, result: Record<string, unknown>) => db.recordExecution(id, kind, result),
-  }));
-}
-
 const taskAction: ProposedAction = {
   kind: "new_task", clientId: "client-1",
   fields: { title: "Ligar", description: "", due_date_display: "" },
@@ -109,7 +96,6 @@ describe("teste 34 (o mais importante): side effect ocorreu mas finalize(complet
     mockCommonDeps();
     const db = new FakeProposalsDb();
     db.seed({ id: "proposal-1", admin_id: "admin-1", params_json: JSON.stringify(taskAction) });
-    mockDbBackedRepo(db);
 
     let executionCount = 0;
     vi.doMock("@/lib/ai/core/proposal-handlers", async (importOriginal) => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useAssistantPageContext } from "@/lib/ai/context/assistant-page-context";
 import {
   CalendarDays,
   CheckCircle2,
@@ -247,6 +248,7 @@ function moveDate(value: string, amount: number) {
 }
 
 export default function AgendaPage() {
+  const { setExtra: setAssistantContextExtra } = useAssistantPageContext();
   const [selectedDate, setSelectedDate] = useState(todayInputDate());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -433,6 +435,12 @@ export default function AgendaPage() {
   }
 
   async function prepareBriefing(appointmentId: string) {
+    // Pedir o briefing de uma consulta especifica e um sinal explicito de
+    // foco — publica esse appointmentId para o copiloto (secao 5 do pedido
+    // de UX: "agenda: appointment quando selecionado"). Some sozinho ao
+    // trocar de tela (AssistantPageContextProvider limpa "extra" na troca
+    // de rota).
+    setAssistantContextExtra({ appointmentId });
     setBriefings((current) => ({ ...current, [appointmentId]: { loading: true } }));
     try {
       const response = await fetch(`/api/admin/ai/briefing/${appointmentId}`);

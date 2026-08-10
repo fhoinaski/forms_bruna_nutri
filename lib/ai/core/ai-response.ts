@@ -1,4 +1,7 @@
 import type { ProposedAction } from "@/lib/ai/schemas/action.schema";
+import type { GetClientEvolutionSummaryOutput } from "@/lib/ai/agents/clinical/evolution-summary-agent";
+import type { AvailableSlotsResult } from "@/lib/ai/agents/appointments/availability-lookup-agent";
+import type { PatientsWithPendenciesResult } from "@/lib/ai/agents/appointments/schedule-lookup-agent";
 
 export interface AssistantNavigationResult {
   path: string;
@@ -28,6 +31,25 @@ export interface WorkflowPlanSummary {
 }
 
 /**
+ * Dado factual ja calculado deterministicamente por uma tool de leitura
+ * (secao 9/11 do pedido de UX: "DADOS DO SISTEMA" separado de "ANALISE DO
+ * COPILOTO"). O envelope so REPASSA o que a tool ja retornou — nunca
+ * recalcula nada aqui. Usado pelo frontend para render rico (Comparison,
+ * AvailableSlots etc.) em vez de so o texto livre do modelo.
+ */
+export interface ClientPendingTasksFacts {
+  found: boolean;
+  clientName: string;
+  tasks: { title: string; dueDate: string | null }[];
+}
+
+export type AssistantFactsPayload =
+  | { type: "client_evolution"; data: GetClientEvolutionSummaryOutput }
+  | { type: "available_slots"; data: AvailableSlotsResult }
+  | { type: "patients_with_pendencies"; data: PatientsWithPendenciesResult }
+  | { type: "client_pending_tasks"; data: ClientPendingTasksFacts };
+
+/**
  * Envelope de resposta interno do assistente (secao 13 do pedido de
  * arquitetura) — separa texto livre de comando executavel validado. A rota
  * HTTP de chat mapeia isso para o shape legado que o frontend ja consome
@@ -42,6 +64,7 @@ export interface AssistantResponseEnvelope {
   options?: AssistantOption[];
   warnings?: string[];
   data?: Record<string, unknown>;
+  facts?: AssistantFactsPayload;
   plan?: WorkflowPlanSummary;
 }
 
@@ -51,6 +74,7 @@ export interface LegacyChatHttpResponse {
   navigateAction?: AssistantNavigationResult;
   options?: AssistantOption[];
   warnings?: string[];
+  facts?: AssistantFactsPayload;
 }
 
 export function toLegacyChatResponse(envelope: AssistantResponseEnvelope): LegacyChatHttpResponse {
@@ -60,5 +84,6 @@ export function toLegacyChatResponse(envelope: AssistantResponseEnvelope): Legac
     navigateAction: envelope.navigation,
     options: envelope.options?.length ? envelope.options : undefined,
     warnings: envelope.warnings?.length ? envelope.warnings : undefined,
+    facts: envelope.facts,
   };
 }

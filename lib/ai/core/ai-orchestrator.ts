@@ -1,7 +1,7 @@
 import { hasToolCall, stepCountIs, type ModelMessage, type StopCondition, type ToolSet } from "ai";
 import { generate } from "@/lib/ai/gateway/ai-gateway";
 import type { AssistantContext } from "@/lib/ai/core/ai-context";
-import type { AssistantOption, AssistantResponseEnvelope, WorkflowPlanSummary } from "@/lib/ai/core/ai-response";
+import type { AssistantFactsPayload, AssistantOption, AssistantResponseEnvelope, WorkflowPlanSummary } from "@/lib/ai/core/ai-response";
 import { persistProposedAction } from "@/lib/ai/core/proposal-store";
 import { buildToolSet, listRegisteredTools } from "@/lib/ai/tools/registry";
 import { buildProposedAction, PROPOSAL_TOOL_NAMES } from "@/lib/ai/tools/proposal-builders";
@@ -50,14 +50,17 @@ import {
 import {
   GET_PATIENTS_WITH_PENDENCIES_TOOL_NAME,
   SCHEDULE_LOOKUP_ASSISTANT_INSTRUCTIONS,
+  type PatientsWithPendenciesResult,
 } from "@/lib/ai/agents/appointments/schedule-lookup-agent";
 import {
   GET_CLIENT_EVOLUTION_SUMMARY_TOOL_NAME,
   EVOLUTION_SUMMARY_ASSISTANT_INSTRUCTIONS,
+  type GetClientEvolutionSummaryOutput,
 } from "@/lib/ai/agents/clinical/evolution-summary-agent";
 import {
   GET_AVAILABLE_SLOTS_TOOL_NAME,
   AVAILABILITY_LOOKUP_ASSISTANT_INSTRUCTIONS,
+  type AvailableSlotsResult,
 } from "@/lib/ai/agents/appointments/availability-lookup-agent";
 import type { AllowedAttachmentMediaType } from "@/lib/ai/agents/system/chat-attachments";
 import { getNutritionRecord } from "@/lib/repositories/nutrition-records";
@@ -130,6 +133,32 @@ export function resolveDisambiguationOptions(
   if (hasProposedAction || hasNavigation) return undefined;
   if (!findClientOutput?.found || !findClientOutput.items || findClientOutput.items.length <= 1) return undefined;
   return findClientOutput.items.slice(0, 5).map((item) => ({ id: item.id, label: item.name }));
+}
+
+/**
+ * Anexa ao envelope o resultado ja calculado da ULTIMA tool de leitura
+ * "rica" chamada no turno (evolucao/horarios/pendencias), para o frontend
+ * poder renderizar um componente estruturado (Comparison/AvailableSlots/
+ * FactList) em vez de so o texto livre do modelo — secao 9/11 do pedido de
+ * UX. Nunca recalcula nada aqui, so repassa o output real da tool.
+ */
+export function buildFactsPayload(
+  toolResults: ReadonlyArray<{ toolName: string; output?: unknown }> | undefined
+): AssistantFactsPayload | undefined {
+  if (!toolResults?.length) return undefined;
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    const toolResult = toolResults[index];
+    if (toolResult.toolName === GET_CLIENT_EVOLUTION_SUMMARY_TOOL_NAME) {
+      return { type: "client_evolution", data: toolResult.output as GetClientEvolutionSummaryOutput };
+    }
+    if (toolResult.toolName === GET_AVAILABLE_SLOTS_TOOL_NAME) {
+      return { type: "available_slots", data: toolResult.output as AvailableSlotsResult };
+    }
+    if (toolResult.toolName === GET_PATIENTS_WITH_PENDENCIES_TOOL_NAME) {
+      return { type: "patients_with_pendencies", data: toolResult.output as PatientsWithPendenciesResult };
+    }
+  }
+  return undefined;
 }
 
 export interface AssistantTurnAttachment {
@@ -313,6 +342,8 @@ export async function runAssistantTurn(
     Boolean(navigation)
   );
 
+  const facts = buildFactsPayload(result.toolResults as ReadonlyArray<{ toolName: string; output?: unknown }> | undefined);
+
   // Deteccao de "loop cortado pelo limite de seguranca": o modelo estava no
   // meio de tool calls (finishReason "tool-calls") quando um dos limites
   // (etapas ou repeticao da mesma tool) foi atingido, sem chegar a compor
@@ -364,6 +395,7 @@ export async function runAssistantTurn(
     navigation,
     options,
     warnings: warnings.length ? warnings : undefined,
+    facts,
     plan,
   };
 }

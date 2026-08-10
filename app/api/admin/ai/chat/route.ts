@@ -39,6 +39,9 @@ const requestSchema = z.object({
     clientId: z.string().min(1).max(120).optional(),
     submissionId: z.string().min(1).max(120).optional(),
     currentPage: z.string().min(1).max(200).optional(),
+    appointmentId: z.string().min(1).max(120).optional(),
+    protocolId: z.string().min(1).max(120).optional(),
+    recipeId: z.string().min(1).max(120).optional(),
   }).optional(),
 });
 
@@ -97,6 +100,9 @@ export async function POST(req: NextRequest) {
       clientId: parsed.data.context?.clientId,
       submissionId: parsed.data.context?.submissionId,
       currentPage: parsed.data.context?.currentPage,
+      appointmentId: parsed.data.context?.appointmentId,
+      protocolId: parsed.data.context?.protocolId,
+      recipeId: parsed.data.context?.recipeId,
     });
 
     const envelope = await runAssistantTurn(context, {

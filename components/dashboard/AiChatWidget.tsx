@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bot, Check, Paperclip, Send, Sparkles, X } from "lucide-react";
+import { Bot, Check, MessageSquarePlus, Paperclip, Send, Sparkles, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import { SUGGESTED_CHAT_PROMPTS } from "@/lib/ai/agents/system/system-knowledge";
@@ -11,6 +11,10 @@ import { NUTRITION_TEXT_FIELD_LABELS, type NutritionRecordTextFieldKey } from "@
 import { PRE_ANALYSIS_FIELD_LABELS, type PreAnalysisFieldKey } from "@/lib/clinical/pre-analysis-fields";
 import { NEW_CLIENT_FIELD_LABELS, type NewClientFieldKey } from "@/lib/clinical/client-fields";
 import { ALLOWED_ATTACHMENT_MEDIA_TYPES, MAX_ATTACHMENT_RAW_BYTES, type AllowedAttachmentMediaType } from "@/lib/ai/agents/system/chat-attachments";
+import { useAssistantPageContext, type AssistantPageContext } from "@/lib/ai/context/assistant-page-context";
+import { getQuickActionsForContext, resolveQuickActionDate, type QuickAction } from "@/components/dashboard/ai-quick-actions";
+import { FactsCard, formatDateTimeBR } from "@/components/dashboard/ai-facts";
+import type { AssistantFactsPayload, AssistantOption } from "@/lib/ai/core/ai-response";
 
 const INTRO_SHOWN_KEY = "bruna_nutri_ai_chat_intro_shown";
 const DAILY_BRIEFING_SHOWN_KEY_PREFIX = "bruna_nutri_daily_briefing_shown_";
@@ -91,7 +95,7 @@ const markdownComponents: Components = {
 // confirmacao usa exclusivamente os parametros gravados no servidor no
 // momento da proposta.
 type ProposedField = { key: string; label: string; value: string };
-type ProposalStatus = "pending" | "applying" | "applied" | "discarded" | "error";
+type ProposalStatus = "pending" | "applying" | "applied" | "discarded" | "error" | "expired";
 
 type ProposedRecipeIngredient = { food_name: string; grams: number; taco_number: number | null };
 
@@ -138,6 +142,11 @@ const APPLIED_MESSAGES: Partial<Record<ChatProposal["kind"], string>> = {
   client_protocol: "Notas do protocolo atualizadas.",
 };
 
+// Kinds cuja alteracao e clinica (secao 18 do pedido de UX) — so para exibir
+// um badge diferenciado no card, nunca usado para decidir permissao (isso
+// continua 100% server-side em lib/ai/policies).
+const CLINICAL_PROPOSAL_KINDS = new Set<ChatProposal["kind"]>(["nutrition_record", "client_protocol", "new_protocol", "pre_analysis"]);
+
 interface ChatProposalBase {
   title: string;
   applyLabel: string;
@@ -161,13 +170,33 @@ type ChatProposal =
   | (ChatProposalBase & { kind: "new_task"; clientId: string });
 
 type ChatMessage = {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
   proposal?: ChatProposal;
+  facts?: AssistantFactsPayload;
+  options?: AssistantOption[];
   attachmentName?: string;
 };
 
 type PendingAttachment = { name: string; mediaType: AllowedAttachmentMediaType; base64: string };
+
+// Rotulo curto de "onde a pessoa esta", usado no chip do cabecalho e no
+// divisor de troca de contexto — nao depende de nenhum dado assincrono
+// (nome do cliente e buscado a parte) para poder atualizar instantaneamente.
+const PAGE_CONTEXT_LABELS: Record<string, string> = {
+  client_record: "a ficha de um paciente",
+  submission_detail: "um formulário de pré-consulta",
+  agenda: "a agenda",
+  clients_list: "a lista de pacientes",
+  protocols_library: "a biblioteca de protocolos",
+  protocol_detail: "um protocolo",
+  recipes_library: "a biblioteca de receitas",
+  templates_library: "os modelos",
+  opportunities: "as oportunidades",
+  financeiro: "o financeiro",
+  tasks: "as tarefas",
+  dashboard: "o dashboard",
+};
 
 function toFields(record: Record<string, string>, labels: Record<string, string>): ProposedField[] {
   return Object.entries(record)
@@ -294,8 +323,32 @@ function buildProposal(update: Record<string, unknown>): ChatProposal | null {
   return null;
 }
 
-export function AiChatWidget({ context }: { context?: { clientId?: string; submissionId?: string } } = {}) {
+// So algumas kinds de proposta sao vinculadas a um cliente (nutrition_record,
+// client_protocol, new_protocol, new_appointment, new_task) — as demais
+// (new_client, new_recipe, new_blog_post, pre_analysis) nao tem `clientId`
+// no tipo, entao um acesso direto `proposal.clientId` nao compila.
+function proposalClientId(proposal: ChatProposal): string | undefined {
+  switch (proposal.kind) {
+    case "nutrition_record":
+    case "client_protocol":
+    case "new_protocol":
+    case "new_appointment":
+    case "new_task":
+      return proposal.clientId;
+    default:
+      return undefined;
+  }
+}
+
+function contextSwitchMessage(hadPreviousClient: boolean, next: AssistantPageContext): string {
+  if (next.currentPage === "client_record") return "Contexto atualizado — agora falando sobre outro paciente.";
+  if (hadPreviousClient) return "Contexto atualizado — você saiu da ficha do paciente anterior.";
+  return `Contexto atualizado — agora em ${PAGE_CONTEXT_LABELS[next.currentPage] ?? "outra tela"}.`;
+}
+
+export function AiChatWidget() {
   const router = useRouter();
+  const { context } = useAssistantPageContext();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -307,6 +360,9 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previousClientIdRef = useRef<string | undefined>(context.clientId);
+
+  const quickActions = getQuickActionsForContext(context);
 
   useEffect(() => {
     const dailyKey = `${DAILY_BRIEFING_SHOWN_KEY_PREFIX}${todaySaoPauloKey()}`;
@@ -331,12 +387,28 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
 
   useEffect(() => {
     setClientName("");
-    if (!context?.clientId) return;
+    if (!context.clientId) return;
     fetch(`/api/admin/clients/${context.clientId}`, { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
       .then((data: { name?: string } | null) => setClientName(data?.name ?? ""))
       .catch(() => setClientName(""));
-  }, [context?.clientId]);
+  }, [context.clientId]);
+
+  // Troca de paciente (ou saida da ficha de um paciente) precisa ser
+  // percebida na hora (secao 4/28 do pedido de UX) — nunca reinterpretamos
+  // silenciosamente o historico anterior como sendo sobre o novo contexto.
+  // So insere o divisor se ja havia conversa em andamento.
+  useEffect(() => {
+    const previous = previousClientIdRef.current;
+    const current = context.clientId;
+    if (previous !== current) {
+      setMessages((existing) =>
+        existing.length > 0 ? [...existing, { role: "system", content: contextSwitchMessage(Boolean(previous), context) }] : existing
+      );
+      previousClientIdRef.current = current;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context.clientId, context.currentPage]);
 
   useEffect(() => {
     if (!open) return;
@@ -379,7 +451,17 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
     reader.readAsDataURL(file);
   }
 
-  async function sendMessage(text: string) {
+  function startNewConversation() {
+    // So limpa o historico local da conversa — o contexto da tela atual
+    // (context, vindo do AssistantPageContextProvider) continua o mesmo, e o
+    // resumo persistido por (admin, cliente) tambem nao e afetado (secao 27:
+    // sao conceitos diferentes, "nova conversa" nao e "esquecer o cliente").
+    setMessages([]);
+    setError("");
+    setPendingAttachment(null);
+  }
+
+  async function sendMessage(text: string, contextOverride?: Partial<Pick<AssistantPageContext, "clientId">>) {
     const content = text.trim();
     if (!content || sending) return;
     setError("");
@@ -394,15 +476,31 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: nextMessages.slice(-MAX_HISTORY_MESSAGES_SENT).map(({ role, content: messageContent }) => ({ role, content: messageContent })),
+          messages: nextMessages
+            .filter((message) => message.role !== "system")
+            .slice(-MAX_HISTORY_MESSAGES_SENT)
+            .map(({ role, content: messageContent }) => ({ role, content: messageContent })),
           attachment: attachment ? { name: attachment.name, mediaType: attachment.mediaType, data: attachment.base64 } : undefined,
-          context,
+          context: {
+            clientId: contextOverride?.clientId ?? context.clientId,
+            submissionId: context.submissionId,
+            currentPage: context.currentPage,
+            appointmentId: context.appointmentId,
+            protocolId: context.protocolId,
+            recipeId: context.recipeId,
+          },
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "Não foi possível responder agora.");
       const proposal = data.proposedUpdate ? buildProposal(data.proposedUpdate) : null;
-      const assistantMessage: ChatMessage = { role: "assistant", content: data.reply, proposal: proposal ?? undefined };
+      const assistantMessage: ChatMessage = {
+        role: "assistant",
+        content: data.reply,
+        proposal: proposal ?? undefined,
+        facts: data.facts,
+        options: data.options,
+      };
       setMessages([...nextMessages, assistantMessage]);
       const navigateAction = data.navigateAction as { path: string; clientName?: string } | undefined;
       if (navigateAction?.path) router.push(navigateAction.path);
@@ -411,6 +509,44 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
     } finally {
       setSending(false);
     }
+  }
+
+  async function runDeterministicQuickAction(action: Extract<QuickAction, { kind: "deterministic" }>) {
+    if (sending) return;
+    if (action.action !== "day_overview" && !context.clientId) return;
+    setError("");
+    setMessages((current) => [...current, { role: "user", content: action.label }]);
+    setSending(true);
+    try {
+      const body =
+        action.action === "day_overview"
+          ? { action: "day_overview" as const, date: resolveQuickActionDate(action) }
+          : { action: action.action, clientId: context.clientId as string };
+      const response = await fetch("/api/admin/ai/quick-facts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Não foi possível buscar os dados agora.");
+      setMessages((current) => [...current, { role: "assistant", content: "", facts: data.facts }]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível buscar os dados agora.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function runQuickAction(action: QuickAction) {
+    if (action.kind === "chat") {
+      void sendMessage(action.message);
+    } else {
+      void runDeterministicQuickAction(action);
+    }
+  }
+
+  function chooseDisambiguationOption(option: AssistantOption) {
+    void sendMessage(option.label, { clientId: option.id });
   }
 
   function updateProposal(messageIndex: number, updater: (proposal: ChatProposal) => ChatProposal) {
@@ -443,17 +579,17 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
         router.push("/dashboard/blog");
         return;
       case "new_protocol":
-        if (context?.clientId === proposal.clientId) router.refresh();
+        if (context.clientId === proposal.clientId) router.refresh();
         else router.push(`/dashboard/clients/${proposal.clientId}`);
         return;
       case "nutrition_record":
       case "client_protocol":
       case "new_appointment":
       case "new_task":
-        if (context?.clientId === proposal.clientId) router.refresh();
+        if (context.clientId === proposal.clientId) router.refresh();
         return;
       case "pre_analysis":
-        if (context?.submissionId === proposal.submissionId) router.refresh();
+        if (context.submissionId === proposal.submissionId) router.refresh();
         return;
     }
   }
@@ -479,7 +615,16 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
       // antes de executar.
       const response = await fetch(`/api/admin/ai/proposals/${proposal.proposalId}/confirm`, { method: "POST" });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message ?? "Não foi possível concluir a ação.");
+      if (!response.ok) {
+        // 410 = proposta expirada — estado dedicado na UI (secao 19/25),
+        // com uma acao clara ("peça novamente") em vez de cair no erro
+        // generico.
+        if (response.status === 410) {
+          updateProposal(messageIndex, (current) => ({ ...current, status: "expired" }));
+          return;
+        }
+        throw new Error(data.message ?? "Não foi possível concluir a ação.");
+      }
       updateProposal(messageIndex, (current) => ({ ...current, status: "applied" }));
       navigateAfterConfirm(proposal, data);
     } catch (cause) {
@@ -490,6 +635,14 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
       }));
     }
   }
+
+  const contextChipLabel = context.clientId
+    ? `Vendo a ficha de ${clientName || "este cliente"}`
+    : context.submissionId
+      ? "Vendo este formulário de pré-consulta"
+      : context.currentPage && PAGE_CONTEXT_LABELS[context.currentPage]
+        ? `Vendo ${PAGE_CONTEXT_LABELS[context.currentPage]}`
+        : "Ajuda a usar o dashboard";
 
   return (
     <>
@@ -505,42 +658,64 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
       {open && (
         <div
           ref={panelRef}
-          className="fixed bottom-24 right-5 z-40 flex h-[min(32rem,70vh)] w-[calc(100vw-2.5rem)] max-w-96 flex-col overflow-hidden rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] shadow-2xl"
+          className="fixed bottom-24 right-5 z-40 flex h-[min(34rem,75vh)] w-[calc(100vw-2.5rem)] max-w-96 flex-col overflow-hidden rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] shadow-2xl md:max-w-[26rem]"
         >
           <div className="flex items-center justify-between gap-3 border-b border-[#EDE1D6] bg-[#FBF7F1] px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EAF0E4] text-[#607A56]"><Bot className="h-4 w-4" /></span>
-              <div>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EAF0E4] text-[#607A56]"><Bot className="h-4 w-4" /></span>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-[#3A3028]">Assistente do sistema</p>
-                <p className="text-[11px] text-[#8A7B70]">
-                  {context?.clientId
-                    ? `Vendo a ficha de ${clientName || "este cliente"}`
-                    : context?.submissionId
-                      ? "Vendo este formulário de pré-consulta"
-                      : "Ajuda a usar o dashboard"}
-                </p>
+                <p className="truncate text-[11px] text-[#8A7B70]">{contextChipLabel}</p>
               </div>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Fechar" className="rounded-full p-1 text-[#8C6E52] hover:bg-white">
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={startNewConversation}
+                disabled={messages.length === 0}
+                aria-label="Iniciar nova conversa"
+                title="Nova conversa"
+                className="rounded-full p-1.5 text-[#8C6E52] hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <MessageSquarePlus className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Fechar" className="rounded-full p-1.5 text-[#8C6E52] hover:bg-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          {quickActions.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 border-b border-[#EDE1D6] bg-[#FFFDFC] px-3 py-2">
+              {quickActions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  onClick={() => runQuickAction(action)}
+                  disabled={sending}
+                  className="rounded-full border border-[#D9E4D3] bg-[#F4F8F1] px-2.5 py-1 text-[11px] font-semibold text-[#4F6847] transition hover:bg-[#EAF0E4] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div ref={scrollRef} aria-live="polite" className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {messages.length === 0 && (
               <div className="space-y-3">
                 <p className="text-sm leading-6 text-[#75675E]">
-                  {context?.clientId
+                  {context.clientId
                     ? `Olá! Posso te ajudar a usar o sistema, organizar o prontuário, revisar o plano alimentar, criar um protocolo novo, marcar consultas, criar tarefas e atualizar notas de protocolo de ${clientName || "este cliente"}. Descreva o caso, anexe um exame em PDF ou imagem se ajudar, e eu monto uma proposta — você revisa e confirma antes de qualquer coisa ser salva.`
-                    : context?.submissionId
+                    : context.submissionId
                       ? "Olá! Posso te ajudar a usar o sistema e também a montar a pré-análise deste formulário a partir das respostas do paciente. Peça um resumo do caso e eu monto uma proposta — você revisa e confirma antes de salvar."
                       : "Olá! Posso explicar como usar o sistema, te levar direto para onde você precisa (inclusive já numa aba específica da ficha), cadastrar um paciente novo, criar uma receita na biblioteca e até escrever um rascunho de post pro blog — diga algo como \"abre a antropometria do Beltrano\", \"cria uma receita baixa caloria para emagrecimento\" ou \"escreve um post sobre alimentação saudável\". Não dou orientação clínica."}
                 </p>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">Perguntas rápidas</p>
                 <div className="flex flex-wrap gap-2">
-                  {(context?.clientId
+                  {(context.clientId
                     ? ["Preencher o prontuário com base no que vou descrever agora", "Marcar uma consulta para esse cliente", "Criar um protocolo novo para esse cliente", "Atualizar as notas do protocolo atual", ...SUGGESTED_CHAT_PROMPTS]
-                    : context?.submissionId
+                    : context.submissionId
                       ? ["Montar um resumo de pré-análise com base nas respostas", ...SUGGESTED_CHAT_PROMPTS]
                       : ["Abrir a ficha de um cliente pelo nome", "Cadastrar um novo paciente", "Criar uma receita baixa caloria para emagrecimento", "Escrever um rascunho de post pro blog", ...SUGGESTED_CHAT_PROMPTS]
                   ).map((prompt) => (
@@ -556,37 +731,79 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
                 </div>
               </div>
             )}
-            {messages.map((message, index) => (
-              <div key={index} className="space-y-2">
-                <div
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 ${
-                    message.role === "user"
-                      ? "ml-auto whitespace-pre-wrap bg-[#7F9A74] text-white"
-                      : "bg-[#F4F8F1] text-[#3A3028]"
-                  }`}
-                >
-                  {message.role === "assistant" ? (
-                    <ReactMarkdown components={markdownComponents}>{message.content}</ReactMarkdown>
-                  ) : (
-                    <>
-                      {message.attachmentName && (
-                        <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
-                          <Paperclip className="h-3 w-3" /> {message.attachmentName}
-                        </span>
+            {messages.map((message, index) => {
+              if (message.role === "system") {
+                return (
+                  <div key={index} className="flex justify-center">
+                    <span className="rounded-full bg-[#EDE1D6]/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">
+                      {message.content}
+                    </span>
+                  </div>
+                );
+              }
+              return (
+                <div key={index} className="space-y-2">
+                  {message.content && (
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 ${
+                        message.role === "user"
+                          ? "ml-auto whitespace-pre-wrap bg-[#7F9A74] text-white"
+                          : "bg-[#F4F8F1] text-[#3A3028]"
+                      }`}
+                    >
+                      {message.role === "assistant" ? (
+                        <ReactMarkdown components={markdownComponents}>{message.content}</ReactMarkdown>
+                      ) : (
+                        <>
+                          {message.attachmentName && (
+                            <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
+                              <Paperclip className="h-3 w-3" /> {message.attachmentName}
+                            </span>
+                          )}
+                          <div>{message.content}</div>
+                        </>
                       )}
-                      <div>{message.content}</div>
-                    </>
+                    </div>
+                  )}
+                  {message.facts && (
+                    <FactsCard
+                      facts={message.facts}
+                      onPickSlot={
+                        message.facts.type === "available_slots"
+                          ? (iso) => void sendMessage(`Marcar consulta nesse horário: ${formatDateTimeBR(iso)} (${iso})`)
+                          : undefined
+                      }
+                    />
+                  )}
+                  {message.options && message.options.length > 0 && (
+                    <div className="flex max-w-[92%] flex-wrap gap-1.5">
+                      {message.options.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => chooseDisambiguationOption(option)}
+                          className="rounded-full border border-[#D9C4B2] bg-white px-3 py-1.5 text-xs font-semibold text-[#3A3028] transition hover:bg-[#FBF7F1]"
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {message.proposal && (
+                    <ProposalCard
+                      proposal={message.proposal}
+                      belongsToOtherContext={(() => {
+                        const proposalClient = proposalClientId(message.proposal);
+                        return Boolean(proposalClient) && context.clientId !== undefined && context.clientId !== proposalClient;
+                      })()}
+                      onDiscard={() => discardProposal(index, message.proposal!)}
+                      onApply={() => void applyProposal(index, message.proposal!)}
+                      onFindNewSlots={() => void sendMessage("Busque novos horários disponíveis para essa consulta.")}
+                    />
                   )}
                 </div>
-                {message.proposal && (
-                  <ProposalCard
-                    proposal={message.proposal}
-                    onDiscard={() => discardProposal(index, message.proposal!)}
-                    onApply={() => void applyProposal(index, message.proposal!)}
-                  />
-                )}
-              </div>
-            ))}
+              );
+            })}
             {sending && (
               <div className="flex items-center gap-2 text-xs text-[#8A7B70]">
                 <Sparkles className="h-3.5 w-3.5 animate-pulse" />
@@ -669,10 +886,12 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
   );
 }
 
-function ProposalCard({ proposal, onDiscard, onApply }: {
+function ProposalCard({ proposal, belongsToOtherContext, onDiscard, onApply, onFindNewSlots }: {
   proposal: ChatProposal;
+  belongsToOtherContext: boolean;
   onDiscard: () => void;
   onApply: () => void;
+  onFindNewSlots: () => void;
 }) {
   if (!proposal.fields.length) return null;
 
@@ -687,12 +906,33 @@ function ProposalCard({ proposal, onDiscard, onApply }: {
       </p>
     );
   }
+  if (proposal.status === "expired") {
+    return (
+      <p className="rounded-xl border border-[#F0D4C7] bg-[#FFF7F3] px-3 py-2 text-xs leading-5 text-[#8C5F50]">
+        Esta proposta expirou. Peça novamente ao assistente.
+      </p>
+    );
+  }
 
   const applying = proposal.status === "applying";
+  const isClinical = CLINICAL_PROPOSAL_KINDS.has(proposal.kind);
+  const isSlotConflict = proposal.status === "error" && proposal.error?.toLowerCase().includes("ocupado");
 
   return (
     <div className="max-w-[92%] space-y-3 rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">{proposal.title}</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">{proposal.title}</p>
+        {isClinical && (
+          <span className="rounded-full bg-[#F3E6DE] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-[#8C5F50]">
+            Alteração clínica
+          </span>
+        )}
+        {belongsToOtherContext && (
+          <span className="rounded-full bg-[#FCEFE4] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-[#A9724C]">
+            Pertence a outro paciente
+          </span>
+        )}
+      </div>
       <div className="space-y-2.5">
         {proposal.fields.map((field) => (
           <div key={field.key}>
@@ -717,7 +957,18 @@ function ProposalCard({ proposal, onDiscard, onApply }: {
         </div>
       )}
       {proposal.status === "error" && proposal.error && (
-        <p className="rounded-lg border border-[#F0D4C7] bg-[#FFF7F3] px-2.5 py-1.5 text-xs text-[#8C5F50]">{proposal.error}</p>
+        <div className="space-y-1.5">
+          <p className="rounded-lg border border-[#F0D4C7] bg-[#FFF7F3] px-2.5 py-1.5 text-xs text-[#8C5F50]">{proposal.error}</p>
+          {isSlotConflict && (
+            <button
+              type="button"
+              onClick={onFindNewSlots}
+              className="rounded-full border border-[#D9E4D3] bg-white px-3 py-1.5 text-xs font-semibold text-[#4F6847] transition hover:bg-[#EAF0E4]"
+            >
+              Buscar novos horários
+            </button>
+          )}
+        </div>
       )}
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onDiscard} disabled={applying} className="rounded-full border border-[#EDE1D6] px-3 py-1.5 text-xs font-semibold text-[#75675E] transition hover:bg-[#FBF7F1] disabled:opacity-50">
