@@ -477,7 +477,12 @@ export function AiChatWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: nextMessages
-            .filter((message) => message.role !== "system")
+            // Mensagens de sistema (divisor de troca de contexto) e
+            // mensagens "so facts" (ex.: resultado de quick action
+            // deterministica, sem texto do modelo) nunca vao para o
+            // historico enviado ao servidor — a rota exige content com pelo
+            // menos 1 caractere, e essas nunca passaram pelo LLM mesmo.
+            .filter((message) => message.role !== "system" && message.content.trim().length > 0)
             .slice(-MAX_HISTORY_MESSAGES_SENT)
             .map(({ role, content: messageContent }) => ({ role, content: messageContent })),
           attachment: attachment ? { name: attachment.name, mediaType: attachment.mediaType, data: attachment.base64 } : undefined,
