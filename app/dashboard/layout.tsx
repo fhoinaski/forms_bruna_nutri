@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { AiChatWidget } from "@/components/dashboard/AiChatWidget";
 
 const jost = Jost({ subsets: ["latin"], variable: "--font-sans" });
 const cormorant = Cormorant_Garamond({
@@ -408,6 +409,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
         <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
+      <AiChatWidget />
     </div>
   );
 }

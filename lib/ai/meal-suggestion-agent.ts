@@ -1,12 +1,9 @@
-import { generateText, stepCountIs, type LanguageModel } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createGoogle } from "@ai-sdk/google";
-import { createOpenAI } from "@ai-sdk/openai";
+import { generateText, stepCountIs } from "ai";
 import { z } from "zod";
+import { createConfiguredModel } from "@/lib/ai/model-factory";
 import {
   DEFAULT_MEAL_SUGGESTION_SYSTEM_PROMPT,
   getAISettings,
-  type AISettings,
 } from "@/lib/repositories/ai-settings";
 import { getRecipeById, getRecipes } from "@/lib/repositories/recipes";
 import { searchTacoFoods, getTacoFoodByNumber } from "@/lib/nutrition/taco";
@@ -35,22 +32,6 @@ export type ResolvedMealSuggestion = AiMealSuggestionOutput & {
   }>;
   aiModel: string;
 };
-
-function createConfiguredModel(settings: AISettings): LanguageModel {
-  if (!settings.api_key) {
-    throw new Error("API Key de IA nao configurada. Acesse Dashboard > Sistema > IA e salve uma chave valida.");
-  }
-
-  if (settings.provider === "openai") {
-    return createOpenAI({ apiKey: settings.api_key })(settings.model);
-  }
-
-  if (settings.provider === "anthropic") {
-    return createAnthropic({ apiKey: settings.api_key })(settings.model);
-  }
-
-  return createGoogle({ apiKey: settings.api_key })(settings.model);
-}
 
 function buildPrompt(input: AiMealSuggestionContext) {
   const requestedShape = `{

@@ -626,6 +626,20 @@ export const guideCategories: GuideCategory[] = [
           "Em todos os casos, a IA escolhe apenas entre alimentos e receitas que já existem no sistema — ela não inventa itens novos, e toda sugestão fica em revisão até você confirmar.",
         ],
       },
+      {
+        id: "assistente-chat-flutuante",
+        title: "Assistente de chat flutuante",
+        summary:
+          "O botão redondo no canto inferior direito, disponível em qualquer tela do dashboard, abre um chat que explica como usar o sistema.",
+        steps: [
+          "Clique no botão para abrir e digite sua dúvida, ou escolha uma das perguntas rápidas sugeridas.",
+          "As respostas vêm do mesmo conteúdo da Central de Ajuda — se a dúvida não estiver coberta, ele avisa em vez de inventar um passo que não existe.",
+        ],
+        cautions: [
+          "O assistente só orienta sobre o uso do sistema — nunca sobre conduta clínica, diagnóstico ou dados de um paciente específico.",
+          "Também depende da chave de IA configurada acima; sem ela, o chat avisa e leva direto para esta tela.",
+        ],
+      },
     ],
   },
   {

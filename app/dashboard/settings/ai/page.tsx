@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Bot, Save, ShieldCheck } from "lucide-react";
 import { HelpPopover } from "@/components/dashboard/HelpPopover";
 
-type AIProvider = "openai" | "anthropic" | "google";
+type AIProvider = "openai" | "anthropic" | "google" | "deepseek" | "xai" | "groq" | "mistral";
 
 type AISettingsForm = {
   provider: AIProvider;
@@ -21,12 +21,20 @@ const providerModels: Record<AIProvider, string[]> = {
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"],
   anthropic: ["claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250929", "claude-opus-4-1-20250805"],
   google: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
+  deepseek: ["deepseek-chat", "deepseek-reasoner"],
+  xai: ["grok-4", "grok-4-fast", "grok-3", "grok-3-mini"],
+  groq: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "deepseek-r1-distill-llama-70b", "gemma2-9b-it"],
+  mistral: ["mistral-large-latest", "mistral-small-latest", "pixtral-large-latest", "codestral-latest"],
 };
 
 const providerLabels: Record<AIProvider, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
   google: "Google",
+  deepseek: "DeepSeek",
+  xai: "xAI (Grok)",
+  groq: "Groq",
+  mistral: "Mistral",
 };
 
 const emptyForm: AISettingsForm = {
@@ -193,8 +201,11 @@ export default function AISettingsPage() {
               value={form.chat_system_prompt}
               onChange={(event) => setForm({ ...form, chat_system_prompt: event.target.value })}
               className="brand-input min-h-[180px] resize-y font-mono text-xs leading-5"
-              placeholder="Prompt para futuros recursos de chat/assistente."
+              placeholder="Prompt usado pelo assistente de chat flutuante do dashboard (ajuda sobre o uso do sistema)."
             />
+            <p className="mt-2 text-xs leading-5 text-[#8A7B70]">
+              Usado pelo botão de chat flutuante em todas as telas do dashboard. Ele só orienta sobre o uso do sistema — nunca dá conduta clínica.
+            </p>
           </div>
 
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}

@@ -1,9 +1,7 @@
 import type { SubmissionWithAnswers } from "@/lib/repositories/submissions";
 import type { PreAnalysis } from "@/lib/repositories/pre-analyses";
-import { generateText, type LanguageModel } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createGoogle } from "@ai-sdk/google";
-import { createOpenAI } from "@ai-sdk/openai";
+import { generateText } from "ai";
+import { createConfiguredModel } from "@/lib/ai/model-factory";
 import {
   getTemplateDetail,
   getTemplatesByGroup,
@@ -299,22 +297,6 @@ function generateRuleBasedDraft(input: GenerateProtocolInput): ProtocolDraftOutp
 }
 
 // ── Gerador com IA externa (Anthropic Claude) ─────────────────────────────
-
-function createConfiguredModel(settings: AISettings): LanguageModel {
-  if (!settings.api_key) {
-    throw new Error("API Key de IA nao configurada. Acesse Dashboard > Sistema > IA e salve uma chave valida.");
-  }
-
-  if (settings.provider === "openai") {
-    return createOpenAI({ apiKey: settings.api_key })(settings.model);
-  }
-
-  if (settings.provider === "anthropic") {
-    return createAnthropic({ apiKey: settings.api_key })(settings.model);
-  }
-
-  return createGoogle({ apiKey: settings.api_key })(settings.model);
-}
 
 async function generateWithConfiguredAi(
   input: GenerateProtocolInput,
