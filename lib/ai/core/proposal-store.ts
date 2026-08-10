@@ -1,9 +1,15 @@
 import {
+  cancelAiActionProposal,
+  claimAiActionProposal,
   createAiActionProposal,
+  finalizeAiActionProposal,
   getAiActionProposal,
+  getProposalExecution,
   isAiActionProposalExpired,
-  markAiActionProposalStatus,
+  markAiActionProposalExpired,
+  recordProposalExecution,
   type AiActionProposal,
+  type AiProposalExecution,
 } from "@/lib/repositories/ai-action-proposals";
 import type { ProposedAction } from "@/lib/ai/schemas/action.schema";
 
@@ -42,5 +48,14 @@ export async function persistProposedAction(
   return { ...action, proposalId: record.id, expiresAt: record.expires_at };
 }
 
-export { getAiActionProposal, markAiActionProposalStatus, isAiActionProposalExpired };
-export type { AiActionProposal };
+export {
+  getAiActionProposal,
+  claimAiActionProposal,
+  finalizeAiActionProposal,
+  cancelAiActionProposal,
+  markAiActionProposalExpired,
+  isAiActionProposalExpired,
+  getProposalExecution,
+  recordProposalExecution,
+};
+export type { AiActionProposal, AiProposalExecution };

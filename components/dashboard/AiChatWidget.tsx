@@ -85,7 +85,12 @@ const markdownComponents: Components = {
   ),
 };
 
-type ProposedField = { key: string; label: string; value: string; included: boolean };
+// Toda proposta sensitive/clinical e persistida e confirmada server-side
+// (lib/ai/core/proposal-store.ts + proposal-handlers.ts) — o campo aqui e so
+// para EXIBIR o que foi proposto. Editar nao muda o que e executado: a
+// confirmacao usa exclusivamente os parametros gravados no servidor no
+// momento da proposta.
+type ProposedField = { key: string; label: string; value: string };
 type ProposalStatus = "pending" | "applying" | "applied" | "discarded" | "error";
 
 type ProposedRecipeIngredient = { food_name: string; grams: number; taco_number: number | null };
@@ -128,33 +133,32 @@ const APPLIED_MESSAGES: Partial<Record<ChatProposal["kind"], string>> = {
   new_blog_post: "Rascunho salvo no blog. Abrindo a lista...",
   new_appointment: "Consulta agendada.",
   new_task: "Tarefa criada.",
+  nutrition_record: "Prontuário atualizado.",
+  pre_analysis: "Pré-análise salva.",
+  client_protocol: "Notas do protocolo atualizadas.",
 };
 
-function parseBrDateTimeToIso(text: string): string | null {
-  const match = text.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})$/);
-  if (!match) return null;
-  const [, day, month, year, hour, minute] = match;
-  const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
-
-function parseBrDateToIsoDate(text: string): string | null {
-  const match = text.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (!match) return null;
-  const [, day, month, year] = match;
-  return `${year}-${month}-${day}`;
+interface ChatProposalBase {
+  title: string;
+  applyLabel: string;
+  fields: ProposedField[];
+  status: ProposalStatus;
+  error?: string;
+  /** Id da proposta persistida no servidor — a UNICA coisa enviada de volta na confirmação. */
+  proposalId?: string;
+  expiresAt?: string;
 }
 
 type ChatProposal =
-  | { kind: "nutrition_record"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
-  | { kind: "pre_analysis"; submissionId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
-  | { kind: "client_protocol"; clientId: string; clientProtocolId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
-  | { kind: "new_client"; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
-  | { kind: "new_recipe"; title: string; applyLabel: string; fields: ProposedField[]; ingredients: ProposedRecipeIngredient[]; status: ProposalStatus; error?: string }
-  | { kind: "new_protocol"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
-  | { kind: "new_blog_post"; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
-  | { kind: "new_appointment"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string; proposalId?: string; expiresAt?: string }
-  | { kind: "new_task"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string };
+  | (ChatProposalBase & { kind: "nutrition_record"; clientId: string })
+  | (ChatProposalBase & { kind: "pre_analysis"; submissionId: string })
+  | (ChatProposalBase & { kind: "client_protocol"; clientId: string; clientProtocolId: string })
+  | (ChatProposalBase & { kind: "new_client" })
+  | (ChatProposalBase & { kind: "new_recipe"; ingredients: ProposedRecipeIngredient[] })
+  | (ChatProposalBase & { kind: "new_protocol"; clientId: string })
+  | (ChatProposalBase & { kind: "new_blog_post" })
+  | (ChatProposalBase & { kind: "new_appointment"; clientId: string })
+  | (ChatProposalBase & { kind: "new_task"; clientId: string });
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -165,37 +169,38 @@ type ChatMessage = {
 
 type PendingAttachment = { name: string; mediaType: AllowedAttachmentMediaType; base64: string };
 
+function toFields(record: Record<string, string>, labels: Record<string, string>): ProposedField[] {
+  return Object.entries(record)
+    .filter(([, value]) => value)
+    .map(([key, value]) => ({ key, label: labels[key] ?? key, value }));
+}
+
 function buildProposal(update: Record<string, unknown>): ChatProposal | null {
+  const proposalId = update.proposalId as string | undefined;
+  const expiresAt = update.expiresAt as string | undefined;
+
   if (update.kind === "nutrition_record") {
-    const fields = update.fields as Record<string, string>;
     return {
       kind: "nutrition_record",
       clientId: update.clientId as string,
       title: "Proposta para o prontuário",
       applyLabel: "Aplicar no prontuário",
       status: "pending",
-      fields: Object.entries(fields).map(([key, value]) => ({
-        key,
-        label: NUTRITION_TEXT_FIELD_LABELS[key as NutritionRecordTextFieldKey] ?? key,
-        value,
-        included: true,
-      })),
+      proposalId,
+      expiresAt,
+      fields: toFields(update.fields as Record<string, string>, NUTRITION_TEXT_FIELD_LABELS as Record<string, string>),
     };
   }
   if (update.kind === "pre_analysis") {
-    const fields = update.fields as Record<string, string>;
     return {
       kind: "pre_analysis",
       submissionId: update.submissionId as string,
       title: "Proposta de pré-análise",
       applyLabel: "Aplicar na pré-análise",
       status: "pending",
-      fields: Object.entries(fields).map(([key, value]) => ({
-        key,
-        label: PRE_ANALYSIS_FIELD_LABELS[key as PreAnalysisFieldKey] ?? key,
-        value,
-        included: true,
-      })),
+      proposalId,
+      expiresAt,
+      fields: toFields(update.fields as Record<string, string>, PRE_ANALYSIS_FIELD_LABELS as Record<string, string>),
     };
   }
   if (update.kind === "client_protocol") {
@@ -206,27 +211,20 @@ function buildProposal(update: Record<string, unknown>): ChatProposal | null {
       title: "Proposta para o protocolo do cliente",
       applyLabel: "Aplicar no protocolo",
       status: "pending",
-      fields: [{
-        key: "professionalNotes",
-        label: "Notas profissionais do protocolo",
-        value: update.professionalNotes as string,
-        included: true,
-      }],
+      proposalId,
+      expiresAt,
+      fields: [{ key: "professionalNotes", label: "Notas profissionais do protocolo", value: update.professionalNotes as string }],
     };
   }
   if (update.kind === "new_client") {
-    const fields = update.fields as Record<string, string>;
     return {
       kind: "new_client",
       title: "Proposta de novo cadastro",
       applyLabel: "Cadastrar cliente",
       status: "pending",
-      fields: Object.entries(fields).map(([key, value]) => ({
-        key,
-        label: NEW_CLIENT_FIELD_LABELS[key as NewClientFieldKey] ?? key,
-        value,
-        included: true,
-      })),
+      proposalId,
+      expiresAt,
+      fields: toFields(update.fields as Record<string, string>, NEW_CLIENT_FIELD_LABELS as Record<NewClientFieldKey, string>),
     };
   }
   if (update.kind === "new_recipe") {
@@ -235,78 +233,62 @@ function buildProposal(update: Record<string, unknown>): ChatProposal | null {
       title: "Proposta de nova receita",
       applyLabel: "Salvar receita na biblioteca",
       status: "pending",
+      proposalId,
+      expiresAt,
       ingredients: update.ingredients as ProposedRecipeIngredient[],
       fields: [
-        { key: "recipe_title", label: "Título", value: update.title as string, included: true },
-        { key: "meal_group", label: "Grupo da refeição", value: update.meal_group as string, included: true },
-        { key: "servings", label: "Porções", value: String(update.servings), included: true },
-        { key: "preparation_steps", label: "Modo de preparo", value: (update.preparation_steps as string) || "", included: true },
+        { key: "recipe_title", label: "Título", value: update.title as string },
+        { key: "meal_group", label: "Grupo da refeição", value: update.meal_group as string },
+        { key: "servings", label: "Porções", value: String(update.servings) },
+        { key: "preparation_steps", label: "Modo de preparo", value: (update.preparation_steps as string) || "" },
       ],
     };
   }
   if (update.kind === "new_protocol") {
-    const fields = update.fields as Record<string, string>;
     return {
       kind: "new_protocol",
       clientId: update.clientId as string,
       title: "Proposta de novo protocolo",
       applyLabel: "Criar protocolo",
       status: "pending",
-      fields: Object.entries(fields).map(([key, value]) => ({
-        key,
-        label: NEW_PROTOCOL_FIELD_LABELS[key] ?? key,
-        value,
-        included: true,
-      })),
+      proposalId,
+      expiresAt,
+      fields: toFields(update.fields as Record<string, string>, NEW_PROTOCOL_FIELD_LABELS),
     };
   }
   if (update.kind === "new_blog_post") {
-    const fields = update.fields as Record<string, string>;
     return {
       kind: "new_blog_post",
       title: "Proposta de rascunho de post",
       applyLabel: "Salvar rascunho no blog",
       status: "pending",
-      fields: Object.entries(fields).filter(([, value]) => value).map(([key, value]) => ({
-        key,
-        label: NEW_BLOG_POST_FIELD_LABELS[key] ?? key,
-        value,
-        included: true,
-      })),
+      proposalId,
+      expiresAt,
+      fields: toFields(update.fields as Record<string, string>, NEW_BLOG_POST_FIELD_LABELS),
     };
   }
   if (update.kind === "new_appointment") {
-    const fields = update.fields as Record<string, string>;
     return {
       kind: "new_appointment",
       clientId: update.clientId as string,
       title: "Proposta de nova consulta",
       applyLabel: "Agendar consulta",
       status: "pending",
-      proposalId: update.proposalId as string | undefined,
-      expiresAt: update.expiresAt as string | undefined,
-      fields: Object.entries(fields).filter(([, value]) => value).map(([key, value]) => ({
-        key,
-        label: NEW_APPOINTMENT_FIELD_LABELS[key] ?? key,
-        value,
-        included: true,
-      })),
+      proposalId,
+      expiresAt,
+      fields: toFields(update.fields as Record<string, string>, NEW_APPOINTMENT_FIELD_LABELS),
     };
   }
   if (update.kind === "new_task") {
-    const fields = update.fields as Record<string, string>;
     return {
       kind: "new_task",
       clientId: update.clientId as string,
       title: "Proposta de nova tarefa",
       applyLabel: "Criar tarefa",
       status: "pending",
-      fields: Object.entries(fields).filter(([, value]) => value).map(([key, value]) => ({
-        key,
-        label: NEW_TASK_FIELD_LABELS[key] ?? key,
-        value,
-        included: true,
-      })),
+      proposalId,
+      expiresAt,
+      fields: toFields(update.fields as Record<string, string>, NEW_TASK_FIELD_LABELS),
     };
   }
   return null;
@@ -438,236 +420,68 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
     }));
   }
 
-  function toggleProposalField(messageIndex: number, fieldKey: string) {
-    updateProposal(messageIndex, (proposal) => ({
-      ...proposal,
-      fields: proposal.fields.map((field) => field.key === fieldKey ? { ...field, included: !field.included } : field),
-    }));
+  function discardProposal(messageIndex: number, proposal: ChatProposal) {
+    updateProposal(messageIndex, (current) => ({ ...current, status: "discarded" }));
+    // Melhor esforço: marca a proposta como cancelada no servidor tambem,
+    // para que ela nao possa mais ser confirmada (ex.: por uma aba antiga
+    // ainda aberta com o mesmo link). A UI ja reflete "descartada" mesmo se
+    // essa chamada falhar.
+    if (proposal.proposalId) {
+      void fetch(`/api/admin/ai/proposals/${proposal.proposalId}/cancel`, { method: "POST" }).catch(() => {});
+    }
   }
 
-  function editProposalField(messageIndex: number, fieldKey: string, value: string) {
-    updateProposal(messageIndex, (proposal) => ({
-      ...proposal,
-      fields: proposal.fields.map((field) => field.key === fieldKey ? { ...field, value } : field),
-    }));
-  }
-
-  function discardProposal(messageIndex: number) {
-    updateProposal(messageIndex, (proposal) => ({ ...proposal, status: "discarded" }));
+  function navigateAfterConfirm(proposal: ChatProposal, data: Record<string, unknown>) {
+    switch (proposal.kind) {
+      case "new_client":
+        if (typeof data.clientId === "string") router.push(`/dashboard/clients/${data.clientId}`);
+        return;
+      case "new_recipe":
+        router.push("/dashboard/templates/receitas");
+        return;
+      case "new_blog_post":
+        router.push("/dashboard/blog");
+        return;
+      case "new_protocol":
+        if (context?.clientId === proposal.clientId) router.refresh();
+        else router.push(`/dashboard/clients/${proposal.clientId}`);
+        return;
+      case "nutrition_record":
+      case "client_protocol":
+      case "new_appointment":
+      case "new_task":
+        if (context?.clientId === proposal.clientId) router.refresh();
+        return;
+      case "pre_analysis":
+        if (context?.submissionId === proposal.submissionId) router.refresh();
+        return;
+    }
   }
 
   async function applyProposal(messageIndex: number, proposal: ChatProposal) {
-    updateProposal(messageIndex, (current) => ({ ...current, status: "applying", error: undefined }));
-    const includedEntries = proposal.fields.filter((field) => field.included);
-    if (!includedEntries.length) {
-      updateProposal(messageIndex, (current) => ({ ...current, status: "error", error: "Selecione ao menos um campo para aplicar." }));
+    if (!proposal.proposalId) {
+      updateProposal(messageIndex, (current) => ({
+        ...current,
+        status: "error",
+        error: "Esta proposta não pôde ser confirmada pelo servidor. Peça novamente ao assistente.",
+      }));
       return;
     }
 
+    updateProposal(messageIndex, (current) => ({ ...current, status: "applying", error: undefined }));
+
     try {
-      if (proposal.kind === "nutrition_record") {
-        const payload = Object.fromEntries(includedEntries.map((field) => [field.key, field.value]));
-        const response = await fetch(`/api/admin/clients/${proposal.clientId}/nutrition-record`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar no prontuário.");
-        if (context?.clientId === proposal.clientId) router.refresh();
-      }
-
-      if (proposal.kind === "pre_analysis") {
-        const currentResponse = await fetch(`/api/admin/submissions/${proposal.submissionId}/pre-analysis`, { cache: "no-store" });
-        const currentData = currentResponse.ok ? await currentResponse.json() : null;
-        const merged = {
-          summary: currentData?.summary ?? null,
-          attention_points: currentData?.attention_points ?? null,
-          main_goal: currentData?.main_goal ?? null,
-          restrictions: currentData?.restrictions ?? null,
-          professional_notes: currentData?.professional_notes ?? null,
-          priority: currentData?.priority ?? "normal",
-        };
-        for (const field of includedEntries) (merged as Record<string, string>)[field.key] = field.value;
-        const response = await fetch(`/api/admin/submissions/${proposal.submissionId}/pre-analysis`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(merged),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar a pré-análise.");
-        if (context?.submissionId === proposal.submissionId) router.refresh();
-      }
-
-      if (proposal.kind === "client_protocol") {
-        const notes = includedEntries.find((field) => field.key === "professionalNotes")?.value;
-        const response = await fetch(`/api/admin/clients/${proposal.clientId}/protocols/${proposal.clientProtocolId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ professionalNotes: notes }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar o protocolo.");
-        if (context?.clientId === proposal.clientId) router.refresh();
-      }
-
-      if (proposal.kind === "new_client") {
-        const name = includedEntries.find((field) => field.key === "name")?.value;
-        if (!name?.trim()) throw new Error("O nome é obrigatório para cadastrar o cliente.");
-        const payload = Object.fromEntries(includedEntries.map((field) => [field.key, field.value]));
-        const response = await fetch("/api/admin/clients", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message ?? "Não foi possível cadastrar o cliente.");
-        if (data.id) router.push(`/dashboard/clients/${data.id}`);
-      }
-
-      if (proposal.kind === "new_recipe") {
-        const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
-        const title = byKey("recipe_title");
-        const mealGroup = byKey("meal_group");
-        if (!title?.trim() || !mealGroup?.trim()) throw new Error("Título e grupo da refeição são obrigatórios para salvar a receita.");
-        const response = await fetch("/api/admin/recipes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            meal_group: mealGroup,
-            servings: Math.max(1, Number(byKey("servings")) || 1),
-            preparation_steps: byKey("preparation_steps") || null,
-            ingredients: proposal.ingredients.map((ingredient) => ({
-              taco_number: ingredient.taco_number,
-              food_name: ingredient.food_name,
-              grams: ingredient.grams,
-            })),
-            source_note: "Receita criada com apoio de IA a partir de um pedido no chat. Revisar antes de prescrever.",
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar a receita.");
-        router.push("/dashboard/templates/receitas");
-      }
-
-      if (proposal.kind === "new_protocol") {
-        const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
-        const title = byKey("title");
-        if (!title?.trim()) throw new Error("O título é obrigatório para criar o protocolo.");
-        const response = await fetch(`/api/admin/clients/${proposal.clientId}/protocols`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mode: "create_personalized",
-            title,
-            category: byKey("category") || null,
-            description: byKey("description") || null,
-            professionalNotes: byKey("professional_notes") || null,
-            createTasks: false,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message ?? "Não foi possível criar o protocolo.");
-        if (context?.clientId === proposal.clientId) router.refresh();
-        else router.push(`/dashboard/clients/${proposal.clientId}`);
-      }
-
-      if (proposal.kind === "new_blog_post") {
-        const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
-        const title = byKey("title");
-        const excerpt = byKey("excerpt");
-        const contentMarkdown = byKey("content_markdown");
-        if (!title?.trim() || !excerpt?.trim() || !contentMarkdown?.trim()) {
-          throw new Error("Título, resumo e conteúdo são obrigatórios para salvar o rascunho.");
-        }
-        const tags = (byKey("tags") || "").split(",").map((tag) => tag.trim()).filter(Boolean);
-        const response = await fetch("/api/admin/blog-posts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            excerpt,
-            content_markdown: contentMarkdown,
-            category: byKey("category") || null,
-            tags,
-            seo_title: byKey("seo_title") || title,
-            seo_description: byKey("seo_description") || excerpt,
-            status: "draft",
-            ai_generated: true,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar o rascunho.");
-        router.push("/dashboard/blog");
-      }
-
-      if (proposal.kind === "new_appointment") {
-        if (proposal.proposalId) {
-          // Proposta persistida server-side: o corpo da confirmacao vai
-          // vazio de proposito — o servidor usa exclusivamente os
-          // parametros gravados no momento da proposta (nunca o que esta
-          // editavel na tela), revalida o horario contra conflitos reais e
-          // so entao cria a consulta. Isso impede replay (a proposta so
-          // pode ser confirmada uma vez) e impede que o horario proposto
-          // seja trocado depois de gerado.
-          const response = await fetch(`/api/admin/ai/proposals/${proposal.proposalId}/confirm`, {
-            method: "POST",
-          });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.message ?? "Não foi possível agendar a consulta.");
-          if (context?.clientId === proposal.clientId) router.refresh();
-        } else {
-          // Compatibilidade: proposta sem id persistido (formato legado).
-          const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
-          const title = byKey("title");
-          const startsAtDisplay = byKey("starts_at_display");
-          if (!title?.trim() || !startsAtDisplay?.trim()) throw new Error("Título e data/hora são obrigatórios para agendar a consulta.");
-          const startsAtIso = parseBrDateTimeToIso(startsAtDisplay);
-          if (!startsAtIso) throw new Error("Data e hora inválidas. Use o formato DD/MM/AAAA HH:mm.");
-          const response = await fetch("/api/admin/appointments", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              client_id: proposal.clientId,
-              title,
-              appointment_type: byKey("appointment_type") || "consulta",
-              starts_at: startsAtIso,
-              location: byKey("location") || null,
-              notes: byKey("notes") || null,
-              status: "agendado",
-            }),
-          });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.message ?? "Não foi possível agendar a consulta.");
-          if (context?.clientId === proposal.clientId) router.refresh();
-        }
-      }
-
-      if (proposal.kind === "new_task") {
-        const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
-        const title = byKey("title");
-        if (!title?.trim()) throw new Error("O título é obrigatório para criar a tarefa.");
-        const dueDateDisplay = byKey("due_date_display");
-        const dueDate = dueDateDisplay ? parseBrDateToIsoDate(dueDateDisplay) : null;
-        if (dueDateDisplay && !dueDate) throw new Error("Prazo inválido. Use o formato DD/MM/AAAA.");
-        const response = await fetch("/api/admin/client-tasks", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            client_id: proposal.clientId,
-            title,
-            description: byKey("description") || null,
-            due_date: dueDate,
-            status: "pendente",
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message ?? "Não foi possível criar a tarefa.");
-        if (context?.clientId === proposal.clientId) router.refresh();
-      }
-
+      // O corpo vai vazio de proposito: a confirmacao usa exclusivamente os
+      // parametros que o servidor persistiu no momento da proposta — nunca
+      // o que estiver (ou nao) editado na tela. Isso impede que o frontend
+      // troque os dados depois da proposta pronta, e o servidor revalida
+      // tudo de novo (ownership, conflito de horario, duplicidade etc.)
+      // antes de executar.
+      const response = await fetch(`/api/admin/ai/proposals/${proposal.proposalId}/confirm`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Não foi possível concluir a ação.");
       updateProposal(messageIndex, (current) => ({ ...current, status: "applied" }));
+      navigateAfterConfirm(proposal, data);
     } catch (cause) {
       updateProposal(messageIndex, (current) => ({
         ...current,
@@ -767,9 +581,7 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
                 {message.proposal && (
                   <ProposalCard
                     proposal={message.proposal}
-                    onToggleField={(fieldKey) => toggleProposalField(index, fieldKey)}
-                    onEditField={(fieldKey, value) => editProposalField(index, fieldKey, value)}
-                    onDiscard={() => discardProposal(index)}
+                    onDiscard={() => discardProposal(index, message.proposal!)}
                     onApply={() => void applyProposal(index, message.proposal!)}
                   />
                 )}
@@ -857,10 +669,8 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
   );
 }
 
-function ProposalCard({ proposal, onToggleField, onEditField, onDiscard, onApply }: {
+function ProposalCard({ proposal, onDiscard, onApply }: {
   proposal: ChatProposal;
-  onToggleField: (fieldKey: string) => void;
-  onEditField: (fieldKey: string, value: string) => void;
   onDiscard: () => void;
   onApply: () => void;
 }) {
@@ -873,40 +683,24 @@ function ProposalCard({ proposal, onToggleField, onEditField, onDiscard, onApply
     return (
       <p className="flex items-center gap-1.5 rounded-xl border border-[#D9E4D3] bg-[#F4F8F1] px-3 py-2 text-xs font-semibold text-[#4F6847]">
         <Check className="h-3.5 w-3.5" />
-        {APPLIED_MESSAGES[proposal.kind] ?? "Alterações salvas com os campos selecionados."}
+        {APPLIED_MESSAGES[proposal.kind] ?? "Concluído."}
       </p>
     );
   }
 
   const applying = proposal.status === "applying";
-  // Propostas persistidas server-side (hoje, so new_appointment) sao
-  // confirmadas usando apenas os parametros gravados no momento da
-  // proposta — editar o texto aqui nao mudaria o que e de fato criado, entao
-  // os campos ficam somente para revisao, nao para edicao.
-  const isServerLockedProposal = proposal.kind === "new_appointment" && Boolean(proposal.proposalId);
 
   return (
     <div className="max-w-[92%] space-y-3 rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">{proposal.title} — revise antes de aplicar</p>
-      {isServerLockedProposal && (
-        <p className="rounded-lg bg-[#FBF7F1] px-2.5 py-1.5 text-[11px] leading-4 text-[#8A7B70]">
-          Estes dados foram validados pelo servidor e não podem ser editados aqui. Se algo estiver errado, descarte e peça de novo.
-        </p>
-      )}
-      <div className="space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">{proposal.title}</p>
+      <div className="space-y-2.5">
         {proposal.fields.map((field) => (
-          <label key={field.key} className="block">
-            <span className="mb-1 flex items-center gap-2 text-xs font-semibold text-[#3A3028]">
-              <input type="checkbox" checked={field.included} onChange={() => onToggleField(field.key)} disabled={isServerLockedProposal} className="h-3.5 w-3.5 accent-[#7F9A74]" />
-              {field.label}
-            </span>
-            <textarea
-              value={field.value}
-              onChange={(event) => onEditField(field.key, event.target.value)}
-              disabled={!field.included || applying || isServerLockedProposal}
-              className={`w-full resize-y rounded-lg border border-[#EDE1D6] bg-white px-2 py-1.5 text-xs leading-5 text-[#3A3028] outline-none focus:border-[#7F9A74] disabled:opacity-50 ${field.key === "content_markdown" ? "min-h-56" : "min-h-16"}`}
-            />
-          </label>
+          <div key={field.key}>
+            <p className="mb-0.5 text-xs font-semibold text-[#3A3028]">{field.label}</p>
+            <p className="whitespace-pre-wrap rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] px-2.5 py-1.5 text-xs leading-5 text-[#4F453D]">
+              {field.value || "—"}
+            </p>
+          </div>
         ))}
       </div>
       {proposal.kind === "new_recipe" && (
@@ -930,7 +724,7 @@ function ProposalCard({ proposal, onToggleField, onEditField, onDiscard, onApply
           Descartar
         </button>
         <button type="button" onClick={onApply} disabled={applying} className="rounded-full bg-[#7F9A74] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#607A56] disabled:cursor-not-allowed disabled:opacity-60">
-          {applying ? "Aplicando..." : proposal.applyLabel}
+          {applying ? "Executando..." : proposal.applyLabel}
         </button>
       </div>
     </div>
