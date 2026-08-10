@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { generateText, stepCountIs, type ToolSet } from "ai";
+import { generateText, stepCountIs, type ModelMessage, type ToolSet } from "ai";
 import { createConfiguredModel } from "@/lib/ai/model-factory";
 import { buildSystemUsageKnowledgeBase } from "@/lib/ai/system-chat-knowledge";
 import {
@@ -21,10 +21,36 @@ import {
   buildClientProtocolsContext,
   proposeClientProtocolNotesInputSchema,
 } from "@/lib/ai/client-protocol-assistant";
+import {
+  FIND_CLIENT_TOOL_NAME,
+  NAVIGATE_TOOL_NAME,
+  NAVIGATION_ASSISTANT_INSTRUCTIONS,
+  executeFindClient,
+  findClientInputSchema,
+  navigateInputSchema,
+  resolveNavigationPath,
+  type NavigateInput,
+} from "@/lib/ai/navigation-assistant";
+import {
+  CLIENT_CREATION_ASSISTANT_INSTRUCTIONS,
+  PROPOSE_NEW_CLIENT_TOOL_NAME,
+  proposeNewClientInputSchema,
+  type ProposeNewClientInput,
+} from "@/lib/ai/client-creation-assistant";
+import {
+  PROPOSE_NEW_RECIPE_TOOL_NAME,
+  RECIPE_CREATION_ASSISTANT_INSTRUCTIONS,
+  executeProposeNewRecipe,
+  proposeNewRecipeInputSchema,
+  type ProposeNewRecipeOutput,
+} from "@/lib/ai/recipe-creation-assistant";
+import { DIET_REVIEW_ASSISTANT_INSTRUCTIONS, buildActiveMealPlanContext } from "@/lib/ai/diet-review-assistant";
+import { ALLOWED_ATTACHMENT_MEDIA_TYPES, MAX_ATTACHMENT_BASE64_LENGTH } from "@/lib/ai/chat-attachments";
 import { DEFAULT_CHAT_SYSTEM_PROMPT, getAISettings } from "@/lib/repositories/ai-settings";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
 import { getClientProtocols } from "@/lib/repositories/client-protocols";
+import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
 import { getNutritionRecord } from "@/lib/repositories/nutrition-records";
 import { getSubmissionById } from "@/lib/repositories/submissions";
 import { getPreAnalysisBySubmissionId } from "@/lib/repositories/pre-analyses";
@@ -35,13 +61,23 @@ import { getRequestFingerprint } from "@/lib/security/request";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Historico e mantido inteiro na UI, mas o cliente so envia uma janela
+// recente (ver AiChatWidget) — o limite aqui e so uma rede de seguranca
+// generosa contra payloads anormais, nao um teto real de conversa.
 const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),
-  content: z.string().min(1).max(2000),
+  content: z.string().min(1).max(4000),
+});
+
+const attachmentSchema = z.object({
+  name: z.string().min(1).max(200),
+  mediaType: z.enum(ALLOWED_ATTACHMENT_MEDIA_TYPES),
+  data: z.string().min(1).max(MAX_ATTACHMENT_BASE64_LENGTH),
 });
 
 const requestSchema = z.object({
-  messages: z.array(messageSchema).min(1).max(20),
+  messages: z.array(messageSchema).min(1).max(60),
+  attachment: attachmentSchema.optional(),
   context: z.object({
     clientId: z.string().min(1).max(120).optional(),
     submissionId: z.string().min(1).max(120).optional(),
@@ -52,11 +88,14 @@ export async function POST(req: NextRequest) {
   const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
 
+  // Limite generoso: existe so como rede de seguranca contra um loop com
+  // bug disparando chamadas sem parar (o que geraria custo real na API do
+  // provedor de IA), nao para restringir o uso normal do chat.
   const limit = await consumeRateLimit(req, {
     scope: "ai-system-chat",
-    limit: 30,
+    limit: 600,
     windowMs: 60 * 60 * 1000,
-    blockMs: 30 * 60 * 1000,
+    blockMs: 5 * 60 * 1000,
   });
   if (!limit.allowed) {
     return NextResponse.json(
@@ -90,11 +129,37 @@ export async function POST(req: NextRequest) {
       buildSystemUsageKnowledgeBase(),
     ];
 
-    const tools: ToolSet = {};
+    systemPromptParts.push(NAVIGATION_ASSISTANT_INSTRUCTIONS, CLIENT_CREATION_ASSISTANT_INSTRUCTIONS, RECIPE_CREATION_ASSISTANT_INSTRUCTIONS);
+    const tools: ToolSet = {
+      [FIND_CLIENT_TOOL_NAME]: {
+        description: "Busca clientes pelo nome para descobrir o id antes de navegar ate a ficha dele.",
+        inputSchema: findClientInputSchema,
+        execute: executeFindClient,
+      },
+      [NAVIGATE_TOOL_NAME]: {
+        description: "Navega o sistema ate a tela pedida (ficha de um cliente, lista de clientes, agenda, biblioteca de protocolos/modelos/receitas, tarefas ou financeiro).",
+        inputSchema: navigateInputSchema,
+        execute: async (input: NavigateInput) => input,
+      },
+      [PROPOSE_NEW_CLIENT_TOOL_NAME]: {
+        description: "Registra uma proposta de cadastro de um novo cliente/paciente com os dados informados, para revisao humana antes de criar de verdade.",
+        inputSchema: proposeNewClientInputSchema,
+        execute: async (input: ProposeNewClientInput) => input,
+      },
+      [PROPOSE_NEW_RECIPE_TOOL_NAME]: {
+        description: "Busca ingredientes reais na TACO e monta uma proposta de receita nova (titulo, grupo, porcoes, ingredientes e modo de preparo) para revisao humana antes de salvar na biblioteca.",
+        inputSchema: proposeNewRecipeInputSchema,
+        execute: executeProposeNewRecipe,
+      },
+    };
 
     if (client) {
       const record = await getNutritionRecord(client.id);
       systemPromptParts.push(PRONTUARIO_ASSISTANT_INSTRUCTIONS, buildNutritionRecordContext(client.name, record));
+
+      const activeMealPlan = await getActiveMealPlan(client.id);
+      systemPromptParts.push(DIET_REVIEW_ASSISTANT_INSTRUCTIONS, buildActiveMealPlanContext(activeMealPlan));
+
       tools[PROPOSE_NUTRITION_RECORD_TOOL_NAME] = {
         description: "Registra uma proposta de preenchimento/atualizacao de campos do prontuario nutricional do cliente atual, para revisao humana antes de salvar.",
         inputSchema: proposeNutritionRecordInputSchema,
@@ -122,22 +187,43 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    const hasTools = Object.keys(tools).length > 0;
+    const attachment = parsed.data.attachment;
+    if (attachment) {
+      systemPromptParts.push(
+        `A nutricionista anexou um arquivo a mensagem mais recente: "${attachment.name}". Leia o conteudo e use para ajudar a interpretar exames/diagnosticos, complementar o prontuario, a pre-analise ou a conduta, conforme o pedido. Deixe claro que sua leitura e um apoio tecnico e a decisao final e da profissional.`
+      );
+    }
+
+    const messages: ModelMessage[] = parsed.data.messages.map((message, index, array) => {
+      const isLastMessage = index === array.length - 1;
+      if (!attachment || !isLastMessage || message.role !== "user") return message;
+      return {
+        role: "user",
+        content: [
+          { type: "text", text: message.content },
+          { type: "file", data: attachment.data, mediaType: attachment.mediaType, filename: attachment.name },
+        ],
+      };
+    });
 
     const result = await generateText({
       model,
       system: systemPromptParts.join("\n\n"),
-      messages: parsed.data.messages,
-      stopWhen: stepCountIs(3),
-      maxOutputTokens: hasTools ? 4000 : 1200,
-      tools: hasTools ? tools : undefined,
+      messages,
+      stopWhen: stepCountIs(4),
+      maxOutputTokens: 4000,
+      tools,
     });
 
     const proposalCall = result.toolCalls?.find((call) =>
       call.toolName === PROPOSE_NUTRITION_RECORD_TOOL_NAME
       || call.toolName === PROPOSE_CLIENT_PROTOCOL_NOTES_TOOL_NAME
       || call.toolName === PROPOSE_PRE_ANALYSIS_TOOL_NAME
+      || call.toolName === PROPOSE_NEW_CLIENT_TOOL_NAME
+      || call.toolName === PROPOSE_NEW_RECIPE_TOOL_NAME
     );
+    const navigateCall = result.toolCalls?.find((call) => call.toolName === NAVIGATE_TOOL_NAME);
+    const navigateResult = navigateCall ? await resolveNavigationPath(navigateCall.input as NavigateInput) : null;
 
     let proposedUpdate: Record<string, unknown> | undefined;
 
@@ -167,6 +253,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (proposalCall?.toolName === PROPOSE_NEW_CLIENT_TOOL_NAME) {
+      const input = proposalCall.input as ProposeNewClientInput;
+      const fields = Object.fromEntries(
+        Object.entries(input).filter(([, value]) => value?.trim())
+      );
+      if (fields.name) proposedUpdate = { kind: "new_client", fields };
+    }
+
+    if (proposalCall?.toolName === PROPOSE_NEW_RECIPE_TOOL_NAME) {
+      const output = result.toolResults?.find((toolResult) => toolResult.toolName === PROPOSE_NEW_RECIPE_TOOL_NAME)
+        ?.output as ProposeNewRecipeOutput | undefined;
+      if (output && !("error" in output)) {
+        proposedUpdate = {
+          kind: "new_recipe",
+          title: output.title,
+          meal_group: output.meal_group,
+          servings: output.servings,
+          preparation_steps: output.preparation_steps,
+          ingredients: output.ingredients,
+        };
+      }
+    }
+
     await writeAuditLog({
       action: "ai_system_chat_message",
       adminId: admin.sub,
@@ -178,12 +287,15 @@ export async function POST(req: NextRequest) {
         clientId: client?.id ?? null,
         submissionId: submission?.id ?? null,
         proposalKind: (proposedUpdate?.kind as string | undefined) ?? null,
+        navigatedTo: navigateResult?.path ?? null,
+        attachmentUsed: attachment ? { name: attachment.name, mediaType: attachment.mediaType } : null,
       },
     });
 
     return NextResponse.json({
       reply: result.text || (proposedUpdate ? "Preparei uma proposta. Revise os campos abaixo antes de aplicar." : ""),
       proposedUpdate,
+      navigateAction: navigateResult ? { path: navigateResult.path, clientName: navigateResult.clientName } : undefined,
     });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "Não foi possível responder agora.";

@@ -3,14 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bot, Check, Send, Sparkles, X } from "lucide-react";
+import { Bot, Check, Paperclip, Send, Sparkles, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import { SUGGESTED_CHAT_PROMPTS } from "@/lib/ai/system-chat-knowledge";
 import { NUTRITION_TEXT_FIELD_LABELS, type NutritionRecordTextFieldKey } from "@/lib/clinical/nutrition-record-fields";
 import { PRE_ANALYSIS_FIELD_LABELS, type PreAnalysisFieldKey } from "@/lib/clinical/pre-analysis-fields";
+import { NEW_CLIENT_FIELD_LABELS, type NewClientFieldKey } from "@/lib/clinical/client-fields";
+import { ALLOWED_ATTACHMENT_MEDIA_TYPES, MAX_ATTACHMENT_RAW_BYTES, type AllowedAttachmentMediaType } from "@/lib/ai/chat-attachments";
 
 const INTRO_SHOWN_KEY = "bruna_nutri_ai_chat_intro_shown";
+
+// So a janela mais recente da conversa e enviada a cada chamada — a
+// interface guarda o historico inteiro, mas o custo/latencia da IA e o
+// limite do servidor ficam sempre limitados, nao importa quanto tempo o
+// chat esteja aberto.
+const MAX_HISTORY_MESSAGES_SENT = 20;
 
 // Estilo compacto para markdown dentro de uma bolha de chat pequena — nao
 // usa a classe "prose" porque o plugin de tipografia do Tailwind nao esta
@@ -33,16 +41,23 @@ const markdownComponents: Components = {
 type ProposedField = { key: string; label: string; value: string; included: boolean };
 type ProposalStatus = "pending" | "applying" | "applied" | "discarded" | "error";
 
+type ProposedRecipeIngredient = { food_name: string; grams: number; taco_number: number | null };
+
 type ChatProposal =
   | { kind: "nutrition_record"; clientId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
   | { kind: "pre_analysis"; submissionId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
-  | { kind: "client_protocol"; clientId: string; clientProtocolId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string };
+  | { kind: "client_protocol"; clientId: string; clientProtocolId: string; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
+  | { kind: "new_client"; title: string; applyLabel: string; fields: ProposedField[]; status: ProposalStatus; error?: string }
+  | { kind: "new_recipe"; title: string; applyLabel: string; fields: ProposedField[]; ingredients: ProposedRecipeIngredient[]; status: ProposalStatus; error?: string };
 
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   proposal?: ChatProposal;
+  attachmentName?: string;
 };
+
+type PendingAttachment = { name: string; mediaType: AllowedAttachmentMediaType; base64: string };
 
 function buildProposal(update: Record<string, unknown>): ChatProposal | null {
   if (update.kind === "nutrition_record") {
@@ -93,6 +108,36 @@ function buildProposal(update: Record<string, unknown>): ChatProposal | null {
       }],
     };
   }
+  if (update.kind === "new_client") {
+    const fields = update.fields as Record<string, string>;
+    return {
+      kind: "new_client",
+      title: "Proposta de novo cadastro",
+      applyLabel: "Cadastrar cliente",
+      status: "pending",
+      fields: Object.entries(fields).map(([key, value]) => ({
+        key,
+        label: NEW_CLIENT_FIELD_LABELS[key as NewClientFieldKey] ?? key,
+        value,
+        included: true,
+      })),
+    };
+  }
+  if (update.kind === "new_recipe") {
+    return {
+      kind: "new_recipe",
+      title: "Proposta de nova receita",
+      applyLabel: "Salvar receita na biblioteca",
+      status: "pending",
+      ingredients: update.ingredients as ProposedRecipeIngredient[],
+      fields: [
+        { key: "recipe_title", label: "Título", value: update.title as string, included: true },
+        { key: "meal_group", label: "Grupo da refeição", value: update.meal_group as string, included: true },
+        { key: "servings", label: "Porções", value: String(update.servings), included: true },
+        { key: "preparation_steps", label: "Modo de preparo", value: (update.preparation_steps as string) || "", included: true },
+      ],
+    };
+  }
   return null;
 }
 
@@ -104,8 +149,11 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [clientName, setClientName] = useState("");
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
+  const [attachmentError, setAttachmentError] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (window.localStorage.getItem(INTRO_SHOWN_KEY)) return;
@@ -142,20 +190,44 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, sending]);
 
+  function selectAttachment(file: File | undefined) {
+    setAttachmentError("");
+    if (!file) return;
+    if (!ALLOWED_ATTACHMENT_MEDIA_TYPES.includes(file.type as AllowedAttachmentMediaType)) {
+      setAttachmentError("Formato não suportado. Envie PDF, PNG, JPEG ou WEBP.");
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_RAW_BYTES) {
+      setAttachmentError("Arquivo muito grande. O limite é 9 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result ?? "");
+      const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+      setPendingAttachment({ name: file.name, mediaType: file.type as AllowedAttachmentMediaType, base64 });
+    };
+    reader.onerror = () => setAttachmentError("Não foi possível ler o arquivo.");
+    reader.readAsDataURL(file);
+  }
+
   async function sendMessage(text: string) {
     const content = text.trim();
     if (!content || sending) return;
     setError("");
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content }];
+    const attachment = pendingAttachment;
+    const nextMessages: ChatMessage[] = [...messages, { role: "user", content, attachmentName: attachment?.name }];
     setMessages(nextMessages);
     setInput("");
+    setPendingAttachment(null);
     setSending(true);
     try {
       const response = await fetch("/api/admin/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: nextMessages.map(({ role, content: messageContent }) => ({ role, content: messageContent })),
+          messages: nextMessages.slice(-MAX_HISTORY_MESSAGES_SENT).map(({ role, content: messageContent }) => ({ role, content: messageContent })),
+          attachment: attachment ? { name: attachment.name, mediaType: attachment.mediaType, data: attachment.base64 } : undefined,
           context,
         }),
       });
@@ -164,6 +236,8 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
       const proposal = data.proposedUpdate ? buildProposal(data.proposedUpdate) : null;
       const assistantMessage: ChatMessage = { role: "assistant", content: data.reply, proposal: proposal ?? undefined };
       setMessages([...nextMessages, assistantMessage]);
+      const navigateAction = data.navigateAction as { path: string; clientName?: string } | undefined;
+      if (navigateAction?.path) router.push(navigateAction.path);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível responder agora.");
     } finally {
@@ -251,6 +325,46 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
         if (context?.clientId === proposal.clientId) router.refresh();
       }
 
+      if (proposal.kind === "new_client") {
+        const name = includedEntries.find((field) => field.key === "name")?.value;
+        if (!name?.trim()) throw new Error("O nome é obrigatório para cadastrar o cliente.");
+        const payload = Object.fromEntries(includedEntries.map((field) => [field.key, field.value]));
+        const response = await fetch("/api/admin/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Não foi possível cadastrar o cliente.");
+        if (data.id) router.push(`/dashboard/clients/${data.id}`);
+      }
+
+      if (proposal.kind === "new_recipe") {
+        const byKey = (key: string) => includedEntries.find((field) => field.key === key)?.value;
+        const title = byKey("recipe_title");
+        const mealGroup = byKey("meal_group");
+        if (!title?.trim() || !mealGroup?.trim()) throw new Error("Título e grupo da refeição são obrigatórios para salvar a receita.");
+        const response = await fetch("/api/admin/recipes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            meal_group: mealGroup,
+            servings: Math.max(1, Number(byKey("servings")) || 1),
+            preparation_steps: byKey("preparation_steps") || null,
+            ingredients: proposal.ingredients.map((ingredient) => ({
+              taco_number: ingredient.taco_number,
+              food_name: ingredient.food_name,
+              grams: ingredient.grams,
+            })),
+            source_note: "Receita criada com apoio de IA a partir de um pedido no chat. Revisar antes de prescrever.",
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar a receita.");
+        router.push("/dashboard/templates/receitas");
+      }
+
       updateProposal(messageIndex, (current) => ({ ...current, status: "applied" }));
     } catch (cause) {
       updateProposal(messageIndex, (current) => ({
@@ -301,10 +415,10 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
               <div className="space-y-3">
                 <p className="text-sm leading-6 text-[#75675E]">
                   {context?.clientId
-                    ? `Olá! Posso te ajudar a usar o sistema, organizar o prontuário e atualizar notas de protocolo de ${clientName || "este cliente"}. Descreva o caso ou o que quer registrar e eu monto uma proposta — você revisa e confirma antes de qualquer coisa ser salva.`
+                    ? `Olá! Posso te ajudar a usar o sistema, organizar o prontuário, revisar o plano alimentar e atualizar notas de protocolo de ${clientName || "este cliente"}. Descreva o caso, anexe um exame em PDF ou imagem se ajudar, e eu monto uma proposta — você revisa e confirma antes de qualquer coisa ser salva.`
                     : context?.submissionId
                       ? "Olá! Posso te ajudar a usar o sistema e também a montar a pré-análise deste formulário a partir das respostas do paciente. Peça um resumo do caso e eu monto uma proposta — você revisa e confirma antes de salvar."
-                      : "Olá! Sou o assistente do sistema — posso explicar como usar qualquer tela ou funcionalidade do dashboard. Não dou orientação clínica, só ajudo a usar o sistema."}
+                      : "Olá! Posso explicar como usar o sistema, te levar direto para onde você precisa, cadastrar um paciente novo e até criar uma receita na biblioteca — diga algo como \"vou atender a Fulana agora\", \"abre o cliente Beltrano\" ou \"cria uma receita baixa caloria para emagrecimento\". Não dou orientação clínica."}
                 </p>
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">Perguntas rápidas</p>
                 <div className="flex flex-wrap gap-2">
@@ -312,7 +426,7 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
                     ? ["Preencher o prontuário com base no que vou descrever agora", "Atualizar as notas do protocolo atual", ...SUGGESTED_CHAT_PROMPTS]
                     : context?.submissionId
                       ? ["Montar um resumo de pré-análise com base nas respostas", ...SUGGESTED_CHAT_PROMPTS]
-                      : SUGGESTED_CHAT_PROMPTS
+                      : ["Abrir a ficha de um cliente pelo nome", "Cadastrar um novo paciente", "Criar uma receita baixa caloria para emagrecimento", ...SUGGESTED_CHAT_PROMPTS]
                   ).map((prompt) => (
                     <button
                       key={prompt}
@@ -338,7 +452,14 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
                   {message.role === "assistant" ? (
                     <ReactMarkdown components={markdownComponents}>{message.content}</ReactMarkdown>
                   ) : (
-                    message.content
+                    <>
+                      {message.attachmentName && (
+                        <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">
+                          <Paperclip className="h-3 w-3" /> {message.attachmentName}
+                        </span>
+                      )}
+                      <div>{message.content}</div>
+                    </>
                   )}
                 </div>
                 {message.proposal && (
@@ -378,8 +499,39 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
               event.preventDefault();
               void sendMessage(input);
             }}
-            className="flex items-center gap-2 border-t border-[#EDE1D6] bg-[#FBF7F1] p-3"
+            className="border-t border-[#EDE1D6] bg-[#FBF7F1] p-3"
           >
+            {attachmentError && <p className="mb-2 text-xs text-[#8C5F50]">{attachmentError}</p>}
+            {pendingAttachment && (
+              <div className="mb-2 flex items-center gap-2 rounded-full border border-[#D9C4B2] bg-white px-3 py-1.5 text-xs text-[#3A3028]">
+                <Paperclip className="h-3.5 w-3.5 shrink-0 text-[#8C6E52]" />
+                <span className="min-w-0 flex-1 truncate">{pendingAttachment.name}</span>
+                <button type="button" onClick={() => setPendingAttachment(null)} aria-label="Remover anexo" className="shrink-0 text-[#8C6E52] hover:text-[#3A3028]">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ALLOWED_ATTACHMENT_MEDIA_TYPES.join(",")}
+              onChange={(event) => {
+                selectAttachment(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              aria-label="Anexar arquivo (PDF ou imagem)"
+              title="Anexar PDF ou imagem"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#EDE1D6] bg-white text-[#8C6E52] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
             <input
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -395,6 +547,7 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
             >
               <Send className="h-4 w-4" />
             </button>
+            </div>
           </form>
         </div>
       )}
@@ -417,7 +570,12 @@ function ProposalCard({ proposal, onToggleField, onEditField, onDiscard, onApply
   if (proposal.status === "applied") {
     return (
       <p className="flex items-center gap-1.5 rounded-xl border border-[#D9E4D3] bg-[#F4F8F1] px-3 py-2 text-xs font-semibold text-[#4F6847]">
-        <Check className="h-3.5 w-3.5" /> Alterações salvas com os campos selecionados.
+        <Check className="h-3.5 w-3.5" />
+        {proposal.kind === "new_client"
+          ? "Cliente cadastrado. Abrindo a ficha..."
+          : proposal.kind === "new_recipe"
+            ? "Receita salva na biblioteca. Abrindo a lista..."
+            : "Alterações salvas com os campos selecionados."}
       </p>
     );
   }
@@ -443,6 +601,19 @@ function ProposalCard({ proposal, onToggleField, onEditField, onDiscard, onApply
           </label>
         ))}
       </div>
+      {proposal.kind === "new_recipe" && (
+        <div className="rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-2.5">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">Ingredientes (buscados na TACO)</p>
+          <ul className="space-y-1 text-xs leading-5 text-[#3A3028]">
+            {proposal.ingredients.map((ingredient, index) => (
+              <li key={index}>
+                {ingredient.food_name} — {ingredient.grams}g
+                {!ingredient.taco_number && <span className="text-[#A9978A]"> (não vinculado à TACO)</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {proposal.status === "error" && proposal.error && (
         <p className="rounded-lg border border-[#F0D4C7] bg-[#FFF7F3] px-2.5 py-1.5 text-xs text-[#8C5F50]">{proposal.error}</p>
       )}
