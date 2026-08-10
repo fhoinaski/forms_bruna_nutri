@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Save, Phone, Mail, FileText, Printer,
@@ -214,6 +214,10 @@ const TABS = [
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
+
+function resolveTabFromParam(param: string | null): TabId {
+  return (TABS.some((tab) => tab.id === param) ? param : "resumo") as TabId;
+}
 
 function formatMoney(cents: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -1076,8 +1080,14 @@ function SecondaryNavigation({ items, value, onChange }: {
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<TabId>("resumo");
+  const [activeTab, setActiveTab] = useState<TabId>(() => resolveTabFromParam(searchParams.get("tab")));
+
+  useEffect(() => {
+    setActiveTab(resolveTabFromParam(searchParams.get("tab")));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get("tab")]);
   const [summaryView, setSummaryView] = useState<"dados" | "portal">("dados");
   const [planView, setPlanView] = useState<"dieta" | "protocolos">("dieta");
   const [evolutionView, setEvolutionView] = useState<"timeline" | "agenda" | "tarefas" | "financeiro" | "relatorios">("timeline");

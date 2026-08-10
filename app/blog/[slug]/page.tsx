@@ -152,6 +152,17 @@ export default async function BlogPostPage({
           </div>
         </header>
 
+        {post.cover_image_url && (
+          <div className="mx-auto max-w-4xl px-5 pt-10 lg:px-8">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={post.cover_image_url}
+              alt={post.title}
+              className="max-h-[420px] w-full rounded-[1.5rem] object-cover shadow-[0_20px_60px_rgba(58,48,40,0.15)]"
+            />
+          </div>
+        )}
+
         <div className="mx-auto max-w-3xl px-5 py-14 lg:px-8">
           <div className="prose-none">
             <ReactMarkdown components={blogMarkdownComponents}>{post.content_markdown}</ReactMarkdown>

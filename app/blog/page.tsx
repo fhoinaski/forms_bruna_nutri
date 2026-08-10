@@ -81,38 +81,48 @@ export default async function BlogPage() {
               return (
                 <article
                   key={post.id}
-                  className="group flex min-h-[300px] flex-col rounded-[1.35rem] border border-[#EDE1D6] bg-[#FFFDFC] p-6 shadow-[0_18px_45px_rgba(58,48,40,0.055)] transition hover:-translate-y-1 hover:shadow-[0_24px_58px_rgba(58,48,40,0.08)]"
+                  className="group flex min-h-[300px] flex-col overflow-hidden rounded-[1.35rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_18px_45px_rgba(58,48,40,0.055)] transition hover:-translate-y-1 hover:shadow-[0_24px_58px_rgba(58,48,40,0.08)]"
                 >
-                  <div className="mb-5 flex items-center justify-between gap-3">
-                    <span className="rounded-full bg-[#EAF0E4] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#607A56]">
-                      {post.category || "Nutrição"}
-                    </span>
-                    <span className="text-xs text-[#A9978A]">
-                      {formatDate(post.published_at)}
-                    </span>
-                  </div>
-                  <h2 className="font-serif text-2xl font-semibold leading-tight text-[#3A3028]">
-                    {post.title}
-                  </h2>
-                  <p className="mt-3 line-clamp-4 text-sm leading-7 text-[#75675E]">
-                    {post.excerpt}
-                  </p>
-                  {tags.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-1.5">
-                      {tags.slice(0, 3).map((tag) => (
-                        <span key={tag} className="text-[11px] text-[#8C5F50]">
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
+                  {post.cover_image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={post.cover_image_url}
+                      alt=""
+                      className="aspect-[16/9] w-full object-cover"
+                    />
                   )}
-                  <Link
-                    href={`/blog/${post.slug}`}
-                    className="mt-auto inline-flex items-center gap-2 pt-6 text-sm font-semibold text-[#607A56] transition group-hover:text-[#8C5F50]"
-                  >
-                    Ler artigo
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
+                  <div className="flex flex-1 flex-col p-6">
+                    <div className="mb-5 flex items-center justify-between gap-3">
+                      <span className="rounded-full bg-[#EAF0E4] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#607A56]">
+                        {post.category || "Nutrição"}
+                      </span>
+                      <span className="text-xs text-[#A9978A]">
+                        {formatDate(post.published_at)}
+                      </span>
+                    </div>
+                    <h2 className="font-serif text-2xl font-semibold leading-tight text-[#3A3028]">
+                      {post.title}
+                    </h2>
+                    <p className="mt-3 line-clamp-4 text-sm leading-7 text-[#75675E]">
+                      {post.excerpt}
+                    </p>
+                    {tags.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-1.5">
+                        {tags.slice(0, 3).map((tag) => (
+                          <span key={tag} className="text-[11px] text-[#8C5F50]">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <Link
+                      href={`/blog/${post.slug}`}
+                      className="mt-auto inline-flex items-center gap-2 pt-6 text-sm font-semibold text-[#607A56] transition group-hover:text-[#8C5F50]"
+                    >
+                      Ler artigo
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
                 </article>
               );
             })}
