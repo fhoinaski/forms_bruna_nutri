@@ -41,6 +41,54 @@ export function calculateWeightDelta(
   return Math.round((currentWeight - previousWeight) * 10) / 10;
 }
 
+/** Relacao cintura-quadril (RCQ / WHR) — cintura dividida pelo quadril. */
+export function calculateWaistHipRatio(
+  waistCm: string | number | null | undefined,
+  hipCm: string | number | null | undefined
+): number | null {
+  const waist = parseMeasurement(waistCm);
+  const hip = parseMeasurement(hipCm);
+  if (!waist || !hip) return null;
+  return Math.round((waist / hip) * 1000) / 1000;
+}
+
+/**
+ * Classificacao de risco cardiometabolico por RCQ, conforme referencia da
+ * OMS: alto risco acima de 0,90 para homens e 0,85 para mulheres.
+ */
+export function classifyWaistHipRatio(
+  ratio: number | null,
+  biologicalSex: string | null | undefined
+): string | null {
+  if (ratio === null) return null;
+  if (biologicalSex !== "Masculino" && biologicalSex !== "Feminino") {
+    return "Defina o sexo biologico para classificar o risco";
+  }
+  const threshold = biologicalSex === "Masculino" ? 0.9 : 0.85;
+  return ratio >= threshold ? "Risco cardiometabolico aumentado" : "Dentro da faixa de referencia";
+}
+
+/**
+ * Relacao cintura-estatura (RCE / WHtR) — cintura dividida pela altura,
+ * expressa como percentual. E um indicador simples de risco
+ * cardiometabolico, com o mesmo corte (0,5) valido para adultos de
+ * qualquer sexo e altura.
+ */
+export function calculateWaistHeightRatio(
+  waistCm: string | number | null | undefined,
+  heightCm: string | number | null | undefined
+): number | null {
+  const waist = parseMeasurement(waistCm);
+  const height = parseMeasurement(heightCm);
+  if (!waist || !height) return null;
+  return Math.round((waist / height) * 1000) / 1000;
+}
+
+export function classifyWaistHeightRatio(ratio: number | null): string | null {
+  if (ratio === null) return null;
+  return ratio >= 0.5 ? "Risco cardiometabolico aumentado (RCE >= 0,5)" : "Dentro da faixa de referencia";
+}
+
 /**
  * Idade completa em anos na data de referencia (por padrao, hoje).
  * Usada para calculos clinicos que dependem da idade no momento da

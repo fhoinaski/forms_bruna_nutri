@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Save, Phone, Mail, FileText, Printer,
   User, BookOpen, CheckSquare, TrendingUp, Clock,
-  Plus, Check, X, Trash2, ChevronRight,
+  Plus, Check, X, Trash2, ChevronRight, ChevronDown,
   CalendarDays, WalletCards, KeyRound, ShieldCheck, RefreshCw, ExternalLink,
   Copy, Play,
   Utensils, AlertTriangle, Activity,
@@ -16,7 +16,13 @@ import { MealPlanEditor } from "@/components/dashboard/MealPlanEditor";
 import { EvolutionChart } from "@/components/dashboard/EvolutionChart";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { suggestEducationCardsFromDiagnoses } from "@/lib/clinical/patient-education-suggestions";
-import { calculateAgeInYears } from "@/lib/clinical/anthropometry";
+import {
+  calculateAgeInYears,
+  calculateWaistHeightRatio,
+  calculateWaistHipRatio,
+  classifyWaistHeightRatio,
+  classifyWaistHipRatio,
+} from "@/lib/clinical/anthropometry";
 import { calculateBodyComposition, type SkinfoldValuesMm } from "@/lib/clinical/body-composition";
 import { PROTOCOL_TEMPLATE_GROUP_LABELS, PROTOCOL_TEMPLATE_TARGET_GROUPS } from "@/lib/protocol-templates/constants";
 
@@ -334,7 +340,6 @@ function ClinicalEvolutionForm({ clientId, onSuccess, biologicalSex, ageYears }:
   const [armCm, setArmCm] = useState("");
   const [abdomenCm, setAbdomenCm] = useState("");
   const [thighCm, setThighCm] = useState("");
-  const [bodyFat, setBodyFat] = useState("");
   const [skinfoldTriceps, setSkinfoldTriceps] = useState("");
   const [skinfoldSubscapular, setSkinfoldSubscapular] = useState("");
   const [skinfoldChest, setSkinfoldChest] = useState("");
@@ -373,13 +378,9 @@ function ClinicalEvolutionForm({ clientId, onSuccess, biologicalSex, ageYears }:
     [weight, ageYears, biologicalSex, skinfoldTriceps, skinfoldSubscapular, skinfoldChest, skinfoldMidaxillary, skinfoldSuprailiac, skinfoldAbdominal, skinfoldThigh]
   );
 
-  useEffect(() => {
-    if (bodyComposition) setBodyFat(bodyComposition.bodyFatPercentage.toFixed(1));
-  }, [bodyComposition]);
-
   const resetForm = () => {
     setMeasuredAt(new Date().toISOString().slice(0, 10));
-    setWeight(""); setHeight(""); setWaistCm(""); setHipCm(""); setArmCm(""); setAbdomenCm(""); setThighCm(""); setBodyFat("");
+    setWeight(""); setHeight(""); setWaistCm(""); setHipCm(""); setArmCm(""); setAbdomenCm(""); setThighCm("");
     setSkinfoldTriceps(""); setSkinfoldSubscapular(""); setSkinfoldChest(""); setSkinfoldMidaxillary("");
     setSkinfoldSuprailiac(""); setSkinfoldAbdominal(""); setSkinfoldThigh("");
     setBloodPressure(""); setEnergyLevel(""); setAppetite(""); setBowelPattern(""); setSleepQuality("");
@@ -403,7 +404,7 @@ function ClinicalEvolutionForm({ clientId, onSuccess, biologicalSex, ageYears }:
           arm_cm: armCm ? Number(armCm) : null,
           abdomen_cm: abdomenCm ? Number(abdomenCm) : null,
           thigh_cm: thighCm ? Number(thighCm) : null,
-          body_fat_percentage: bodyFat ? Number(bodyFat) : null,
+          body_fat_percentage: bodyComposition ? Number(bodyComposition.bodyFatPercentage.toFixed(1)) : null,
           skinfold_triceps_mm: skinfoldValuesMm.triceps,
           skinfold_subscapular_mm: skinfoldValuesMm.subscapular,
           skinfold_chest_mm: skinfoldValuesMm.chest,
@@ -437,6 +438,8 @@ function ClinicalEvolutionForm({ clientId, onSuccess, biologicalSex, ageYears }:
 
   const bmiPreview = weight && height ? (Number(weight) / Math.pow(Number(height) / 100, 2)).toFixed(1) : null;
   const sexDefined = biologicalSex === "Masculino" || biologicalSex === "Feminino";
+  const waistHipRatio = calculateWaistHipRatio(waistCm, hipCm);
+  const waistHeightRatio = calculateWaistHeightRatio(waistCm, height);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/60 p-5">
@@ -449,19 +452,12 @@ function ClinicalEvolutionForm({ clientId, onSuccess, biologicalSex, ageYears }:
         <div><label className="brand-label">Peso (kg)</label><input type="number" step="0.1" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="Ex: 68.5" className="brand-input" /></div>
         <div><label className="brand-label">Altura (cm)</label><input type="number" step="0.1" value={height} onChange={(event) => setHeight(event.target.value)} placeholder="Ex: 165" className="brand-input" /></div>
       </div>
-      {bmiPreview && <p className="text-xs font-medium text-[#7A9A74]">IMC calculado: {bmiPreview} ({classifyBmiLabel(bmiPreview)})</p>}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
         <div><label className="brand-label">Cintura (cm)</label><input type="number" step="0.1" value={waistCm} onChange={(event) => setWaistCm(event.target.value)} placeholder="Ex: 82" className="brand-input" /></div>
         <div><label className="brand-label">Quadril (cm)</label><input type="number" step="0.1" value={hipCm} onChange={(event) => setHipCm(event.target.value)} placeholder="Ex: 98" className="brand-input" /></div>
         <div><label className="brand-label">Braco (cm)</label><input type="number" step="0.1" value={armCm} onChange={(event) => setArmCm(event.target.value)} placeholder="Ex: 29" className="brand-input" /></div>
         <div><label className="brand-label">Abdomen (cm)</label><input type="number" step="0.1" value={abdomenCm} onChange={(event) => setAbdomenCm(event.target.value)} placeholder="Ex: 90" className="brand-input" /></div>
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <div><label className="brand-label">Coxa (cm)</label><input type="number" step="0.1" value={thighCm} onChange={(event) => setThighCm(event.target.value)} placeholder="Ex: 58" className="brand-input" /></div>
-        <div>
-          <label className="brand-label">{bodyComposition ? "Gordura (%) — calculado pelas dobras" : "Gordura (%)"}</label>
-          <input type="number" step="0.1" value={bodyFat} onChange={(event) => setBodyFat(event.target.value)} placeholder="Ex: 31" className="brand-input" />
-        </div>
       </div>
 
       <div className="rounded-xl border border-[#EAD8C2] bg-[#FFFDFC] p-4">
@@ -487,15 +483,34 @@ function ClinicalEvolutionForm({ clientId, onSuccess, biologicalSex, ageYears }:
             Cadastre a data de nascimento do paciente para calcular a composicao corporal por dobras cutaneas.
           </p>
         )}
-        {bodyComposition && (
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg bg-[#EAF0E4] p-3"><p className="brand-label mb-1">Soma das dobras</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.sumSkinfoldsMm.toFixed(0)} mm</p></div>
-            <div className="rounded-lg bg-[#EAF0E4] p-3"><p className="brand-label mb-1">Densidade corporal</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.bodyDensity.toFixed(4)} g/ml</p></div>
-            <div className="rounded-lg bg-[#EAF0E4] p-3"><p className="brand-label mb-1">Massa gorda</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.fatMassKg.toFixed(1)} kg</p></div>
-            <div className="rounded-lg bg-[#EAF0E4] p-3"><p className="brand-label mb-1">Massa livre de gordura</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.leanMassKg.toFixed(1)} kg</p></div>
-          </div>
-        )}
       </div>
+
+      {(bmiPreview || bodyComposition || waistHipRatio !== null || waistHeightRatio !== null) && (
+        <div className="rounded-xl border border-[#D9E4D3] bg-[#F4F8F1] p-4">
+          <h4 className="font-serif text-base font-semibold text-[#4F6847]">Indicadores calculados</h4>
+          <p className="mt-1 text-xs leading-5 text-[#607A56]">Calculados automaticamente a partir das medidas informadas acima — mude as medidas para atualizar.</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {bmiPreview && (
+              <div className="rounded-lg bg-white p-3"><p className="brand-label mb-1">IMC</p><p className="text-sm font-semibold text-[#3A3028]">{bmiPreview}</p><p className="mt-1 text-xs leading-5 text-[#75675E]">{classifyBmiLabel(bmiPreview)}</p></div>
+            )}
+            {waistHipRatio !== null && (
+              <div className="rounded-lg bg-white p-3"><p className="brand-label mb-1">RCQ (cintura/quadril)</p><p className="text-sm font-semibold text-[#3A3028]">{waistHipRatio.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p><p className="mt-1 text-xs leading-5 text-[#75675E]">{classifyWaistHipRatio(waistHipRatio, biologicalSex)}</p></div>
+            )}
+            {waistHeightRatio !== null && (
+              <div className="rounded-lg bg-white p-3"><p className="brand-label mb-1">RCE (cintura/estatura)</p><p className="text-sm font-semibold text-[#3A3028]">{waistHeightRatio.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p><p className="mt-1 text-xs leading-5 text-[#75675E]">{classifyWaistHeightRatio(waistHeightRatio)}</p></div>
+            )}
+            {bodyComposition && (
+              <>
+                <div className="rounded-lg bg-white p-3"><p className="brand-label mb-1">Gordura corporal</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.bodyFatPercentage.toFixed(1)}%</p></div>
+                <div className="rounded-lg bg-white p-3"><p className="brand-label mb-1">Soma das dobras</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.sumSkinfoldsMm.toFixed(0)} mm</p></div>
+                <div className="rounded-lg bg-white p-3"><p className="brand-label mb-1">Densidade corporal</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.bodyDensity.toFixed(4)} g/ml</p></div>
+                <div className="rounded-lg bg-white p-3"><p className="brand-label mb-1">Massa gorda</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.fatMassKg.toFixed(1)} kg</p></div>
+                <div className="rounded-lg bg-white p-3"><p className="brand-label mb-1">Massa livre de gordura</p><p className="text-sm font-semibold text-[#3A3028]">{bodyComposition.leanMassKg.toFixed(1)} kg</p></div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div><label className="brand-label">Pressao arterial</label><input value={bloodPressure} onChange={(event) => setBloodPressure(event.target.value)} placeholder="Ex: 110/70" className="brand-input" /></div>
@@ -524,27 +539,144 @@ function ClinicalEvolutionForm({ clientId, onSuccess, biologicalSex, ageYears }:
   );
 }
 
+function EvolutionMetric({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="rounded-lg bg-[#FBF7F1] p-3">
+      <p className="brand-label mb-1">{label}</p>
+      <p className="text-sm font-semibold text-[#3A3028]">{value}</p>
+    </div>
+  );
+}
+
+function EvolutionHistoryItem({ evolution, onDelete }: { evolution: ClientEvolution; onDelete: (id: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const waistHipRatio = calculateWaistHipRatio(evolution.waist_cm, evolution.hip_cm);
+  const waistHeightRatio = calculateWaistHeightRatio(evolution.waist_cm, evolution.height);
+  const hasMeasurements = [
+    evolution.weight, evolution.height, evolution.bmi, evolution.waist_cm, evolution.hip_cm,
+    evolution.arm_cm, evolution.abdomen_cm, evolution.thigh_cm, evolution.body_fat_percentage,
+    evolution.fat_mass_kg, evolution.lean_mass_kg,
+  ].some((value) => value !== null && value !== undefined);
+
+  return (
+    <li className="border border-[#EAD8C2] rounded-xl p-5 bg-[#FAF7F2]/60">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <p className="text-xs text-[#A8927D]">{formatDateSafe(evolution.measured_at ?? evolution.created_at, "dd/MM/yyyy 'às' HH:mm")}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          {evolution.weight && (
+            <span className="text-xs font-semibold text-[#7A9A74]">{evolution.weight}kg</span>
+          )}
+          {evolution.bmi && (
+            <span className="text-xs bg-[#EAD8C2] text-[#8C6E52] px-2 py-0.5 rounded-full">
+              IMC {evolution.bmi}
+            </span>
+          )}
+          {hasMeasurements && (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]"
+            >
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+              {expanded ? "Ocultar dados" : "Ver dados"}
+            </button>
+          )}
+          <button onClick={() => onDelete(evolution.id)}
+            title="Remover"
+            className="p-1 rounded-lg text-[#A8927D] hover:bg-red-50 hover:text-red-600 transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {expanded && hasMeasurements && (
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <EvolutionMetric label="Peso" value={evolution.weight ? `${evolution.weight} kg` : null} />
+          <EvolutionMetric label="Altura" value={evolution.height ? `${evolution.height} cm` : null} />
+          <EvolutionMetric label="IMC" value={evolution.bmi ? String(evolution.bmi) : null} />
+          <EvolutionMetric label="Cintura" value={evolution.waist_cm ? `${evolution.waist_cm} cm` : null} />
+          <EvolutionMetric label="Quadril" value={evolution.hip_cm ? `${evolution.hip_cm} cm` : null} />
+          <EvolutionMetric label="Braço" value={evolution.arm_cm ? `${evolution.arm_cm} cm` : null} />
+          <EvolutionMetric label="Abdômen" value={evolution.abdomen_cm ? `${evolution.abdomen_cm} cm` : null} />
+          <EvolutionMetric label="Coxa" value={evolution.thigh_cm ? `${evolution.thigh_cm} cm` : null} />
+          <EvolutionMetric
+            label="RCQ (cintura/quadril)"
+            value={waistHipRatio !== null ? waistHipRatio.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null}
+          />
+          <EvolutionMetric
+            label="RCE (cintura/estatura)"
+            value={waistHeightRatio !== null ? waistHeightRatio.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null}
+          />
+          <EvolutionMetric label="Gordura corporal" value={evolution.body_fat_percentage ? `${evolution.body_fat_percentage}%` : null} />
+          <EvolutionMetric label="Massa gorda" value={evolution.fat_mass_kg ? `${evolution.fat_mass_kg.toFixed(1)} kg` : null} />
+          <EvolutionMetric label="Massa livre de gordura" value={evolution.lean_mass_kg ? `${evolution.lean_mass_kg.toFixed(1)} kg` : null} />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        {evolution.symptoms && (
+          <div><p className="brand-label mb-1">Sintomas</p><p className="text-[#3A2B1F]">{evolution.symptoms}</p></div>
+        )}
+        {evolution.adherence_notes && (
+          <div><p className="brand-label mb-1">Adesão</p><p className="text-[#3A2B1F]">{evolution.adherence_notes}</p></div>
+        )}
+        {evolution.progress_notes && (
+          <div className="md:col-span-2"><p className="brand-label mb-1">Progressos</p><p className="text-[#3A2B1F]">{evolution.progress_notes}</p></div>
+        )}
+        {evolution.conduct_notes && (
+          <div className="md:col-span-2"><p className="brand-label mb-1">Conduta</p><p className="text-[#3A2B1F]">{evolution.conduct_notes}</p></div>
+        )}
+        {evolution.next_steps && (
+          <div className="md:col-span-2"><p className="brand-label mb-1">Próximos passos</p><p className="text-[#3A2B1F]">{evolution.next_steps}</p></div>
+        )}
+      </div>
+    </li>
+  );
+}
+
 function formatComparisonDelta(current: number | null, initial: number | null, unit: string, decimals = 1): string {
   if (current === null || initial === null) return "—";
   const delta = Math.round((current - initial) * 10 ** decimals) / 10 ** decimals;
   const prefix = delta > 0 ? "+" : "";
-  return `${prefix}${delta.toLocaleString("pt-BR", { maximumFractionDigits: decimals, minimumFractionDigits: decimals })} ${unit}`;
+  const formatted = delta.toLocaleString("pt-BR", { maximumFractionDigits: decimals, minimumFractionDigits: decimals });
+  return unit ? `${prefix}${formatted} ${unit}` : `${prefix}${formatted}`;
 }
 
 function formatComparisonValue(value: number | null, unit: string, decimals = 1): string {
   if (value === null) return "—";
-  return `${value.toLocaleString("pt-BR", { maximumFractionDigits: decimals, minimumFractionDigits: decimals })} ${unit}`;
+  const formatted = value.toLocaleString("pt-BR", { maximumFractionDigits: decimals, minimumFractionDigits: decimals });
+  return unit ? `${formatted} ${unit}` : formatted;
 }
 
-const REASSESSMENT_ROWS: { key: keyof ClientEvolution; label: string; unit: string; decimals?: number }[] = [
-  { key: "weight", label: "Peso", unit: "kg" },
-  { key: "body_fat_percentage", label: "% de gordura", unit: "%" },
-  { key: "fat_mass_kg", label: "Massa gorda", unit: "kg" },
-  { key: "waist_cm", label: "Cintura", unit: "cm", decimals: 0 },
+const REASSESSMENT_ROWS: { key: string; label: string; unit: string; decimals?: number; getValue: (ev: ClientEvolution) => number | null }[] = [
+  { key: "weight", label: "Peso", unit: "kg", getValue: (ev) => ev.weight },
+  { key: "body_fat_percentage", label: "% de gordura", unit: "%", getValue: (ev) => ev.body_fat_percentage },
+  { key: "fat_mass_kg", label: "Massa gorda", unit: "kg", getValue: (ev) => ev.fat_mass_kg },
+  { key: "lean_mass_kg", label: "Massa livre de gordura", unit: "kg", getValue: (ev) => ev.lean_mass_kg },
+  { key: "waist_cm", label: "Cintura", unit: "cm", decimals: 0, getValue: (ev) => ev.waist_cm },
+  { key: "hip_cm", label: "Quadril", unit: "cm", decimals: 0, getValue: (ev) => ev.hip_cm },
+  { key: "waist_hip_ratio", label: "RCQ (cintura/quadril)", unit: "", decimals: 2, getValue: (ev) => calculateWaistHipRatio(ev.waist_cm, ev.hip_cm) },
+  { key: "waist_height_ratio", label: "RCE (cintura/estatura)", unit: "", decimals: 2, getValue: (ev) => calculateWaistHeightRatio(ev.waist_cm, ev.height) },
 ];
 
 function ReassessmentTable({ evolutions }: { evolutions: ClientEvolution[] }) {
-  if (evolutions.length < 2) {
+  // A lista chega ordenada da mais recente para a mais antiga; para a
+  // comparacao, trabalhar em ordem cronologica (mais antiga primeiro) fica
+  // mais intuitivo para escolher "de" / "ate".
+  const chronological = useMemo(
+    () => [...evolutions].sort((a, b) => new Date(a.measured_at ?? a.created_at).getTime() - new Date(b.measured_at ?? b.created_at).getTime()),
+    [evolutions]
+  );
+  const [fromId, setFromId] = useState<string>("");
+  const [toId, setToId] = useState<string>("");
+
+  const defaultFromId = chronological[0]?.id ?? "";
+  const defaultToId = chronological[chronological.length - 1]?.id ?? "";
+  const fromEvolution = chronological.find((item) => item.id === (fromId || defaultFromId)) ?? null;
+  const toEvolution = chronological.find((item) => item.id === (toId || defaultToId)) ?? null;
+
+  if (chronological.length < 2) {
     return (
       <div className="rounded-2xl border border-dashed border-[#D9C4B2] bg-white p-6 text-center">
         <p className="text-sm text-[#75675E]">Registre uma nova avaliação para ver a comparação com a primeira medição.</p>
@@ -552,17 +684,29 @@ function ReassessmentTable({ evolutions }: { evolutions: ClientEvolution[] }) {
     );
   }
 
-  // A lista chega ordenada da mais recente para a mais antiga.
-  const latest = evolutions[0];
-  const initial = evolutions[evolutions.length - 1];
-
   return (
     <div className="overflow-hidden rounded-2xl border border-[#EAD8C2] bg-white">
       <div className="border-b border-[#EAD8C2] bg-[#FAF7F2]/60 px-5 py-3">
         <h3 className="font-serif text-base font-semibold text-[#B47F6A]">Reavaliação</h3>
-        <p className="mt-1 text-xs leading-5 text-[#8C6E52]">
-          Comparando {formatDateSafe(initial.measured_at ?? initial.created_at)} (inicial) com {formatDateSafe(latest.measured_at ?? latest.created_at)} (mais recente).
-        </p>
+        <p className="mt-1 text-xs leading-5 text-[#8C6E52]">Escolha duas avaliações para comparar — por padrão, a primeira e a mais recente.</p>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="brand-label">De</label>
+            <select value={fromId || defaultFromId} onChange={(event) => setFromId(event.target.value)} className="brand-input">
+              {chronological.map((item) => (
+                <option key={item.id} value={item.id}>{formatDateSafe(item.measured_at ?? item.created_at)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="brand-label">Até</label>
+            <select value={toId || defaultToId} onChange={(event) => setToId(event.target.value)} className="brand-input">
+              {chronological.map((item) => (
+                <option key={item.id} value={item.id}>{formatDateSafe(item.measured_at ?? item.created_at)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -576,8 +720,8 @@ function ReassessmentTable({ evolutions }: { evolutions: ClientEvolution[] }) {
           </thead>
           <tbody>
             {REASSESSMENT_ROWS.map((row) => {
-              const initialValue = initial[row.key] as number | null;
-              const latestValue = latest[row.key] as number | null;
+              const initialValue = fromEvolution ? row.getValue(fromEvolution) : null;
+              const latestValue = toEvolution ? row.getValue(toEvolution) : null;
               return (
                 <tr key={row.key} className="border-t border-[#EDE1D6]">
                   <td className="px-5 py-3 font-medium text-[#3A3028]">{row.label}</td>
@@ -634,8 +778,6 @@ const ANTHROPOMETRY_FIELDS: {
 }[] = [
   { key: "current_weight_kg", label: "Peso atual (kg)", placeholder: "Ex: 68,5" },
   { key: "height_cm", label: "Altura (cm)", placeholder: "Ex: 165" },
-  { key: "bmi", label: "IMC", placeholder: "Ex: 25,2" },
-  { key: "waist_cm", label: "Cintura (cm)", placeholder: "Ex: 82" },
   {
     key: "target_weight_kg",
     label: "Peso/meta clinica",
@@ -760,12 +902,10 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
       ...ANTHROPOMETRY_FIELDS.map((field) => field.key),
       "anthropometry_notes",
     ];
-    const computedBmi = calculateBmi(record.current_weight_kg, record.height_cm);
+    // O IMC nunca e enviado aqui — e sempre calculado no servidor a partir
+    // de peso e altura (nunca aceito como valor digitado pelo usuario).
     const payload = Object.fromEntries(
-      recordFields.map((key) => {
-        const value = key === "bmi" && !record.bmi ? computedBmi : record[key];
-        return [key, String(value ?? "").trim() || null];
-      })
+      recordFields.map((key) => [key, String(record[key] ?? "").trim() || null])
     );
     try {
       const res = await fetch(`/api/admin/clients/${clientId}/nutrition-record`, {
@@ -867,11 +1007,17 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
             </div>
           ))}
         </div>
-        {!record.bmi && calculateBmi(record.current_weight_kg, record.height_cm) && (
-          <p className="mt-3 text-xs font-medium text-[#7A9A74]">
-            IMC calculado ao salvar: {calculateBmi(record.current_weight_kg, record.height_cm)}
-          </p>
-        )}
+        {(() => {
+          const liveBmi = calculateBmi(record.current_weight_kg, record.height_cm) ?? record.bmi;
+          if (!liveBmi) return null;
+          return (
+            <div className="mt-4 rounded-lg border border-[#D9E4D3] bg-[#F4F8F1] p-3 sm:w-64">
+              <p className="brand-label mb-1">IMC calculado</p>
+              <p className="text-sm font-semibold text-[#3A3028]">{liveBmi}</p>
+              <p className="mt-1 text-xs leading-5 text-[#4F6847]">{classifyBmiLabel(liveBmi)} · calculado a partir de peso e altura</p>
+            </div>
+          );
+        })()}
         <div className="mt-4">
           <label className="brand-label">Observacoes antropometricas</label>
           <textarea
@@ -1912,43 +2058,7 @@ export default function ClientDetailPage() {
               ) : (
                 <ul className="space-y-4">
                   {evolutions.map((ev) => (
-                    <li key={ev.id} className="border border-[#EAD8C2] rounded-xl p-5 bg-[#FAF7F2]/60">
-                      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <p className="text-xs text-[#A8927D]">{formatDateSafe(ev.created_at, "dd/MM/yyyy 'às' HH:mm")}</p>
-                        <div className="flex flex-wrap items-center gap-3">
-                          {ev.weight && (
-                            <span className="text-xs font-semibold text-[#7A9A74]">{ev.weight}kg</span>
-                          )}
-                          {ev.bmi && (
-                            <span className="text-xs bg-[#EAD8C2] text-[#8C6E52] px-2 py-0.5 rounded-full">
-                              IMC {ev.bmi}
-                            </span>
-                          )}
-                          <button onClick={() => handleDeleteEvolution(ev.id)}
-                            title="Remover"
-                            className="p-1 rounded-lg text-[#A8927D] hover:bg-red-50 hover:text-red-600 transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                        {ev.symptoms && (
-                          <div><p className="brand-label mb-1">Sintomas</p><p className="text-[#3A2B1F]">{ev.symptoms}</p></div>
-                        )}
-                        {ev.adherence_notes && (
-                          <div><p className="brand-label mb-1">Adesão</p><p className="text-[#3A2B1F]">{ev.adherence_notes}</p></div>
-                        )}
-                        {ev.progress_notes && (
-                          <div className="md:col-span-2"><p className="brand-label mb-1">Progressos</p><p className="text-[#3A2B1F]">{ev.progress_notes}</p></div>
-                        )}
-                        {ev.conduct_notes && (
-                          <div className="md:col-span-2"><p className="brand-label mb-1">Conduta</p><p className="text-[#3A2B1F]">{ev.conduct_notes}</p></div>
-                        )}
-                        {ev.next_steps && (
-                          <div className="md:col-span-2"><p className="brand-label mb-1">Próximos passos</p><p className="text-[#3A2B1F]">{ev.next_steps}</p></div>
-                        )}
-                      </div>
-                    </li>
+                    <EvolutionHistoryItem key={ev.id} evolution={ev} onDelete={handleDeleteEvolution} />
                   ))}
                 </ul>
               )}
