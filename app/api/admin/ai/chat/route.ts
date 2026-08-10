@@ -326,6 +326,8 @@ export async function POST(req: NextRequest) {
             content_markdown: input.content_markdown,
             category: input.category ?? "",
             tags: (input.tags ?? []).join(", "),
+            seo_title: input.seo_title ?? "",
+            seo_description: input.seo_description ?? "",
           },
         };
       }

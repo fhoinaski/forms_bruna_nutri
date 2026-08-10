@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { HelpPopover } from "@/components/dashboard/HelpPopover";
+import { MarkdownEditor } from "@/components/dashboard/MarkdownEditor";
 
 type BlogStatus = "draft" | "published" | "archived";
 
@@ -159,6 +160,10 @@ export default function DashboardBlogPage() {
 
   async function savePost(event: React.FormEvent) {
     event.preventDefault();
+    if (form.content_markdown.trim().length < 200) {
+      setMessage("O conteúdo precisa ter pelo menos 200 caracteres.");
+      return;
+    }
     setSaving(true);
     setMessage("");
 
@@ -438,93 +443,114 @@ export default function DashboardBlogPage() {
             )}
           </div>
 
-          <form onSubmit={savePost} className="space-y-4">
-            <div>
-              <label className="brand-label">Titulo</label>
-              <input
-                value={form.title}
-                onChange={(event) => updateForm("title", event.target.value)}
-                className="brand-input"
-                required
-              />
-            </div>
-            <div>
-              <label className="brand-label">Resumo</label>
-              <textarea
-                value={form.excerpt}
-                onChange={(event) => updateForm("excerpt", event.target.value)}
-                className="brand-input min-h-24 resize-none"
-                required
-              />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+          <form onSubmit={savePost} className="space-y-6">
+            <div className="space-y-4">
+              <p className="brand-kicker">Conteúdo principal</p>
               <div>
-                <label className="brand-label">Categoria</label>
+                <label className="brand-label">Título</label>
                 <input
-                  value={form.category}
-                  onChange={(event) => updateForm("category", event.target.value)}
+                  value={form.title}
+                  onChange={(event) => updateForm("title", event.target.value)}
                   className="brand-input"
+                  maxLength={180}
+                  required
                 />
               </div>
               <div>
-                <label className="brand-label">Status</label>
-                <select
-                  value={form.status}
-                  onChange={(event) => updateForm("status", event.target.value as BlogStatus)}
+                <div className="flex items-baseline justify-between">
+                  <label className="brand-label">Resumo</label>
+                  <span className="text-[10px] text-[#A9978A]">{form.excerpt.length}/500</span>
+                </div>
+                <textarea
+                  value={form.excerpt}
+                  onChange={(event) => updateForm("excerpt", event.target.value)}
+                  className="brand-input min-h-24 resize-none"
+                  maxLength={500}
+                  placeholder="1-2 frases que resumem o artigo para quem está navegando."
+                  required
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="brand-label">Categoria</label>
+                  <input
+                    value={form.category}
+                    onChange={(event) => updateForm("category", event.target.value)}
+                    className="brand-input"
+                  />
+                </div>
+                <div>
+                  <label className="brand-label">Status</label>
+                  <select
+                    value={form.status}
+                    onChange={(event) => updateForm("status", event.target.value as BlogStatus)}
+                    className="brand-input"
+                  >
+                    {Object.entries(statusLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="brand-label">Tags separadas por vírgula</label>
+                <input
+                  value={form.tags}
+                  onChange={(event) => updateForm("tags", event.target.value)}
                   className="brand-input"
-                >
-                  {Object.entries(statusLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="introducao alimentar, seletividade, rotina"
+                />
+              </div>
+              <div>
+                <label className="brand-label">Imagem de capa URL</label>
+                <input
+                  value={form.cover_image_url}
+                  onChange={(event) => updateForm("cover_image_url", event.target.value)}
+                  className="brand-input"
+                  placeholder="https://..."
+                />
+              </div>
+              <div>
+                <label className="brand-label">Conteúdo</label>
+                <MarkdownEditor
+                  value={form.content_markdown}
+                  onChange={(value) => updateForm("content_markdown", value)}
+                  minHeightClassName="min-h-64"
+                  placeholder="Escreva o artigo. Use a barra de ferramentas para negrito, subtítulos, listas e links."
+                />
               </div>
             </div>
-            <div>
-              <label className="brand-label">Tags separadas por virgula</label>
-              <input
-                value={form.tags}
-                onChange={(event) => updateForm("tags", event.target.value)}
-                className="brand-input"
-                placeholder="introducao alimentar, seletividade, rotina"
-              />
-            </div>
-            <div>
-              <label className="brand-label">Imagem de capa URL</label>
-              <input
-                value={form.cover_image_url}
-                onChange={(event) => updateForm("cover_image_url", event.target.value)}
-                className="brand-input"
-                placeholder="https://..."
-              />
-            </div>
-            <div>
-              <label className="brand-label">Titulo SEO</label>
-              <input
-                value={form.seo_title}
-                onChange={(event) => updateForm("seo_title", event.target.value)}
-                className="brand-input"
-                placeholder="Se vazio, usa o titulo do artigo"
-              />
-            </div>
-            <div>
-              <label className="brand-label">Descricao SEO</label>
-              <textarea
-                value={form.seo_description}
-                onChange={(event) => updateForm("seo_description", event.target.value)}
-                className="brand-input min-h-20 resize-none"
-              />
-            </div>
-            <div>
-              <label className="brand-label">Conteudo em Markdown</label>
-              <textarea
-                value={form.content_markdown}
-                onChange={(event) => updateForm("content_markdown", event.target.value)}
-                className="brand-input min-h-56 resize-y"
-                placeholder="Use ## para subtitulos e - para listas."
-                required
-              />
+
+            <div className="space-y-4 rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-4">
+              <p className="brand-kicker">SEO e metadados</p>
+              <div>
+                <div className="flex items-baseline justify-between">
+                  <label className="brand-label">Título SEO</label>
+                  <span className="text-[10px] text-[#A9978A]">{form.seo_title.length}/180</span>
+                </div>
+                <input
+                  value={form.seo_title}
+                  onChange={(event) => updateForm("seo_title", event.target.value)}
+                  className="brand-input"
+                  maxLength={180}
+                  placeholder="Se vazio, usa o título do artigo"
+                />
+              </div>
+              <div>
+                <div className="flex items-baseline justify-between">
+                  <label className="brand-label">Descrição SEO</label>
+                  <span className="text-[10px] text-[#A9978A]">{form.seo_description.length}/300</span>
+                </div>
+                <textarea
+                  value={form.seo_description}
+                  onChange={(event) => updateForm("seo_description", event.target.value)}
+                  className="brand-input min-h-20 resize-none"
+                  maxLength={300}
+                  placeholder="Se vazio, usa o resumo do artigo"
+                />
+              </div>
             </div>
             {message && (
               <p className="rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] px-3 py-2 text-xs text-[#75675E]">

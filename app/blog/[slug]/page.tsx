@@ -2,6 +2,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, UserRound } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
 import { PublicHeader } from "@/components/public/PublicHeader";
 import { PublicFooter } from "@/components/public/PublicFooter";
 import { getBlogPostBySlug } from "@/lib/repositories/blog-posts";
@@ -22,43 +24,24 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
-function renderMarkdown(content: string) {
-  const blocks = content.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
-
-  return blocks.map((block, index) => {
-    if (block.startsWith("### ")) {
-      return (
-        <h3 key={index} className="mt-8 font-serif text-2xl font-semibold text-[#3A3028]">
-          {block.replace(/^### /, "")}
-        </h3>
-      );
-    }
-    if (block.startsWith("## ")) {
-      return (
-        <h2 key={index} className="mt-10 font-serif text-3xl font-semibold text-[#3A3028]">
-          {block.replace(/^## /, "")}
-        </h2>
-      );
-    }
-    if (block.startsWith("- ")) {
-      return (
-        <ul key={index} className="my-6 space-y-3">
-          {block.split("\n").map((item) => (
-            <li key={item} className="flex gap-3 text-base leading-8 text-[#75675E]">
-              <span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7F9A74]" />
-              <span>{item.replace(/^- /, "")}</span>
-            </li>
-          ))}
-        </ul>
-      );
-    }
-    return (
-      <p key={index} className="my-6 text-base leading-8 text-[#75675E]">
-        {block}
-      </p>
-    );
-  });
-}
+const blogMarkdownComponents: Components = {
+  h2: ({ children }) => <h2 className="mt-10 font-serif text-3xl font-semibold text-[#3A3028]">{children}</h2>,
+  h3: ({ children }) => <h3 className="mt-8 font-serif text-2xl font-semibold text-[#3A3028]">{children}</h3>,
+  p: ({ children }) => <p className="my-6 text-base leading-8 text-[#75675E]">{children}</p>,
+  ul: ({ children }) => <ul className="my-6 list-disc space-y-3 pl-6 marker:text-[#7F9A74]">{children}</ul>,
+  ol: ({ children }) => <ol className="my-6 list-decimal space-y-3 pl-6 marker:font-semibold marker:text-[#7F9A74]">{children}</ol>,
+  li: ({ children }) => <li className="pl-1 text-base leading-8 text-[#75675E]">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-[#3A3028]">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  blockquote: ({ children }) => (
+    <blockquote className="my-6 border-l-2 border-[#D9C4B2] pl-4 italic text-[#8C7A6B]">{children}</blockquote>
+  ),
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#607A56] underline">
+      {children}
+    </a>
+  ),
+};
 
 export async function generateMetadata({
   params,
@@ -170,7 +153,9 @@ export default async function BlogPostPage({
         </header>
 
         <div className="mx-auto max-w-3xl px-5 py-14 lg:px-8">
-          <div className="prose-none">{renderMarkdown(post.content_markdown)}</div>
+          <div className="prose-none">
+            <ReactMarkdown components={blogMarkdownComponents}>{post.content_markdown}</ReactMarkdown>
+          </div>
 
           <aside className="mt-10 rounded-[1.25rem] border border-[#EDE1D6] bg-[#FBF7F1] p-5">
             <p className="brand-kicker mb-2">Revisão e segurança</p>

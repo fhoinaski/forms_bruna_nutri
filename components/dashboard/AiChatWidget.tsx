@@ -56,6 +56,8 @@ const NEW_BLOG_POST_FIELD_LABELS: Record<string, string> = {
   content_markdown: "Conteúdo (Markdown)",
   category: "Categoria",
   tags: "Tags (separadas por vírgula)",
+  seo_title: "Título SEO",
+  seo_description: "Descrição SEO",
 };
 
 type ChatProposal =
@@ -453,6 +455,8 @@ export function AiChatWidget({ context }: { context?: { clientId?: string; submi
             content_markdown: contentMarkdown,
             category: byKey("category") || null,
             tags,
+            seo_title: byKey("seo_title") || title,
+            seo_description: byKey("seo_description") || excerpt,
             status: "draft",
             ai_generated: true,
           }),
@@ -697,7 +701,7 @@ function ProposalCard({ proposal, onToggleField, onEditField, onDiscard, onApply
               value={field.value}
               onChange={(event) => onEditField(field.key, event.target.value)}
               disabled={!field.included || applying}
-              className="w-full min-h-16 resize-y rounded-lg border border-[#EDE1D6] bg-white px-2 py-1.5 text-xs leading-5 text-[#3A3028] outline-none focus:border-[#7F9A74] disabled:opacity-50"
+              className={`w-full resize-y rounded-lg border border-[#EDE1D6] bg-white px-2 py-1.5 text-xs leading-5 text-[#3A3028] outline-none focus:border-[#7F9A74] disabled:opacity-50 ${field.key === "content_markdown" ? "min-h-56" : "min-h-16"}`}
             />
           </label>
         ))}
