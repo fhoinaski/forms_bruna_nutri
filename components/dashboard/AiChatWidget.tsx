@@ -3,9 +3,29 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bot, Send, Sparkles, X } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
 import { SUGGESTED_CHAT_PROMPTS } from "@/lib/ai/system-chat-knowledge";
 
 const INTRO_SHOWN_KEY = "bruna_nutri_ai_chat_intro_shown";
+
+// Estilo compacto para markdown dentro de uma bolha de chat pequena — nao
+// usa a classe "prose" porque o plugin de tipografia do Tailwind nao esta
+// registrado no projeto, e o espacamento padrao dele seria grande demais
+// para uma bolha de chat de qualquer forma.
+const markdownComponents: Components = {
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-4 last:mb-0">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-2 list-decimal space-y-1 pl-4 last:mb-0">{children}</ol>,
+  li: ({ children }) => <li className="leading-6">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  code: ({ children }) => <code className="rounded bg-black/10 px-1 py-0.5 text-[0.85em]">{children}</code>,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="underline">
+      {children}
+    </a>
+  ),
+};
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -126,11 +146,15 @@ export function AiChatWidget() {
                 key={index}
                 className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 ${
                   message.role === "user"
-                    ? "ml-auto bg-[#7F9A74] text-white"
+                    ? "ml-auto whitespace-pre-wrap bg-[#7F9A74] text-white"
                     : "bg-[#F4F8F1] text-[#3A3028]"
                 }`}
               >
-                {message.content}
+                {message.role === "assistant" ? (
+                  <ReactMarkdown components={markdownComponents}>{message.content}</ReactMarkdown>
+                ) : (
+                  message.content
+                )}
               </div>
             ))}
             {sending && (
