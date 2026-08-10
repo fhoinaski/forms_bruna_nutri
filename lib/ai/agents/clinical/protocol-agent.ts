@@ -1,7 +1,5 @@
 import type { SubmissionWithAnswers } from "@/lib/repositories/submissions";
 import type { PreAnalysis } from "@/lib/repositories/pre-analyses";
-import { generateText } from "ai";
-import { createConfiguredModel } from "@/lib/ai/model-factory";
 import {
   getTemplateDetail,
   getTemplatesByGroup,
@@ -14,13 +12,18 @@ import {
   type AISettings,
 } from "@/lib/repositories/ai-settings";
 import type { ProtocolDraftOutput } from "@/lib/validators/ai-protocol";
+import { protocolDraftOutputSchema } from "@/lib/ai/schemas/protocol-draft.schema";
+import { generateStructured } from "@/lib/ai/gateway/ai-gateway";
+import { sanitizeClinicalContext } from "@/lib/ai/privacy/sanitize-context";
+import { AiConfigError } from "@/lib/ai/core/ai-errors";
 
-export const PROMPT_VERSION = "v1.1.0";
+export const PROMPT_VERSION = "v1.2.0";
 
 export interface GenerateProtocolInput {
   submission: SubmissionWithAnswers;
   preAnalysis: PreAnalysis | null;
   extraInstructions?: string | null;
+  adminId?: string | null;
 }
 
 export interface GenerateProtocolResult {
@@ -37,8 +40,19 @@ function getStr(answers: Record<string, unknown>, key: string): string {
   return String(v);
 }
 
+const COMBINING_DIACRITICS_START = 0x0300;
+const COMBINING_DIACRITICS_END = 0x036f;
+
 function normalizeText(value: string): string {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return value
+    .normalize("NFD")
+    .split("")
+    .filter((char) => {
+      const code = char.codePointAt(0) ?? 0;
+      return code < COMBINING_DIACRITICS_START || code > COMBINING_DIACRITICS_END;
+    })
+    .join("")
+    .toLowerCase();
 }
 
 function inferTargetGroup(input: GenerateProtocolInput): ProtocolTemplateTargetGroup {
@@ -296,14 +310,19 @@ function generateRuleBasedDraft(input: GenerateProtocolInput): ProtocolDraftOutp
   };
 }
 
-// ── Gerador com IA externa (Anthropic Claude) ─────────────────────────────
+// ── Gerador com IA externa (via ai-gateway, saida validada por Zod) ───────
+
+function applyRealPatientName(title: string, patientName: string, pseudonym: string): string {
+  if (title.includes(pseudonym)) return title.split(pseudonym).join(patientName);
+  return `${patientName} — ${title}`;
+}
 
 async function generateWithConfiguredAi(
   input: GenerateProtocolInput,
   settings: AISettings,
   templateKnowledgeBase: string
 ): Promise<ProtocolDraftOutput> {
-  const { submission, preAnalysis, extraInstructions } = input;
+  const { submission, preAnalysis, extraInstructions, adminId } = input;
   const a = submission.answers;
 
   const answersText = Object.entries(a)
@@ -321,6 +340,14 @@ async function generateWithConfiguredAi(
         `Prioridade: ${preAnalysis.priority}`,
       ].filter(Boolean).join("\n")
     : "Nenhuma pré-análise registrada.";
+
+  // Minimizacao de PII: o LLM externo nunca recebe o nome real do paciente,
+  // e todo o texto de origem do formulario/pre-analise vai envolvido em
+  // bloco anti-prompt-injection com PII simples (CPF/telefone/e-mail) redigida.
+  const { pseudonym, contextBlock } = sanitizeClinicalContext(submission.patient_name, [
+    { label: "RESPOSTAS_FORMULARIO_PRE_CONSULTA", content: answersText },
+    { label: "PRE_ANALISE_PROFISSIONAL", content: preAnalysisText },
+  ]);
 
   const baseSystemPrompt = settings.protocol_system_prompt?.trim() || DEFAULT_PROTOCOL_SYSTEM_PROMPT;
 
@@ -358,31 +385,24 @@ Gere um rascunho de conduta nutricional em JSON com exatamente esta estrutura:
   "professionalReviewNotes": "string"
 }`;
 
-  const userMessage = `Paciente: ${submission.patient_name}
+  const userMessage = `Paciente: ${pseudonym} (identificação real omitida por privacidade — nunca tente adivinhar, inventar ou repetir um nome no rascunho; refira-se sempre como "a paciente"/"o paciente"; o sistema completa a identificação real no título depois).
 
-RESPOSTAS DO FORMULÁRIO PRÉ-CONSULTA:
-${answersText}
-
-PRÉ-ANÁLISE PROFISSIONAL:
-${preAnalysisText}
+${contextBlock}
 
 ${extraInstructions ? `INSTRUÇÕES EXTRAS DA PROFISSIONAL:\n${extraInstructions}` : ""}
 
 Gere o rascunho de conduta nutricional em JSON conforme estrutura especificada.`;
 
-  const { text } = await generateText({
-    model: createConfiguredModel(settings),
+  const output = await generateStructured({
+    agent: "protocol-agent",
+    adminId,
     system: systemPrompt,
     prompt: userMessage,
+    schema: protocolDraftOutputSchema,
     maxOutputTokens: 4096,
   });
 
-  // Extrai o JSON da resposta (pode vir com markdown code fence)
-  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);
-  const jsonStr = jsonMatch ? jsonMatch[1] : text;
-
-  const parsed = JSON.parse(jsonStr) as ProtocolDraftOutput;
-  return parsed;
+  return { ...output, title: applyRealPatientName(output.title, submission.patient_name, pseudonym) };
 }
 
 // ── Ponto de entrada principal ─────────────────────────────────────────────
@@ -390,12 +410,14 @@ Gere o rascunho de conduta nutricional em JSON conforme estrutura especificada.`
 export async function generateProtocolDraft(
   input: GenerateProtocolInput
 ): Promise<GenerateProtocolResult> {
-  const settings = await getAISettings();
   const { targetGroup, templates } = await getRestrictiveTemplates(input);
   const templateKnowledgeBase = await buildTemplateKnowledgeBase(targetGroup, templates);
 
+  const settings = await getAISettings();
   if (!settings.api_key) {
-    throw new Error("API Key de IA nao configurada. Acesse Dashboard > Sistema > IA e salve uma chave valida antes de gerar protocolos.");
+    throw new AiConfigError(
+      "API Key de IA nao configurada. Acesse Dashboard > Configuracoes > Inteligencia artificial e salve uma chave valida antes de gerar protocolos."
+    );
   }
 
   try {
@@ -407,7 +429,12 @@ export async function generateProtocolDraft(
       promptVersion: PROMPT_VERSION,
     };
   } catch (err) {
-    // Se a IA falhar, não bloquear o fluxo — usar fallback
+    // Erro de configuracao (sem api key) nunca deve cair no fallback
+    // silencioso — a profissional precisa saber que a IA nao esta configurada.
+    if (err instanceof AiConfigError) throw err;
+
+    // Qualquer outro erro (provedor fora do ar, saida invalida mesmo apos
+    // reparo, etc.) nao bloqueia o fluxo — usa o fallback determinístico.
     console.error("[protocol-agent] IA externa falhou, usando fallback:", err);
     const output = generateRuleBasedDraft(input);
     return {

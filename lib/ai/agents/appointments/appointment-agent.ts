@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Appointment } from "@/lib/repositories/appointments";
+import { PROPOSAL_DISCLAIMER } from "@/lib/ai/prompts/shared";
 
 export const PROPOSE_NEW_APPOINTMENT_TOOL_NAME = "proposeNewAppointment";
 
@@ -37,5 +38,5 @@ Como fazer isso:
 - Use a ferramenta ${PROPOSE_NEW_APPOINTMENT_TOOL_NAME} com titulo (ex.: "Consulta", "Retorno"), tipo (${APPOINTMENT_TYPES.join(", ")}), data e hora no formato DD/MM/AAAA HH:mm (calcule a data real a partir de referencias como "semana que vem", "amanha", "dia 20" usando a data de hoje como base) e, se mencionado, local/link e observacoes.
 - Se a nutricionista nao disser um horario claro, pergunte antes de propor — nao invente hora.
 - Isto NAO verifica conflitos de agenda automaticamente; avise que vale conferir a agenda antes de confirmar se o horario for incerto.
-- A ferramenta so registra uma PROPOSTA para revisao antes de criar a consulta de verdade.
+- ${PROPOSAL_DISCLAIMER}
 `.trim();

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PROPOSAL_DISCLAIMER } from "@/lib/ai/prompts/shared";
 
 export const PROPOSE_NEW_PROTOCOL_TOOL_NAME = "proposeNewClientProtocol";
 
@@ -17,5 +18,5 @@ Como fazer isso:
 - Use a ferramenta ${PROPOSE_NEW_PROTOCOL_TOOL_NAME} com um titulo claro (baseado no que foi pedido), categoria livre (ex.: "Emagrecimento", "Hipertrofia", "Gestante") se fizer sentido, uma descricao breve do foco do protocolo e notas profissionais iniciais (conduta, observacoes).
 - Isso cria um protocolo simples (titulo, descricao, categoria, notas) vinculado ao cliente, sem fases ou tarefas predefinidas — a nutricionista pode detalhar fases e tarefas depois na propria tela do protocolo.
 - Se a nutricionista quiser um protocolo clinico completo e estruturado (com fases, tarefas, materiais educativos) baseado nas respostas de um formulario de pre-consulta, isso NAO e feito por essa ferramenta: oriente-a a usar o fluxo de "Gerar rascunho de protocolo com IA" a partir da pre-analise do formulario do paciente, que gera um rascunho completo para revisao.
-- A ferramenta so registra uma PROPOSTA para revisao antes de criar de verdade.
+- ${PROPOSAL_DISCLAIMER}
 `.trim();

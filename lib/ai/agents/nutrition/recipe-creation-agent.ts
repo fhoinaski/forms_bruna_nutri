@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { RECIPE_MEAL_GROUPS } from "@/lib/nutrition/recipe-constants";
-import { suggestMealWithAI } from "@/lib/ai/meal-suggestion-agent";
+import { suggestMealWithAI } from "@/lib/ai/agents/nutrition/meal-suggestion-agent";
+import { PROPOSAL_DISCLAIMER } from "@/lib/ai/prompts/shared";
 
 export const PROPOSE_NEW_RECIPE_TOOL_NAME = "proposeNewRecipe";
 
@@ -62,7 +63,7 @@ Voce tambem pode criar um rascunho de receita nova na biblioteca quando a nutric
 Como fazer isso:
 - Use a ferramenta ${PROPOSE_NEW_RECIPE_TOOL_NAME} com um titulo (invente um titulo claro se a nutricionista nao der um), o grupo de refeicao (${RECIPE_MEAL_GROUPS.join(", ")}) e o numero de porcoes (padrao 1).
 - Coloque em "instructions" qualquer orientacao adicional dada na conversa (ex.: "baixa caloria", "sem lactose", "rica em proteina") para guiar a escolha dos alimentos.
-- A ferramenta busca ingredientes reais na base TACO e ja monta o modo de preparo. Ela so registra uma PROPOSTA: a interface mostra tudo para revisao antes de salvar na biblioteca de verdade.
+- A ferramenta busca ingredientes reais na base TACO e ja monta o modo de preparo. ${PROPOSAL_DISCLAIMER}
 - Se a ferramenta retornar erro, explique em texto o que aconteceu e sugira tentar de novo com um pedido mais simples.
 - Depois de propor, lembre que "baixa caloria" ou qualquer adequacao clinica especifica e uma decisao da nutricionista — o sistema so busca os alimentos e calcula os valores a partir do que for escolhido.
 `.trim();

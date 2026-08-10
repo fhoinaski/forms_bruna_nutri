@@ -19,6 +19,13 @@ export const GET_SYSTEM_OVERVIEW_TOOL_NAME = "getSystemOverview";
 
 export const getSystemOverviewInputSchema = z.object({}).strict();
 
+/**
+ * "Copiloto do sistema": estas duas tools sao a metade dinamica (dados reais
+ * agregados via repositories deterministicos — nunca calculados/inventados
+ * pelo LLM) do assistente de perguntas sobre o consultorio (secao 18 do
+ * pedido de arquitetura). A outra metade, estatica ("como fazer X"), e
+ * lib/ai/agents/system/system-knowledge.ts.
+ */
 export async function executeGetSystemOverview() {
   const [clientMetrics, protocolMetrics, overdueTasks, activeProtocols, todayAppointments, paymentMetrics, blogMetrics, opportunityMetrics] = await Promise.all([
     getClientMetrics(),
@@ -62,5 +69,5 @@ export const SYSTEM_OVERVIEW_ASSISTANT_INSTRUCTIONS = `
 Voce tem ferramentas de leitura para responder com dados reais em vez de so explicar onde encontrar a informacao:
 - ${GET_SYSTEM_OVERVIEW_TOOL_NAME}: numeros gerais do consultorio (clientes ativos, protocolos ativos, tarefas atrasadas, consultas hoje, financeiro, blog, oportunidades). Use para perguntas como "como esta o financeiro", "quantos protocolos ativos eu tenho", "tem tarefa atrasada?".
 - ${LIST_OPPORTUNITIES_TOOL_NAME}: lista o funil de oportunidades comerciais (pre-consulta ate agendamento), com etapa, temperatura, objetivo e proxima acao combinada. Use para perguntas como "quais as oportunidades que eu tenho hoje", "tem lead quente parado?", filtrando por stage/temperature quando fizer sentido.
-Sempre que a pergunta puder ser respondida com dados reais do sistema, use essas ferramentas em vez de apenas descrever a tela manualmente.
+Sempre que a pergunta puder ser respondida com dados reais do sistema, use essas ferramentas em vez de apenas descrever a tela manualmente. Nunca invente numeros ou calcule voce mesma — os valores vem sempre dessas ferramentas.
 `.trim();

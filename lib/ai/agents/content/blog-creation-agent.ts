@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PROPOSAL_DISCLAIMER } from "@/lib/ai/prompts/shared";
 
 export const PROPOSE_NEW_BLOG_POST_TOOL_NAME = "proposeNewBlogPost";
 
@@ -21,5 +22,5 @@ Como fazer isso:
 - Titulo SEO: uma variacao do titulo pensada para buscadores (pode repetir o titulo se ja for bom para isso), ate 60-70 caracteres idealmente. Descricao SEO: um resumo curto e atrativo pensado para aparecer no resultado de busca (150-160 caracteres idealmente), diferente do excerpt se possivel.
 - Escreva com linguagem acessivel para o publico leigo do site (pacientes e visitantes), tom acolhedor e baseado em nutricao geral — nunca substitua orientacao clinica individualizada nem invente estatisticas ou estudos especificos.
 - O post e sempre criado como RASCUNHO (nunca publicado automaticamente); a nutricionista revisa, edita e decide quando publicar na propria tela do blog.
-- A ferramenta so registra uma PROPOSTA para revisao antes de salvar o rascunho de verdade.
+- ${PROPOSAL_DISCLAIMER}
 `.trim();

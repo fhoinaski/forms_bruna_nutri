@@ -4,7 +4,8 @@ import { guideCategories } from "@/lib/help/guide-content";
  * Serializa o guia completo (a mesma fonte usada pela Central de Ajuda e
  * pelos popups de ajuda) em texto compacto para ancorar as respostas do
  * assistente de chat — evita que a IA invente telas ou passos que nao
- * existem no sistema.
+ * existem no sistema. Metade estatica do "copiloto do sistema" — a metade
+ * dinamica (dados reais) e lib/ai/agents/system/system-overview-agent.ts.
  */
 export function buildSystemUsageKnowledgeBase(): string {
   const sections = guideCategories

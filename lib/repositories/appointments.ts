@@ -151,6 +151,18 @@ export async function updateAppointment(
   }
 }
 
+export async function getAppointmentById(id: string): Promise<Appointment | null> {
+  const rows = await d1Query<Appointment>(
+    `SELECT a.*, c.name as client_name, c.phone as client_phone, c.email as client_email
+     FROM appointments a
+     LEFT JOIN clients c ON c.id = a.client_id
+     WHERE a.id = ?1
+     LIMIT 1`,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
 export async function deleteAppointment(id: string): Promise<void> {
   await d1Execute(`DELETE FROM appointment_workflow_items WHERE appointment_id = ?1`, [id]);
   await d1Execute(`DELETE FROM appointments WHERE id = ?1`, [id]);

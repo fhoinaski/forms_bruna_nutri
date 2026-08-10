@@ -1,96 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { generateText, stepCountIs, type ModelMessage, type ToolSet } from "ai";
-import { createConfiguredModel } from "@/lib/ai/model-factory";
-import { buildSystemUsageKnowledgeBase } from "@/lib/ai/system-chat-knowledge";
-import {
-  PRONTUARIO_ASSISTANT_INSTRUCTIONS,
-  PROPOSE_NUTRITION_RECORD_TOOL_NAME,
-  buildNutritionRecordContext,
-  proposeNutritionRecordInputSchema,
-} from "@/lib/ai/prontuario-assistant";
-import {
-  PRE_ANALYSIS_ASSISTANT_INSTRUCTIONS,
-  PROPOSE_PRE_ANALYSIS_TOOL_NAME,
-  buildPreAnalysisContext,
-  proposePreAnalysisInputSchema,
-} from "@/lib/ai/pre-analysis-assistant";
-import {
-  CLIENT_PROTOCOL_ASSISTANT_INSTRUCTIONS,
-  PROPOSE_CLIENT_PROTOCOL_NOTES_TOOL_NAME,
-  buildClientProtocolsContext,
-  proposeClientProtocolNotesInputSchema,
-} from "@/lib/ai/client-protocol-assistant";
-import {
-  FIND_CLIENT_TOOL_NAME,
-  NAVIGATE_TOOL_NAME,
-  NAVIGATION_ASSISTANT_INSTRUCTIONS,
-  executeFindClient,
-  findClientInputSchema,
-  navigateInputSchema,
-  resolveNavigationPath,
-  type NavigateInput,
-} from "@/lib/ai/navigation-assistant";
-import {
-  CLIENT_CREATION_ASSISTANT_INSTRUCTIONS,
-  PROPOSE_NEW_CLIENT_TOOL_NAME,
-  proposeNewClientInputSchema,
-  type ProposeNewClientInput,
-} from "@/lib/ai/client-creation-assistant";
-import {
-  PROPOSE_NEW_RECIPE_TOOL_NAME,
-  RECIPE_CREATION_ASSISTANT_INSTRUCTIONS,
-  executeProposeNewRecipe,
-  proposeNewRecipeInputSchema,
-  type ProposeNewRecipeOutput,
-} from "@/lib/ai/recipe-creation-assistant";
-import {
-  PROPOSE_NEW_PROTOCOL_TOOL_NAME,
-  PROTOCOL_CREATION_ASSISTANT_INSTRUCTIONS,
-  proposeNewClientProtocolInputSchema,
-  type ProposeNewClientProtocolInput,
-} from "@/lib/ai/protocol-creation-assistant";
-import {
-  BLOG_CREATION_ASSISTANT_INSTRUCTIONS,
-  PROPOSE_NEW_BLOG_POST_TOOL_NAME,
-  proposeNewBlogPostInputSchema,
-  type ProposeNewBlogPostInput,
-} from "@/lib/ai/blog-creation-assistant";
-import { DIET_REVIEW_ASSISTANT_INSTRUCTIONS, buildActiveMealPlanContext } from "@/lib/ai/diet-review-assistant";
-import { ALLOWED_ATTACHMENT_MEDIA_TYPES, MAX_ATTACHMENT_BASE64_LENGTH } from "@/lib/ai/chat-attachments";
-import {
-  APPOINTMENT_ASSISTANT_INSTRUCTIONS,
-  PROPOSE_NEW_APPOINTMENT_TOOL_NAME,
-  buildUpcomingAppointmentsContext,
-  proposeNewAppointmentInputSchema,
-  type ProposeNewAppointmentInput,
-} from "@/lib/ai/appointment-assistant";
-import {
-  PROPOSE_NEW_TASK_TOOL_NAME,
-  TASK_ASSISTANT_INSTRUCTIONS,
-  proposeNewClientTaskInputSchema,
-  type ProposeNewClientTaskInput,
-} from "@/lib/ai/task-assistant";
-import {
-  GET_SYSTEM_OVERVIEW_TOOL_NAME,
-  LIST_OPPORTUNITIES_TOOL_NAME,
-  SYSTEM_OVERVIEW_ASSISTANT_INSTRUCTIONS,
-  executeGetSystemOverview,
-  executeListOpportunities,
-  getSystemOverviewInputSchema,
-  listOpportunitiesInputSchema,
-  type OpportunityStage,
-  type OpportunityTemperature,
-} from "@/lib/ai/system-overview-assistant";
-import { DEFAULT_CHAT_SYSTEM_PROMPT, getAISettings } from "@/lib/repositories/ai-settings";
 import { getAdminFromRequest } from "@/lib/auth/session";
-import { getAppointments } from "@/lib/repositories/appointments";
-import { getClientById } from "@/lib/repositories/clients";
-import { getClientProtocols } from "@/lib/repositories/client-protocols";
-import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
-import { getNutritionRecord } from "@/lib/repositories/nutrition-records";
-import { getSubmissionById } from "@/lib/repositories/submissions";
-import { getPreAnalysisBySubmissionId } from "@/lib/repositories/pre-analyses";
+import { getAISettings } from "@/lib/repositories/ai-settings";
+import { resolveAssistantContext } from "@/lib/ai/core/ai-context";
+import { runAssistantTurn } from "@/lib/ai/core/ai-orchestrator";
+import { toLegacyChatResponse } from "@/lib/ai/core/ai-response";
+import { AiConfigError, AiProviderError, AiValidationError } from "@/lib/ai/core/ai-errors";
+import {
+  ALLOWED_ATTACHMENT_MEDIA_TYPES,
+  MAX_ATTACHMENT_BASE64_LENGTH,
+  validateChatAttachment,
+} from "@/lib/ai/agents/system/chat-attachments";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
@@ -118,9 +38,17 @@ const requestSchema = z.object({
   context: z.object({
     clientId: z.string().min(1).max(120).optional(),
     submissionId: z.string().min(1).max(120).optional(),
+    currentPage: z.string().min(1).max(200).optional(),
   }).optional(),
 });
 
+/**
+ * Wrapper HTTP fino: autentica, valida input, resolve contexto, delega tudo
+ * (system prompt, selecao de tools, tool-calling, memoria) ao orquestrador
+ * central (lib/ai/core/ai-orchestrator.ts), e mapeia o envelope de resposta
+ * para o mesmo shape JSON que o frontend (AiChatWidget) ja consome — nenhuma
+ * mudanca de contrato foi necessaria no cliente.
+ */
 export async function POST(req: NextRequest) {
   const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
@@ -154,269 +82,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const clientId = parsed.data.context?.clientId;
-  const submissionId = parsed.data.context?.submissionId;
-  const client = clientId ? await getClientById(clientId) : null;
-  const submission = submissionId ? await getSubmissionById(submissionId) : null;
+  let attachment: ReturnType<typeof validateChatAttachment> | undefined;
+  try {
+    attachment = parsed.data.attachment ? validateChatAttachment(parsed.data.attachment) : undefined;
+  } catch (cause) {
+    return NextResponse.json(
+      { message: cause instanceof Error ? cause.message : "Anexo invalido." },
+      { status: 400 }
+    );
+  }
 
   try {
-    const model = createConfiguredModel(settings);
-    const systemPromptParts = [
-      settings.chat_system_prompt?.trim() || DEFAULT_CHAT_SYSTEM_PROMPT,
-      buildSystemUsageKnowledgeBase(),
-    ];
-
-    systemPromptParts.push(
-      NAVIGATION_ASSISTANT_INSTRUCTIONS,
-      CLIENT_CREATION_ASSISTANT_INSTRUCTIONS,
-      RECIPE_CREATION_ASSISTANT_INSTRUCTIONS,
-      BLOG_CREATION_ASSISTANT_INSTRUCTIONS,
-      SYSTEM_OVERVIEW_ASSISTANT_INSTRUCTIONS
-    );
-    const tools: ToolSet = {
-      [FIND_CLIENT_TOOL_NAME]: {
-        description: "Busca clientes pelo nome para descobrir o id antes de navegar ate a ficha dele.",
-        inputSchema: findClientInputSchema,
-        execute: executeFindClient,
-      },
-      [NAVIGATE_TOOL_NAME]: {
-        description: "Navega o sistema ate a tela pedida (ficha de um cliente, lista de clientes, agenda, biblioteca de protocolos/modelos/receitas, tarefas, financeiro ou oportunidades).",
-        inputSchema: navigateInputSchema,
-        execute: async (input: NavigateInput) => input,
-      },
-      [GET_SYSTEM_OVERVIEW_TOOL_NAME]: {
-        description: "Le numeros gerais e atuais do consultorio (clientes, protocolos, tarefas, consultas hoje, financeiro, blog, oportunidades) para responder perguntas com dados reais.",
-        inputSchema: getSystemOverviewInputSchema,
-        execute: executeGetSystemOverview,
-      },
-      [LIST_OPPORTUNITIES_TOOL_NAME]: {
-        description: "Lista as oportunidades comerciais (funil de pre-consulta ate agendamento), com etapa, temperatura e proxima acao combinada.",
-        inputSchema: listOpportunitiesInputSchema,
-        execute: async (input: { stage?: OpportunityStage; temperature?: OpportunityTemperature }) => executeListOpportunities(input),
-      },
-      [PROPOSE_NEW_CLIENT_TOOL_NAME]: {
-        description: "Registra uma proposta de cadastro de um novo cliente/paciente com os dados informados, para revisao humana antes de criar de verdade.",
-        inputSchema: proposeNewClientInputSchema,
-        execute: async (input: ProposeNewClientInput) => input,
-      },
-      [PROPOSE_NEW_RECIPE_TOOL_NAME]: {
-        description: "Busca ingredientes reais na TACO e monta uma proposta de receita nova (titulo, grupo, porcoes, ingredientes e modo de preparo) para revisao humana antes de salvar na biblioteca.",
-        inputSchema: proposeNewRecipeInputSchema,
-        execute: executeProposeNewRecipe,
-      },
-      [PROPOSE_NEW_BLOG_POST_TOOL_NAME]: {
-        description: "Registra uma proposta de rascunho de post novo para o blog do site (titulo, resumo, conteudo em markdown, categoria e tags), para revisao humana antes de salvar.",
-        inputSchema: proposeNewBlogPostInputSchema,
-        execute: async (input: ProposeNewBlogPostInput) => input,
-      },
-    };
-
-    if (client) {
-      const record = await getNutritionRecord(client.id);
-      systemPromptParts.push(PRONTUARIO_ASSISTANT_INSTRUCTIONS, buildNutritionRecordContext(client.name, record));
-
-      const activeMealPlan = await getActiveMealPlan(client.id);
-      systemPromptParts.push(DIET_REVIEW_ASSISTANT_INSTRUCTIONS, buildActiveMealPlanContext(activeMealPlan));
-
-      tools[PROPOSE_NUTRITION_RECORD_TOOL_NAME] = {
-        description: "Registra uma proposta de preenchimento/atualizacao de campos do prontuario nutricional do cliente atual, para revisao humana antes de salvar.",
-        inputSchema: proposeNutritionRecordInputSchema,
-        execute: async (input: Record<string, string | undefined>) => input,
-      };
-
-      systemPromptParts.push(PROTOCOL_CREATION_ASSISTANT_INSTRUCTIONS);
-      tools[PROPOSE_NEW_PROTOCOL_TOOL_NAME] = {
-        description: "Registra uma proposta de criacao de um protocolo personalizado simples (titulo, categoria, descricao, notas) para o cliente atual, para revisao humana antes de criar de verdade.",
-        inputSchema: proposeNewClientProtocolInputSchema,
-        execute: async (input: ProposeNewClientProtocolInput) => input,
-      };
-
-      const protocols = await getClientProtocols(client.id);
-      if (protocols.length) {
-        systemPromptParts.push(CLIENT_PROTOCOL_ASSISTANT_INSTRUCTIONS, buildClientProtocolsContext(protocols));
-        tools[PROPOSE_CLIENT_PROTOCOL_NOTES_TOOL_NAME] = {
-          description: "Registra uma proposta de atualizacao das notas profissionais de um protocolo ja atribuido ao cliente atual, para revisao humana antes de salvar.",
-          inputSchema: proposeClientProtocolNotesInputSchema,
-          execute: async (input: { clientProtocolId: string; professionalNotes: string }) => input,
-        };
-      }
-
-      const appointments = await getAppointments({ clientId: client.id });
-      systemPromptParts.push(APPOINTMENT_ASSISTANT_INSTRUCTIONS, buildUpcomingAppointmentsContext(appointments));
-      tools[PROPOSE_NEW_APPOINTMENT_TOOL_NAME] = {
-        description: "Registra uma proposta de nova consulta na agenda para o cliente atual, para revisao humana antes de criar de verdade.",
-        inputSchema: proposeNewAppointmentInputSchema,
-        execute: async (input: ProposeNewAppointmentInput) => input,
-      };
-
-      systemPromptParts.push(TASK_ASSISTANT_INSTRUCTIONS);
-      tools[PROPOSE_NEW_TASK_TOOL_NAME] = {
-        description: "Registra uma proposta de tarefa de acompanhamento para o cliente atual, para revisao humana antes de criar de verdade.",
-        inputSchema: proposeNewClientTaskInputSchema,
-        execute: async (input: ProposeNewClientTaskInput) => input,
-      };
-    }
-
-    if (submission) {
-      const currentPreAnalysis = await getPreAnalysisBySubmissionId(submission.id);
-      systemPromptParts.push(PRE_ANALYSIS_ASSISTANT_INSTRUCTIONS, buildPreAnalysisContext(submission, currentPreAnalysis));
-      tools[PROPOSE_PRE_ANALYSIS_TOOL_NAME] = {
-        description: "Registra uma proposta de pre-analise (resumo, pontos de atencao, objetivo, restricoes e notas) para o formulario de pre-consulta atual, para revisao humana antes de salvar.",
-        inputSchema: proposePreAnalysisInputSchema,
-        execute: async (input: Record<string, string | undefined>) => input,
-      };
-    }
-
-    const attachment = parsed.data.attachment;
-    if (attachment) {
-      systemPromptParts.push(
-        `A nutricionista anexou um arquivo a mensagem mais recente: "${attachment.name}". Leia o conteudo e use para ajudar a interpretar exames/diagnosticos, complementar o prontuario, a pre-analise ou a conduta, conforme o pedido. Deixe claro que sua leitura e um apoio tecnico e a decisao final e da profissional.`
-      );
-    }
-
-    const messages: ModelMessage[] = parsed.data.messages.map((message, index, array) => {
-      const isLastMessage = index === array.length - 1;
-      if (!attachment || !isLastMessage || message.role !== "user") return message;
-      return {
-        role: "user",
-        content: [
-          { type: "text", text: message.content },
-          { type: "file", data: attachment.data, mediaType: attachment.mediaType, filename: attachment.name },
-        ],
-      };
+    const context = await resolveAssistantContext(admin, {
+      clientId: parsed.data.context?.clientId,
+      submissionId: parsed.data.context?.submissionId,
+      currentPage: parsed.data.context?.currentPage,
     });
 
-    const result = await generateText({
-      model,
-      system: systemPromptParts.join("\n\n"),
-      messages,
-      stopWhen: stepCountIs(4),
-      maxOutputTokens: 6000,
-      tools,
+    const envelope = await runAssistantTurn(context, {
+      messages: parsed.data.messages,
+      attachment,
     });
-
-    const proposalCall = result.toolCalls?.find((call) =>
-      call.toolName === PROPOSE_NUTRITION_RECORD_TOOL_NAME
-      || call.toolName === PROPOSE_CLIENT_PROTOCOL_NOTES_TOOL_NAME
-      || call.toolName === PROPOSE_PRE_ANALYSIS_TOOL_NAME
-      || call.toolName === PROPOSE_NEW_CLIENT_TOOL_NAME
-      || call.toolName === PROPOSE_NEW_RECIPE_TOOL_NAME
-      || call.toolName === PROPOSE_NEW_PROTOCOL_TOOL_NAME
-      || call.toolName === PROPOSE_NEW_BLOG_POST_TOOL_NAME
-      || call.toolName === PROPOSE_NEW_APPOINTMENT_TOOL_NAME
-      || call.toolName === PROPOSE_NEW_TASK_TOOL_NAME
-    );
-    const navigateCall = result.toolCalls?.find((call) => call.toolName === NAVIGATE_TOOL_NAME);
-    const navigateResult = navigateCall ? await resolveNavigationPath(navigateCall.input as NavigateInput) : null;
-
-    let proposedUpdate: Record<string, unknown> | undefined;
-
-    if (proposalCall?.toolName === PROPOSE_NUTRITION_RECORD_TOOL_NAME && client) {
-      const fields = Object.fromEntries(
-        Object.entries(proposalCall.input as Record<string, string | undefined>).filter(([, value]) => value?.trim())
-      );
-      if (Object.keys(fields).length) proposedUpdate = { kind: "nutrition_record", clientId: client.id, fields };
-    }
-
-    if (proposalCall?.toolName === PROPOSE_PRE_ANALYSIS_TOOL_NAME && submission) {
-      const fields = Object.fromEntries(
-        Object.entries(proposalCall.input as Record<string, string | undefined>).filter(([, value]) => value?.trim())
-      );
-      if (Object.keys(fields).length) proposedUpdate = { kind: "pre_analysis", submissionId: submission.id, fields };
-    }
-
-    if (proposalCall?.toolName === PROPOSE_CLIENT_PROTOCOL_NOTES_TOOL_NAME && client) {
-      const input = proposalCall.input as { clientProtocolId: string; professionalNotes: string };
-      if (input.professionalNotes?.trim()) {
-        proposedUpdate = {
-          kind: "client_protocol",
-          clientId: client.id,
-          clientProtocolId: input.clientProtocolId,
-          professionalNotes: input.professionalNotes,
-        };
-      }
-    }
-
-    if (proposalCall?.toolName === PROPOSE_NEW_CLIENT_TOOL_NAME) {
-      const input = proposalCall.input as ProposeNewClientInput;
-      const fields = Object.fromEntries(
-        Object.entries(input).filter(([, value]) => value?.trim())
-      );
-      if (fields.name) proposedUpdate = { kind: "new_client", fields };
-    }
-
-    if (proposalCall?.toolName === PROPOSE_NEW_RECIPE_TOOL_NAME) {
-      const output = result.toolResults?.find((toolResult) => toolResult.toolName === PROPOSE_NEW_RECIPE_TOOL_NAME)
-        ?.output as ProposeNewRecipeOutput | undefined;
-      if (output && !("error" in output)) {
-        proposedUpdate = {
-          kind: "new_recipe",
-          title: output.title,
-          meal_group: output.meal_group,
-          servings: output.servings,
-          preparation_steps: output.preparation_steps,
-          ingredients: output.ingredients,
-        };
-      }
-    }
-
-    if (proposalCall?.toolName === PROPOSE_NEW_PROTOCOL_TOOL_NAME && client) {
-      const input = proposalCall.input as ProposeNewClientProtocolInput;
-      const fields = Object.fromEntries(
-        Object.entries(input).filter(([, value]) => value?.trim())
-      );
-      if (fields.title) proposedUpdate = { kind: "new_protocol", clientId: client.id, fields };
-    }
-
-    if (proposalCall?.toolName === PROPOSE_NEW_BLOG_POST_TOOL_NAME) {
-      const input = proposalCall.input as ProposeNewBlogPostInput;
-      if (input.title && input.excerpt && input.content_markdown) {
-        proposedUpdate = {
-          kind: "new_blog_post",
-          fields: {
-            title: input.title,
-            excerpt: input.excerpt,
-            content_markdown: input.content_markdown,
-            category: input.category ?? "",
-            tags: (input.tags ?? []).join(", "),
-            seo_title: input.seo_title ?? "",
-            seo_description: input.seo_description ?? "",
-          },
-        };
-      }
-    }
-
-    if (proposalCall?.toolName === PROPOSE_NEW_APPOINTMENT_TOOL_NAME && client) {
-      const input = proposalCall.input as ProposeNewAppointmentInput;
-      if (input.title && input.starts_at_display) {
-        proposedUpdate = {
-          kind: "new_appointment",
-          clientId: client.id,
-          fields: {
-            title: input.title,
-            appointment_type: input.appointment_type,
-            starts_at_display: input.starts_at_display,
-            location: input.location ?? "",
-            notes: input.notes ?? "",
-          },
-        };
-      }
-    }
-
-    if (proposalCall?.toolName === PROPOSE_NEW_TASK_TOOL_NAME && client) {
-      const input = proposalCall.input as ProposeNewClientTaskInput;
-      if (input.title) {
-        proposedUpdate = {
-          kind: "new_task",
-          clientId: client.id,
-          fields: {
-            title: input.title,
-            description: input.description ?? "",
-            due_date_display: input.due_date_display ?? "",
-          },
-        };
-      }
-    }
 
     await writeAuditLog({
       action: "ai_system_chat_message",
@@ -426,21 +112,28 @@ export async function POST(req: NextRequest) {
       metadata: {
         aiModel: settings.model,
         provider: settings.provider,
-        clientId: client?.id ?? null,
-        submissionId: submission?.id ?? null,
-        proposalKind: (proposedUpdate?.kind as string | undefined) ?? null,
-        navigatedTo: navigateResult?.path ?? null,
-        attachmentUsed: attachment ? { name: attachment.name, mediaType: attachment.mediaType } : null,
+        clientId: context.client?.id ?? null,
+        submissionId: context.submission?.id ?? null,
+        proposalKind: envelope.proposedAction?.kind ?? null,
+        navigatedTo: envelope.navigation?.path ?? null,
+        attachmentUsed: attachment
+          ? { name: attachment.name, mediaType: attachment.mediaType, rawBytes: attachment.rawBytes }
+          : null,
       },
     });
 
-    return NextResponse.json({
-      reply: result.text || (proposedUpdate ? "Preparei uma proposta. Revise os campos abaixo antes de aplicar." : ""),
-      proposedUpdate,
-      navigateAction: navigateResult ? { path: navigateResult.path, clientName: navigateResult.clientName } : undefined,
-    });
+    return NextResponse.json(toLegacyChatResponse(envelope));
   } catch (cause) {
+    if (cause instanceof AiConfigError) {
+      return NextResponse.json({ message: cause.message }, { status: 409 });
+    }
+    if (cause instanceof AiValidationError) {
+      return NextResponse.json({ message: "A IA não retornou uma resposta no formato esperado. Tente novamente." }, { status: 502 });
+    }
+    if (cause instanceof AiProviderError) {
+      return NextResponse.json({ message: cause.message }, { status: 502 });
+    }
     const message = cause instanceof Error ? cause.message : "Não foi possível responder agora.";
-    return NextResponse.json({ message }, { status: message.includes("configurad") ? 409 : 502 });
+    return NextResponse.json({ message }, { status: 502 });
   }
 }

@@ -6,7 +6,7 @@ import {
   createAiProtocolDraft,
   getAiProtocolDraftsBySubmissionId,
 } from "@/lib/repositories/ai-protocol-drafts";
-import { generateProtocolDraft, PROMPT_VERSION } from "@/lib/ai/protocol-agent";
+import { generateProtocolDraft, PROMPT_VERSION } from "@/lib/ai/agents/clinical/protocol-agent";
 import { aiProtocolGenerateSchema } from "@/lib/validators/ai-protocol";
 import { d1Execute } from "@/lib/d1/client";
 
@@ -57,6 +57,7 @@ export async function POST(
     submission,
     preAnalysis,
     extraInstructions: parsed.data.extraInstructions,
+    adminId: admin.sub,
   });
 
   // Snapshot do input (sem dados sensíveis desnecessários)

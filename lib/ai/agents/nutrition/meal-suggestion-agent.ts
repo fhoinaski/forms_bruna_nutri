@@ -1,6 +1,6 @@
-import { generateText, stepCountIs } from "ai";
+import { stepCountIs } from "ai";
 import { z } from "zod";
-import { createConfiguredModel } from "@/lib/ai/model-factory";
+import { generate } from "@/lib/ai/gateway/ai-gateway";
 import {
   DEFAULT_MEAL_SUGGESTION_SYSTEM_PROMPT,
   getAISettings,
@@ -129,14 +129,10 @@ async function resolveAndValidate(output: AiMealSuggestionOutput, context: AiMea
 export async function suggestMealWithAI(input: AiMealSuggestionContext): Promise<ResolvedMealSuggestion> {
   const context = aiMealSuggestionContextSchema.parse(input);
   const settings = await getAISettings();
-  if (!settings.api_key) {
-    throw new Error("IA nao configurada. Configure a chave em Dashboard > Inteligencia artificial.");
-  }
-
   const isFullDayTemplate = context.context === "template";
 
-  const result = await generateText({
-    model: createConfiguredModel(settings),
+  const result = await generate({
+    agent: "meal-suggestion",
     system: DEFAULT_MEAL_SUGGESTION_SYSTEM_PROMPT,
     prompt: buildPrompt(context),
     stopWhen: stepCountIs(isFullDayTemplate ? 12 : 5),

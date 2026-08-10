@@ -37,6 +37,26 @@ interface Client {
   email: string | null;
 }
 
+interface PreConsultationBriefing {
+  clientName: string;
+  systemData: {
+    lastAppointment: { date: string; title: string } | null;
+    previousWeightKg: number | null;
+    currentWeightKg: number | null;
+    weightVariationKg: number | null;
+    bmi: number | null;
+    pendingTasks: { title: string; dueDate: string | null }[];
+    activeMealPlanTitle: string | null;
+  };
+  aiSuggestions: string[];
+}
+
+interface BriefingState {
+  loading: boolean;
+  data?: PreConsultationBriefing;
+  error?: string;
+}
+
 interface Appointment {
   id: string;
   client_id: string | null;
@@ -235,6 +255,7 @@ export default function AgendaPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [briefings, setBriefings] = useState<Record<string, BriefingState>>({});
   const [form, setForm] = useState<FormState>({
     client_id: "",
     title: "",
@@ -411,6 +432,27 @@ export default function AgendaPage() {
     await loadAgenda();
   }
 
+  async function prepareBriefing(appointmentId: string) {
+    setBriefings((current) => ({ ...current, [appointmentId]: { loading: true } }));
+    try {
+      const response = await fetch(`/api/admin/ai/briefing/${appointmentId}`);
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        setBriefings((current) => ({
+          ...current,
+          [appointmentId]: { loading: false, error: payload?.message ?? "Não foi possível preparar o briefing." },
+        }));
+        return;
+      }
+      setBriefings((current) => ({ ...current, [appointmentId]: { loading: false, data: payload } }));
+    } catch {
+      setBriefings((current) => ({
+        ...current,
+        [appointmentId]: { loading: false, error: "Não foi possível preparar o briefing." },
+      }));
+    }
+  }
+
   async function updateWorkflowStatus(id: string, status: WorkflowStatus) {
     setWorkflows((current) =>
       current.map((item) => (item.id === id ? { ...item, status } : item))
@@ -542,7 +584,9 @@ export default function AgendaPage() {
           loading={loading}
           appointments={visibleAppointments}
           workflows={workflows}
+          briefings={briefings}
           onGenerateWorkflow={generateWorkflow}
+          onPrepareBriefing={prepareBriefing}
           onRemove={removeAppointment}
           onStatusChange={updateStatus}
         />
@@ -566,6 +610,52 @@ export default function AgendaPage() {
   );
 }
 
+function BriefingSummary({ briefing }: { briefing: PreConsultationBriefing }) {
+  const { systemData } = briefing;
+  return (
+    <div className="mt-3 space-y-3 rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] p-3 text-xs leading-5 text-[#4A5C42]">
+      <div>
+        <p className="mb-1 font-bold uppercase tracking-[0.12em] text-[#607A56]">Dados do sistema</p>
+        <ul className="space-y-1">
+          <li>
+            Última consulta:{" "}
+            {systemData.lastAppointment
+              ? `${new Date(systemData.lastAppointment.date).toLocaleDateString("pt-BR")} — ${systemData.lastAppointment.title}`
+              : "nenhuma consulta anterior registrada"}
+          </li>
+          <li>
+            Peso:{" "}
+            {systemData.currentWeightKg === null
+              ? "sem registro"
+              : systemData.previousWeightKg === null
+                ? `${systemData.currentWeightKg} kg`
+                : `${systemData.previousWeightKg} kg → ${systemData.currentWeightKg} kg (${systemData.weightVariationKg && systemData.weightVariationKg > 0 ? "+" : ""}${systemData.weightVariationKg} kg)`}
+          </li>
+          {systemData.bmi !== null && <li>IMC mais recente: {systemData.bmi}</li>}
+          <li>Plano alimentar ativo: {systemData.activeMealPlanTitle ?? "nenhum"}</li>
+          <li>
+            Tarefas pendentes:{" "}
+            {systemData.pendingTasks.length ? systemData.pendingTasks.map((task) => task.title).join(", ") : "nenhuma"}
+          </li>
+        </ul>
+      </div>
+      {briefing.aiSuggestions.length > 0 && (
+        <div>
+          <p className="mb-1 font-bold uppercase tracking-[0.12em] text-[#8C5F50]">Sugestões para revisar (IA)</p>
+          <ul className="space-y-1">
+            {briefing.aiSuggestions.map((suggestion, index) => (
+              <li key={index} className="flex gap-2">
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#C58D73]" />
+                <span>{suggestion}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Metric({ icon, label, value, hint }: { icon: React.ReactNode; label: string; value: number; hint: string }) {
   return (
     <div className="rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] p-5 shadow-[0_14px_35px_rgba(58,48,40,0.045)]">
@@ -583,14 +673,18 @@ function SchedulePanel({
   loading,
   appointments,
   workflows,
+  briefings,
   onGenerateWorkflow,
+  onPrepareBriefing,
   onRemove,
   onStatusChange,
 }: {
   loading: boolean;
   appointments: Appointment[];
   workflows: WorkflowItem[];
+  briefings: Record<string, BriefingState>;
   onGenerateWorkflow: (appointmentId: string) => Promise<void>;
+  onPrepareBriefing: (appointmentId: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
   onStatusChange: (id: string, status: AppointmentStatus) => Promise<void>;
 }) {
@@ -719,6 +813,23 @@ function SchedulePanel({
                       <Sparkles className="h-3.5 w-3.5" />
                       Preparar roteiro
                     </button>
+                  )}
+                  {item.client_id && (
+                    <button
+                      type="button"
+                      onClick={() => void onPrepareBriefing(item.id)}
+                      disabled={briefings[item.id]?.loading}
+                      className="mt-3 ml-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[#607A56] transition hover:text-[#8C5F50] disabled:opacity-60"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {briefings[item.id]?.loading ? "Preparando briefing..." : "Preparar briefing"}
+                    </button>
+                  )}
+                  {briefings[item.id]?.error && (
+                    <p className="mt-2 text-xs text-[#B3564A]">{briefings[item.id]?.error}</p>
+                  )}
+                  {briefings[item.id]?.data && (
+                    <BriefingSummary briefing={briefings[item.id]!.data!} />
                   )}
                 </div>
 

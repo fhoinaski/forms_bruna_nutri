@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { tryParseJsonFromText } from "@/lib/ai/schemas/json-extract";
 
 export const aiMealSuggestionContextSchema = z.object({
   context: z.enum(["meal", "recipe", "template"]),
@@ -31,7 +32,5 @@ export const aiMealSuggestionOutputSchema = z.object({
 export type AiMealSuggestionOutput = z.infer<typeof aiMealSuggestionOutputSchema>;
 
 export function parseAiMealSuggestionJson(value: string): AiMealSuggestionOutput {
-  const jsonMatch = value.match(/```(?:json)?\s*([\s\S]*?)```/) ?? value.match(/(\{[\s\S]*\})/);
-  const json = jsonMatch ? jsonMatch[1] : value;
-  return aiMealSuggestionOutputSchema.parse(JSON.parse(json));
+  return aiMealSuggestionOutputSchema.parse(tryParseJsonFromText(value));
 }

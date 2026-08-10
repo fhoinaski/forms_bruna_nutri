@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
-import { suggestMealWithAI } from "@/lib/ai/meal-suggestion-agent";
+import { suggestMealWithAI } from "@/lib/ai/agents/nutrition/meal-suggestion-agent";
 import { aiMealSuggestionContextSchema } from "@/lib/validators/ai-meal-suggestion";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { writeAuditLog } from "@/lib/security/audit";

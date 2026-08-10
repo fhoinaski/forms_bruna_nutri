@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation";
 import { Bot, Check, Paperclip, Send, Sparkles, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
-import { SUGGESTED_CHAT_PROMPTS } from "@/lib/ai/system-chat-knowledge";
+import { SUGGESTED_CHAT_PROMPTS } from "@/lib/ai/agents/system/system-knowledge";
 import { NUTRITION_TEXT_FIELD_LABELS, type NutritionRecordTextFieldKey } from "@/lib/clinical/nutrition-record-fields";
 import { PRE_ANALYSIS_FIELD_LABELS, type PreAnalysisFieldKey } from "@/lib/clinical/pre-analysis-fields";
 import { NEW_CLIENT_FIELD_LABELS, type NewClientFieldKey } from "@/lib/clinical/client-fields";
-import { ALLOWED_ATTACHMENT_MEDIA_TYPES, MAX_ATTACHMENT_RAW_BYTES, type AllowedAttachmentMediaType } from "@/lib/ai/chat-attachments";
+import { ALLOWED_ATTACHMENT_MEDIA_TYPES, MAX_ATTACHMENT_RAW_BYTES, type AllowedAttachmentMediaType } from "@/lib/ai/agents/system/chat-attachments";
 
 const INTRO_SHOWN_KEY = "bruna_nutri_ai_chat_intro_shown";
 const DAILY_BRIEFING_SHOWN_KEY_PREFIX = "bruna_nutri_daily_briefing_shown_";
