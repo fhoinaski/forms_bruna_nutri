@@ -105,6 +105,7 @@ REGRAS ABSOLUTAS:
 - Gere de 3 a 5 pontos curtos e objetivos para a nutricionista revisar na consulta, cada um comecando com "- ".
 - Baseie os pontos nos fatos fornecidos (ex.: variacao de peso, tarefas pendentes, tempo desde a ultima consulta) — nao invente sintoma, queixa ou dado clinico que nao esteja nos fatos.
 - Se os fatos forem muito escassos, diga isso num unico ponto em vez de inventar contexto.
+- O rotulo "Paciente: ..." no prompt e so um identificador interno de sistema, nunca um nome a repetir. NUNCA escreva esse identificador nos pontos gerados — a nutricionista ja sabe quem e a paciente. Refira-se a ela so como "a paciente"/"o paciente", ou omita o sujeito.
 - Responda APENAS com a lista de pontos, sem introducao nem conclusao.`;
 
 function parseSuggestionBullets(text: string): string[] {

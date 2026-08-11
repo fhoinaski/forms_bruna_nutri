@@ -231,6 +231,48 @@ export const patientChangeRequestActionSchema = z.object({
   ...actionEnvelopeFields,
 });
 
+// ── consultation_tasks_batch (Modo Consulta — pacote de tarefas pos-consulta) ──
+//
+// Unico jeito hoje de propor VARIAS tarefas numa so confirmacao — new_task
+// so cobre uma de cada vez. clientId sempre vem do contexto ambiente
+// (builder), nunca do modelo, mesmo padrao de new_task/client_protocol.
+
+export const consultationTaskItemActionSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(1000).nullable().optional(),
+  dueInDays: z.number().int().min(0).max(365).nullable().optional(),
+});
+
+export const consultationTasksBatchActionSchema = z.object({
+  kind: z.literal("consultation_tasks_batch"),
+  clientId: z.string().min(1),
+  consultationSessionId: z.string().min(1).nullable().optional(),
+  tasks: z.array(consultationTaskItemActionSchema).min(1).max(10),
+  ...actionEnvelopeFields,
+});
+
+// ── consultation_summary (Modo Consulta — resumo estruturado pos-consulta) ──
+//
+// Side effect estreito: so grava consultation_sessions.summary_json — nunca
+// toca prontuario/plano/protocolo (mesma filosofia de patient_change_request).
+
+export const consultationSummaryContentActionSchema = z.object({
+  summary: z.string().min(1).max(1500),
+  evolution: z.string().max(800).nullable().optional(),
+  conduct: z.string().max(800).nullable().optional(),
+  plan: z.string().max(800).nullable().optional(),
+  goals: z.string().max(500).nullable().optional(),
+  nextSteps: z.string().max(500).nullable().optional(),
+});
+
+export const consultationSummaryActionSchema = z.object({
+  kind: z.literal("consultation_summary"),
+  clientId: z.string().min(1),
+  consultationSessionId: z.string().min(1),
+  content: consultationSummaryContentActionSchema,
+  ...actionEnvelopeFields,
+});
+
 export const proposedActionSchema = z.discriminatedUnion("kind", [
   nutritionRecordActionSchema,
   preAnalysisActionSchema,
@@ -244,6 +286,8 @@ export const proposedActionSchema = z.discriminatedUnion("kind", [
   mealPlanChangeActionSchema,
   patientAppointmentRequestActionSchema,
   patientChangeRequestActionSchema,
+  consultationTasksBatchActionSchema,
+  consultationSummaryActionSchema,
 ]);
 
 export type ProposedAction = z.infer<typeof proposedActionSchema>;

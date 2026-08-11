@@ -1,4 +1,4 @@
-import { d1Query, d1Execute } from "@/lib/d1/client";
+import { d1Query, d1Execute, d1Batch } from "@/lib/d1/client";
 import { getPhaseDueInDays } from "@/lib/protocols/helpers";
 
 export interface ClientTask {
@@ -145,6 +145,30 @@ export async function createClientTask(input: CreateClientTaskInput): Promise<st
   );
 
   return id;
+}
+
+/**
+ * Cria varias tarefas numa unica escrita atomica (d1Batch) — usado pelo
+ * pacote de acoes pos-consulta do Modo Consulta (proposal
+ * consultation_tasks_batch): ou todas as tarefas do lote sao criadas, ou
+ * nenhuma e, nunca um subconjunto por falha parcial (mesmo raciocinio da
+ * atomicidade de protocolo na rodada de hardening anterior).
+ */
+export async function createClientTasksBatch(
+  clientId: string,
+  tasks: Array<{ title: string; description?: string | null; due_date?: string | null }>
+): Promise<string[]> {
+  if (!tasks.length) return [];
+  const now = new Date().toISOString();
+  const ids = tasks.map(() => crypto.randomUUID());
+  await d1Batch(
+    tasks.map((task, index) => ({
+      sql: `INSERT INTO client_tasks (id, client_id, client_protocol_id, title, description, due_date, status, created_at, updated_at)
+            VALUES (?1, ?2, NULL, ?3, ?4, ?5, 'pendente', ?6, ?7)`,
+      params: [ids[index], clientId, task.title, task.description ?? null, task.due_date ?? null, now, now],
+    }))
+  );
+  return ids;
 }
 
 export async function getClientTasks(

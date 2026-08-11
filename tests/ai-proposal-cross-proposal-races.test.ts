@@ -133,8 +133,8 @@ describe("secao 13: duas propostas diferentes (proposalIds distintos) para o MES
   });
 });
 
-describe("secao 14 (risco documentado, não corrigido nesta auditoria): duas propostas diferentes de novo cliente com o mesmo e-mail", () => {
-  it("sem constraint única em clients.email, duas checagens de duplicidade concorrentes podem ambas passar — risco real, ver relatório", async () => {
+describe("secao 14 (corrigido — hardening de producao): duas propostas diferentes de novo cliente com o mesmo e-mail", () => {
+  it("a checagem de duplicidade em si e TOCTOU, mas o indice UNIQUE em clients.email_normalized garante exatamente um cliente criado", async () => {
     mockCommonDeps();
     const newClientAction = (email: string): ProposedAction => ({
       kind: "new_client",
@@ -143,15 +143,31 @@ describe("secao 14 (risco documentado, não corrigido nesta auditoria): duas pro
     });
 
     const db = new FakeProposalsDb();
-    db.seed({ id: "proposal-A", admin_id: "admin-1", params_json: JSON.stringify(newClientAction("maria@example.com")) });
+    db.seed({ id: "proposal-A", admin_id: "admin-1", params_json: JSON.stringify(newClientAction("Maria@Example.com")) });
     db.seed({ id: "proposal-B", admin_id: "admin-1", params_json: JSON.stringify(newClientAction("maria@example.com")) });
     mockDbBackedRepo(db);
 
-    // Ambas checagens de duplicidade rodam ANTES de qualquer create —
-    // exatamente o TOCTOU: nenhuma delas ve a outra ainda nao commitada.
-    const createClient = vi.fn().mockResolvedValueOnce("client-A").mockResolvedValueOnce("client-B");
+    // Ambas checagens de duplicidade (getClients) rodam ANTES de qualquer
+    // create — isso permanece TOCTOU, e por design (e so uma checagem de UX
+    // antecipada). A garantia real e simulada aqui como o indice UNIQUE
+    // parcial faria no D1 real: so a PRIMEIRA escrita com um dado
+    // email_normalized vence; a segunda relanca ClientDuplicateError —
+    // exatamente o que createClient (lib/repositories/clients.ts) faz ao
+    // capturar "UNIQUE constraint failed: clients.email_normalized".
+    const claimedEmails = new Set<string>();
+    let nextId = 0;
+    const createClient = vi.fn(async (input: { email?: string | null }) => {
+      const normalized = input.email?.trim().toLowerCase() ?? null;
+      if (normalized && claimedEmails.has(normalized)) {
+        const { ClientDuplicateError } = await import("../lib/clinical/client-identity");
+        throw new ClientDuplicateError("email");
+      }
+      if (normalized) claimedEmails.add(normalized);
+      nextId += 1;
+      return `client-${nextId}`;
+    });
     vi.doMock("@/lib/repositories/clients", () => ({
-      getClients: vi.fn().mockResolvedValue({ items: [] }), // nenhuma das duas ve duplicidade
+      getClients: vi.fn().mockResolvedValue({ items: [] }), // nenhuma das duas ve duplicidade na checagem antecipada
       createClient,
     }));
 
@@ -161,10 +177,13 @@ describe("secao 14 (risco documentado, não corrigido nesta auditoria): duas pro
       POST(makeRequest("/api/admin/ai/proposals/proposal-B/confirm"), { params: Promise.resolve({ id: "proposal-B" }) }),
     ]);
 
-    // Isto DOCUMENTA o risco (nao ha protecao hoje): as duas passam e dois
-    // clientes com o mesmo e-mail sao criados. Ver relatorio final — P2,
-    // recomendado unique index apos auditoria de dados existentes.
-    expect([a.status, b.status]).toEqual([200, 200]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([200, 409]);
     expect(createClient).toHaveBeenCalledTimes(2);
+
+    const failed = a.status === 409 ? a : b;
+    const failedBody = await failed.json();
+    expect(failedBody.message).toContain("Já existe um paciente cadastrado com esse e-mail");
+    expect(failedBody.message).not.toMatch(/SQLITE|UNIQUE constraint|SQL/i);
   });
 });

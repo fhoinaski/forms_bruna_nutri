@@ -1,4 +1,4 @@
-import { d1Query, d1Execute } from "@/lib/d1/client";
+import { d1Query, d1Execute, d1Batch, type D1Statement } from "@/lib/d1/client";
 
 export interface ClientProtocol {
   id: string;
@@ -54,6 +54,109 @@ export async function applyProtocolToClient(
   );
 
   return id;
+}
+
+export interface CreateProtocolAndApplyInput {
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  createdBy?: string | null;
+  kind: "standard" | "personalized";
+  clientId: string;
+  copiedFromProtocolId?: string | null;
+  phases?: Array<{
+    title: string;
+    days?: string | null;
+    objective?: string | null;
+    actions: string[];
+    notes?: string | null;
+  }>;
+  apply?: {
+    sourceDraftId?: string | null;
+    startedAt?: string;
+    reviewDate?: string | null;
+    professionalNotes?: string | null;
+  };
+}
+
+/**
+ * Cria o protocolo (+fases) e ja o vincula ao paciente (client_protocols)
+ * numa unica unidade atomica (d1Batch — mesmo mecanismo ja usado em
+ * lib/repositories/meal-plans.ts para create/update de plano alimentar).
+ *
+ * Existiam DUAS implementacoes separadas do mesmo passo de negocio
+ * "criar protocolo personalizado e aplicar ao cliente" — o handler de IA
+ * (executeNewProtocol) e a rota manual do dashboard
+ * (app/api/admin/clients/[id]/protocols/route.ts, modo create_personalized)
+ * — cada uma fazendo createProtocol() e depois applyProtocolToClient() como
+ * duas escritas separadas: se a segunda falhasse (rede, D1 fora do ar), o
+ * protocolo ficava orfao (existe, mas nenhum client_protocols aponta pra
+ * ele). Esta funcao e o unico lugar que faz essa operacao agora — ambos os
+ * chamadores foram migrados para usa-la.
+ */
+export async function createProtocolAndApplyToClient(
+  input: CreateProtocolAndApplyInput
+): Promise<{ protocolId: string; clientProtocolId: string }> {
+  const protocolId = crypto.randomUUID();
+  const clientProtocolId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const startedAt = input.apply?.startedAt ?? now.slice(0, 10);
+
+  const statements: D1Statement[] = [
+    {
+      sql: `INSERT INTO protocols
+              (id, title, description, category, kind, client_id, copied_from_protocol_id, source_draft_id, created_by, is_active, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8, 1, ?9, ?10)`,
+      params: [
+        protocolId,
+        input.title,
+        input.description ?? null,
+        input.category ?? null,
+        input.kind,
+        input.clientId,
+        input.copiedFromProtocolId ?? null,
+        input.createdBy ?? null,
+        now,
+        now,
+      ],
+    },
+  ];
+
+  const phases = input.phases ?? [];
+  for (let i = 0; i < phases.length; i++) {
+    const phase = phases[i];
+    statements.push({
+      sql: `INSERT INTO protocol_phases (id, protocol_id, title, days, objective, actions_json, notes, phase_order, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+      params: [
+        crypto.randomUUID(), protocolId,
+        phase.title, phase.days ?? null, phase.objective ?? null,
+        JSON.stringify(phase.actions ?? []), phase.notes ?? null,
+        i, now, now,
+      ],
+    });
+  }
+
+  statements.push({
+    sql: `INSERT INTO client_protocols
+            (id, client_id, protocol_id, source_draft_id, status, started_at, review_date, professional_notes, created_at, updated_at)
+          VALUES (?1, ?2, ?3, ?4, 'ativo', ?5, ?6, ?7, ?8, ?9)`,
+    params: [
+      clientProtocolId,
+      input.clientId,
+      protocolId,
+      input.apply?.sourceDraftId ?? null,
+      startedAt,
+      input.apply?.reviewDate ?? null,
+      input.apply?.professionalNotes ?? null,
+      now,
+      now,
+    ],
+  });
+
+  await d1Batch(statements);
+
+  return { protocolId, clientProtocolId };
 }
 
 export async function getClientProtocols(clientId: string): Promise<ClientProtocol[]> {

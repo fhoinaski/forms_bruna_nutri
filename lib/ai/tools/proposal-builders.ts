@@ -17,6 +17,12 @@ import { PROPOSE_NEW_TASK_TOOL_NAME, type ProposeNewClientTaskInput } from "@/li
 import { PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME, type ProposeMealPlanChangeOutput } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { REQUEST_APPOINTMENT_TOOL_NAME, type RequestAppointmentInput } from "@/lib/ai/agents/patient/patient-scheduling-agent";
 import { REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME, type RequestProfessionalReviewOutput } from "@/lib/ai/agents/patient/patient-request-agent";
+import {
+  PROPOSE_CONSULTATION_TASKS_BATCH_TOOL_NAME,
+  PROPOSE_CONSULTATION_SUMMARY_TOOL_NAME,
+  type ProposeConsultationTasksBatchInput,
+  type ProposeConsultationSummaryInput,
+} from "@/lib/ai/agents/clinical/consultation-agent";
 
 /**
  * Substitui a cadeia de 9 `if`s quase identicos que existia em
@@ -28,6 +34,8 @@ import { REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME, type RequestProfessionalReviewOu
 export interface ProposalBuilderContext {
   clientId?: string;
   submissionId?: string;
+  /** So presente quando a proposta esta sendo montada dentro do Modo Consulta (secao 7 do pedido). */
+  consultationSessionId?: string;
 }
 
 type ProposedActionWithoutEnvelope = Omit<ProposedAction, "risk" | "requiresConfirmation">;
@@ -197,6 +205,34 @@ const BUILDERS: Record<string, ProposalBuilder> = {
       appointmentId: output.appointmentId,
       clientTaskId: output.clientTaskId,
       preview: output.preview,
+    };
+  },
+
+  [PROPOSE_CONSULTATION_TASKS_BATCH_TOOL_NAME]: (input, ctx) => {
+    if (!ctx.clientId) return null;
+    const typed = input as ProposeConsultationTasksBatchInput;
+    if (!typed.tasks?.length) return null;
+    return {
+      kind: "consultation_tasks_batch",
+      clientId: ctx.clientId,
+      consultationSessionId: ctx.consultationSessionId ?? null,
+      tasks: typed.tasks.map((task) => ({
+        title: task.title,
+        description: task.description ?? null,
+        dueInDays: task.dueInDays ?? null,
+      })),
+    };
+  },
+
+  [PROPOSE_CONSULTATION_SUMMARY_TOOL_NAME]: (input, ctx) => {
+    if (!ctx.clientId || !ctx.consultationSessionId) return null;
+    const typed = input as ProposeConsultationSummaryInput;
+    if (!typed.content?.summary?.trim()) return null;
+    return {
+      kind: "consultation_summary",
+      clientId: ctx.clientId,
+      consultationSessionId: ctx.consultationSessionId,
+      content: typed.content,
     };
   },
 };

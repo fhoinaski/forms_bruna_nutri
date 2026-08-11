@@ -1,4 +1,5 @@
 import { d1Batch, d1Query, d1Execute } from "@/lib/d1/client";
+import { mapClientConstraintError, normalizeEmailIdentity, normalizePhoneIdentity } from "@/lib/clinical/client-identity";
 
 export interface Client {
   id: string;
@@ -79,22 +80,28 @@ export async function createClient(input: CreateClientInput): Promise<string> {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  await d1Execute(
-    `INSERT INTO clients
-       (id, name, email, phone, birth_date, source_submission_id, status, notes, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'ativo', ?7, ?8, ?9)`,
-    [
-      id,
-      input.name,
-      input.email ?? null,
-      input.phone ?? null,
-      input.birth_date ?? null,
-      input.source_submission_id ?? null,
-      input.notes ?? null,
-      now,
-      now,
-    ]
-  );
+  try {
+    await d1Execute(
+      `INSERT INTO clients
+         (id, name, email, phone, birth_date, source_submission_id, status, notes, created_at, updated_at, email_normalized, phone_normalized)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'ativo', ?7, ?8, ?9, ?10, ?11)`,
+      [
+        id,
+        input.name,
+        input.email ?? null,
+        input.phone ?? null,
+        input.birth_date ?? null,
+        input.source_submission_id ?? null,
+        input.notes ?? null,
+        now,
+        now,
+        normalizeEmailIdentity(input.email),
+        normalizePhoneIdentity(input.phone),
+      ]
+    );
+  } catch (error) {
+    throw mapClientConstraintError(error) ?? error;
+  }
 
   return id;
 }
@@ -165,10 +172,14 @@ export async function updateClient(
   if (data.email !== undefined) {
     updates.push(`email = ?${idx++}`);
     params.push(data.email);
+    updates.push(`email_normalized = ?${idx++}`);
+    params.push(normalizeEmailIdentity(data.email));
   }
   if (data.phone !== undefined) {
     updates.push(`phone = ?${idx++}`);
     params.push(data.phone);
+    updates.push(`phone_normalized = ?${idx++}`);
+    params.push(normalizePhoneIdentity(data.phone));
   }
   if (data.birth_date !== undefined) {
     updates.push(`birth_date = ?${idx++}`);
@@ -189,10 +200,14 @@ export async function updateClient(
   params.push(new Date().toISOString());
   params.push(id);
 
-  await d1Execute(
-    `UPDATE clients SET ${updates.join(", ")} WHERE id = ?${idx}`,
-    params
-  );
+  try {
+    await d1Execute(
+      `UPDATE clients SET ${updates.join(", ")} WHERE id = ?${idx}`,
+      params
+    );
+  } catch (error) {
+    throw mapClientConstraintError(error) ?? error;
+  }
 }
 
 export async function deleteClient(id: string): Promise<Client | null> {
@@ -201,6 +216,7 @@ export async function deleteClient(id: string): Promise<Client | null> {
 
   await d1Batch([
     { sql: "DELETE FROM appointment_workflow_items WHERE appointment_id IN (SELECT id FROM appointments WHERE client_id = ?1)", params: [id] },
+    { sql: "DELETE FROM consultation_sessions WHERE client_id = ?1", params: [id] },
     { sql: "DELETE FROM appointments WHERE client_id = ?1", params: [id] },
     { sql: "DELETE FROM payments WHERE client_id = ?1", params: [id] },
     { sql: "DELETE FROM client_tasks WHERE client_id = ?1", params: [id] },

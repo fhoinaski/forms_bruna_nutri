@@ -8,6 +8,7 @@ import { getPaymentMetrics } from "@/lib/repositories/payments";
 import { listPrivacyRequests } from "@/lib/repositories/privacy";
 import { getDashboardMetrics } from "@/lib/repositories/submissions";
 import { getPendingPatientRequestsCount } from "@/lib/repositories/patient-requests";
+import { getProposalsNeedingRecoveryCount } from "@/lib/repositories/ai-action-proposals";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest) {
     privacyRequests,
     submissionMetrics,
     pendingPatientRequests,
+    proposalsNeedingRecovery,
   ] = await Promise.all([
     getOverdueTasksCount(),
     getTodayAppointmentsCount(),
@@ -57,6 +59,7 @@ export async function GET(req: NextRequest) {
     listPrivacyRequests(),
     getDashboardMetrics(),
     getPendingPatientRequestsCount(),
+    getProposalsNeedingRecoveryCount(),
   ]);
 
   const pendingDrafts = pendingDraftRows[0]?.c ?? 0;
@@ -126,6 +129,13 @@ export async function GET(req: NextRequest) {
     count: pendingPatientRequests,
     href: "/dashboard/solicitacoes",
   });
+  addItem(items, {
+    id: "ai-recovery",
+    type: "ai_recovery",
+    label: `${proposalsNeedingRecovery} ${plural(proposalsNeedingRecovery, "ação da IA precisando de verificação", "ações da IA precisando de verificação")}`,
+    count: proposalsNeedingRecovery,
+    href: "/dashboard/ai-recovery",
+  });
 
   const totalUnread = items.reduce((total, item) => total + item.count, 0);
   const signature = items.map((item) => `${item.id}:${item.count}`).join("|");
@@ -140,6 +150,7 @@ export async function GET(req: NextRequest) {
       oportunidades: activeOpportunities,
       privacidade: openPrivacyRequests,
       solicitacoes: pendingPatientRequests,
+      aiRecovery: proposalsNeedingRecovery,
     },
   });
 }

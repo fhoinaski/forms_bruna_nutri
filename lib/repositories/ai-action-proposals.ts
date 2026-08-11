@@ -1,6 +1,6 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
 
-export type AiActionProposalStatus = "pending" | "executing" | "completed" | "cancelled" | "expired" | "failed";
+export type AiActionProposalStatus = "pending" | "executing" | "completed" | "cancelled" | "expired" | "failed" | "requires_review";
 
 export interface AiActionProposal {
   id: string;
@@ -80,6 +80,26 @@ export async function getAiActionProposal(id: string, adminId: string): Promise<
     `SELECT * FROM ai_action_proposals WHERE id = ?1 AND admin_id = ?2 LIMIT 1`,
     [id, adminId]
   );
+  return rows[0] ?? null;
+}
+
+/**
+ * Variante SEM filtro de owner — usada SOMENTE pela superficie de recovery
+ * administrativa (app/api/admin/ai/proposals/[id]/recover), que e uma
+ * ferramenta operacional da equipe (protegida so por getAdminFromRequest),
+ * nao um fluxo de usuario final. Necessaria porque `admin_id` guarda o id
+ * de quem PROPÔS a acao — para propostas originadas pelo PATIENT_ASSISTANT
+ * (patient_appointment_request, patient_change_request) esse valor e o
+ * clientId da paciente (reaproveitamento pragmatico da coluna, ja
+ * estabelecido na fase anterior), nunca o id de um admin real. Se a
+ * verificacao de recovery continuasse filtrando por admin_id = id do admin
+ * logado, uma proposta presa originada pela paciente ficaria invisivel para
+ * a nutricionista — exatamente o cenario que esta ferramenta existe para
+ * resolver. getAiActionProposal (owner-scoped) continua sendo o unico
+ * usado nos fluxos normais de confirm/cancel do admin e do portal.
+ */
+export async function getAiActionProposalById(id: string): Promise<AiActionProposal | null> {
+  const rows = await d1Query<AiActionProposal>(`SELECT * FROM ai_action_proposals WHERE id = ?1 LIMIT 1`, [id]);
   return rows[0] ?? null;
 }
 
@@ -174,4 +194,106 @@ export async function markAiActionProposalExpired(id: string): Promise<void> {
 
 export function isAiActionProposalExpired(proposal: AiActionProposal): boolean {
   return new Date(proposal.expires_at).getTime() < Date.now();
+}
+
+/**
+ * Limiar acima do qual uma proposta em 'executing' e considerada presa
+ * (nao "so um pouco lenta"). D1 via HTTP tem timeout de request bem menor
+ * que isso (CLOUDFLARE_D1_TIMEOUT_MS, default 15s) — 2 minutos da uma folga
+ * generosa antes de qualquer tentativa de recuperacao entrar em cena, entao
+ * nunca interfere com uma confirmacao genuina ainda em andamento.
+ */
+export const STUCK_EXECUTING_THRESHOLD_MS = 2 * 60 * 1000;
+
+/**
+ * Lista o que precisa de atencao manual da nutricionista: propostas presas
+ * em 'executing' ha mais tempo que o limiar (executing_at fora do limiar),
+ * e propostas ja classificadas como 'requires_review' (ambiguidade que a
+ * recuperacao automatica nao conseguiu resolver com seguranca). Consulta
+ * pequena e deterministica — sem LLM, sem heuristica.
+ */
+export async function getProposalsNeedingRecoveryCount(
+  thresholdMs: number = STUCK_EXECUTING_THRESHOLD_MS
+): Promise<number> {
+  const cutoff = new Date(Date.now() - thresholdMs).toISOString();
+  const rows = await d1Query<{ c: number }>(
+    `SELECT COUNT(*) as c FROM ai_action_proposals
+     WHERE status = 'requires_review'
+        OR (status = 'executing' AND executing_at IS NOT NULL AND executing_at < ?1)`,
+    [cutoff]
+  );
+  return rows[0]?.c ?? 0;
+}
+
+export async function listProposalsNeedingRecovery(
+  thresholdMs: number = STUCK_EXECUTING_THRESHOLD_MS
+): Promise<AiActionProposal[]> {
+  const cutoff = new Date(Date.now() - thresholdMs).toISOString();
+  return d1Query<AiActionProposal>(
+    `SELECT * FROM ai_action_proposals
+     WHERE status = 'requires_review'
+        OR (status = 'executing' AND executing_at IS NOT NULL AND executing_at < ?1)
+     ORDER BY created_at DESC
+     LIMIT 100`,
+    [cutoff]
+  );
+}
+
+/**
+ * Re-reivindica atomicamente uma proposta presa em 'executing' para uma
+ * tentativa de recuperacao — mesmo padrao de UPDATE...WHERE...RETURNING de
+ * claimAiActionProposal: exige que ainda esteja 'executing' E ainda esteja
+ * alem do limiar de "presa" no momento exato do UPDATE. Se duas
+ * verificacoes manuais (ou uma verificacao manual e o proprio processo
+ * original, que na verdade nao morreu, so estava lento) disputarem a mesma
+ * proposta, no maximo uma consegue avancar — a outra ve executing_at ja
+ * atualizado (nao bate mais o `< cutoff`) e recebe null.
+ *
+ * Sem filtro de owner — mesmo motivo de getAiActionProposalById (ferramenta
+ * operacional da equipe, protegida so por getAdminFromRequest na rota).
+ */
+export async function reclaimStuckExecutingProposal(
+  id: string,
+  thresholdMs: number = STUCK_EXECUTING_THRESHOLD_MS
+): Promise<AiActionProposal | null> {
+  const now = new Date().toISOString();
+  const cutoff = new Date(Date.now() - thresholdMs).toISOString();
+  const rows = await d1Query<AiActionProposal>(
+    `UPDATE ai_action_proposals
+     SET executing_at = ?3
+     WHERE id = ?1 AND status = 'executing' AND executing_at IS NOT NULL AND executing_at < ?2
+     RETURNING *`,
+    [id, cutoff, now]
+  );
+  return rows[0] ?? null;
+}
+
+/** So marca requires_review a partir de 'executing' — nunca sobrescreve um estado ja finalizado. */
+export async function markProposalRequiresReview(id: string): Promise<void> {
+  await d1Execute(
+    `UPDATE ai_action_proposals SET status = 'requires_review' WHERE id = ?1 AND status = 'executing'`,
+    [id]
+  );
+}
+
+/**
+ * Fecha manualmente uma proposta em 'requires_review' depois que a
+ * nutricionista verificou por fora (ex.: olhou a agenda e confirmou se a
+ * consulta existe ou nao) — nunca re-executa o handler, so registra o que
+ * foi apurado.
+ */
+export async function resolveRequiresReview(
+  id: string,
+  resolution: "not_applied" | "already_applied"
+): Promise<void> {
+  const status = resolution === "already_applied" ? "completed" : "failed";
+  const failedReason = resolution === "not_applied" ? "Verificado manualmente: a ação não chegou a acontecer." : null;
+  await d1Execute(
+    `UPDATE ai_action_proposals
+     SET status = ?1,
+         completed_at = CASE WHEN ?1 = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_at END,
+         failed_reason = ?2
+     WHERE id = ?3 AND status = 'requires_review'`,
+    [status, failedReason, id]
+  );
 }

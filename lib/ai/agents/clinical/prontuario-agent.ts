@@ -16,14 +16,19 @@ export type ProposeNutritionRecordInput = z.infer<typeof proposeNutritionRecordI
 /**
  * Contexto textual do prontuario atual, para a IA nao reescrever campos que
  * ja tem conteudo bom e para conseguir complementar em vez de duplicar.
- * O nome do cliente e pseudonimizado e o conteudo clinico ja preenchido vai
- * envolvido em bloco anti-prompt-injection antes de compor o prompt que sai
- * para o provedor de IA externo (lib/ai/privacy/sanitize-context.ts).
+ * Este bloco entra no MESMO prompt do orquestrador principal que ja
+ * identifica o cliente pelo nome real (ai-orchestrator.ts) — por isso NAO
+ * repetimos um pseudonimo aqui (misturar nome real + pseudonimo no mesmo
+ * prompt faz o modelo colar os dois na resposta, ex.: "Fulana (Paciente
+ * 1234)"). O pseudonimo continua existindo e sendo usado nas chamadas
+ * isoladas de sub-agentes clinicos (briefing, prontuario-agent standalone,
+ * protocol-agent) que NUNCA recebem o nome real. O conteudo clinico ja
+ * preenchido continua envolvido em bloco anti-prompt-injection antes de
+ * compor o prompt (lib/ai/privacy/sanitize-context.ts).
  */
 export function buildNutritionRecordContext(clientName: string, record: NutritionRecord | null): string {
   if (!record) {
-    const { pseudonym } = sanitizeClinicalContext(clientName, []);
-    return `Cliente: ${pseudonym}. Prontuario ainda sem registro nutricional criado.`;
+    return "Prontuario ainda sem registro nutricional criado.";
   }
 
   const filled = NUTRITION_TEXT_FIELDS
@@ -34,12 +39,11 @@ export function buildNutritionRecordContext(clientName: string, record: Nutritio
     .filter(Boolean)
     .join("\n");
 
-  const { pseudonym, contextBlock } = sanitizeClinicalContext(clientName, [
+  const { contextBlock } = sanitizeClinicalContext(clientName, [
     { label: "PRONTUARIO_ATUAL", content: filled },
   ]);
 
   return [
-    `Cliente atual: ${pseudonym}.`,
     "Campos do prontuario ja preenchidos (nao repita nem contradiga sem necessidade, apenas complemente ou refine quando o relato trouxer informacao nova):",
     filled ? contextBlock : "(nenhum campo de texto preenchido ainda)",
   ].join("\n");

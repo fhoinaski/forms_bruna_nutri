@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { createClient, getClients, getClientMetrics } from "@/lib/repositories/clients";
+import { ClientDuplicateError } from "@/lib/clinical/client-identity";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { getRequestFingerprint } from "@/lib/security/request";
 import { writeAuditLog } from "@/lib/security/audit";
@@ -63,14 +64,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados invalidos." }, { status: 400 });
   }
 
-  const clientId = await createClient({
-    name: parsed.data.name,
-    email: parsed.data.email || null,
-    phone: parsed.data.phone || null,
-    birth_date: parsed.data.birth_date || null,
-    source_submission_id: null,
-    notes: parsed.data.notes || "Paciente cadastrado manualmente no dashboard.",
-  });
+  let clientId: string;
+  try {
+    clientId = await createClient({
+      name: parsed.data.name,
+      email: parsed.data.email || null,
+      phone: parsed.data.phone || null,
+      birth_date: parsed.data.birth_date || null,
+      source_submission_id: null,
+      notes: parsed.data.notes || "Paciente cadastrado manualmente no dashboard.",
+    });
+  } catch (error) {
+    if (error instanceof ClientDuplicateError) {
+      return NextResponse.json({ message: error.message }, { status: 409 });
+    }
+    throw error;
+  }
 
   await addTimelineEvent({
     client_id: clientId,

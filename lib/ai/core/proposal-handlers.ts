@@ -7,8 +7,7 @@ import { getAvailableSlots, hasAppointmentConflict, slotEnd, countFutureClientAp
 import { createClientTask, getClientTasks } from "@/lib/repositories/client-tasks";
 import { createRecipe, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/repositories/recipes";
 import { getTacoFoodByNumber } from "@/lib/nutrition/taco";
-import { createProtocol } from "@/lib/repositories/protocols";
-import { applyProtocolToClient, getClientProtocolById, updateClientProtocol } from "@/lib/repositories/client-protocols";
+import { getClientProtocolById, updateClientProtocol } from "@/lib/repositories/client-protocols";
 import { updateNutritionRecord, type NutritionRecordInput } from "@/lib/repositories/nutrition-records";
 import { NUTRITION_TEXT_FIELDS, type NutritionRecordTextFieldKey } from "@/lib/clinical/nutrition-record-fields";
 import { getSubmissionById } from "@/lib/repositories/submissions";
@@ -18,6 +17,10 @@ import { getActiveMealPlan, getMealPlanById, updateMealPlan } from "@/lib/reposi
 import { applyMealPlanChangesWithPreview, MealPlanChangeValidationError } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { normalize } from "@/lib/nutrition/macros";
 import { createPatientRequest, findSimilarPendingPatientRequest } from "@/lib/repositories/patient-requests";
+import { ClientDuplicateError } from "@/lib/clinical/client-identity";
+import { createProtocolAndApplyToClient } from "@/lib/repositories/client-protocols";
+import { createClientTasksBatch } from "@/lib/repositories/client-tasks";
+import { getConsultationSessionById, saveConsultationSummary } from "@/lib/repositories/consultation-sessions";
 
 /**
  * Execucao real de cada proposal kind, chamada SOMENTE depois que o
@@ -121,8 +124,12 @@ const executeNewClient: ProposalHandler<"new_client"> = async (action) => {
   const email = action.fields.email?.trim() || null;
   const phone = action.fields.phone?.trim() || null;
 
-  // Revalida duplicidade agora — a busca feita no momento da proposta pode
-  // estar desatualizada (outro cadastro pode ter sido criado nesse meio-tempo).
+  // Checagem antecipada (so UX — nao e a garantia real): da um erro rapido
+  // no caso comum de duplicidade obvia sem precisar tentar o INSERT. A
+  // garantia de fato contra corrida entre duas propostas diferentes
+  // confirmadas ao mesmo tempo e o indice UNIQUE parcial em
+  // clients.email_normalized/phone_normalized (migration 0032) — createClient
+  // relança essa violação como ClientDuplicateError, tratado abaixo.
   if (email) {
     const existing = await getClients({ search: email, pageSize: 5 });
     if (existing.items.some((client) => client.email?.toLowerCase() === email.toLowerCase())) {
@@ -136,14 +143,20 @@ const executeNewClient: ProposalHandler<"new_client"> = async (action) => {
     }
   }
 
-  const clientId = await createClient({
-    name: name.trim(),
-    email,
-    phone,
-    birth_date: action.fields.birth_date?.trim() || null,
-  });
-
-  return { data: { clientId } };
+  try {
+    const clientId = await createClient({
+      name: name.trim(),
+      email,
+      phone,
+      birth_date: action.fields.birth_date?.trim() || null,
+    });
+    return { data: { clientId } };
+  } catch (error) {
+    if (error instanceof ClientDuplicateError) {
+      throw new ProposalExecutionError(error.message, 409);
+    }
+    throw error;
+  }
 };
 
 // ── new_recipe ───────────────────────────────────────────────────────────
@@ -194,18 +207,17 @@ const executeNewProtocol: ProposalHandler<"new_protocol"> = async (action, ctx) 
   const title = action.fields.title;
   if (!title?.trim()) throw new ProposalExecutionError("Título do protocolo é obrigatório.", 422);
 
-  const protocolId = await createProtocol({
+  // createProtocolAndApplyToClient cria o protocolo E o vincula ao paciente
+  // numa unica escrita atomica (d1Batch) — nunca deixa um protocolo orfao
+  // (criado mas sem client_protocols) se a segunda parte falhar.
+  const { protocolId, clientProtocolId } = await createProtocolAndApplyToClient({
     title,
     description: action.fields.description || null,
     category: action.fields.category || null,
-    created_by: ctx.adminId,
+    createdBy: ctx.adminId,
     kind: "personalized",
-    client_id: action.clientId,
-    phases: [],
-  });
-
-  const clientProtocolId = await applyProtocolToClient(action.clientId, protocolId, {
-    professionalNotes: action.fields.professional_notes || null,
+    clientId: action.clientId,
+    apply: { professionalNotes: action.fields.professional_notes || null },
   });
 
   return { data: { protocolId, clientProtocolId } };
@@ -472,6 +484,56 @@ const executePatientChangeRequest: ProposalHandler<"patient_change_request"> = a
   return { data: { requestId } };
 };
 
+// ── consultation_tasks_batch (Modo Consulta — pacote de tarefas) ────────
+
+const executeConsultationTasksBatch: ProposalHandler<"consultation_tasks_batch"> = async (action) => {
+  const client = await getClientById(action.clientId);
+  if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
+
+  // Revalida a sessao de consulta (se informada) contra o cliente real —
+  // nunca confia so no que a proposta guardou no momento da criacao.
+  if (action.consultationSessionId) {
+    const session = await getConsultationSessionById(action.consultationSessionId);
+    if (!session || session.client_id !== action.clientId) {
+      throw new ProposalExecutionError("Esta sessão de consulta não pertence a este paciente.", 403);
+    }
+  }
+
+  const now = Date.now();
+  const taskIds = await createClientTasksBatch(
+    action.clientId,
+    action.tasks.map((task) => ({
+      title: task.title,
+      description: task.description ?? null,
+      due_date: task.dueInDays != null ? new Date(now + task.dueInDays * 86_400_000).toISOString().slice(0, 10) : null,
+    }))
+  );
+
+  return { data: { taskIds, taskCount: taskIds.length } };
+};
+
+// ── consultation_summary (Modo Consulta — resumo estruturado) ───────────
+
+const executeConsultationSummary: ProposalHandler<"consultation_summary"> = async (action) => {
+  const client = await getClientById(action.clientId);
+  if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
+
+  const session = await getConsultationSessionById(action.consultationSessionId);
+  if (!session || session.client_id !== action.clientId) {
+    throw new ProposalExecutionError("Esta sessão de consulta não pertence a este paciente.", 403);
+  }
+
+  // O UNICO side effect desta confirmacao e gravar o resumo na propria
+  // sessao de consulta — nunca prontuario/plano/protocolo diretamente
+  // (mesma filosofia de patient_change_request: side effect estreito).
+  const saved = await saveConsultationSummary(action.consultationSessionId, action.content);
+  if (!saved) {
+    throw new ProposalExecutionError("Esta consulta já foi finalizada ou cancelada — não é possível salvar o resumo.", 409);
+  }
+
+  return { data: { consultationSessionId: action.consultationSessionId } };
+};
+
 // ── dispatch tipado (sem switch untyped, sem `any`) ─────────────────────
 
 const PROPOSAL_HANDLERS: { [K in ProposedActionKind]: ProposalHandler<K> } = {
@@ -487,6 +549,8 @@ const PROPOSAL_HANDLERS: { [K in ProposedActionKind]: ProposalHandler<K> } = {
   meal_plan_change: executeMealPlanChange,
   patient_appointment_request: executePatientAppointmentRequest,
   patient_change_request: executePatientChangeRequest,
+  consultation_tasks_batch: executeConsultationTasksBatch,
+  consultation_summary: executeConsultationSummary,
 };
 
 export async function executeProposedAction(

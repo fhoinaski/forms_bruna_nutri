@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { createDecipheriv, createHash } from "node:crypto";
+import { createHash } from "node:crypto";
+import { decryptBackupPayload } from "./lib/backup-crypto.mjs";
 
 const [, , filename] = process.argv;
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -17,11 +18,7 @@ async function query(sql, params = []) {
 }
 
 const input = await readFile(filename);
-if (input.subarray(0, 4).toString() !== "BFN1") throw new Error("Formato de backup inválido.");
-const key = createHash("sha256").update(backupSecret).digest();
-const decipher = createDecipheriv("aes-256-gcm", key, input.subarray(4, 16));
-decipher.setAuthTag(input.subarray(16, 32));
-const payload = JSON.parse(Buffer.concat([decipher.update(input.subarray(32)), decipher.final()]).toString("utf8"));
+const payload = decryptBackupPayload(input, backupSecret);
 
 for (const entry of payload.schema.filter((item) => item.type === "table")) await query(entry.sql);
 for (const [table, rows] of Object.entries(payload.data)) {

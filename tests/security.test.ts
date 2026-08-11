@@ -25,6 +25,40 @@ describe("security primitives", () => {
     expect(decryptValue(first)).toBe("sensitive-value");
   });
 
+  it("hardening: dado cifrado ANTES de CLINICAL_DATA_ENCRYPTION_KEY existir continua legivel depois (cadeia de chaves)", () => {
+    const original = process.env.CLINICAL_DATA_ENCRYPTION_KEY;
+    try {
+      delete process.env.CLINICAL_DATA_ENCRYPTION_KEY;
+      // Cifra hoje, sem CLINICAL_DATA_ENCRYPTION_KEY definido: cai para
+      // MFA_ENCRYPTION_KEY (elo mais antigo da cadeia "clinical").
+      const legacyPayload = encryptValue("prontuario sensivel", "clinical");
+
+      // Alguem define a chave dedicada depois — dado NOVO passa a usar essa
+      // chave, mas o dado ANTIGO (legacyPayload) precisa continuar legivel
+      // sem nenhuma migracao manual.
+      process.env.CLINICAL_DATA_ENCRYPTION_KEY = "test-clinical-secret-with-at-least-thirty-two-chars";
+      expect(decryptValue(legacyPayload, "clinical")).toBe("prontuario sensivel");
+
+      // Dado cifrado DEPOIS usa a chave nova — e ambos continuam decifraveis.
+      const freshPayload = encryptValue("prontuario novo", "clinical");
+      expect(freshPayload).not.toBe(legacyPayload);
+      expect(decryptValue(freshPayload, "clinical")).toBe("prontuario novo");
+      expect(decryptValue(legacyPayload, "clinical")).toBe("prontuario sensivel");
+    } finally {
+      if (original === undefined) delete process.env.CLINICAL_DATA_ENCRYPTION_KEY;
+      else process.env.CLINICAL_DATA_ENCRYPTION_KEY = original;
+    }
+  });
+
+  it("hardening: purposes diferentes (clinical/mfa/backup) nao decifram payload um do outro", () => {
+    process.env.CLINICAL_DATA_ENCRYPTION_KEY = "test-clinical-secret-with-at-least-thirty-two-chars";
+    process.env.BACKUP_ENCRYPTION_KEY = "test-backup-secret-with-at-least-thirty-two-chars-x";
+    const clinicalPayload = encryptValue("dado clinico", "clinical");
+    expect(() => decryptValue(clinicalPayload, "backup")).toThrow();
+    const backupPayload = encryptValue("dado de backup", "backup");
+    expect(() => decryptValue(backupPayload, "clinical")).toThrow();
+  });
+
   it("creates one-time recovery codes and deterministic hashes", () => {
     const codes = generateRecoveryCodes();
     expect(new Set(codes).size).toBe(8);

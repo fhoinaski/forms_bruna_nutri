@@ -24,6 +24,16 @@ export interface AssistantContextInput {
   appointmentId?: string;
   protocolId?: string;
   recipeId?: string;
+  /**
+   * Hint do Modo Consulta (FASE 1) — so presente quando a nutricionista
+   * esta dentro do workspace de consulta. Mesmo padrao NAO-eager de
+   * appointmentId/protocolId: so um identificador, nunca resolvido aqui.
+   * O orquestrador usa a PRESENCA deste campo para decidir se injeta o
+   * prompt/tools do Modo Consulta; cada tool/handler que efetivamente usa
+   * o valor revalida a sessao contra o cliente aberto (nunca confia so no
+   * hint vindo do frontend).
+   */
+  consultationSessionId?: string;
 }
 
 /**
@@ -42,6 +52,7 @@ export interface AssistantContext {
   appointmentId?: string;
   protocolId?: string;
   recipeId?: string;
+  consultationSessionId?: string;
 }
 
 export async function resolveAssistantContext(
@@ -64,5 +75,6 @@ export async function resolveAssistantContext(
     appointmentId: input.appointmentId,
     protocolId: input.protocolId,
     recipeId: input.recipeId,
+    consultationSessionId: input.consultationSessionId,
   };
 }

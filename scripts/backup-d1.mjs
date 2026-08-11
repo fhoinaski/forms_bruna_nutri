@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import path from "node:path";
+import { checksumOf, encryptBackupPayload } from "./lib/backup-crypto.mjs";
 
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const databaseId = process.env.CLOUDFLARE_D1_DATABASE_ID;
@@ -30,13 +30,8 @@ for (const table of tables) {
   data[table] = rows;
 }
 
-const payload = Buffer.from(JSON.stringify({ format: 1, createdAt: new Date().toISOString(), schema, data }), "utf8");
-const iv = randomBytes(12);
-const key = createHash("sha256").update(backupSecret).digest();
-const cipher = createCipheriv("aes-256-gcm", key, iv);
-const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
-const output = Buffer.concat([Buffer.from("BFN1"), iv, cipher.getAuthTag(), encrypted]);
-const checksum = createHash("sha256").update(output).digest("hex");
+const output = encryptBackupPayload({ format: 1, createdAt: new Date().toISOString(), schema, data }, backupSecret);
+const checksum = checksumOf(output);
 const directory = path.resolve(process.cwd(), "backups");
 await mkdir(directory, { recursive: true });
 const filename = `bruna-nutri-${new Date().toISOString().replace(/[:.]/g, "-")}.enc`;

@@ -11,6 +11,7 @@ import { getToolDefinition, getToolRisk } from "@/lib/ai/tools/registry";
 import { isProfileAllowed } from "@/lib/ai/policies/permissions";
 import type { ProposedAction } from "@/lib/ai/schemas/action.schema";
 import { getPatientConversationMemory, recordPatientConversationTurn } from "@/lib/ai/memory/patient-conversation-summary";
+import { redactPii } from "@/lib/ai/privacy/pii";
 import {
   GET_MY_MEAL_PLAN_TOOL_NAME,
   GET_MY_MEAL_DETAILS_TOOL_NAME,
@@ -191,7 +192,15 @@ export async function runPatientAssistantTurn(
   }
 
   const tools = resolvePatientTools(context.clientId);
-  const messages: ModelMessage[] = input.messages.map((message) => ({ role: message.role, content: message.content }));
+  // Mensagens do proprio paciente sao conteudo nao confiavel (secao 22 do
+  // pedido) — CPF/telefone/e-mail/CEP digitados no chat nunca devem
+  // trafegar em claro para o provedor de IA externo. So redige mensagens do
+  // paciente (role "user"); o texto do assistente e gerado pelo proprio
+  // modelo e nao precisa de redacao.
+  const messages: ModelMessage[] = input.messages.map((message) => ({
+    role: message.role,
+    content: message.role === "user" ? redactPii(message.content).text : message.content,
+  }));
 
   const result = await generate({
     agent: "patient-portal-chat",

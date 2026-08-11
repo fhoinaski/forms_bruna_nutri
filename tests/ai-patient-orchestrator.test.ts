@@ -83,6 +83,32 @@ describe("resolvePatientTools — allow-list real (nao so cosmetica)", () => {
   });
 });
 
+describe("runPatientAssistantTurn — hardening: mensagens do paciente nunca vao cruas para o LLM (secao 22/0.3)", () => {
+  it("redige CPF/telefone/e-mail da mensagem do paciente antes de montar `messages` para generate()", async () => {
+    vi.doMock("@/lib/ai/memory/patient-conversation-summary", () => ({
+      getPatientConversationMemory: vi.fn().mockResolvedValue(null),
+      recordPatientConversationTurn: vi.fn().mockResolvedValue(undefined),
+    }));
+    let capturedMessages: Array<{ role: string; content: string }> = [];
+    vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({
+      generate: vi.fn(async (options: { messages: Array<{ role: string; content: string }> }) => {
+        capturedMessages = options.messages;
+        return { text: "ok", toolCalls: [], toolResults: [], steps: [], finishReason: "stop" };
+      }),
+    }));
+
+    const { runPatientAssistantTurn } = await import("../lib/ai/core/patient-orchestrator");
+    const context = { clientId: "client-A" } as import("@/lib/ai/core/patient-context").PatientAssistantContext;
+    await runPatientAssistantTurn(context, {
+      messages: [{ role: "user", content: "Meu CPF e 123.456.789-00, pode confirmar meus dados?" }],
+    });
+
+    expect(capturedMessages).toHaveLength(1);
+    expect(capturedMessages[0].content).not.toContain("123.456.789-00");
+    expect(capturedMessages[0].content).toContain("[CPF removido]");
+  });
+});
+
 describe("resolvePatientAssistantContext — clientId sempre da sessao (secao 4/44)", () => {
   const sessionA: ClientPortalSession = { sub: "client-A", type: "client_portal", sessionVersion: 1 };
 

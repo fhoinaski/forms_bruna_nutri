@@ -83,6 +83,16 @@ const VALID_ACTIONS: Record<ProposedActionKind, ProposedAction> = {
     preview: { title: "Substituição alimentar", details: "Lanche da tarde: Banana → Maçã" },
     risk: "sensitive", requiresConfirmation: true,
   },
+  consultation_tasks_batch: {
+    kind: "consultation_tasks_batch", clientId: "client-1", consultationSessionId: "session-1",
+    tasks: [{ title: "Beber mais água", description: null, dueInDays: 7 }],
+    risk: "sensitive", requiresConfirmation: true,
+  },
+  consultation_summary: {
+    kind: "consultation_summary", clientId: "client-1", consultationSessionId: "session-1",
+    content: { summary: "Paciente estável, manteve adesão ao plano." },
+    risk: "clinical", requiresConfirmation: true,
+  },
 };
 
 const ALL_KINDS = Object.keys(VALID_ACTIONS) as ProposedActionKind[];

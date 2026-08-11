@@ -2,16 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
-import {
-  cloneProtocolForClient,
-  createProtocol,
-  getProtocolById,
-} from "@/lib/repositories/protocols";
+import { getProtocolById } from "@/lib/repositories/protocols";
 import {
   applyProtocolToClient,
+  createProtocolAndApplyToClient,
   getClientProtocols,
   hasActiveProtocol,
 } from "@/lib/repositories/client-protocols";
+import { parseProtocolActions } from "@/lib/protocols/helpers";
 import {
   createTasksFromDraft,
   createTasksFromProtocolPhases,
@@ -79,51 +77,77 @@ export async function POST(
     );
   }
 
+  const startedAt = parsed.data.startedAt ?? new Date().toISOString().slice(0, 10);
+
   let protocolId: string;
+  let clientProtocolId: string;
+  let protocolTitle: string;
+  let protocolKind: "standard" | "personalized";
+  let phases: Array<{ title: string; days: string | null; objective: string | null; actions: string[]; actions_json: string; notes: string | null }>;
+  let sourceDraftId: string | null = null;
+
   if (parsed.data.mode === "create_personalized") {
+    // createProtocolAndApplyToClient cria o protocolo (+fases copiadas, se
+    // houver protocolo base) E o vincula ao paciente numa unica escrita
+    // atomica — nunca deixa um protocolo orfao (criado mas sem
+    // client_protocols) se a segunda parte falhasse como no fluxo antigo.
     if (parsed.data.baseProtocolId) {
-      protocolId = await cloneProtocolForClient({
-        sourceProtocolId: parsed.data.baseProtocolId,
-        clientId,
-        createdBy: admin.sub,
-        title: parsed.data.title,
-        description: parsed.data.description,
-        category: parsed.data.category,
-      });
+      const source = await getProtocolById(parsed.data.baseProtocolId);
+      if (!source) return NextResponse.json({ message: "Protocolo de origem não encontrado." }, { status: 404 });
+      phases = source.phases.map((phase) => ({
+        title: phase.title, days: phase.days, objective: phase.objective,
+        actions: parseProtocolActions(phase.actions_json), actions_json: phase.actions_json, notes: phase.notes,
+      }));
     } else {
-      protocolId = await createProtocol({
-        title: parsed.data.title,
-        description: parsed.data.description,
-        category: parsed.data.category,
-        created_by: admin.sub,
-        kind: "personalized",
-        client_id: clientId,
-        phases: [],
-      });
+      phases = [];
     }
+
+    const created = await createProtocolAndApplyToClient({
+      title: parsed.data.title,
+      description: parsed.data.description,
+      category: parsed.data.category,
+      createdBy: admin.sub,
+      kind: "personalized",
+      clientId,
+      copiedFromProtocolId: parsed.data.baseProtocolId ?? null,
+      phases: phases.map(({ title, days, objective, actions, notes }) => ({ title, days, objective, actions, notes })),
+      apply: {
+        startedAt,
+        reviewDate: parsed.data.reviewDate,
+        professionalNotes: parsed.data.professionalNotes,
+      },
+    });
+    protocolId = created.protocolId;
+    clientProtocolId = created.clientProtocolId;
+    protocolTitle = parsed.data.title;
+    protocolKind = "personalized";
   } else {
     protocolId = parsed.data.protocolId;
-  }
+    const protocol = await getProtocolById(protocolId);
+    if (!protocol || protocol.is_active !== 1) {
+      return NextResponse.json({ message: "Protocolo ativo não encontrado." }, { status: 404 });
+    }
+    if (protocol.kind === "personalized" && protocol.client_id !== clientId) {
+      return NextResponse.json({ message: "Este protocolo pertence a outra cliente." }, { status: 403 });
+    }
+    if (await hasActiveProtocol(clientId, protocolId)) {
+      return NextResponse.json({ message: "Este protocolo já está ativo para a cliente." }, { status: 409 });
+    }
 
-  const protocol = await getProtocolById(protocolId);
-  if (!protocol || protocol.is_active !== 1) {
-    return NextResponse.json({ message: "Protocolo ativo não encontrado." }, { status: 404 });
+    sourceDraftId = parsed.data.sourceDraftId ?? null;
+    clientProtocolId = await applyProtocolToClient(clientId, protocolId, {
+      sourceDraftId,
+      startedAt,
+      reviewDate: parsed.data.reviewDate,
+      professionalNotes: parsed.data.professionalNotes,
+    });
+    protocolTitle = protocol.title;
+    protocolKind = protocol.kind;
+    phases = protocol.phases.map((phase) => ({
+      title: phase.title, days: phase.days, objective: phase.objective,
+      actions: parseProtocolActions(phase.actions_json), actions_json: phase.actions_json, notes: phase.notes,
+    }));
   }
-  if (protocol.kind === "personalized" && protocol.client_id !== clientId) {
-    return NextResponse.json({ message: "Este protocolo pertence a outra cliente." }, { status: 403 });
-  }
-  if (await hasActiveProtocol(clientId, protocolId)) {
-    return NextResponse.json({ message: "Este protocolo já está ativo para a cliente." }, { status: 409 });
-  }
-
-  const startedAt = parsed.data.startedAt ?? new Date().toISOString().slice(0, 10);
-  const sourceDraftId = parsed.data.mode === "apply" ? parsed.data.sourceDraftId : null;
-  const clientProtocolId = await applyProtocolToClient(clientId, protocolId, {
-    sourceDraftId,
-    startedAt,
-    reviewDate: parsed.data.reviewDate,
-    professionalNotes: parsed.data.professionalNotes,
-  });
 
   let tasksCreated = 0;
   if (parsed.data.createTasks) {
@@ -140,11 +164,11 @@ export async function POST(
           tasksCreated = 0;
         }
       }
-    } else {
+    } else if (phases.length) {
       tasksCreated = await createTasksFromProtocolPhases(
         clientId,
         clientProtocolId,
-        protocol.phases,
+        phases,
         startedAt
       );
     }
@@ -153,9 +177,9 @@ export async function POST(
   await addTimelineEvent({
     client_id: clientId,
     type: "protocol_applied",
-    title: protocol.kind === "personalized" ? "Protocolo personalizado iniciado" : "Protocolo padrão iniciado",
-    description: `Protocolo "${protocol.title}" aplicado com ${protocol.phases.length} fase(s) e ${tasksCreated} tarefa(s).`,
-    metadata: { clientProtocolId, protocolId, tasksCreated, kind: protocol.kind },
+    title: protocolKind === "personalized" ? "Protocolo personalizado iniciado" : "Protocolo padrão iniciado",
+    description: `Protocolo "${protocolTitle}" aplicado com ${phases.length} fase(s) e ${tasksCreated} tarefa(s).`,
+    metadata: { clientProtocolId, protocolId, tasksCreated, kind: protocolKind },
   });
   await writeAuditLog({
     action: "client_protocol_applied",
@@ -163,7 +187,7 @@ export async function POST(
     entityType: "client_protocol",
     entityId: clientProtocolId,
     ipHash: getRequestFingerprint(req).ipHash,
-    metadata: { clientId, protocolId, tasksCreated, kind: protocol.kind },
+    metadata: { clientId, protocolId, tasksCreated, kind: protocolKind },
   });
 
   return NextResponse.json(

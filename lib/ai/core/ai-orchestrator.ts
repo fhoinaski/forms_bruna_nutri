@@ -71,6 +71,17 @@ import {
   GET_PATIENT_REQUESTS_TOOL_NAME,
   PATIENT_REQUESTS_ADMIN_INSTRUCTIONS,
 } from "@/lib/ai/agents/clients/patient-requests-agent";
+import {
+  GET_CONSULTATION_BRIEF_TOOL_NAME,
+  GET_ACTIVE_MEAL_PLAN_TOOL_NAME,
+  GET_ACTIVE_PROTOCOL_TOOL_NAME,
+  GET_PENDING_PATIENT_ITEMS_TOOL_NAME,
+  COMPARE_ANTHROPOMETRY_TOOL_NAME,
+  PROPOSE_CONSULTATION_TASKS_BATCH_TOOL_NAME,
+  PROPOSE_CONSULTATION_SUMMARY_TOOL_NAME,
+  CONSULTATION_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/clinical/consultation-agent";
+import { getConsultationSessionById } from "@/lib/repositories/consultation-sessions";
 import type { AllowedAttachmentMediaType } from "@/lib/ai/agents/system/chat-attachments";
 import { getNutritionRecord } from "@/lib/repositories/nutrition-records";
 import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
@@ -285,6 +296,26 @@ export async function runAssistantTurn(
 
     systemPromptParts.push(TASK_ASSISTANT_INSTRUCTIONS);
     activeToolNames.push(PROPOSE_NEW_TASK_TOOL_NAME);
+
+    // Modo Consulta (FASE 1): so ativa o prompt/tools dedicados quando o
+    // hint realmente aponta para uma sessao 'in_progress' DESTE cliente —
+    // nunca confia so no id vindo do frontend (mesmo padrao de revalidacao
+    // ja usado nos handlers de proposal).
+    if (context.consultationSessionId) {
+      const consultationSession = await getConsultationSessionById(context.consultationSessionId);
+      if (consultationSession && consultationSession.client_id === client.id && consultationSession.status === "in_progress") {
+        systemPromptParts.push(CONSULTATION_ASSISTANT_INSTRUCTIONS);
+        activeToolNames.push(
+          GET_CONSULTATION_BRIEF_TOOL_NAME,
+          GET_ACTIVE_MEAL_PLAN_TOOL_NAME,
+          GET_ACTIVE_PROTOCOL_TOOL_NAME,
+          GET_PENDING_PATIENT_ITEMS_TOOL_NAME,
+          COMPARE_ANTHROPOMETRY_TOOL_NAME,
+          PROPOSE_CONSULTATION_TASKS_BATCH_TOOL_NAME,
+          PROPOSE_CONSULTATION_SUMMARY_TOOL_NAME
+        );
+      }
+    }
   }
 
   if (submission) {
@@ -345,7 +376,7 @@ export async function runAssistantTurn(
     const built = buildProposedAction(
       proposalCall.toolName,
       proposalCall.input,
-      { clientId: client?.id, submissionId: submission?.id },
+      { clientId: client?.id, submissionId: submission?.id, consultationSessionId: context.consultationSessionId },
       toolOutput
     );
     if (built) {

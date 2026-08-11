@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   Bell,
   Bot,
   CalendarDays,
@@ -54,6 +55,7 @@ const primaryNavigation = [
 const secondaryNavigation = [
   { href: "/dashboard/oportunidades", label: "Oportunidades", icon: HeartHandshake, badgeKey: "oportunidades" },
   { href: "/dashboard/solicitacoes", label: "Solicitações", icon: MessageSquareText, badgeKey: "solicitacoes" },
+  { href: "/dashboard/ai-recovery", label: "Verificações da IA", icon: AlertTriangle, badgeKey: "aiRecovery" },
   { href: "/dashboard/tarefas", label: "Tarefas", icon: ClipboardList, badgeKey: "tarefas" },
   { href: "/dashboard/protocols", label: "Protocolos", icon: ShieldCheck },
   { href: "/dashboard/privacidade", label: "Privacidade", icon: ShieldCheck, badgeKey: "privacidade" },
@@ -73,6 +75,7 @@ const breadcrumbLabels: Record<string, string> = {
   protocols: "Protocolos",
   oportunidades: "Oportunidades",
   solicitacoes: "Solicitações",
+  "ai-recovery": "Verificações da IA",
   tarefas: "Tarefas",
   privacidade: "Privacidade",
   blog: "Conteúdo",
@@ -100,6 +103,7 @@ type NotificationSummary = {
     oportunidades: number;
     privacidade: number;
     solicitacoes: number;
+    aiRecovery: number;
   };
 };
 

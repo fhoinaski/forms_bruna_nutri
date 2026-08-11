@@ -5,6 +5,7 @@ import {
   createClient,
   getClientBySubmissionId,
 } from "@/lib/repositories/clients";
+import { ClientDuplicateError } from "@/lib/clinical/client-identity";
 import { markOpportunityConvertedBySubmissionId } from "@/lib/repositories/lead-opportunities";
 
 export const runtime = "nodejs";
@@ -41,13 +42,24 @@ export async function POST(
   if (answers.motivacao) noteParts.push(`Motivação: ${String(answers.motivacao).slice(0, 200)}`);
   const notes = noteParts.length > 0 ? noteParts.join(" | ") : null;
 
-  const clientId = await createClient({
-    name: submission.patient_name,
-    email: submission.patient_email,
-    phone: submission.patient_phone,
-    source_submission_id: id,
-    notes,
-  });
+  let clientId: string;
+  try {
+    clientId = await createClient({
+      name: submission.patient_name,
+      email: submission.patient_email,
+      phone: submission.patient_phone,
+      source_submission_id: id,
+      notes,
+    });
+  } catch (error) {
+    // O email/telefone deste formulario pode coincidir com um cliente ja
+    // cadastrado por outro caminho (cadastro manual, outra pre-consulta) —
+    // nunca expor a constraint crua, e nunca criar um segundo cadastro.
+    if (error instanceof ClientDuplicateError) {
+      return NextResponse.json({ message: error.message }, { status: 409 });
+    }
+    throw error;
+  }
   await markOpportunityConvertedBySubmissionId(id);
 
   return NextResponse.json({ success: true, clientId, alreadyExisted: false }, { status: 201 });

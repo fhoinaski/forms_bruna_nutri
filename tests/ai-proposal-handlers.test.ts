@@ -156,13 +156,11 @@ describe("executeProposedAction — new_protocol", () => {
     await expect(executeProposedAction(action, ctx)).rejects.toThrow(ProposalExecutionError);
   });
 
-  it("cria o protocolo e aplica ao cliente", async () => {
+  it("cria o protocolo e aplica ao cliente numa unica operacao atomica", async () => {
     vi.doMock("@/lib/repositories/clients", () => ({ getClientById: vi.fn().mockResolvedValue({ id: "client-1" }) }));
-    const createProtocol = vi.fn().mockResolvedValue("protocol-1");
-    const applyProtocolToClient = vi.fn().mockResolvedValue("cp-1");
-    vi.doMock("@/lib/repositories/protocols", () => ({ createProtocol }));
+    const createProtocolAndApplyToClient = vi.fn().mockResolvedValue({ protocolId: "protocol-1", clientProtocolId: "cp-1" });
     vi.doMock("@/lib/repositories/client-protocols", () => ({
-      applyProtocolToClient,
+      createProtocolAndApplyToClient,
       getClientProtocolById: vi.fn(),
       updateClientProtocol: vi.fn(),
     }));
@@ -174,7 +172,7 @@ describe("executeProposedAction — new_protocol", () => {
     };
     const result = await executeProposedAction(action, ctx);
     expect(result.data).toEqual({ protocolId: "protocol-1", clientProtocolId: "cp-1" });
-    expect(createProtocol).toHaveBeenCalledWith(expect.objectContaining({ created_by: "admin-1", kind: "personalized", client_id: "client-1" }));
+    expect(createProtocolAndApplyToClient).toHaveBeenCalledWith(expect.objectContaining({ createdBy: "admin-1", kind: "personalized", clientId: "client-1" }));
   });
 });
 

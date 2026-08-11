@@ -1,4 +1,5 @@
 import type { MealPlanPayload } from "@/lib/repositories/meal-plans";
+import { wrapUntrustedData } from "@/lib/ai/privacy/sanitize-context";
 
 export function buildActiveMealPlanContext(plan: MealPlanPayload | null): string {
   if (!plan) return "O cliente ainda nao tem um plano alimentar ativo cadastrado.";
@@ -15,7 +16,10 @@ export function buildActiveMealPlanContext(plan: MealPlanPayload | null): string
   return [
     "DADOS CALCULADOS/ESTRUTURADOS PELO SISTEMA PARA ANALISE E EVENTUAL ALTERACAO DO PLANO (use como fatos; nao recalcular; os ids entre colchetes sao os reais do banco, use-os exatamente assim se for propor uma alteracao):",
     `Plano alimentar ativo: "${plan.title}" (id: ${plan.id}, versao: ${plan.version}).`,
-    plan.notes ? `Observacoes do plano: ${plan.notes}` : "",
+    // plan.notes e texto livre (pode ter sido colado a partir de uma
+    // resposta do paciente/formulario) — nunca interpolado cru no prompt,
+    // sempre envolvido como DADO nao confiavel (secao 22 do pedido).
+    plan.notes ? wrapUntrustedData("OBSERVACOES_DO_PLANO", plan.notes) : "",
     "Refeicoes atuais:",
     meals || "(sem refeicoes cadastradas)",
   ].filter(Boolean).join("\n");

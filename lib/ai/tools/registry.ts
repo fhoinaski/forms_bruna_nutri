@@ -113,6 +113,27 @@ import {
   executeGetPatientRequests,
   getPatientRequestsInputSchema,
 } from "@/lib/ai/agents/clients/patient-requests-agent";
+import {
+  GET_CONSULTATION_BRIEF_TOOL_NAME,
+  GET_ACTIVE_MEAL_PLAN_TOOL_NAME,
+  GET_ACTIVE_PROTOCOL_TOOL_NAME,
+  GET_PENDING_PATIENT_ITEMS_TOOL_NAME,
+  COMPARE_ANTHROPOMETRY_TOOL_NAME,
+  PROPOSE_CONSULTATION_TASKS_BATCH_TOOL_NAME,
+  PROPOSE_CONSULTATION_SUMMARY_TOOL_NAME,
+  getConsultationBriefInputSchema,
+  getActiveMealPlanForConsultationInputSchema,
+  getActiveProtocolForConsultationInputSchema,
+  getPendingPatientItemsInputSchema,
+  compareAnthropometryInputSchema,
+  proposeConsultationTasksBatchInputSchema,
+  proposeConsultationSummaryInputSchema,
+  executeGetConsultationBrief,
+  executeGetActiveMealPlanForConsultation,
+  executeGetActiveProtocolForConsultation,
+  executeGetPendingPatientItems,
+  executeCompareAnthropometry,
+} from "@/lib/ai/agents/clinical/consultation-agent";
 
 /**
  * Requisito de contexto para uma tool poder ser oferecida ao LLM na
@@ -347,6 +368,82 @@ defineTool({
   profiles: ADMIN,
   contextRequirement: "client",
   execute: executeProposeMealPlanChange,
+});
+
+// ── Modo Consulta (FASE 1) — workspace clinico dedicado ──────────────────
+// So ativas quando o admin-orchestrator detecta consultationSessionId no
+// contexto (lib/ai/core/ai-orchestrator.ts) — nunca oferecidas fora do
+// Modo Consulta. Perfil continua ADMIN_ASSISTANT (mesmo tool registry,
+// mesma risk policy) — nao e um terceiro perfil de capacidade.
+
+defineTool({
+  name: GET_CONSULTATION_BRIEF_TOOL_NAME,
+  description: "Monta o briefing de preparacao para a consulta do cliente atual: dados deterministicos do sistema (ultima visita, evolucao, pendencias, plano, protocolo) e, quando a IA estiver configurada, uma interpretacao estruturada desses fatos. Nunca inventa numero nem decisao clinica.",
+  inputSchema: getConsultationBriefInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: (input) => executeGetConsultationBrief(input),
+});
+
+defineTool({
+  name: GET_ACTIVE_MEAL_PLAN_TOOL_NAME,
+  description: "Le o plano alimentar ativo do cliente atual (refeicoes, itens, ids reais) dentro do Modo Consulta, sem precisar sair da tela de consulta.",
+  inputSchema: getActiveMealPlanForConsultationInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: executeGetActiveMealPlanForConsultation,
+});
+
+defineTool({
+  name: GET_ACTIVE_PROTOCOL_TOOL_NAME,
+  description: "Le o protocolo ativo/pausado do cliente atual (titulo, status, fases, progresso de tarefas) dentro do Modo Consulta.",
+  inputSchema: getActiveProtocolForConsultationInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: executeGetActiveProtocolForConsultation,
+});
+
+defineTool({
+  name: GET_PENDING_PATIENT_ITEMS_TOOL_NAME,
+  description: "Le tarefas pendentes e solicitacoes da paciente aguardando revisao, para o resumo de pendencias do Modo Consulta.",
+  inputSchema: getPendingPatientItemsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: executeGetPendingPatientItems,
+});
+
+defineTool({
+  name: COMPARE_ANTHROPOMETRY_TOOL_NAME,
+  description: "Compara as duas medidas antropometricas mais recentes do cliente atual (peso, cintura, gordura corporal, IMC) — Atual/Anterior/Diferenca, sempre calculado deterministicamente, nunca pela IA.",
+  inputSchema: compareAnthropometryInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: executeCompareAnthropometry,
+});
+
+defineTool({
+  name: PROPOSE_CONSULTATION_TASKS_BATCH_TOOL_NAME,
+  description: "Registra uma proposta de criacao de varias tarefas de uma vez (pacote de acoes pos-consulta) para o cliente atual, para revisao humana antes de criar de verdade — nunca cria as tarefas sozinha.",
+  inputSchema: proposeConsultationTasksBatchInputSchema,
+  risk: "sensitive",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: async (input) => input,
+});
+
+defineTool({
+  name: PROPOSE_CONSULTATION_SUMMARY_TOOL_NAME,
+  description: "Registra uma proposta de resumo estruturado da consulta atual (resumo, evolucao, conduta, plano, metas, proximos passos) baseado SOMENTE no que foi discutido/decidido nesta consulta, para revisao humana antes de salvar na sessao. Acao clinica — nunca aplicada automaticamente.",
+  inputSchema: proposeConsultationSummaryInputSchema,
+  risk: "clinical",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: async (input) => input,
 });
 
 // ── PATIENT_ASSISTANT — copiloto do portal do paciente ──────────────────
