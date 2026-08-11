@@ -37,6 +37,7 @@ export function getQuickActionsForContext(context: AssistantPageContext): QuickA
         { id: "pendencias", label: "Ver pendências", kind: "deterministic", action: "client_pending_tasks", needsClientId: true },
         { id: "proxima_consulta", label: "Próxima consulta", kind: "chat", message: "Qual a próxima consulta agendada desse paciente?" },
         { id: "revisar_plano", label: "Revisar plano alimentar", kind: "chat", message: "Revise o plano alimentar atual desse paciente e aponte o que vale a pena ajustar." },
+        { id: "sugerir_substituicoes", label: "Sugerir substituições", kind: "chat", message: "Sugira substituições de alimentos nesse plano alimentar e prepare uma proposta estruturada se eu topar uma delas." },
       ];
     case "agenda":
       return [

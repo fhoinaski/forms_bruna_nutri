@@ -6,15 +6,15 @@ export function buildActiveMealPlanContext(plan: MealPlanPayload | null): string
   const meals = plan.meals
     .map((meal) => {
       const items = meal.items
-        .map((item) => `${item.food}${item.quantity ? ` — ${item.quantity}${item.unit ?? ""}` : ""}`)
-        .join("; ");
-      return `- ${meal.name}${meal.suggested_time ? ` (${meal.suggested_time})` : ""}: ${items || "sem itens"}`;
+        .map((item) => `  - [item:${item.id}] ${item.food}${item.quantity ? ` — ${item.quantity}${item.unit ?? ""}` : ""}`)
+        .join("\n");
+      return `- [meal:${meal.id}] ${meal.name}${meal.suggested_time ? ` (${meal.suggested_time})` : ""}:\n${items || "  (sem itens)"}`;
     })
     .join("\n");
 
   return [
-    "DADOS CALCULADOS/ESTRUTURADOS PELO SISTEMA PARA ANALISE DO PLANO (use como fatos; nao recalcular nem alterar):",
-    `Plano alimentar ativo: "${plan.title}" (versao ${plan.version}).`,
+    "DADOS CALCULADOS/ESTRUTURADOS PELO SISTEMA PARA ANALISE E EVENTUAL ALTERACAO DO PLANO (use como fatos; nao recalcular; os ids entre colchetes sao os reais do banco, use-os exatamente assim se for propor uma alteracao):",
+    `Plano alimentar ativo: "${plan.title}" (id: ${plan.id}, versao: ${plan.version}).`,
     plan.notes ? `Observacoes do plano: ${plan.notes}` : "",
     "Refeicoes atuais:",
     meals || "(sem refeicoes cadastradas)",
@@ -26,7 +26,7 @@ Voce tambem pode analisar o plano alimentar atual do cliente (fornecido no conte
 Como fazer isso:
 - Separe fatos do sistema de sugestoes: quando citar algo do plano atual, trate como DADOS DO SISTEMA; quando interpretar ou sugerir, marque como SUGESTAO PARA REVISAO.
 - Comente em texto normal (sem ferramenta) os pontos que valem atencao: distribuicao de macronutrientes ao longo do dia, repeticao excessiva de alimentos, porcoes que parecem incoerentes com o objetivo do cliente, ausencia de fontes importantes (fibra, proteina, etc.).
-- Se a conversa levar a uma conduta ou ajuste concreto que valha registrar, use a ferramenta de prontuario para propor a atualizacao do campo "Plano de cuidado e conduta" ou "Metas antropometricas e clinicas" com o resumo da sua analise e da sugestao — sempre como PROPOSTA para revisao humana.
-- Voce nao edita as refeicoes e alimentos do plano diretamente por aqui; para isso, a nutricionista deve usar o editor de plano alimentar (inclusive o botao "Sugerir com IA" de cada refeicao). Se for esse o pedido, oriente-a a usar aquele editor.
+- Se a nutricionista pedir uma alteracao concreta no plano (trocar/adicionar/remover alimento ou refeicao, mudar quantidade/horario), use a ferramenta de alteracao de plano alimentar descrita a seguir — nao vire mais texto solto do prontuario. Se for so analise/opiniao, sem pedido de mudanca, NAO chame nenhuma ferramenta de alteracao.
+- Se a conversa levar a uma conduta clinica mais ampla (nao uma mudanca de refeicao/item especifica) que valha registrar, use a ferramenta de prontuario para propor a atualizacao do campo "Plano de cuidado e conduta" ou "Metas antropometricas e clinicas".
 - Deixe claro que sua leitura e um apoio tecnico e a decisao final e da nutricionista.
 `.trim();

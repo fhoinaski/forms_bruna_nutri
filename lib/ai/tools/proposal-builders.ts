@@ -14,6 +14,8 @@ import { PROPOSE_NEW_PROTOCOL_TOOL_NAME, type ProposeNewClientProtocolInput } fr
 import { PROPOSE_NEW_BLOG_POST_TOOL_NAME, type ProposeNewBlogPostInput } from "@/lib/ai/agents/content/blog-creation-agent";
 import { PROPOSE_NEW_APPOINTMENT_TOOL_NAME, type ProposeNewAppointmentInput } from "@/lib/ai/agents/appointments/appointment-agent";
 import { PROPOSE_NEW_TASK_TOOL_NAME, type ProposeNewClientTaskInput } from "@/lib/ai/agents/appointments/task-agent";
+import { PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME, type ProposeMealPlanChangeOutput } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
+import { REQUEST_APPOINTMENT_TOOL_NAME, type RequestAppointmentInput } from "@/lib/ai/agents/patient/patient-scheduling-agent";
 
 /**
  * Substitui a cadeia de 9 `if`s quase identicos que existia em
@@ -145,6 +147,35 @@ const BUILDERS: Record<string, ProposalBuilder> = {
         due_date_display: typed.due_date_display ?? "",
       },
     };
+  },
+
+  [PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME]: (_input, ctx, toolOutput) => {
+    const output = toolOutput as ProposeMealPlanChangeOutput | undefined;
+    if (!output || "error" in output) return null;
+    // Checagem defensiva: o plano resolvido pela tool precisa realmente
+    // pertencer ao cliente que esta aberto no contexto atual — nunca confiar
+    // so no que o modelo passou. A checagem definitiva (que nao pode ser
+    // pulada) acontece de novo no handler de confirmacao.
+    if (!ctx.clientId || ctx.clientId !== output.clientId) return null;
+    return {
+      kind: "meal_plan_change",
+      clientId: output.clientId,
+      mealPlanId: output.mealPlanId,
+      baseVersion: output.baseVersion,
+      changes: output.changes,
+      preview: output.preview,
+    };
+  },
+
+  // Unico builder do dominio PATIENT_ASSISTANT — nunca chamado pelo
+  // orquestrador admin, ja que "requestAppointment" nunca e oferecida a ele
+  // (nao esta no tool set do admin). ctx.clientId aqui vem sempre da sessao
+  // do portal (patient-orchestrator.ts), nunca do input do modelo.
+  [REQUEST_APPOINTMENT_TOOL_NAME]: (input, ctx) => {
+    if (!ctx.clientId) return null;
+    const typed = input as RequestAppointmentInput;
+    if (!typed.startsAtIso) return null;
+    return { kind: "patient_appointment_request", clientId: ctx.clientId, startsAtIso: typed.startsAtIso };
   },
 };
 

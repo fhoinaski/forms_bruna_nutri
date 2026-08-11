@@ -15,6 +15,7 @@ import {
   Utensils,
 } from "lucide-react";
 import { getSaoPauloDateKey } from "@/lib/utils/timezone";
+import { PatientAiChatWidget } from "@/components/portal/PatientAiChatWidget";
 
 type Appointment = {
   id: string;
@@ -359,7 +360,7 @@ export default function ClientPortalPage() {
         </section>
 
         {mealPlan && (
-          <section className="mb-5 rounded-2xl border border-[#E6D5C5] bg-white/80 p-5">
+          <section id="portal-meal-plan" className="mb-5 rounded-2xl border border-[#E6D5C5] bg-white/80 p-5">
             <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="mb-2 flex items-center gap-2">
@@ -447,7 +448,7 @@ export default function ClientPortalPage() {
         )}
 
         <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="space-y-5">
+          <div id="portal-appointments" className="space-y-5">
             <div className="rounded-2xl border border-[#E6D5C5] bg-white/75 p-5">
               <div className="mb-4 flex items-center gap-2">
                 <CalendarDays className="h-5 w-5 text-[#607A56]" />
@@ -583,7 +584,7 @@ export default function ClientPortalPage() {
             </div>
           </div>
 
-          <div className="space-y-5">
+          <div id="portal-tasks" className="space-y-5">
             <div className="rounded-2xl border border-[#E6D5C5] bg-white/75 p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -646,6 +647,7 @@ export default function ClientPortalPage() {
           </section>
         )}
       </div>
+      <PatientAiChatWidget />
     </main>
   );
 }

@@ -62,6 +62,11 @@ import {
   AVAILABILITY_LOOKUP_ASSISTANT_INSTRUCTIONS,
   type AvailableSlotsResult,
 } from "@/lib/ai/agents/appointments/availability-lookup-agent";
+import {
+  SEARCH_MEAL_PLAN_FOODS_TOOL_NAME,
+  PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME,
+  MEAL_PLAN_CHANGE_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import type { AllowedAttachmentMediaType } from "@/lib/ai/agents/system/chat-attachments";
 import { getNutritionRecord } from "@/lib/repositories/nutrition-records";
 import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
@@ -250,6 +255,10 @@ export async function runAssistantTurn(
 
     const activeMealPlan = await getActiveMealPlan(client.id);
     systemPromptParts.push(DIET_REVIEW_ASSISTANT_INSTRUCTIONS, buildActiveMealPlanContext(activeMealPlan));
+    if (activeMealPlan) {
+      systemPromptParts.push(MEAL_PLAN_CHANGE_ASSISTANT_INSTRUCTIONS);
+      activeToolNames.push(SEARCH_MEAL_PLAN_FOODS_TOOL_NAME, PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME);
+    }
 
     systemPromptParts.push(PROTOCOL_CREATION_ASSISTANT_INSTRUCTIONS);
     activeToolNames.push(PROPOSE_NEW_PROTOCOL_TOOL_NAME);

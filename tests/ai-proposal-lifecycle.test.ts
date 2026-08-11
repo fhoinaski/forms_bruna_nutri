@@ -63,6 +63,20 @@ const VALID_ACTIONS: Record<ProposedActionKind, ProposedAction> = {
     },
     risk: "sensitive", requiresConfirmation: true,
   },
+  meal_plan_change: {
+    kind: "meal_plan_change", clientId: "client-1", mealPlanId: "plan-1", baseVersion: 3,
+    changes: [{ operation: "change_quantity", mealId: "meal-1", itemId: "item-1", quantity: 130 }],
+    preview: {
+      mealPlanTitle: "Plano padrão",
+      changeSummaries: [{ operation: "change_quantity", mealName: "Lanche da tarde", before: "Banana — 100g", after: "Banana — 130g" }],
+      totalImpact: { kcal: 26, protein: 0.3, carbs: 6.8, fat: 0.1 },
+    },
+    risk: "clinical", requiresConfirmation: true,
+  },
+  patient_appointment_request: {
+    kind: "patient_appointment_request", clientId: "client-1", startsAtIso: "2026-08-13T15:00:00.000-03:00",
+    risk: "sensitive", requiresConfirmation: true,
+  },
 };
 
 const ALL_KINDS = Object.keys(VALID_ACTIONS) as ProposedActionKind[];

@@ -3,7 +3,7 @@ import { extractIsoDateTime, parseBrDateTimeToIso, parseBrDateToIsoDate } from "
 import { getClientById, getClients } from "@/lib/repositories/clients";
 import { createClient } from "@/lib/repositories/clients";
 import { createAppointment } from "@/lib/repositories/appointments";
-import { hasAppointmentConflict, slotEnd } from "@/lib/repositories/availability";
+import { getAvailableSlots, hasAppointmentConflict, slotEnd, countFutureClientAppointments } from "@/lib/repositories/availability";
 import { createClientTask } from "@/lib/repositories/client-tasks";
 import { createRecipe, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/repositories/recipes";
 import { getTacoFoodByNumber } from "@/lib/nutrition/taco";
@@ -14,6 +14,8 @@ import { NUTRITION_TEXT_FIELDS, type NutritionRecordTextFieldKey } from "@/lib/c
 import { getSubmissionById } from "@/lib/repositories/submissions";
 import { upsertPreAnalysis } from "@/lib/repositories/pre-analyses";
 import { createBlogPost } from "@/lib/repositories/blog-posts";
+import { getMealPlanById, updateMealPlan } from "@/lib/repositories/meal-plans";
+import { applyMealPlanChangesWithPreview, MealPlanChangeValidationError } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 
 /**
  * Execucao real de cada proposal kind, chamada SOMENTE depois que o
@@ -297,6 +299,109 @@ const executeNewBlogPost: ProposalHandler<"new_blog_post"> = async (action) => {
   return { data: { blogPostId } };
 };
 
+// ── meal_plan_change (alteracao estruturada do plano alimentar) ────────
+
+const executeMealPlanChange: ProposalHandler<"meal_plan_change"> = async (action) => {
+  const client = await getClientById(action.clientId);
+  if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
+
+  const plan = await getMealPlanById(action.mealPlanId);
+  if (!plan) throw new ProposalExecutionError("Plano alimentar não encontrado.", 404);
+
+  // Ownership: o plano precisa realmente pertencer a este paciente — nunca
+  // confiar so no clientId do payload.
+  if (plan.client_id !== action.clientId) {
+    throw new ProposalExecutionError("Este plano alimentar não pertence a este paciente.", 403);
+  }
+
+  // Concorrencia otimista: se alguem (manualmente ou outra proposta) alterou
+  // o plano depois que esta proposta foi criada, nunca aplicar por cima
+  // silenciosamente — o baseVersion tem que bater com a versao atual.
+  if (plan.version !== action.baseVersion) {
+    throw new ProposalExecutionError(
+      "O plano foi alterado depois que esta proposta foi criada. Revise novamente antes de aplicar.",
+      409
+    );
+  }
+
+  // Revalida TACO no momento da execucao — nunca confia no que foi
+  // calculado quando a proposta foi gerada (mesmo padrao de executeNewRecipe).
+  for (const change of action.changes) {
+    if ("food" in change && change.food.tacoNumber !== null && !getTacoFoodByNumber(change.food.tacoNumber)) {
+      throw new ProposalExecutionError(
+        `O alimento "${change.food.foodName}" não corresponde a um alimento válido na base TACO.`,
+        422
+      );
+    }
+  }
+
+  let newMeals;
+  try {
+    newMeals = applyMealPlanChangesWithPreview(plan.meals, action.changes, plan.title).meals;
+  } catch (error) {
+    const message = error instanceof MealPlanChangeValidationError ? error.message : "Não foi possível aplicar esta alteração.";
+    throw new ProposalExecutionError(message, 422);
+  }
+
+  // Reusa updateMealPlan tal como o editor manual usa — mesmo delete-all-
+  // insert-all atomico (d1Batch) e mesmo incremento de versao, preservando
+  // titulo/status/notas/slots/substituicoes/suplementos inalterados.
+  const updated = await updateMealPlan(plan.id, action.clientId, {
+    title: plan.title,
+    status: plan.status,
+    notes: plan.notes,
+    meals: newMeals,
+    weekly_slots: plan.weekly_slots,
+    substitutions: plan.substitutions,
+    supplements: plan.supplements,
+  });
+  if (!updated) throw new ProposalExecutionError("Não foi possível salvar a alteração no plano alimentar.", 500);
+
+  return { data: { mealPlanId: updated.id, newVersion: updated.version } };
+};
+
+// ── patient_appointment_request (autoagendamento pedido pelo proprio paciente) ──
+
+const executePatientAppointmentRequest: ProposalHandler<"patient_appointment_request"> = async (action) => {
+  const client = await getClientById(action.clientId);
+  if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
+
+  const starts = new Date(action.startsAtIso);
+  if (Number.isNaN(starts.getTime()) || starts.getTime() <= Date.now()) {
+    throw new ProposalExecutionError("Escolha um horário futuro.", 422);
+  }
+  const endsAtIso = slotEnd(action.startsAtIso);
+
+  // Mesma regra antiabuso da rota de autoagendamento manual
+  // (app/api/portal/appointments POST): so uma consulta futura ativa por vez.
+  const futureCount = await countFutureClientAppointments(action.clientId);
+  if (futureCount >= 1) {
+    throw new ProposalExecutionError("Você já possui uma consulta futura agendada.", 409);
+  }
+
+  // Revalidacao obrigatoria (mesmo padrao do admin): o horario pode ter sido
+  // ocupado entre o momento da proposta e a confirmacao.
+  const rangeDate = action.startsAtIso.slice(0, 10);
+  const availability = await getAvailableSlots(rangeDate, rangeDate);
+  const available = availability.some((day) => day.slots.includes(action.startsAtIso));
+  if (!available || (await hasAppointmentConflict(action.startsAtIso, endsAtIso))) {
+    throw new ProposalExecutionError("Esse horário não está mais disponível. Escolha outro horário.", 409);
+  }
+
+  const appointmentId = await createAppointment({
+    client_id: action.clientId,
+    title: "Consulta nutricional",
+    appointment_type: "consulta",
+    starts_at: action.startsAtIso,
+    ends_at: endsAtIso,
+    status: "agendado",
+    portal_visible: 1,
+    notes: "Consulta marcada pela paciente no portal (via assistente).",
+  });
+
+  return { data: { appointmentId, startsAtIso: action.startsAtIso } };
+};
+
 // ── dispatch tipado (sem switch untyped, sem `any`) ─────────────────────
 
 const PROPOSAL_HANDLERS: { [K in ProposedActionKind]: ProposalHandler<K> } = {
@@ -309,6 +414,8 @@ const PROPOSAL_HANDLERS: { [K in ProposedActionKind]: ProposalHandler<K> } = {
   nutrition_record: executeNutritionRecord,
   pre_analysis: executePreAnalysis,
   new_blog_post: executeNewBlogPost,
+  meal_plan_change: executeMealPlanChange,
+  patient_appointment_request: executePatientAppointmentRequest,
 };
 
 export async function executeProposedAction(

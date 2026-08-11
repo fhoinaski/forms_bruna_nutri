@@ -141,12 +141,16 @@ const APPLIED_MESSAGES: Partial<Record<ChatProposal["kind"], string>> = {
   nutrition_record: "Prontuário atualizado.",
   pre_analysis: "Pré-análise salva.",
   client_protocol: "Notas do protocolo atualizadas.",
+  meal_plan_change: "Plano alimentar atualizado.",
 };
 
 // Kinds cuja alteracao e clinica (secao 18 do pedido de UX) — so para exibir
 // um badge diferenciado no card, nunca usado para decidir permissao (isso
 // continua 100% server-side em lib/ai/policies).
-const CLINICAL_PROPOSAL_KINDS = new Set<ChatProposal["kind"]>(["nutrition_record", "client_protocol", "new_protocol", "pre_analysis"]);
+const CLINICAL_PROPOSAL_KINDS = new Set<ChatProposal["kind"]>(["nutrition_record", "client_protocol", "new_protocol", "pre_analysis", "meal_plan_change"]);
+
+type MealPlanChangeSummary = { operation: string; mealName: string; before: string | null; after: string | null };
+type MealPlanChangeImpact = { kcal: number; protein: number; carbs: number; fat: number };
 
 interface ChatProposalBase {
   title: string;
@@ -168,7 +172,16 @@ type ChatProposal =
   | (ChatProposalBase & { kind: "new_protocol"; clientId: string })
   | (ChatProposalBase & { kind: "new_blog_post" })
   | (ChatProposalBase & { kind: "new_appointment"; clientId: string })
-  | (ChatProposalBase & { kind: "new_task"; clientId: string });
+  | (ChatProposalBase & { kind: "new_task"; clientId: string })
+  | (ChatProposalBase & {
+      kind: "meal_plan_change";
+      clientId: string;
+      mealPlanId: string;
+      baseVersion: number;
+      mealPlanTitle: string;
+      changeSummaries: MealPlanChangeSummary[];
+      totalImpact: MealPlanChangeImpact;
+    });
 
 type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -309,6 +322,28 @@ function buildProposal(update: Record<string, unknown>): ChatProposal | null {
       fields: toFields(update.fields as Record<string, string>, NEW_APPOINTMENT_FIELD_LABELS),
     };
   }
+  if (update.kind === "meal_plan_change") {
+    const preview = update.preview as {
+      mealPlanTitle: string;
+      changeSummaries: MealPlanChangeSummary[];
+      totalImpact: MealPlanChangeImpact;
+    };
+    return {
+      kind: "meal_plan_change",
+      clientId: update.clientId as string,
+      mealPlanId: update.mealPlanId as string,
+      baseVersion: update.baseVersion as number,
+      mealPlanTitle: preview.mealPlanTitle,
+      changeSummaries: preview.changeSummaries,
+      totalImpact: preview.totalImpact,
+      title: "Proposta de alteração do plano alimentar",
+      applyLabel: "Aplicar no plano alimentar",
+      status: "pending",
+      proposalId,
+      expiresAt,
+      fields: [],
+    };
+  }
   if (update.kind === "new_task") {
     return {
       kind: "new_task",
@@ -335,6 +370,7 @@ function proposalClientId(proposal: ChatProposal): string | undefined {
     case "new_protocol":
     case "new_appointment":
     case "new_task":
+    case "meal_plan_change":
       return proposal.clientId;
     default:
       return undefined;
@@ -592,6 +628,7 @@ export function AiChatWidget() {
       case "client_protocol":
       case "new_appointment":
       case "new_task":
+      case "meal_plan_change":
         if (context.clientId === proposal.clientId) router.refresh();
         return;
       case "pre_analysis":
@@ -899,7 +936,7 @@ function ProposalCard({ proposal, belongsToOtherContext, onDiscard, onApply, onF
   onApply: () => void;
   onFindNewSlots: () => void;
 }) {
-  if (!proposal.fields.length) return null;
+  if (!proposal.fields.length && proposal.kind !== "meal_plan_change") return null;
 
   if (proposal.status === "discarded") {
     return <p className="rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] px-3 py-2 text-xs text-[#8A7B70]">Proposta descartada.</p>;
@@ -962,6 +999,31 @@ function ProposalCard({ proposal, belongsToOtherContext, onDiscard, onApply, onF
           </ul>
         </div>
       )}
+      {proposal.kind === "meal_plan_change" && (
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">
+            Plano: {proposal.mealPlanTitle} (versão {proposal.baseVersion})
+          </p>
+          <div className="space-y-1.5">
+            {proposal.changeSummaries.map((change, index) => (
+              <div key={index} className="rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">{change.mealName}</p>
+                {change.before && <p className="text-xs leading-5 text-[#8C5F50]">− {change.before}</p>}
+                {change.after && <p className="text-xs leading-5 text-[#4F6847]">+ {change.after}</p>}
+              </div>
+            ))}
+          </div>
+          <div>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">Impacto calculado</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              <MacroImpact label="Kcal" value={proposal.totalImpact.kcal} />
+              <MacroImpact label="Proteína" value={proposal.totalImpact.protein} unit="g" />
+              <MacroImpact label="Carbo." value={proposal.totalImpact.carbs} unit="g" />
+              <MacroImpact label="Gordura" value={proposal.totalImpact.fat} unit="g" />
+            </div>
+          </div>
+        </div>
+      )}
       {proposal.status === "error" && proposal.error && (
         <div className="space-y-1.5">
           <p className="rounded-lg border border-[#F0D4C7] bg-[#FFF7F3] px-2.5 py-1.5 text-xs text-[#8C5F50]">{proposal.error}</p>
@@ -984,6 +1046,16 @@ function ProposalCard({ proposal, belongsToOtherContext, onDiscard, onApply, onF
           {applying ? "Executando..." : proposal.applyLabel}
         </button>
       </div>
+    </div>
+  );
+}
+
+function MacroImpact({ label, value, unit = "" }: { label: string; value: number; unit?: string }) {
+  const sign = value > 0 ? "+" : "";
+  return (
+    <div className="rounded-lg border border-[#EDE1D6] bg-white px-1.5 py-1.5 text-center">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.04em] text-[#A9978A]">{label}</p>
+      <p className="text-xs font-semibold text-[#3A3028]">{sign}{value}{unit}</p>
     </div>
   );
 }

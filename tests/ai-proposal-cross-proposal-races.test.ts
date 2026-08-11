@@ -103,6 +103,9 @@ describe("secao 13: duas propostas diferentes (proposalIds distintos) para o MES
     // a partir dai, o slot esta ocupado — a revalidacao da segunda proposta
     // (proposalId diferente!) precisa detectar isso.
     let appointmentCreated = false;
+    vi.doMock("@/lib/repositories/clients", () => ({
+      getClientById: vi.fn(async (id: string) => (id === "client-1" ? { id: "client-1", name: "Maria Silva" } : null)),
+    }));
     vi.doMock("@/lib/repositories/availability", () => ({
       hasAppointmentConflict: vi.fn(async () => appointmentCreated),
       slotEnd: vi.fn((iso: string) => new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString()),

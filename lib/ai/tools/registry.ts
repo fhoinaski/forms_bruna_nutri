@@ -72,6 +72,36 @@ import {
   executeGetAvailableSlots,
   getAvailableSlotsInputSchema,
 } from "@/lib/ai/agents/appointments/availability-lookup-agent";
+import {
+  SEARCH_MEAL_PLAN_FOODS_TOOL_NAME,
+  PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME,
+  executeSearchMealPlanFoods,
+  executeProposeMealPlanChange,
+  searchMealPlanFoodsInputSchema,
+  proposeMealPlanChangeInputSchema,
+} from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
+import {
+  GET_MY_MEAL_PLAN_TOOL_NAME,
+  GET_MY_MEAL_DETAILS_TOOL_NAME,
+  GET_MY_APPOINTMENTS_TOOL_NAME,
+  GET_MY_TASKS_TOOL_NAME,
+  SEARCH_ALLOWED_FOOD_ALTERNATIVES_TOOL_NAME,
+  NAVIGATE_PATIENT_PORTAL_TOOL_NAME,
+  getMyMealPlanInputSchema,
+  getMyMealDetailsInputSchema,
+  getMyAppointmentsInputSchema,
+  getMyTasksInputSchema,
+  searchAllowedFoodAlternativesInputSchema,
+  navigatePatientPortalInputSchema,
+  executeNavigatePatientPortal,
+} from "@/lib/ai/agents/patient/patient-portal-agent";
+import {
+  GET_MY_AVAILABLE_SLOTS_TOOL_NAME,
+  REQUEST_APPOINTMENT_TOOL_NAME,
+  getAvailableSlotsForSchedulingInputSchema,
+  requestAppointmentInputSchema,
+  executeGetAvailableSlotsForScheduling,
+} from "@/lib/ai/agents/patient/patient-scheduling-agent";
 
 /**
  * Requisito de contexto para uma tool poder ser oferecida ao LLM na
@@ -102,6 +132,21 @@ function defineTool<TInput, TOutput>(def: ToolDefinition<TInput, TOutput>): Tool
 }
 
 const ADMIN = ["ADMIN_ASSISTANT"] as const;
+const PATIENT = ["PATIENT_ASSISTANT"] as const;
+
+/**
+ * As tools de leitura do PATIENT_ASSISTANT que dependem de "de quem sao os
+ * dados" (plano, consultas, tarefas, alimentos do plano) NUNCA recebem
+ * clientId do modelo — o `execute` registrado aqui e so um placeholder de
+ * schema/risco; a execucao real e sempre um fechamento vinculado ao clientId
+ * da sessao do portal, montado por `resolvePatientTools()` em
+ * lib/ai/core/patient-orchestrator.ts (que le `inputSchema`/`description`
+ * daqui, mas SUBSTITUI `execute`). Isso mantem risco/perfil centralizados
+ * aqui, sem abrir uma brecha de "clientId escolhido pelo modelo".
+ */
+async function unboundPatientToolStub(): Promise<never> {
+  throw new Error("Esta tool exige contexto de sessao do paciente — use resolvePatientTools(), nunca o registry diretamente.");
+}
 
 defineTool({
   name: FIND_CLIENT_TOOL_NAME,
@@ -261,6 +306,111 @@ defineTool({
   profiles: ADMIN,
   contextRequirement: "none",
   execute: executeGetAvailableSlots,
+});
+
+defineTool({
+  name: SEARCH_MEAL_PLAN_FOODS_TOOL_NAME,
+  description: "Busca alimentos reais na base TACO pelo nome, para resolver o numero TACO correto antes de propor uma alteracao de plano alimentar — nunca confiar em nome de alimento sem buscar primeiro.",
+  inputSchema: searchMealPlanFoodsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: executeSearchMealPlanFoods,
+});
+
+defineTool({
+  name: PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME,
+  description: "Monta uma proposta estruturada de alteracao do plano alimentar ativo do cliente atual (adicionar/remover/renomear refeicao, adicionar/remover/substituir item, mudar quantidade/medida/horario), com preview de impacto nos macros calculado deterministicamente, para revisao humana antes de aplicar.",
+  inputSchema: proposeMealPlanChangeInputSchema,
+  risk: "clinical",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: executeProposeMealPlanChange,
+});
+
+// ── PATIENT_ASSISTANT — copiloto do portal do paciente ──────────────────
+// Nenhuma destas tools jamais recebe "ADMIN_ASSISTANT" em profiles, e
+// nenhuma tool administrativa jamais recebe "PATIENT_ASSISTANT" — os dois
+// perfis nunca compartilham capability por acidente (secao 2/17 do pedido).
+
+defineTool({
+  name: GET_MY_MEAL_PLAN_TOOL_NAME,
+  description: "Le o plano alimentar ativo da propria paciente autenticada (refeicoes e itens), sem carregar prontuario nem historico.",
+  inputSchema: getMyMealPlanInputSchema,
+  risk: "read",
+  profiles: PATIENT,
+  contextRequirement: "client",
+  execute: unboundPatientToolStub,
+});
+
+defineTool({
+  name: GET_MY_MEAL_DETAILS_TOOL_NAME,
+  description: "Le so UMA refeicao especifica do plano ativo da propria paciente (ex.: cafe da manha, almoco, lanche da tarde), sem carregar o plano inteiro.",
+  inputSchema: getMyMealDetailsInputSchema,
+  risk: "read",
+  profiles: PATIENT,
+  contextRequirement: "client",
+  execute: unboundPatientToolStub,
+});
+
+defineTool({
+  name: GET_MY_APPOINTMENTS_TOOL_NAME,
+  description: "Le as proprias consultas futuras da paciente autenticada (data, tipo, local), nunca notas internas da nutricionista.",
+  inputSchema: getMyAppointmentsInputSchema,
+  risk: "read",
+  profiles: PATIENT,
+  contextRequirement: "client",
+  execute: unboundPatientToolStub,
+});
+
+defineTool({
+  name: GET_MY_TASKS_TOOL_NAME,
+  description: "Le as proprias tarefas pendentes da paciente autenticada.",
+  inputSchema: getMyTasksInputSchema,
+  risk: "read",
+  profiles: PATIENT,
+  contextRequirement: "client",
+  execute: unboundPatientToolStub,
+});
+
+defineTool({
+  name: SEARCH_ALLOWED_FOOD_ALTERNATIVES_TOOL_NAME,
+  description: "Localiza um alimento no proprio plano ativo da paciente e busca alternativas reais na TACO — nunca aprova uma troca, so mostra opcoes para revisao com a nutricionista.",
+  inputSchema: searchAllowedFoodAlternativesInputSchema,
+  risk: "read",
+  profiles: PATIENT,
+  contextRequirement: "client",
+  execute: unboundPatientToolStub,
+});
+
+defineTool({
+  name: NAVIGATE_PATIENT_PORTAL_TOOL_NAME,
+  description: "Indica qual secao do portal (plano alimentar, consultas ou tarefas) o frontend deve rolar/abrir — allow-list fechada, nunca uma URL livre.",
+  inputSchema: navigatePatientPortalInputSchema,
+  risk: "low",
+  profiles: PATIENT,
+  contextRequirement: "none",
+  execute: executeNavigatePatientPortal,
+});
+
+defineTool({
+  name: GET_MY_AVAILABLE_SLOTS_TOOL_NAME,
+  description: "Le os horarios realmente disponiveis para autoagendamento (ate 14 dias) — a IA nunca inventa horario, so usa o que esta ferramenta retorna.",
+  inputSchema: getAvailableSlotsForSchedulingInputSchema,
+  risk: "read",
+  profiles: PATIENT,
+  contextRequirement: "none",
+  execute: executeGetAvailableSlotsForScheduling,
+});
+
+defineTool({
+  name: REQUEST_APPOINTMENT_TOOL_NAME,
+  description: "Registra um pedido de agendamento da propria paciente para um horario ja confirmado como disponivel, para revisao/confirmacao dela antes de marcar de verdade.",
+  inputSchema: requestAppointmentInputSchema,
+  risk: "sensitive",
+  profiles: PATIENT,
+  contextRequirement: "client",
+  execute: async (input) => input,
 });
 
 export function getToolDefinition(name: string): ToolDefinition<any, unknown> | undefined {

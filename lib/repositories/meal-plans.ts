@@ -271,6 +271,18 @@ export async function getActiveMealPlan(clientId: string): Promise<MealPlanPaylo
   return rows[0] ? (await hydrateMealPlans(rows))[0] : null;
 }
 
+/**
+ * Busca por id sozinho (sem escopo de cliente) — uso interno da tool/handler
+ * de proposta de IA para plano alimentar, que precisa ler o plano ANTES de
+ * saber com certeza a quem ele pertence (a checagem de ownership real
+ * acontece depois, comparando `plan.client_id` com o clientId da proposta).
+ * Nunca usar isto num lugar que decida autorizacao sozinho.
+ */
+export async function getMealPlanById(planId: string): Promise<MealPlanPayload | null> {
+  const rows = await d1Query<MealPlanRow>("SELECT * FROM meal_plans WHERE id = ?1 LIMIT 1", [planId]);
+  return rows[0] ? (await hydrateMealPlans(rows))[0] : null;
+}
+
 async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]> {
   if (!rows.length) return [];
   const planIds = JSON.stringify(rows.map((row) => row.id));
