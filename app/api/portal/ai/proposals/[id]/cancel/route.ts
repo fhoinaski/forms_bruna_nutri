@@ -5,12 +5,13 @@ import { cancelAiActionProposal, getAiActionProposal } from "@/lib/repositories/
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALLOWED_KIND = "patient_appointment_request" as const;
+const ALLOWED_KINDS = ["patient_appointment_request", "patient_change_request"] as const;
+type AllowedKind = (typeof ALLOWED_KINDS)[number];
 
 /**
  * Cancela uma solicitacao pendente do PATIENT_ASSISTANT. Mesma logica do
  * cancel administrativo, so trocando a fonte de autenticacao e restringindo
- * a kind permitida (mesma defesa em profundidade do confirm route).
+ * as kinds permitidas (mesma defesa em profundidade do confirm route).
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getClientPortalSessionFromRequest(req);
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
 
   const existing = await getAiActionProposal(id, session.sub);
-  if (!existing || existing.kind !== ALLOWED_KIND) {
+  if (!existing || !ALLOWED_KINDS.includes(existing.kind as AllowedKind)) {
     return NextResponse.json({ message: "Solicitação não encontrada." }, { status: 404 });
   }
 

@@ -7,7 +7,7 @@ import type { Components } from "react-markdown";
 import { PatientFactsCard } from "@/components/portal/patient-ai-facts";
 import { formatDateTimeBR } from "@/components/dashboard/ai-facts";
 import type { PatientAssistantFactsPayload } from "@/lib/ai/core/patient-response";
-import type { PatientPortalSection } from "@/lib/ai/agents/patient/patient-portal-agent";
+import type { FoodAlternativeOption, PatientPortalSection } from "@/lib/ai/agents/patient/patient-portal-agent";
 
 /**
  * Assistente do PORTAL DO PACIENTE — widget PROPRIO, independente do
@@ -24,22 +24,33 @@ const SECTION_ANCHOR_IDS: Record<PatientPortalSection, string> = {
 
 type ProposalStatus = "pending" | "applying" | "applied" | "discarded" | "error" | "expired";
 
-interface PatientProposal {
+interface PatientProposalBase {
   proposalId?: string;
   expiresAt?: string;
-  startsAtIso: string;
   status: ProposalStatus;
   error?: string;
 }
 
+type PatientProposal =
+  | (PatientProposalBase & { kind: "patient_appointment_request"; startsAtIso: string })
+  | (PatientProposalBase & { kind: "patient_change_request"; title: string; details: string | null });
+
 function buildPatientProposal(update: Record<string, unknown> | undefined): PatientProposal | null {
-  if (!update || update.kind !== "patient_appointment_request") return null;
-  return {
-    proposalId: update.proposalId as string | undefined,
-    expiresAt: update.expiresAt as string | undefined,
-    startsAtIso: update.startsAtIso as string,
-    status: "pending",
-  };
+  if (!update) return null;
+  const proposalId = update.proposalId as string | undefined;
+  const expiresAt = update.expiresAt as string | undefined;
+  if (update.kind === "patient_appointment_request") {
+    return { kind: "patient_appointment_request", proposalId, expiresAt, status: "pending", startsAtIso: update.startsAtIso as string };
+  }
+  if (update.kind === "patient_change_request") {
+    const preview = update.preview as { title?: string; details?: string | null } | undefined;
+    return {
+      kind: "patient_change_request", proposalId, expiresAt, status: "pending",
+      title: preview?.title ?? "Solicitação para a nutricionista",
+      details: preview?.details ?? null,
+    };
+  }
+  return null;
 }
 
 type ChatMessage = {
@@ -187,11 +198,15 @@ export function PatientAiChatWidget() {
           updateProposal(messageIndex, (current) => ({ ...current, status: "expired" }));
           return;
         }
-        throw new Error(data.message ?? "Não foi possível marcar a consulta.");
+        throw new Error(data.message ?? (proposal.kind === "patient_change_request" ? "Não foi possível enviar a solicitação." : "Não foi possível marcar a consulta."));
       }
       updateProposal(messageIndex, (current) => ({ ...current, status: "applied" }));
     } catch (cause) {
-      updateProposal(messageIndex, (current) => ({ ...current, status: "error", error: cause instanceof Error ? cause.message : "Não foi possível marcar a consulta." }));
+      updateProposal(messageIndex, (current) => ({
+        ...current,
+        status: "error",
+        error: cause instanceof Error ? cause.message : (proposal.kind === "patient_change_request" ? "Não foi possível enviar a solicitação." : "Não foi possível marcar a consulta."),
+      }));
     }
   }
 
@@ -261,7 +276,11 @@ export function PatientAiChatWidget() {
                 </p>
               </div>
             )}
-            {messages.map((message, index) => (
+            {messages.map((message, index) => {
+              const facts = message.facts;
+              const currentFoodForReview =
+                facts?.type === "food_alternatives" && facts.data.found ? facts.data.currentFood : undefined;
+              return (
               <div key={index} className="space-y-2">
                 {message.content && (
                   <div
@@ -276,12 +295,18 @@ export function PatientAiChatWidget() {
                     )}
                   </div>
                 )}
-                {message.facts && (
+                {facts && (
                   <PatientFactsCard
-                    facts={message.facts}
+                    facts={facts}
                     onPickSlot={
-                      message.facts.type === "available_slots"
+                      facts.type === "available_slots"
                         ? (iso) => void sendMessage(`Quero marcar consulta nesse horário: ${formatDateTimeBR(iso)} (${iso})`)
+                        : undefined
+                    }
+                    onRequestFoodReview={
+                      currentFoodForReview
+                        ? (alternative: FoodAlternativeOption) =>
+                            void sendMessage(`Quero pedir a troca de ${currentFoodForReview} por ${alternative.descricao}.`)
                         : undefined
                     }
                   />
@@ -294,7 +319,8 @@ export function PatientAiChatWidget() {
                   />
                 )}
               </div>
-            ))}
+              );
+            })}
             {sending && (
               <div className="flex items-center gap-2 text-xs text-[#9A8B80]">
                 <Sparkles className="h-3.5 w-3.5 animate-pulse" />
@@ -350,24 +376,33 @@ function PatientProposalCard({ proposal, onDiscard, onConfirm }: {
     return (
       <p className="flex items-center gap-1.5 rounded-xl border border-[#D9E4D3] bg-[#EEF3EA] px-3 py-2 text-xs font-semibold text-[#4F6847]">
         <Check className="h-3.5 w-3.5" />
-        Consulta marcada.
+        {proposal.kind === "patient_change_request" ? "Solicitação enviada para sua nutricionista." : "Consulta marcada."}
       </p>
     );
   }
   if (proposal.status === "expired") {
     return (
       <p className="rounded-xl border border-[#E7C9A9] bg-white px-3 py-2 text-xs leading-5 text-[#9B6F59]">
-        Esse horário expirou. Peça novamente ao assistente.
+        Isso expirou. Peça novamente ao assistente.
       </p>
     );
   }
 
   const applying = proposal.status === "applying";
+  const cardTitle = proposal.kind === "patient_change_request" ? proposal.title : "Marcar consulta";
 
   return (
     <div className="max-w-[92%] space-y-3 rounded-2xl border border-[#E7C9A9] bg-white p-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#9B6F59]">Marcar consulta</p>
-      <p className="text-sm font-semibold text-[#3A3028]">{formatDateTimeBR(proposal.startsAtIso)}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#9B6F59]">{cardTitle}</p>
+      {proposal.kind === "patient_appointment_request" && (
+        <p className="text-sm font-semibold text-[#3A3028]">{formatDateTimeBR(proposal.startsAtIso)}</p>
+      )}
+      {proposal.kind === "patient_change_request" && proposal.details && (
+        <p className="text-sm text-[#3A3028]">{proposal.details}</p>
+      )}
+      {proposal.kind === "patient_change_request" && (
+        <p className="text-[11px] italic text-[#9A8B80]">Isso não altera seu plano — só avisa sua nutricionista para revisar.</p>
+      )}
       {proposal.status === "error" && proposal.error && (
         <p className="rounded-lg border border-[#F0D4C7] bg-[#FFF7F3] px-2.5 py-1.5 text-xs text-[#9B6F59]">{proposal.error}</p>
       )}
@@ -376,7 +411,9 @@ function PatientProposalCard({ proposal, onDiscard, onConfirm }: {
           Cancelar
         </button>
         <button type="button" onClick={onConfirm} disabled={applying} className="rounded-full bg-[#607A56] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#4F6847] disabled:cursor-not-allowed disabled:opacity-60">
-          {applying ? "Marcando..." : "Confirmar"}
+          {proposal.kind === "patient_change_request"
+            ? applying ? "Enviando..." : "Enviar"
+            : applying ? "Marcando..." : "Confirmar"}
         </button>
       </div>
     </div>

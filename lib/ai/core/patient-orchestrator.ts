@@ -34,6 +34,14 @@ import {
   REQUEST_APPOINTMENT_TOOL_NAME,
   PATIENT_SCHEDULING_ASSISTANT_INSTRUCTIONS,
 } from "@/lib/ai/agents/patient/patient-scheduling-agent";
+import {
+  REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME,
+  GET_MY_REQUESTS_TOOL_NAME,
+  PATIENT_REQUEST_ASSISTANT_INSTRUCTIONS,
+  executeGetMyRequests,
+  executeRequestProfessionalReview,
+  type RequestProfessionalReviewInput,
+} from "@/lib/ai/agents/patient/patient-request-agent";
 
 /**
  * Orquestrador PROPRIO do PATIENT_ASSISTANT — NAO reaproveita
@@ -71,7 +79,12 @@ const PATIENT_TOOL_NAMES = [
   NAVIGATE_PATIENT_PORTAL_TOOL_NAME,
   GET_MY_AVAILABLE_SLOTS_TOOL_NAME,
   REQUEST_APPOINTMENT_TOOL_NAME,
+  REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME,
+  GET_MY_REQUESTS_TOOL_NAME,
 ];
+
+/** As duas unicas tools de PROPOSTA do paciente — usado para achar a tool call de proposta no turno, seja ela qual for. */
+const PATIENT_PROPOSAL_TOOL_NAMES = [REQUEST_APPOINTMENT_TOOL_NAME, REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME];
 
 const PATIENT_SENSITIVE_TOOL_NAMES = PATIENT_TOOL_NAMES.filter((name) => {
   const risk = getToolRisk(name);
@@ -105,6 +118,9 @@ const CLIENT_BOUND_EXECUTORS: Record<string, ClientBoundExecutor> = {
   [GET_MY_TASKS_TOOL_NAME]: (clientId) => executeGetMyTasks(clientId),
   [SEARCH_ALLOWED_FOOD_ALTERNATIVES_TOOL_NAME]: (clientId, input) =>
     executeSearchAllowedFoodAlternatives(clientId, input as SearchAllowedFoodAlternativesInput),
+  [REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME]: (clientId, input) =>
+    executeRequestProfessionalReview(clientId, input as RequestProfessionalReviewInput),
+  [GET_MY_REQUESTS_TOOL_NAME]: (clientId) => executeGetMyRequests(clientId),
 };
 
 /**
@@ -142,6 +158,7 @@ function buildPatientFactsPayload(
     if (toolResult.toolName === GET_MY_TASKS_TOOL_NAME) return { type: "tasks", data: toolResult.output as never };
     if (toolResult.toolName === SEARCH_ALLOWED_FOOD_ALTERNATIVES_TOOL_NAME) return { type: "food_alternatives", data: toolResult.output as never };
     if (toolResult.toolName === GET_MY_AVAILABLE_SLOTS_TOOL_NAME) return { type: "available_slots", data: toolResult.output as never };
+    if (toolResult.toolName === GET_MY_REQUESTS_TOOL_NAME) return { type: "my_requests", data: toolResult.output as never };
   }
   return undefined;
 }
@@ -163,6 +180,7 @@ export async function runPatientAssistantTurn(
     PATIENT_SYSTEM_PROMPT_BASE,
     PATIENT_PORTAL_ASSISTANT_INSTRUCTIONS,
     PATIENT_SCHEDULING_ASSISTANT_INSTRUCTIONS,
+    PATIENT_REQUEST_ASSISTANT_INSTRUCTIONS,
   ];
 
   const memory = await getPatientConversationMemory(context.clientId);
@@ -186,7 +204,7 @@ export async function runPatientAssistantTurn(
     timeoutMs: PATIENT_TURN_TIMEOUT_MS,
   });
 
-  const proposalCall = result.toolCalls?.find((call) => call.toolName === REQUEST_APPOINTMENT_TOOL_NAME);
+  const proposalCall = result.toolCalls?.find((call) => PATIENT_PROPOSAL_TOOL_NAMES.includes(call.toolName));
   let proposedAction: ProposedAction | undefined;
   if (proposalCall) {
     const built = buildProposedAction(proposalCall.toolName, proposalCall.input, { clientId: context.clientId });
@@ -209,9 +227,14 @@ export async function runPatientAssistantTurn(
   const warnings: string[] = [];
   if (loopWasCutShort) warnings.push("Limite de etapas do assistente atingido nesta pergunta.");
 
+  const proposalReadyMessage = proposedAction?.kind === "patient_change_request"
+    ? "Preparei sua solicitação para a nutricionista revisar. Confirme abaixo se estiver certo."
+    : proposedAction
+      ? "Preparei um pedido de agendamento. Confirme abaixo se estiver certo."
+      : "";
   const message = loopWasCutShort
     ? "Não consegui concluir esse pedido agora. Pode perguntar de um jeito mais direto?"
-    : result.text || (proposedAction ? "Preparei um pedido de agendamento. Confirme abaixo se estiver certo." : "");
+    : result.text || proposalReadyMessage;
 
   await recordPatientConversationTurn(context.clientId, {
     topic: ([...input.messages].reverse().find((m) => m.role === "user")?.content ?? "").slice(0, 140),

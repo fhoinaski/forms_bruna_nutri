@@ -23,9 +23,11 @@ describe("resolvePatientTools — allow-list real (nao so cosmetica)", () => {
       "getMyAppointments",
       "getMyMealDetails",
       "getMyMealPlan",
+      "getMyRequests",
       "getMyTasks",
       "navigatePatientPortal",
       "requestAppointment",
+      "requestProfessionalReview",
       "searchAllowedFoodAlternatives",
     ].sort());
   });

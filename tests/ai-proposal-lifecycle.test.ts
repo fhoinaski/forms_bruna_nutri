@@ -77,6 +77,12 @@ const VALID_ACTIONS: Record<ProposedActionKind, ProposedAction> = {
     kind: "patient_appointment_request", clientId: "client-1", startsAtIso: "2026-08-13T15:00:00.000-03:00",
     risk: "sensitive", requiresConfirmation: true,
   },
+  patient_change_request: {
+    kind: "patient_change_request", clientId: "client-1", requestType: "food_substitution",
+    patientText: "Quero trocar a banana do lanche por maçã.",
+    preview: { title: "Substituição alimentar", details: "Lanche da tarde: Banana → Maçã" },
+    risk: "sensitive", requiresConfirmation: true,
+  },
 };
 
 const ALL_KINDS = Object.keys(VALID_ACTIONS) as ProposedActionKind[];

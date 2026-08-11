@@ -36,10 +36,11 @@ describe("executeGetMyMealPlan", () => {
     expect(getActiveMealPlan).toHaveBeenCalledWith("client-1");
     expect(result).toEqual({
       found: true,
+      mealPlanId: "plan-1",
       mealPlanTitle: "Plano da Maria",
       meals: [
-        { name: "Café da manhã", suggestedTime: "08:00", items: [{ food: "Pão francês", quantity: "2", unit: "unidade" }] },
-        { name: "Lanche da tarde", suggestedTime: "15:00", items: [{ food: "Banana, da terra, crua", quantity: "100", unit: "g" }] },
+        { mealId: "meal-1", name: "Café da manhã", suggestedTime: "08:00", items: [{ itemId: "item-1", food: "Pão francês", quantity: "2", unit: "unidade" }] },
+        { mealId: "meal-2", name: "Lanche da tarde", suggestedTime: "15:00", items: [{ itemId: "item-2", food: "Banana, da terra, crua", quantity: "100", unit: "g" }] },
       ],
     });
   });
@@ -56,7 +57,10 @@ describe("executeGetMyMealDetails — busca seletiva (secao 29)", () => {
     vi.doMock("@/lib/repositories/meal-plans", () => ({ getActiveMealPlan: vi.fn().mockResolvedValue(makePlan()) }));
     const { executeGetMyMealDetails } = await import("../lib/ai/agents/patient/patient-portal-agent");
     const result = await executeGetMyMealDetails("client-1", { mealQuery: "café" });
-    expect(result).toEqual({ found: true, mealName: "Café da manhã", suggestedTime: "08:00", items: [{ food: "Pão francês", quantity: "2", unit: "unidade" }] });
+    expect(result).toEqual({
+      found: true, mealPlanId: "plan-1", mealId: "meal-1", mealName: "Café da manhã", suggestedTime: "08:00",
+      items: [{ itemId: "item-1", food: "Pão francês", quantity: "2", unit: "unidade" }],
+    });
   });
 
   it("refeicao nao encontrada no plano retorna found:false", async () => {
@@ -81,7 +85,7 @@ describe("executeGetMyAppointments — nunca vaza campo interno (secao 6/23)", (
     const { executeGetMyAppointments } = await import("../lib/ai/agents/patient/patient-portal-agent");
     const result = await executeGetMyAppointments("client-1", { scope: "next" });
     expect(result).toEqual({
-      appointments: [{ startsAtIso: "2099-01-01T15:00:00.000Z", type: "consulta", location: "Online", status: "agendado" }],
+      appointments: [{ appointmentId: "apt-1", startsAtIso: "2099-01-01T15:00:00.000Z", type: "consulta", location: "Online", status: "agendado" }],
     });
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("compulsao");
@@ -118,12 +122,12 @@ describe("executeGetMyAppointments — nunca vaza campo interno (secao 6/23)", (
 
 describe("executeGetMyTasks", () => {
   it("busca so tarefas pendentes do cliente informado", async () => {
-    const getClientTasks = vi.fn().mockResolvedValue([{ title: "Enviar exames", due_date: "2026-08-20" }]);
+    const getClientTasks = vi.fn().mockResolvedValue([{ id: "task-1", title: "Enviar exames", due_date: "2026-08-20" }]);
     vi.doMock("@/lib/repositories/client-tasks", () => ({ getClientTasks }));
     const { executeGetMyTasks } = await import("../lib/ai/agents/patient/patient-portal-agent");
     const result = await executeGetMyTasks("client-1");
     expect(getClientTasks).toHaveBeenCalledWith("client-1", { status: "pendente" });
-    expect(result).toEqual({ tasks: [{ title: "Enviar exames", dueDate: "2026-08-20" }] });
+    expect(result).toEqual({ tasks: [{ taskId: "task-1", title: "Enviar exames", dueDate: "2026-08-20" }] });
   });
 });
 
@@ -136,6 +140,8 @@ describe("executeSearchAllowedFoodAlternatives — ancorado no proprio plano (se
     if (!result.found) throw new Error("esperava found true");
     expect(result.mealName).toBe("Lanche da tarde");
     expect(result.currentFood).toBe("Banana, da terra, crua");
+    expect(result.mealId).toBe("meal-2");
+    expect(result.itemId).toBe("item-2");
     expect(result.alternatives.length).toBeGreaterThan(0);
     expect(JSON.stringify(result).toLowerCase()).not.toContain("aprovad");
   });

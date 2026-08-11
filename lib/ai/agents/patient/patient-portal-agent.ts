@@ -21,21 +21,26 @@ export const GET_MY_MEAL_PLAN_TOOL_NAME = "getMyMealPlan";
 export const getMyMealPlanInputSchema = z.object({}).strict();
 
 export interface PatientMealItemSummary {
+  itemId: string;
   food: string;
   quantity: string | null;
   unit: string | null;
 }
 export interface PatientMealSummary {
+  mealId: string;
   name: string;
   suggestedTime: string | null;
   items: PatientMealItemSummary[];
 }
 export type GetMyMealPlanOutput =
   | { found: false }
-  | { found: true; mealPlanTitle: string; meals: PatientMealSummary[] };
+  | { found: true; mealPlanId: string; mealPlanTitle: string; meals: PatientMealSummary[] };
 
+// ids sao necessarios para requestProfessionalReview poder referenciar
+// precisamente qual refeicao/item a paciente quer discutir (secao 5/14 do
+// pedido de solicitacoes) — nao sao dado sensivel, so identificadores opacos.
 function toItemSummary(item: MealPlanItemPayload): PatientMealItemSummary {
-  return { food: item.food, quantity: item.quantity ?? null, unit: item.unit ?? null };
+  return { itemId: item.id ?? "", food: item.food, quantity: item.quantity ?? null, unit: item.unit ?? null };
 }
 
 export async function executeGetMyMealPlan(clientId: string): Promise<GetMyMealPlanOutput> {
@@ -43,8 +48,10 @@ export async function executeGetMyMealPlan(clientId: string): Promise<GetMyMealP
   if (!plan) return { found: false };
   return {
     found: true,
+    mealPlanId: plan.id,
     mealPlanTitle: plan.title,
     meals: plan.meals.map((meal) => ({
+      mealId: meal.id ?? "",
       name: meal.name,
       suggestedTime: meal.suggested_time ?? null,
       items: meal.items.map(toItemSummary),
@@ -62,7 +69,7 @@ export type GetMyMealDetailsInput = z.infer<typeof getMyMealDetailsInputSchema>;
 
 export type GetMyMealDetailsOutput =
   | { found: false }
-  | { found: true; mealName: string; suggestedTime: string | null; items: PatientMealItemSummary[] };
+  | { found: true; mealPlanId: string; mealId: string; mealName: string; suggestedTime: string | null; items: PatientMealItemSummary[] };
 
 function findMealByQuery(meals: MealPlanMealPayload[], query: string): MealPlanMealPayload | undefined {
   const normalizedQuery = normalize(query);
@@ -77,7 +84,14 @@ export async function executeGetMyMealDetails(clientId: string, input: GetMyMeal
   if (!plan) return { found: false };
   const meal = findMealByQuery(plan.meals, input.mealQuery);
   if (!meal) return { found: false };
-  return { found: true, mealName: meal.name, suggestedTime: meal.suggested_time ?? null, items: meal.items.map(toItemSummary) };
+  return {
+    found: true,
+    mealPlanId: plan.id,
+    mealId: meal.id ?? "",
+    mealName: meal.name,
+    suggestedTime: meal.suggested_time ?? null,
+    items: meal.items.map(toItemSummary),
+  };
 }
 
 // ── getMyAppointments ────────────────────────────────────────────────────
@@ -89,6 +103,7 @@ export const getMyAppointmentsInputSchema = z.object({
 export type GetMyAppointmentsInput = z.infer<typeof getMyAppointmentsInputSchema>;
 
 export interface PatientAppointmentSummary {
+  appointmentId: string;
   startsAtIso: string;
   type: string;
   location: string | null;
@@ -110,6 +125,7 @@ export async function executeGetMyAppointments(clientId: string, input: GetMyApp
   // pertencem ao que o assistente do paciente devolve (secao 6/23).
   return {
     appointments: scoped.map((appointment) => ({
+      appointmentId: appointment.id,
       startsAtIso: appointment.starts_at,
       type: appointment.appointment_type,
       location: appointment.location,
@@ -124,12 +140,12 @@ export const GET_MY_TASKS_TOOL_NAME = "getMyTasks";
 export const getMyTasksInputSchema = z.object({}).strict();
 
 export interface GetMyTasksOutput {
-  tasks: { title: string; dueDate: string | null }[];
+  tasks: { taskId: string; title: string; dueDate: string | null }[];
 }
 
 export async function executeGetMyTasks(clientId: string): Promise<GetMyTasksOutput> {
   const tasks = await getClientTasks(clientId, { status: "pendente" });
-  return { tasks: tasks.map((task) => ({ title: task.title, dueDate: task.due_date })) };
+  return { tasks: tasks.map((task) => ({ taskId: task.id, title: task.title, dueDate: task.due_date })) };
 }
 
 // ── searchAllowedFoodAlternatives ───────────────────────────────────────
@@ -147,7 +163,7 @@ export interface FoodAlternativeOption {
 }
 export type SearchAllowedFoodAlternativesOutput =
   | { found: false; reason: "meal_plan_not_found" | "item_not_in_plan" }
-  | { found: true; currentFood: string; mealName: string; alternatives: FoodAlternativeOption[] };
+  | { found: true; mealPlanId: string; mealId: string; itemId: string; currentFood: string; mealName: string; alternatives: FoodAlternativeOption[] };
 
 /**
  * Ancora a busca no PROPRIO plano do paciente (secao 10): so sugere
@@ -185,6 +201,9 @@ export async function executeSearchAllowedFoodAlternatives(
 
   return {
     found: true,
+    mealPlanId: plan.id,
+    mealId: matchedMeal.id ?? "",
+    itemId: matchedItem.id ?? "",
     currentFood: matchedItem.food,
     mealName: matchedMeal.name,
     alternatives: candidates
@@ -224,11 +243,12 @@ Ferramentas disponíveis e quando usar:
 - ${SEARCH_ALLOWED_FOOD_ALTERNATIVES_TOOL_NAME}: para "posso trocar X por Y", "que opções tenho para esse alimento". Regras importantes:
   - NUNCA diga que uma troca está aprovada, liberada ou definida — você não decide isso.
   - Se a ferramenta devolver "found": false com "item_not_in_plan", diga que não encontrou esse alimento no plano atual dela, sem inventar que ele existe.
-  - Se encontrar alternativas, apresente como opções para ela CONVERSAR COM A NUTRICIONISTA antes de qualquer mudança real — nunca como uma troca já válida.
+  - Se encontrar alternativas, apresente como opções para ela CONVERSAR COM A NUTRICIONISTA antes de qualquer mudança real — nunca como uma troca já válida. Se ela topar uma opção, use os campos mealPlanId/mealId/itemId retornados por esta ferramenta para montar a solicitação (nunca invente esses ids).
 - ${NAVIGATE_PATIENT_PORTAL_TOOL_NAME}: para "abre meu plano", "ver minhas tarefas", "ir para agenda" — só os destinos válidos (meal_plan, appointments, tasks).
 Regras gerais:
 - Números (quantidade, horário, data) sempre vêm prontos das ferramentas — nunca calcule ou invente.
 - Se uma ferramenta não encontrar nada (plano/consulta/tarefa/refeição), diga isso claramente e de forma simples, sem inventar dado.
 - Nunca mencione nome de outra paciente, nem sugira que existe outra pessoa cujos dados você poderia ver.
 - Você NÃO altera o plano alimentar nem registra nada no prontuário — nunca prometa que uma mudança foi aplicada.
+- Os ids retornados pelas ferramentas (mealPlanId/mealId/itemId/appointmentId/taskId) são so identificadores internos — use-os exatamente como vieram quando for montar uma solicitação para a nutricionista, nunca invente um id.
 `.trim();

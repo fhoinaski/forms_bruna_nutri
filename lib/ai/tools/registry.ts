@@ -102,6 +102,17 @@ import {
   requestAppointmentInputSchema,
   executeGetAvailableSlotsForScheduling,
 } from "@/lib/ai/agents/patient/patient-scheduling-agent";
+import {
+  REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME,
+  GET_MY_REQUESTS_TOOL_NAME,
+  requestProfessionalReviewInputSchema,
+  getMyRequestsInputSchema,
+} from "@/lib/ai/agents/patient/patient-request-agent";
+import {
+  GET_PATIENT_REQUESTS_TOOL_NAME,
+  executeGetPatientRequests,
+  getPatientRequestsInputSchema,
+} from "@/lib/ai/agents/clients/patient-requests-agent";
 
 /**
  * Requisito de contexto para uma tool poder ser oferecida ao LLM na
@@ -319,6 +330,16 @@ defineTool({
 });
 
 defineTool({
+  name: GET_PATIENT_REQUESTS_TOOL_NAME,
+  description: "Le as solicitacoes que pacientes enviaram para revisao (substituicao de alimento, dificuldade no plano, sintoma/queixa relatado, pedido sobre consulta, dificuldade com tarefa, duvida geral) — filtra por cliente/status/hoje. Somente leitura; nunca decide nem aplica nada a partir de um pedido.",
+  inputSchema: getPatientRequestsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  execute: executeGetPatientRequests,
+});
+
+defineTool({
   name: PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME,
   description: "Monta uma proposta estruturada de alteracao do plano alimentar ativo do cliente atual (adicionar/remover/renomear refeicao, adicionar/remover/substituir item, mudar quantidade/medida/horario), com preview de impacto nos macros calculado deterministicamente, para revisao humana antes de aplicar.",
   inputSchema: proposeMealPlanChangeInputSchema,
@@ -411,6 +432,26 @@ defineTool({
   profiles: PATIENT,
   contextRequirement: "client",
   execute: async (input) => input,
+});
+
+defineTool({
+  name: REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME,
+  description: "Monta um PEDIDO DE REVISAO da propria paciente para a nutricionista analisar (troca de alimento, dificuldade no plano, sintoma/queixa, pedido sobre consulta, dificuldade com tarefa, duvida geral) — nunca altera plano/prontuario, so cria um pedido pendente apos confirmacao.",
+  inputSchema: requestProfessionalReviewInputSchema,
+  risk: "sensitive",
+  profiles: PATIENT,
+  contextRequirement: "client",
+  execute: unboundPatientToolStub,
+});
+
+defineTool({
+  name: GET_MY_REQUESTS_TOOL_NAME,
+  description: "Le os proprios pedidos de revisao que a paciente ja enviou (tipo, texto, status) — nunca as notas internas da nutricionista.",
+  inputSchema: getMyRequestsInputSchema,
+  risk: "read",
+  profiles: PATIENT,
+  contextRequirement: "client",
+  execute: unboundPatientToolStub,
 });
 
 export function getToolDefinition(name: string): ToolDefinition<any, unknown> | undefined {

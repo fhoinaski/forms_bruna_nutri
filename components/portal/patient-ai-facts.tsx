@@ -8,9 +8,11 @@ import type {
   GetMyAppointmentsOutput,
   GetMyTasksOutput,
   SearchAllowedFoodAlternativesOutput,
+  FoodAlternativeOption,
   PatientMealItemSummary,
 } from "@/lib/ai/agents/patient/patient-portal-agent";
 import type { PatientAvailableSlotsResult } from "@/lib/ai/agents/patient/patient-scheduling-agent";
+import type { GetMyRequestsOutput } from "@/lib/ai/agents/patient/patient-request-agent";
 
 /**
  * "DO SEU ACOMPANHAMENTO" — dados determinísticos do próprio paciente
@@ -86,7 +88,13 @@ function TasksFacts({ data }: { data: GetMyTasksOutput }) {
   );
 }
 
-function FoodAlternativesFacts({ data }: { data: SearchAllowedFoodAlternativesOutput }) {
+function FoodAlternativesFacts({
+  data,
+  onRequestReview,
+}: {
+  data: SearchAllowedFoodAlternativesOutput;
+  onRequestReview?: (alternative: FoodAlternativeOption) => void;
+}) {
   if (!data.found) {
     return (
       <p className="text-xs text-[#75675E]">
@@ -100,14 +108,48 @@ function FoodAlternativesFacts({ data }: { data: SearchAllowedFoodAlternativesOu
       {data.alternatives.length === 0 ? (
         <p className="text-xs text-[#75675E]">Não encontrei opções parecidas na base de alimentos.</p>
       ) : (
-        <ul className="space-y-1 text-sm text-[#3A3028]">
+        <ul className="space-y-1.5 text-sm text-[#3A3028]">
           {data.alternatives.map((alternative) => (
-            <li key={alternative.tacoNumber} className="rounded-lg border border-[#E6D5C5] bg-white px-3 py-2">{alternative.descricao}</li>
+            <li key={alternative.tacoNumber} className="flex items-center justify-between gap-2 rounded-lg border border-[#E6D5C5] bg-white px-3 py-2">
+              <span>{alternative.descricao}</span>
+              {onRequestReview && (
+                <button
+                  type="button"
+                  onClick={() => onRequestReview(alternative)}
+                  className="shrink-0 rounded-full border border-[#D9E4D3] bg-[#EEF3EA] px-2.5 py-1 text-[11px] font-semibold text-[#4F6847] transition hover:bg-[#E1EBDB]"
+                >
+                  Enviar pedido
+                </button>
+              )}
+            </li>
           ))}
         </ul>
       )}
-      <p className="text-[11px] italic text-[#9A8B80]">Converse com sua nutricionista antes de fazer essa troca.</p>
+      <p className="text-[11px] italic text-[#9A8B80]">Essas opções não alteram seu plano automaticamente — enviar um pedido só avisa sua nutricionista para revisar.</p>
     </div>
+  );
+}
+
+const REQUEST_STATUS_LABELS: Record<string, string> = {
+  pending_review: "Aguardando análise",
+  reviewed: "Em análise",
+  resolved: "Resolvida",
+  dismissed: "Encerrada",
+};
+
+function MyRequestsFacts({ data }: { data: GetMyRequestsOutput }) {
+  if (!data.requests.length) return <p className="text-xs text-[#75675E]">Você ainda não enviou nenhuma solicitação.</p>;
+  return (
+    <ul className="space-y-1.5 text-sm text-[#3A3028]">
+      {data.requests.map((request, index) => (
+        <li key={index} className="rounded-lg border border-[#E6D5C5] bg-white px-3 py-2">
+          <p className="line-clamp-2">{request.patientText}</p>
+          <p className="mt-1 text-[11px] font-semibold text-[#9A6F5E]">
+            {REQUEST_STATUS_LABELS[request.status] ?? request.status} — {formatDateBR(request.createdAt)}
+          </p>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -130,7 +172,15 @@ function AvailableSlotsFacts({ data, onPickSlot }: { data: PatientAvailableSlots
   );
 }
 
-export function PatientFactsCard({ facts, onPickSlot }: { facts: PatientAssistantFactsPayload; onPickSlot?: (iso: string) => void }) {
+export function PatientFactsCard({
+  facts,
+  onPickSlot,
+  onRequestFoodReview,
+}: {
+  facts: PatientAssistantFactsPayload;
+  onPickSlot?: (iso: string) => void;
+  onRequestFoodReview?: (alternative: FoodAlternativeOption) => void;
+}) {
   return (
     <div className="max-w-[92%] space-y-2 rounded-2xl border border-[#E6D5C5] bg-[#FBF7F1] p-3">
       <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#607A56]">Do seu acompanhamento</p>
@@ -138,8 +188,9 @@ export function PatientFactsCard({ facts, onPickSlot }: { facts: PatientAssistan
       {facts.type === "meal_detail" && <MealDetailFacts data={facts.data} />}
       {facts.type === "appointments" && <AppointmentsFacts data={facts.data} />}
       {facts.type === "tasks" && <TasksFacts data={facts.data} />}
-      {facts.type === "food_alternatives" && <FoodAlternativesFacts data={facts.data} />}
+      {facts.type === "food_alternatives" && <FoodAlternativesFacts data={facts.data} onRequestReview={onRequestFoodReview} />}
       {facts.type === "available_slots" && <AvailableSlotsFacts data={facts.data} onPickSlot={onPickSlot} />}
+      {facts.type === "my_requests" && <MyRequestsFacts data={facts.data} />}
     </div>
   );
 }

@@ -20,6 +20,7 @@ import {
   LibraryBig,
   LogOut,
   Menu,
+  MessageSquareText,
   MoreHorizontal,
   Newspaper,
   Search,
@@ -52,6 +53,7 @@ const primaryNavigation = [
 
 const secondaryNavigation = [
   { href: "/dashboard/oportunidades", label: "Oportunidades", icon: HeartHandshake, badgeKey: "oportunidades" },
+  { href: "/dashboard/solicitacoes", label: "Solicitações", icon: MessageSquareText, badgeKey: "solicitacoes" },
   { href: "/dashboard/tarefas", label: "Tarefas", icon: ClipboardList, badgeKey: "tarefas" },
   { href: "/dashboard/protocols", label: "Protocolos", icon: ShieldCheck },
   { href: "/dashboard/privacidade", label: "Privacidade", icon: ShieldCheck, badgeKey: "privacidade" },
@@ -70,6 +72,7 @@ const breadcrumbLabels: Record<string, string> = {
   financeiro: "Financeiro",
   protocols: "Protocolos",
   oportunidades: "Oportunidades",
+  solicitacoes: "Solicitações",
   tarefas: "Tarefas",
   privacidade: "Privacidade",
   blog: "Conteúdo",
@@ -96,6 +99,7 @@ type NotificationSummary = {
     tarefas: number;
     oportunidades: number;
     privacidade: number;
+    solicitacoes: number;
   };
 };
 

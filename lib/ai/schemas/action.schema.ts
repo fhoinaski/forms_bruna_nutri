@@ -190,6 +190,47 @@ export const patientAppointmentRequestActionSchema = z.object({
   ...actionEnvelopeFields,
 });
 
+// ── patient_change_request ──────────────────────────────────────────────
+//
+// Solicitacao do PACIENTE para a nutricionista revisar — NUNCA uma
+// alteracao clinica. O "side effect" da confirmacao e so criar uma linha em
+// patient_requests (status pending_review); nenhuma tabela clinica/plano e
+// tocada (ver lib/ai/core/proposal-handlers.ts). Risk e SEMPRE "sensitive",
+// nunca "clinical" — o paciente nao possui nenhuma capability clinica.
+
+export const patientRequestTypeSchema = z.enum([
+  "food_substitution",
+  "meal_plan_difficulty",
+  "symptom_or_complaint",
+  "appointment_request",
+  "task_difficulty",
+  "general_question",
+  "other",
+]);
+export type PatientRequestType = z.infer<typeof patientRequestTypeSchema>;
+
+const patientChangeRequestPreviewSchema = z.object({
+  title: z.string(),
+  details: z.string().nullable(),
+});
+
+export const patientChangeRequestActionSchema = z.object({
+  kind: z.literal("patient_change_request"),
+  clientId: z.string().min(1),
+  requestType: patientRequestTypeSchema,
+  /** Fala original da paciente — nunca substituída pelo resumo de IA. */
+  patientText: z.string().min(1).max(1000),
+  /** Resumo curto opcional gerado pela IA — nunca chain-of-thought, nunca decisão clínica. */
+  aiSummary: z.string().max(300).nullable().optional(),
+  mealPlanId: z.string().min(1).nullable().optional(),
+  mealId: z.string().min(1).nullable().optional(),
+  itemId: z.string().min(1).nullable().optional(),
+  appointmentId: z.string().min(1).nullable().optional(),
+  clientTaskId: z.string().min(1).nullable().optional(),
+  preview: patientChangeRequestPreviewSchema,
+  ...actionEnvelopeFields,
+});
+
 export const proposedActionSchema = z.discriminatedUnion("kind", [
   nutritionRecordActionSchema,
   preAnalysisActionSchema,
@@ -202,6 +243,7 @@ export const proposedActionSchema = z.discriminatedUnion("kind", [
   newTaskActionSchema,
   mealPlanChangeActionSchema,
   patientAppointmentRequestActionSchema,
+  patientChangeRequestActionSchema,
 ]);
 
 export type ProposedAction = z.infer<typeof proposedActionSchema>;

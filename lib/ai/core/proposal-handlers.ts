@@ -2,9 +2,9 @@ import type { ProposedAction, ProposedActionKind } from "@/lib/ai/schemas/action
 import { extractIsoDateTime, parseBrDateTimeToIso, parseBrDateToIsoDate } from "@/lib/ai/schemas/br-datetime";
 import { getClientById, getClients } from "@/lib/repositories/clients";
 import { createClient } from "@/lib/repositories/clients";
-import { createAppointment } from "@/lib/repositories/appointments";
+import { createAppointment, getAppointments } from "@/lib/repositories/appointments";
 import { getAvailableSlots, hasAppointmentConflict, slotEnd, countFutureClientAppointments } from "@/lib/repositories/availability";
-import { createClientTask } from "@/lib/repositories/client-tasks";
+import { createClientTask, getClientTasks } from "@/lib/repositories/client-tasks";
 import { createRecipe, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/repositories/recipes";
 import { getTacoFoodByNumber } from "@/lib/nutrition/taco";
 import { createProtocol } from "@/lib/repositories/protocols";
@@ -14,8 +14,10 @@ import { NUTRITION_TEXT_FIELDS, type NutritionRecordTextFieldKey } from "@/lib/c
 import { getSubmissionById } from "@/lib/repositories/submissions";
 import { upsertPreAnalysis } from "@/lib/repositories/pre-analyses";
 import { createBlogPost } from "@/lib/repositories/blog-posts";
-import { getMealPlanById, updateMealPlan } from "@/lib/repositories/meal-plans";
+import { getActiveMealPlan, getMealPlanById, updateMealPlan } from "@/lib/repositories/meal-plans";
 import { applyMealPlanChangesWithPreview, MealPlanChangeValidationError } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
+import { normalize } from "@/lib/nutrition/macros";
+import { createPatientRequest, findSimilarPendingPatientRequest } from "@/lib/repositories/patient-requests";
 
 /**
  * Execucao real de cada proposal kind, chamada SOMENTE depois que o
@@ -402,6 +404,74 @@ const executePatientAppointmentRequest: ProposalHandler<"patient_appointment_req
   return { data: { appointmentId, startsAtIso: action.startsAtIso } };
 };
 
+// ── patient_change_request (pedido de revisao, NUNCA uma alteracao clinica) ──
+
+const executePatientChangeRequest: ProposalHandler<"patient_change_request"> = async (action) => {
+  const client = await getClientById(action.clientId);
+  if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
+
+  // Revalida ownership de CADA referencia opcional de novo — nunca confia
+  // no que foi validado quando a proposta foi criada (secao 15 do pedido:
+  // "toda entidade precisa ser revalidada contra o paciente autenticado").
+  if (action.mealPlanId) {
+    const plan = await getActiveMealPlan(action.clientId);
+    if (!plan || plan.id !== action.mealPlanId) {
+      throw new ProposalExecutionError("O plano alimentar referenciado não pertence a este paciente.", 403);
+    }
+    if (action.mealId) {
+      const meal = plan.meals.find((candidate) => candidate.id === action.mealId);
+      if (!meal) throw new ProposalExecutionError("A refeição referenciada não pertence a esse plano.", 422);
+      if (action.itemId && !meal.items.some((candidate) => candidate.id === action.itemId)) {
+        throw new ProposalExecutionError("O item referenciado não pertence a essa refeição.", 422);
+      }
+    }
+  }
+  if (action.appointmentId) {
+    const appointments = await getAppointments({ clientId: action.clientId });
+    if (!appointments.some((appointment) => appointment.id === action.appointmentId)) {
+      throw new ProposalExecutionError("A consulta referenciada não pertence a este paciente.", 403);
+    }
+  }
+  if (action.clientTaskId) {
+    const tasks = await getClientTasks(action.clientId, {});
+    if (!tasks.some((task) => task.id === action.clientTaskId)) {
+      throw new ProposalExecutionError("A tarefa referenciada não pertence a este paciente.", 403);
+    }
+  }
+
+  // Deduplicacao deterministica (secao 20): mesmo paciente + tipo +
+  // referencias + texto normalizado, ainda pendente de revisao.
+  const normalizedText = normalize(action.patientText).slice(0, 200);
+  const similar = await findSimilarPendingPatientRequest({
+    clientId: action.clientId,
+    requestType: action.requestType,
+    mealId: action.mealId ?? null,
+    itemId: action.itemId ?? null,
+    appointmentId: action.appointmentId ?? null,
+    clientTaskId: action.clientTaskId ?? null,
+    normalizedText,
+  });
+  if (similar) {
+    throw new ProposalExecutionError("Você já tem uma solicitação parecida aguardando revisão.", 409);
+  }
+
+  // O UNICO side effect desta confirmacao e criar a linha do pedido — nunca
+  // updateMealPlan, updateNutritionRecord ou qualquer outra escrita clinica.
+  const requestId = await createPatientRequest({
+    clientId: action.clientId,
+    requestType: action.requestType,
+    patientText: action.patientText,
+    aiSummary: action.aiSummary ?? null,
+    mealPlanId: action.mealPlanId ?? null,
+    mealId: action.mealId ?? null,
+    itemId: action.itemId ?? null,
+    appointmentId: action.appointmentId ?? null,
+    clientTaskId: action.clientTaskId ?? null,
+  });
+
+  return { data: { requestId } };
+};
+
 // ── dispatch tipado (sem switch untyped, sem `any`) ─────────────────────
 
 const PROPOSAL_HANDLERS: { [K in ProposedActionKind]: ProposalHandler<K> } = {
@@ -416,6 +486,7 @@ const PROPOSAL_HANDLERS: { [K in ProposedActionKind]: ProposalHandler<K> } = {
   new_blog_post: executeNewBlogPost,
   meal_plan_change: executeMealPlanChange,
   patient_appointment_request: executePatientAppointmentRequest,
+  patient_change_request: executePatientChangeRequest,
 };
 
 export async function executeProposedAction(

@@ -16,6 +16,7 @@ import { PROPOSE_NEW_APPOINTMENT_TOOL_NAME, type ProposeNewAppointmentInput } fr
 import { PROPOSE_NEW_TASK_TOOL_NAME, type ProposeNewClientTaskInput } from "@/lib/ai/agents/appointments/task-agent";
 import { PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME, type ProposeMealPlanChangeOutput } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { REQUEST_APPOINTMENT_TOOL_NAME, type RequestAppointmentInput } from "@/lib/ai/agents/patient/patient-scheduling-agent";
+import { REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME, type RequestProfessionalReviewOutput } from "@/lib/ai/agents/patient/patient-request-agent";
 
 /**
  * Substitui a cadeia de 9 `if`s quase identicos que existia em
@@ -176,6 +177,27 @@ const BUILDERS: Record<string, ProposalBuilder> = {
     const typed = input as RequestAppointmentInput;
     if (!typed.startsAtIso) return null;
     return { kind: "patient_appointment_request", clientId: ctx.clientId, startsAtIso: typed.startsAtIso };
+  },
+
+  [REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME]: (_input, ctx, toolOutput) => {
+    const output = toolOutput as RequestProfessionalReviewOutput | undefined;
+    if (!output || "error" in output) return null;
+    // Mesma defesa das demais kinds do paciente: o clientId resolvido pela
+    // tool precisa bater com o clientId do contexto atual da sessao.
+    if (!ctx.clientId || ctx.clientId !== output.clientId) return null;
+    return {
+      kind: "patient_change_request",
+      clientId: output.clientId,
+      requestType: output.requestType,
+      patientText: output.patientText,
+      aiSummary: output.aiSummary,
+      mealPlanId: output.mealPlanId,
+      mealId: output.mealId,
+      itemId: output.itemId,
+      appointmentId: output.appointmentId,
+      clientTaskId: output.clientTaskId,
+      preview: output.preview,
+    };
   },
 };
 

@@ -8,6 +8,7 @@ import type {
   PatientPortalSection,
 } from "@/lib/ai/agents/patient/patient-portal-agent";
 import type { PatientAvailableSlotsResult } from "@/lib/ai/agents/patient/patient-scheduling-agent";
+import type { GetMyRequestsOutput } from "@/lib/ai/agents/patient/patient-request-agent";
 
 /**
  * Envelope de resposta do PATIENT_ASSISTANT — tipo PROPRIO, independente de
@@ -30,7 +31,8 @@ export type PatientAssistantFactsPayload =
   | { type: "appointments"; data: GetMyAppointmentsOutput }
   | { type: "tasks"; data: GetMyTasksOutput }
   | { type: "food_alternatives"; data: SearchAllowedFoodAlternativesOutput }
-  | { type: "available_slots"; data: PatientAvailableSlotsResult };
+  | { type: "available_slots"; data: PatientAvailableSlotsResult }
+  | { type: "my_requests"; data: GetMyRequestsOutput };
 
 export interface PatientAssistantResponseEnvelope {
   message: string;

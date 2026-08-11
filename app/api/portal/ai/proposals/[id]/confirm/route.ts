@@ -23,14 +23,23 @@ export const dynamic = "force-dynamic";
  * portal. Reusa a MESMA infraestrutura de propostas (ai_action_proposals,
  * claim atomico, idempotencia via ai_proposal_executions,
  * executeProposedAction) — nao duplica logica de confirmacao, so troca a
- * fonte de autenticacao e adiciona uma trava extra: so aceita
- * "patient_appointment_request", NUNCA nenhuma outra kind (mesmo que o
- * `admin_id`/owner da proposta por algum motivo colidisse com este
- * clientId, o que nao deveria ser possivel em uso normal — defesa em
- * profundidade contra o portal do paciente confirmar/ler qualquer proposta
- * administrativa ou clinica).
+ * fonte de autenticacao e adiciona uma trava extra: so aceita as kinds da
+ * allow-list abaixo, NUNCA nenhuma outra (mesmo que o `admin_id`/owner da
+ * proposta por algum motivo colidisse com este clientId, o que nao deveria
+ * ser possivel em uso normal — defesa em profundidade contra o portal do
+ * paciente confirmar/ler qualquer proposta administrativa ou clinica).
  */
-const ALLOWED_KIND = "patient_appointment_request" as const;
+const ALLOWED_KINDS = ["patient_appointment_request", "patient_change_request"] as const;
+type AllowedKind = (typeof ALLOWED_KINDS)[number];
+type AllowedAction = Extract<ProposedAction, { kind: AllowedKind }>;
+
+function isAllowedKind(kind: ProposedAction["kind"]): kind is AllowedKind {
+  return (ALLOWED_KINDS as readonly string[]).includes(kind);
+}
+
+function isAllowedAction(action: ProposedAction): action is AllowedAction {
+  return isAllowedKind(action.kind);
+}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getClientPortalSessionFromRequest(req);
@@ -43,17 +52,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return diagnoseClaimFailure(id, session.sub);
   }
 
-  if (claimed.kind !== ALLOWED_KIND) {
+  if (!isAllowedKind(claimed.kind as ProposedAction["kind"])) {
     // Nunca deveria acontecer (o portal so persiste esta kind), mas falha
     // fechado: finaliza como failed sem executar nada, sem revelar detalhe.
     await safeFinalize(claimed.id, "failed", "Tipo de proposta não permitido neste canal.");
     return NextResponse.json({ message: "Não foi possível confirmar esta proposta." }, { status: 403 });
   }
 
-  let action: ProposedAction;
+  let action: AllowedAction;
   try {
     const parsedAction = proposedActionSchema.safeParse(JSON.parse(claimed.params_json));
-    if (!parsedAction.success || parsedAction.data.kind !== ALLOWED_KIND) throw new Error("schema inválido");
+    if (!parsedAction.success || !isAllowedAction(parsedAction.data)) throw new Error("schema inválido");
     action = parsedAction.data;
   } catch {
     await safeFinalize(claimed.id, "failed", "Payload da proposta corrompido ou fora do schema esperado.");
@@ -117,7 +126,7 @@ async function safeFinalize(id: string, status: "completed" | "failed", reason?:
 
 async function diagnoseClaimFailure(id: string, clientId: string): Promise<NextResponse> {
   const existing = await getAiActionProposal(id, clientId);
-  if (!existing || existing.kind !== ALLOWED_KIND) {
+  if (!existing || !isAllowedKind(existing.kind as ProposedAction["kind"])) {
     return NextResponse.json({ message: "Proposta não encontrada." }, { status: 404 });
   }
   if (existing.status === "completed") {

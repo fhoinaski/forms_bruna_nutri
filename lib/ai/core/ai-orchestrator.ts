@@ -67,6 +67,10 @@ import {
   PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME,
   MEAL_PLAN_CHANGE_ASSISTANT_INSTRUCTIONS,
 } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
+import {
+  GET_PATIENT_REQUESTS_TOOL_NAME,
+  PATIENT_REQUESTS_ADMIN_INSTRUCTIONS,
+} from "@/lib/ai/agents/clients/patient-requests-agent";
 import type { AllowedAttachmentMediaType } from "@/lib/ai/agents/system/chat-attachments";
 import { getNutritionRecord } from "@/lib/repositories/nutrition-records";
 import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
@@ -216,6 +220,7 @@ export async function runAssistantTurn(
     EVOLUTION_SUMMARY_ASSISTANT_INSTRUCTIONS,
     AVAILABILITY_LOOKUP_ASSISTANT_INSTRUCTIONS,
     APPOINTMENT_ASSISTANT_INSTRUCTIONS,
+    PATIENT_REQUESTS_ADMIN_INSTRUCTIONS,
     `Voce pode encadear varias ferramentas de LEITURA (buscar cliente, ver agenda, ver evolucao, ver horarios) livremente no mesmo turno para responder um pedido com varias partes — isso e automatico e nao precisa de confirmacao. Mas ao chamar qualquer ferramenta de PROPOSTA (proposeXxx), pare: nao chame outra ferramenta depois dela nem tente aplicar a mudanca sozinha — o sistema sempre exige confirmacao humana explicita antes de qualquer proposta sensivel ou clinica virar realidade.`,
     `Se uma busca de cliente (${FIND_CLIENT_TOOL_NAME}) retornar mais de um resultado parecido, NAO escolha um arbitrariamente: liste as opcoes encontradas (so nome, nunca telefone/e-mail/outros dados) e peca para a pessoa confirmar qual e antes de continuar.`,
   ];
@@ -231,6 +236,7 @@ export async function runAssistantTurn(
     PROPOSE_NEW_APPOINTMENT_TOOL_NAME,
     PROPOSE_NEW_CLIENT_TOOL_NAME,
     PROPOSE_NEW_RECIPE_TOOL_NAME,
+    GET_PATIENT_REQUESTS_TOOL_NAME,
   ];
 
   if (!client && !submission) {
@@ -242,6 +248,11 @@ export async function runAssistantTurn(
   // nesta requisicao (resolveAssistantContext) — nunca reaproveitamos
   // implicitamente um cliente de uma mensagem anterior da mesma conversa.
   if (client) {
+    // Deixa o id do cliente atual disponivel no texto do prompt para que
+    // tools como getPatientRequests possam ser usadas sem pedir o id de novo
+    // a nutricionista (secao 30 do pedido de solicitacoes do paciente).
+    systemPromptParts.push(`Cliente atual aberto nesta tela: ${client.name} (id: ${client.id}).`);
+
     const memory = await getClientConversationMemory(adminUser.sub, client.id);
     if (memory) {
       systemPromptParts.push(

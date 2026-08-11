@@ -7,6 +7,7 @@ import { getLeadOpportunityMetrics } from "@/lib/repositories/lead-opportunities
 import { getPaymentMetrics } from "@/lib/repositories/payments";
 import { listPrivacyRequests } from "@/lib/repositories/privacy";
 import { getDashboardMetrics } from "@/lib/repositories/submissions";
+import { getPendingPatientRequestsCount } from "@/lib/repositories/patient-requests";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,7 @@ export async function GET(req: NextRequest) {
     opportunityMetrics,
     privacyRequests,
     submissionMetrics,
+    pendingPatientRequests,
   ] = await Promise.all([
     getOverdueTasksCount(),
     getTodayAppointmentsCount(),
@@ -54,6 +56,7 @@ export async function GET(req: NextRequest) {
     getLeadOpportunityMetrics(),
     listPrivacyRequests(),
     getDashboardMetrics(),
+    getPendingPatientRequestsCount(),
   ]);
 
   const pendingDrafts = pendingDraftRows[0]?.c ?? 0;
@@ -116,6 +119,13 @@ export async function GET(req: NextRequest) {
     count: submissionMetrics.novos,
     href: "/dashboard/oportunidades",
   });
+  addItem(items, {
+    id: "patient-requests",
+    type: "patient_request",
+    label: `${pendingPatientRequests} ${plural(pendingPatientRequests, "solicitação de paciente aguardando revisão", "solicitações de pacientes aguardando revisão")}`,
+    count: pendingPatientRequests,
+    href: "/dashboard/solicitacoes",
+  });
 
   const totalUnread = items.reduce((total, item) => total + item.count, 0);
   const signature = items.map((item) => `${item.id}:${item.count}`).join("|");
@@ -129,6 +139,7 @@ export async function GET(req: NextRequest) {
       tarefas: overdueTasks,
       oportunidades: activeOpportunities,
       privacidade: openPrivacyRequests,
+      solicitacoes: pendingPatientRequests,
     },
   });
 }
