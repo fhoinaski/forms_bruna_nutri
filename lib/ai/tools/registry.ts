@@ -75,10 +75,16 @@ import {
 import {
   SEARCH_MEAL_PLAN_FOODS_TOOL_NAME,
   PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME,
+  GET_MEAL_PLAN_NUTRITION_TOOL_NAME,
+  FIND_FOOD_EQUIVALENTS_TOOL_NAME,
   executeSearchMealPlanFoods,
   executeProposeMealPlanChange,
+  executeGetMealPlanNutrition,
+  executeFindFoodEquivalents,
   searchMealPlanFoodsInputSchema,
   proposeMealPlanChangeInputSchema,
+  getMealPlanNutritionInputSchema,
+  findFoodEquivalentsInputSchema,
 } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import {
   GET_MY_MEAL_PLAN_TOOL_NAME,
@@ -368,6 +374,26 @@ defineTool({
   profiles: ADMIN,
   contextRequirement: "client",
   execute: executeProposeMealPlanChange,
+});
+
+defineTool({
+  name: GET_MEAL_PLAN_NUTRITION_TOOL_NAME,
+  description: "Calcula deterministicamente (nunca a IA de cabeca) os totais nutricionais do plano alimentar ativo por refeicao e por dia, e compara com a meta definida pela nutricionista (kcal/proteina/carboidrato/gordura) — use para qualquer pergunta sobre calorias, macros ou aderencia a meta.",
+  inputSchema: getMealPlanNutritionInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: executeGetMealPlanNutrition,
+});
+
+defineTool({
+  name: FIND_FOOD_EQUIVALENTS_TOOL_NAME,
+  description: "Encontra alimentos da base TACO nutricionalmente equivalentes a um alimento e quantidade dados, dentro de uma tolerancia e priorizando a mesma categoria alimentar — calculo 100% deterministico, use antes de propor uma substituicao por motivo nutricional.",
+  inputSchema: findFoodEquivalentsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  execute: executeFindFoodEquivalents,
 });
 
 // ── Modo Consulta (FASE 1) — workspace clinico dedicado ──────────────────

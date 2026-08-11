@@ -7,6 +7,7 @@ import { buildToolSet, listRegisteredTools } from "@/lib/ai/tools/registry";
 import { buildProposedAction, PROPOSAL_TOOL_NAMES } from "@/lib/ai/tools/proposal-builders";
 import type { ProposedAction } from "@/lib/ai/schemas/action.schema";
 import { getClientConversationMemory, recordConversationTurn } from "@/lib/ai/memory/conversation-summary";
+import { stripInternalPatientAlias } from "@/lib/ai/privacy/sanitize-context";
 import { DEFAULT_CHAT_SYSTEM_PROMPT, getAISettings } from "@/lib/repositories/ai-settings";
 import { buildSystemUsageKnowledgeBase } from "@/lib/ai/agents/system/system-knowledge";
 import {
@@ -65,6 +66,8 @@ import {
 import {
   SEARCH_MEAL_PLAN_FOODS_TOOL_NAME,
   PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME,
+  GET_MEAL_PLAN_NUTRITION_TOOL_NAME,
+  FIND_FOOD_EQUIVALENTS_TOOL_NAME,
   MEAL_PLAN_CHANGE_ASSISTANT_INSTRUCTIONS,
 } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import {
@@ -279,7 +282,12 @@ export async function runAssistantTurn(
     systemPromptParts.push(DIET_REVIEW_ASSISTANT_INSTRUCTIONS, buildActiveMealPlanContext(activeMealPlan));
     if (activeMealPlan) {
       systemPromptParts.push(MEAL_PLAN_CHANGE_ASSISTANT_INSTRUCTIONS);
-      activeToolNames.push(SEARCH_MEAL_PLAN_FOODS_TOOL_NAME, PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME);
+      activeToolNames.push(
+        SEARCH_MEAL_PLAN_FOODS_TOOL_NAME,
+        PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME,
+        GET_MEAL_PLAN_NUTRITION_TOOL_NAME,
+        FIND_FOOD_EQUIVALENTS_TOOL_NAME
+      );
     }
 
     systemPromptParts.push(PROTOCOL_CREATION_ASSISTANT_INSTRUCTIONS);
@@ -440,11 +448,16 @@ export async function runAssistantTurn(
     navigatedTo: navigation?.path,
   });
 
-  const message = loopWasCutShort
-    ? "Não consegui concluir esse pedido em poucas etapas. Pode refinar a pergunta ou dividir em partes menores?"
-    : options?.length
-      ? result.text || "Encontrei mais de uma pessoa com esse nome — qual delas você quis dizer?"
-      : result.text || (proposedAction ? "Preparei uma proposta. Revise os campos abaixo antes de aplicar." : "");
+  // stripInternalPatientAlias: ultima linha de defesa contra o pseudonimo
+  // interno ("Paciente NNNN") vazar para a nutricionista — nunca confiar so
+  // na instrucao de prompt (secao 41 da FASE 2).
+  const message = stripInternalPatientAlias(
+    loopWasCutShort
+      ? "Não consegui concluir esse pedido em poucas etapas. Pode refinar a pergunta ou dividir em partes menores?"
+      : options?.length
+        ? result.text || "Encontrei mais de uma pessoa com esse nome — qual delas você quis dizer?"
+        : result.text || (proposedAction ? "Preparei uma proposta. Revise os campos abaixo antes de aplicar." : "")
+  );
 
   return {
     message,

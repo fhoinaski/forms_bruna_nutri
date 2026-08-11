@@ -146,6 +146,15 @@ export type MealPlanChangeOperation = z.infer<typeof mealPlanChangeOperationSche
 
 const mealPlanMacroTotalsSchema = z.object({ kcal: z.number(), protein: z.number(), carbs: z.number(), fat: z.number() });
 
+/** Uma linha da comparação meta x prescrito PÓS-alteração (FASE 2, seções 34-35 do pedido) — so os 4 macros que aceitam meta hoje. */
+const mealPlanTargetComparisonRowSchema = z.object({
+  nutrient: z.enum(["energyKcal", "proteinG", "carbohydrateG", "fatG"]),
+  target: z.number(),
+  prescribedAfter: z.number().nullable(),
+  diff: z.number().nullable(),
+  percentOfTarget: z.number().nullable(),
+});
+
 /**
  * Preview calculado deterministicamente pela tool no momento da proposta
  * (nunca pelo LLM) — so para revisao humana. O confirm NUNCA confia nisso
@@ -161,6 +170,9 @@ export const mealPlanChangePreviewSchema = z.object({
     after: z.string().nullable(),
   })),
   totalImpact: mealPlanMacroTotalsSchema,
+  // So presente quando o plano tem alguma meta definida — compara o total
+  // PRESCRITO (nao so o delta) apos aplicar as mudancas contra a meta.
+  totalVsTarget: z.array(mealPlanTargetComparisonRowSchema).optional(),
 });
 export type MealPlanChangePreview = z.infer<typeof mealPlanChangePreviewSchema>;
 

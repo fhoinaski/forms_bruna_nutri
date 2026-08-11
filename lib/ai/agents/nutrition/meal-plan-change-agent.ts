@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { getMealPlanById, type MealPlanMealPayload, type MealPlanItemPayload } from "@/lib/repositories/meal-plans";
-import { searchTacoFoods, getTacoFoodByNumber, estimateFoodMacrosFromTaco } from "@/lib/nutrition/taco";
+import { searchTacoFoods, getTacoFoodByNumber, findBestTacoFood, estimateFoodMacrosFromTaco, TACO_REFERENCES } from "@/lib/nutrition/taco";
 import { estimateFoodMacros, roundedMacros, type MacroReferenceFood } from "@/lib/nutrition/macros";
+import { calculatePlanNutrients, roundedNutrients, type FoodReferenceLookup } from "@/lib/nutrition/nutrients";
+import { compareTargetVsPrescribed, type NutrientTarget } from "@/lib/nutrition/targets";
+import { findEquivalentFoods as findEquivalentFoodsEngine } from "@/lib/nutrition/equivalence";
 import {
   mealPlanChangeOperationSchema,
   type MealPlanChangeOperation,
@@ -9,6 +12,7 @@ import {
   type MealPlanMeasureUnit,
   type MealPlanChangePreview,
 } from "@/lib/ai/schemas/action.schema";
+import { assertCategoryAllowed } from "@/lib/ai/policies/clinical-context-policy";
 
 /**
  * Agente/tools para alteracoes estruturadas do plano alimentar (nao mais
@@ -119,10 +123,21 @@ export interface MealPlanChangeApplyResult {
  * (por isso o baseVersion e checado ANTES de chamar isto, tanto na criacao
  * da proposta quanto na confirmacao).
  */
+// Lookup so-TACO (sem acesso a alimentos personalizados) — este modulo e
+// puro/sincrono hoje; itens vinculados a alimentos personalizados
+// simplesmente ficam de fora do totalVsTarget (cobertura reflete isso, nunca
+// inventa o valor).
+const TACO_ONLY_LOOKUP: FoodReferenceLookup = {
+  byTacoNumber: (numero) => getTacoFoodByNumber(numero),
+  byCustomId: () => null,
+  fuzzyMatch: (food) => findBestTacoFood(food),
+};
+
 export function applyMealPlanChangesWithPreview(
   meals: MealPlanMealPayload[],
   changes: MealPlanChangeOperation[],
-  mealPlanTitle: string
+  mealPlanTitle: string,
+  target?: NutrientTarget
 ): MealPlanChangeApplyResult {
   const working: MealPlanMealPayload[] = meals.map((meal) => ({ ...meal, items: meal.items.map((item) => ({ ...item })) }));
   const summaries: MealPlanChangePreview["changeSummaries"] = [];
@@ -230,12 +245,28 @@ export function applyMealPlanChangesWithPreview(
   }
 
   const rounded = roundedMacros({ ...totalImpact, recognizedItems: 0, totalItems: 0 });
+
+  // totalVsTarget (FASE 2): so calcula quando o plano tem alguma meta
+  // definida — nunca IA, so o motor determinístico (nutrients.ts/targets.ts).
+  let totalVsTarget: MealPlanChangePreview["totalVsTarget"];
+  if (target && Object.values(target).some((value) => value !== null && value !== undefined)) {
+    const { total } = calculatePlanNutrients({ meals: working }, TACO_ONLY_LOOKUP);
+    totalVsTarget = compareTargetVsPrescribed(target, total.values).map((row) => ({
+      nutrient: row.nutrient as "energyKcal" | "proteinG" | "carbohydrateG" | "fatG",
+      target: row.target,
+      prescribedAfter: row.prescribed,
+      diff: row.diff,
+      percentOfTarget: row.percentOfTarget,
+    }));
+  }
+
   return {
     meals: working,
     preview: {
       mealPlanTitle,
       changeSummaries: summaries,
       totalImpact: { kcal: rounded.kcal, protein: rounded.protein, carbs: rounded.carbs, fat: rounded.fat },
+      ...(totalVsTarget ? { totalVsTarget } : {}),
     },
   };
 }
@@ -258,11 +289,95 @@ export async function executeProposeMealPlanChange(input: ProposeMealPlanChangeI
   }
 
   try {
-    const { preview } = applyMealPlanChangesWithPreview(plan.meals, input.changes, plan.title);
+    const target: NutrientTarget = {
+      energyKcal: plan.target_energy_kcal ?? null,
+      proteinG: plan.target_protein_g ?? null,
+      carbohydrateG: plan.target_carbohydrate_g ?? null,
+      fatG: plan.target_fat_g ?? null,
+    };
+    const { preview } = applyMealPlanChangesWithPreview(plan.meals, input.changes, plan.title, target);
     return { clientId: plan.client_id, mealPlanId: plan.id, baseVersion: plan.version, changes: input.changes, preview };
   } catch (error) {
     return { error: error instanceof MealPlanChangeValidationError ? error.message : "Não foi possível montar essa alteração a partir do plano atual." };
   }
+}
+
+// ── get_meal_plan_nutrition (READ) ───────────────────────────────────────
+
+export const GET_MEAL_PLAN_NUTRITION_TOOL_NAME = "getMealPlanNutrition";
+export const getMealPlanNutritionInputSchema = z.object({ mealPlanId: z.string().min(1) }).strict();
+export type GetMealPlanNutritionInput = z.infer<typeof getMealPlanNutritionInputSchema>;
+
+/**
+ * Motor determinístico (nutrients.ts/targets.ts) exposto como tool de
+ * leitura — nunca a IA calculando nutriente de cabeça (seçao 2/32/39 do
+ * pedido). Devolve so os numeros ja calculados, pequenos e prontos.
+ */
+export async function executeGetMealPlanNutrition(input: GetMealPlanNutritionInput) {
+  assertCategoryAllowed("meal_plan_review", "meal_plan");
+  const plan = await getMealPlanById(input.mealPlanId);
+  if (!plan) return { found: false as const };
+
+  const { total, perMeal } = calculatePlanNutrients(plan, TACO_ONLY_LOOKUP);
+  const target: NutrientTarget = {
+    energyKcal: plan.target_energy_kcal ?? null,
+    proteinG: plan.target_protein_g ?? null,
+    carbohydrateG: plan.target_carbohydrate_g ?? null,
+    fatG: plan.target_fat_g ?? null,
+  };
+  const rounded = roundedNutrients(total.values);
+
+  return {
+    found: true as const,
+    mealPlanId: plan.id,
+    perMeal: perMeal.map((meal) => {
+      const values = roundedNutrients(meal.values);
+      return { name: meal.name, kcal: values.energyKcal, protein: values.proteinG, carbs: values.carbohydrateG, fat: values.fatG };
+    }),
+    totalDay: { kcal: rounded.energyKcal, protein: rounded.proteinG, carbs: rounded.carbohydrateG, fat: rounded.fatG, fiber: rounded.fiberG, sodium: rounded.sodiumMg },
+    comparisonVsTarget: compareTargetVsPrescribed(target, total.values),
+    coverage: total.coverage.energyKcal,
+  };
+}
+
+// ── find_food_equivalents (READ) ─────────────────────────────────────────
+
+export const FIND_FOOD_EQUIVALENTS_TOOL_NAME = "findFoodEquivalents";
+export const findFoodEquivalentsInputSchema = z.object({
+  food: z.string().min(1).max(200),
+  amountGrams: z.number().positive().max(5000),
+  targetNutrient: z.enum(["energyKcal", "proteinG", "carbohydrateG", "fatG"]),
+  tolerancePercent: z.number().positive().max(50).optional(),
+  sameCategoryOnly: z.boolean().optional(),
+}).strict();
+export type FindFoodEquivalentsInput = z.infer<typeof findFoodEquivalentsInputSchema>;
+
+/** Wrapper de leitura sobre lib/nutrition/equivalence.ts — 100% determinístico, nunca a IA escolhendo a equivalencia (seçao 22 do pedido). */
+export async function executeFindFoodEquivalents(input: FindFoodEquivalentsInput) {
+  assertCategoryAllowed("meal_plan_review", "meal_plan");
+  const baseFood = findBestTacoFood(input.food);
+  if (!baseFood) return { found: false as const };
+
+  const results = findEquivalentFoodsEngine({
+    baseFood,
+    amountGrams: input.amountGrams,
+    targetNutrient: input.targetNutrient,
+    candidates: TACO_REFERENCES,
+    tolerancePercent: input.tolerancePercent,
+    sameCategoryOnly: input.sameCategoryOnly,
+  });
+
+  return {
+    found: true as const,
+    baseFood: { tacoNumber: baseFood.numero, descricao: baseFood.descricao },
+    equivalents: results.map((result) => ({
+      tacoNumber: result.food.numero,
+      descricao: result.food.descricao,
+      grams: result.gramsNeeded,
+      deltaPercent: result.deltaPercent,
+      sameCategory: result.sameCategory,
+    })),
+  };
 }
 
 export const MEAL_PLAN_CHANGE_ASSISTANT_INSTRUCTIONS = `
@@ -270,9 +385,11 @@ Voce tambem pode propor alteracoes estruturadas no plano alimentar ativo do clie
 Como fazer isso:
 - O plano ativo (com o id de cada refeicao/item e a versao atual) ja esta no contexto acima. Use esses ids EXATAMENTE como aparecem — nunca invente um id.
 - Se precisar do numero TACO de um alimento que nao sabe de cor, use ${SEARCH_MEAL_PLAN_FOODS_TOOL_NAME} primeiro e escolha entre os resultados reais — nunca informe um numero TACO que nao veio de uma busca.
-- So chame ${PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME} quando o pedido for uma alteracao concreta e clara ("troca a banana por maca", "tira esse suplemento", "aumenta o arroz para 150g", "aplique a segunda opcao que sugeri"). Informe mealPlanId e baseVersion exatamente como estao no contexto.
-- Se o pedido for so analise ("o que acha desse plano", "da pra melhorar algo aqui"), NAO chame a ferramenta — responda em texto, separando DADOS DO SISTEMA de SUGESTAO, e so proponha de verdade se a pessoa concordar com uma mudanca especifica.
-- Se o pedido for pedir opcoes ("me da alternativas para esse lanche"), responda em texto com as opcoes — so chame a ferramenta quando a pessoa escolher uma delas.
+- Para "analise o plano" ou perguntas sobre kcal/proteina/carboidrato/gordura/meta do dia, use ${GET_MEAL_PLAN_NUTRITION_TOOL_NAME} — ele ja calcula tudo (total por refeicao, total do dia, comparacao com a meta). NUNCA some ou estime esses numeros voce mesma; sempre use a ferramenta.
+- Para sugerir uma troca por nutriente ("uma fruta com menos carboidrato", "algo com mais proteina no lugar disso"), use ${FIND_FOOD_EQUIVALENTS_TOOL_NAME} primeiro para ver alternativas reais e so entao proponha a troca com ${PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME} usando um dos resultados retornados — nunca invente uma alternativa de cabeca.
+- So chame ${PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME} quando o pedido for uma alteracao concreta e clara ("troca a banana por maca", "tira esse suplemento", "aumenta o arroz para 150g", "aplique a segunda opcao que sugeri", "aproxime o plano de 1900 kcal sem mexer no cafe da manha" — isso pode virar varias operacoes na mesma chamada). Informe mealPlanId e baseVersion exatamente como estao no contexto.
+- Se o pedido for so analise ("o que acha desse plano", "da pra melhorar algo aqui"), NAO chame a ferramenta de alteracao — responda em texto, separando DADOS DO SISTEMA (vindos de ${GET_MEAL_PLAN_NUTRITION_TOOL_NAME}) de SUGESTAO, e so proponha de verdade se a pessoa concordar com uma mudanca especifica.
+- Se o pedido for pedir opcoes ("me da alternativas para esse lanche"), responda em texto com as opcoes — so chame a ferramenta de alteracao quando a pessoa escolher uma delas.
 - Se houver ambiguidade sobre qual item ou refeicao a pessoa quer mudar, pergunte qual antes de propor — nunca escolha sozinha.
-- Se a ferramenta devolver "error" (ex.: plano mudou desde a ultima leitura, alimento invalido), explique o problema em texto simples e nao insista automaticamente.
+- Se a ferramenta devolver "error" ou "found: false" (ex.: plano mudou desde a ultima leitura, alimento invalido, alimento nao encontrado na TACO), explique o problema em texto simples e nao insista automaticamente.
 `.trim();

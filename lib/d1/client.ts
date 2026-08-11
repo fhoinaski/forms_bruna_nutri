@@ -30,6 +30,11 @@ const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const databaseId = process.env.CLOUDFLARE_D1_DATABASE_ID;
 const apiToken = process.env.CLOUDFLARE_D1_API_TOKEN;
 const requestTimeoutMs = Number(process.env.CLOUDFLARE_D1_TIMEOUT_MS ?? 15_000);
+// So para os testes E2E (e2e/helpers/d1-shim.mjs): aponta para um shim HTTP
+// local com contrato identico, rodando SQLite real via node:sqlite, em vez
+// da API da Cloudflare. Nunca definido em dev/producao — comportamento
+// inalterado quando ausente.
+const apiBaseUrl = process.env.CLOUDFLARE_D1_API_BASE_URL || "https://api.cloudflare.com";
 
 function assertConfiguration() {
   if (!accountId || !databaseId || !apiToken) {
@@ -44,7 +49,7 @@ async function requestD1<T>(body: D1RequestBody): Promise<Array<D1Result<T>>> {
 
   try {
     const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`,
+      `${apiBaseUrl}/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`,
       {
         method: "POST",
         headers: {

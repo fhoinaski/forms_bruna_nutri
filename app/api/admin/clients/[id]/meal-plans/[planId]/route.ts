@@ -15,6 +15,9 @@ const itemSchema = z.object({
   quantity: z.string().max(80).nullable().optional(),
   unit: z.string().max(40).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
+  // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2.
+  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER"]).nullable().optional(),
+  food_ref_id: z.string().max(120).nullable().optional(),
 }).strict();
 
 const mealSchema = z.object({
@@ -53,6 +56,11 @@ const UpdateSchema = z.object({
   title: z.string().min(1).max(200),
   status: z.enum(["draft", "active", "archived"]),
   notes: z.string().max(3000).nullable().optional(),
+  // Metas nutricionais do plano (FASE 2, seçao 11) — definidas manualmente.
+  target_energy_kcal: z.number().nonnegative().max(20000).nullable().optional(),
+  target_protein_g: z.number().nonnegative().max(2000).nullable().optional(),
+  target_carbohydrate_g: z.number().nonnegative().max(2000).nullable().optional(),
+  target_fat_g: z.number().nonnegative().max(2000).nullable().optional(),
   meals: z.array(mealSchema).max(30),
   weekly_slots: z.array(weeklySlotSchema).max(14).optional(),
   substitutions: z.array(substitutionSchema).max(120),

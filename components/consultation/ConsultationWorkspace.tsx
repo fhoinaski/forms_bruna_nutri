@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConsultationHeader, type ConsultationHeaderAlerts, type ConsultationHeaderClient } from "@/components/consultation/ConsultationHeader";
 import { ConsultationBrief } from "@/components/consultation/ConsultationBrief";
 import { ConsultationNotes } from "@/components/consultation/ConsultationNotes";
+import { ConsultationRecordSummary, type ConsultationRecordFields } from "@/components/consultation/ConsultationRecordSummary";
 import { ConsultationAnthropometry } from "@/components/consultation/ConsultationAnthropometry";
 import { ConsultationEvolution } from "@/components/consultation/ConsultationEvolution";
 import { ConsultationMealPlan } from "@/components/consultation/ConsultationMealPlan";
@@ -45,6 +46,7 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
   const [client, setClient] = useState<ConsultationHeaderClient | null>(null);
   const [alerts, setAlerts] = useState<ConsultationHeaderAlerts | null>(null);
   const [examsText, setExamsText] = useState<string | null>(null);
+  const [recordFields, setRecordFields] = useState<ConsultationRecordFields | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("consulta");
   const [showFinish, setShowFinish] = useState(false);
@@ -68,6 +70,7 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
     if (recordRes.ok) {
       const record = await recordRes.json();
       setExamsText(record?.exams ?? null);
+      setRecordFields(record ?? null);
       if (growthRes.ok) {
         const growth = await growthRes.json();
         setAlerts({
@@ -151,6 +154,7 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
               initialNotes={session.notes ?? ""}
               onOrganizeWithAI={(notes) => setPendingCopilotMessage(`Organize estas notas da consulta e proponha a atualização do prontuário: ${notes}`)}
             />
+            <ConsultationRecordSummary clientId={clientId} record={recordFields} />
           </TabsContent>
           <TabsContent value="antropometria">
             <ConsultationAnthropometry clientId={clientId} birthDate={client?.birth_date ?? null} biologicalSex={alerts?.biological_sex ?? null} />

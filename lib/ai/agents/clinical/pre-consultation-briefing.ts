@@ -4,7 +4,7 @@ import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
 import { getAppointments, type Appointment } from "@/lib/repositories/appointments";
 import type { Client } from "@/lib/repositories/clients";
 import { generate } from "@/lib/ai/gateway/ai-gateway";
-import { sanitizeClinicalContext } from "@/lib/ai/privacy/sanitize-context";
+import { sanitizeClinicalContext, stripInternalPatientAlias } from "@/lib/ai/privacy/sanitize-context";
 import { AiConfigError, AiProviderError } from "@/lib/ai/core/ai-errors";
 
 /**
@@ -135,7 +135,9 @@ export async function generatePreConsultationBriefing(
       prompt: `Paciente: ${pseudonym}.\n\n${contextBlock}\n\nGere os pontos para revisar na consulta.`,
       maxOutputTokens: 500,
     });
-    aiSuggestions = parseSuggestionBullets(result.text);
+    // Defesa server-side adicional (nunca so a instrucao de prompt) contra o
+    // pseudonimo interno vazar para a nutricionista — secao 41 da FASE 2.
+    aiSuggestions = parseSuggestionBullets(result.text).map(stripInternalPatientAlias);
   } catch (error) {
     // Sem IA configurada ou provedor fora do ar: o briefing continua util
     // so com os dados do sistema, sem a lista de sugestoes.

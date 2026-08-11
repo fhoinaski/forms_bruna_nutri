@@ -359,11 +359,18 @@ const executeMealPlanChange: ProposalHandler<"meal_plan_change"> = async (action
 
   // Reusa updateMealPlan tal como o editor manual usa — mesmo delete-all-
   // insert-all atomico (d1Batch) e mesmo incremento de versao, preservando
-  // titulo/status/notas/slots/substituicoes/suplementos inalterados.
+  // titulo/status/notas/metas/slots/substituicoes/suplementos inalterados.
+  // As metas (target_*) precisam ser passadas explicitamente aqui — sem
+  // isso, updateMealPlan as trataria como "nao definidas" e apagaria uma
+  // meta que a nutricionista ja tinha configurado manualmente.
   const updated = await updateMealPlan(plan.id, action.clientId, {
     title: plan.title,
     status: plan.status,
     notes: plan.notes,
+    target_energy_kcal: plan.target_energy_kcal,
+    target_protein_g: plan.target_protein_g,
+    target_carbohydrate_g: plan.target_carbohydrate_g,
+    target_fat_g: plan.target_fat_g,
     meals: newMeals,
     weekly_slots: plan.weekly_slots,
     substitutions: plan.substitutions,

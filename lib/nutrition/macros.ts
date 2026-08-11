@@ -11,11 +11,22 @@ export interface MacroReferenceFood {
   numero?: number | string;
   descricao: string;
   grupo?: string;
-  fonte?: "taco" | "complementar";
+  fonte?: "taco" | "complementar" | "custom" | "manufacturer";
   energia_kcal: number;
   proteina_g: number;
   carboidrato_g: number;
   lipidios_g: number;
+  // Nutrientes adicionais do motor da FASE 2 (lib/nutrition/nutrients.ts).
+  // Opcionais e `null` quando a fonte nao tem o dado — nunca 0 por omissao,
+  // para nao confundir "zero de verdade" com "sem dado" (diferente dos 4
+  // macros acima, cuja semantica de coercao para 0 em "NA"/"Tr" ja sustenta
+  // todo o app hoje e nao e alterada aqui).
+  fibra_g?: number | null;
+  sodio_mg?: number | null;
+  calcio_mg?: number | null;
+  ferro_mg?: number | null;
+  potassio_mg?: number | null;
+  vitamina_c_mg?: number | null;
 }
 
 const EMPTY: MacroTotals = { kcal: 0, protein: 0, carbs: 0, fat: 0, recognizedItems: 0, totalItems: 0 };

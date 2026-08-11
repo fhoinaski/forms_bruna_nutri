@@ -57,9 +57,19 @@ export function invalidateSessionVersionCache(userId: string): void {
 }
 
 async function hasCurrentSessionVersion(userId: string, expectedVersion: number): Promise<boolean> {
+  // So confia no cache para o veredito POSITIVO (versao bate — caminho
+  // comum, evita ida ao banco a cada request). Um veredito NEGATIVO do
+  // cache nunca e definitivo: proxy.ts (Edge) e as rotas de API (Node.js)
+  // sao runtimes isolados, cada um com sua propria instancia deste modulo —
+  // primeSessionVersionCache() escrito por uma rota Node.js (ex.:
+  // change-password, habilitar/desabilitar MFA) nunca chega ao cache do
+  // Edge. Sem isso, um admin que troca a senha logo apos abrir uma pagina
+  // do dashboard era derrubado de volta para /login por ate
+  // SESSION_VERSION_CACHE_TTL_MS, mesmo com o token novo va correto —
+  // sempre reconsulta o banco antes de decidir por invalido.
   const cached = sessionVersionCache.get(userId);
-  if (cached && cached.expiresAt > Date.now()) return cached.version === expectedVersion;
-  if (cached) sessionVersionCache.delete(userId);
+  if (cached && cached.expiresAt > Date.now() && cached.version === expectedVersion) return true;
+  if (cached && cached.expiresAt <= Date.now()) sessionVersionCache.delete(userId);
   const current = (await d1Query<{ session_version: number }>(
     "SELECT session_version FROM admin_users WHERE id = ?1 LIMIT 1",
     [userId]

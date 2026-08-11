@@ -8,12 +8,14 @@ import { HelpPopover } from "@/components/dashboard/HelpPopover";
 import { MfaPanel } from "@/components/security/MfaPanel";
 
 function PasswordInput({
+  id,
   label,
   value,
   onChange,
   placeholder,
   autoComplete,
 }: {
+  id: string;
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -23,9 +25,10 @@ function PasswordInput({
   const [show, setShow] = useState(false);
   return (
     <div>
-      <label className="brand-label">{label}</label>
+      <label htmlFor={id} className="brand-label">{label}</label>
       <div className="relative">
         <input
+          id={id}
           type={show ? "text" : "password"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -146,6 +149,7 @@ export default function SecurityPage() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-8 space-y-5">
           <PasswordInput
+            id="current-password"
             label="Senha atual"
             value={currentPassword}
             onChange={setCurrentPassword}
@@ -153,6 +157,7 @@ export default function SecurityPage() {
             autoComplete="current-password"
           />
           <PasswordInput
+            id="new-password"
             label="Nova senha"
             value={newPassword}
             onChange={setNewPassword}
@@ -160,6 +165,7 @@ export default function SecurityPage() {
             autoComplete="new-password"
           />
           <PasswordInput
+            id="confirm-new-password"
             label="Confirmar nova senha"
             value={confirmPassword}
             onChange={setConfirmPassword}

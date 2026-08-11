@@ -14,6 +14,11 @@ export type MealItem = {
   notes?: string | null;
   ai_suggested?: boolean;
   taco_number?: number | string | null;
+  // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2. So
+  // preenchido quando o alimento vem de um resultado de busca escolhido;
+  // digitacao livre mantem os dois como null (mesmo comportamento de hoje).
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | null;
+  food_ref_id?: string | null;
 };
 
 export type Meal = {
@@ -25,6 +30,12 @@ export type Meal = {
 };
 
 type FoodSuggestion = MacroReferenceFood & { numero: number | string; grupo: string };
+
+function toFoodSourceTag(fonte: MacroReferenceFood["fonte"]): "TACO" | "CUSTOM" | "MANUFACTURER" {
+  if (fonte === "custom") return "CUSTOM";
+  if (fonte === "manufacturer") return "MANUFACTURER";
+  return "TACO";
+}
 
 type RecipeLibraryItem = {
   id: string;
@@ -66,6 +77,8 @@ export function cleanMealsForSave(meals: Meal[]): Meal[] {
           quantity: item.quantity ?? null,
           unit: item.unit ?? null,
           notes: item.notes ?? null,
+          food_source: item.food_source ?? null,
+          food_ref_id: item.food_ref_id ?? null,
         })),
     }))
     .filter((meal) => meal.name.trim() && meal.items.length);
@@ -450,7 +463,7 @@ export function MealItemsEditor({
                       value={item.food}
                       onChange={(event) => {
                         const key = `${mealIndex}:${itemIndex}`;
-                        updateMealItem(mealIndex, itemIndex, { food: event.target.value, taco_number: null });
+                        updateMealItem(mealIndex, itemIndex, { food: event.target.value, taco_number: null, food_source: null, food_ref_id: null });
                         setActiveFoodField(key);
                         setFoodSearch({ key, query: event.target.value });
                       }}
@@ -476,7 +489,12 @@ export function MealItemsEditor({
                             type="button"
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={() => {
-                              updateMealItem(mealIndex, itemIndex, { food: suggestion.descricao, taco_number: suggestion.numero });
+                              updateMealItem(mealIndex, itemIndex, {
+                                food: suggestion.descricao,
+                                taco_number: suggestion.numero,
+                                food_source: toFoodSourceTag(suggestion.fonte),
+                                food_ref_id: String(suggestion.numero),
+                              });
                               setFoodSuggestions((current) => ({ ...current, [`${mealIndex}:${itemIndex}`]: [suggestion] }));
                               setActiveFoodField("");
                             }}
@@ -484,7 +502,10 @@ export function MealItemsEditor({
                           >
                             <span className="block text-sm font-medium text-[#3A3028]">{suggestion.descricao}</span>
                             <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">
-                              {suggestion.grupo} - {Math.round(suggestion.energia_kcal)} kcal/100g{suggestion.fonte === "complementar" ? " - TBCA/USDA" : ""}
+                              {suggestion.grupo || "Alimento personalizado"} - {Math.round(suggestion.energia_kcal)} kcal/100g
+                              {suggestion.fonte === "complementar" ? " - TBCA/USDA" : ""}
+                              {suggestion.fonte === "custom" ? " - Personalizado" : ""}
+                              {suggestion.fonte === "manufacturer" ? " - Marca" : ""}
                             </span>
                           </button>
                         ))}

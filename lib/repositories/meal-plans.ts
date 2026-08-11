@@ -12,6 +12,14 @@ export type MealPlanPayload = {
   status: MealPlanStatus;
   version: number;
   notes: string | null;
+  // Metas nutricionais do plano (FASE 2, seçao 11) — definidas manualmente
+  // pela nutricionista, nunca calculadas automaticamente (seçao 12).
+  // Opcionais no tipo (alem de aceitarem null) para nao exigir atualizar
+  // fixtures de teste anteriores a esta fase que nao tratam de metas.
+  target_energy_kcal?: number | null;
+  target_protein_g?: number | null;
+  target_carbohydrate_g?: number | null;
+  target_fat_g?: number | null;
   created_at: string;
   updated_at: string;
   meals: MealPlanMealPayload[];
@@ -35,6 +43,11 @@ export type MealPlanItemPayload = {
   quantity?: string | null;
   unit?: string | null;
   notes?: string | null;
+  // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2.
+  // Ambos nulos = item legado ou digitado livremente; o calculo cai para o
+  // match aproximado por texto ja existente (findBestFoodReference).
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | null;
+  food_ref_id?: string | null;
 };
 
 export type MealPlanWeeklySlotPayload = {
@@ -335,6 +348,8 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
         quantity: item.quantity,
         unit: item.unit,
         notes: item.notes,
+        food_source: item.food_source ?? null,
+        food_ref_id: item.food_ref_id ?? null,
         })),
       })),
     weekly_slots: (weeklySlotsByPlan.get(row.id) ?? []).map(({ id, weekday, meal_type, title, notes, source_meal_id }) => ({
@@ -518,6 +533,10 @@ export async function updateMealPlan(planId: string, clientId: string, input: {
   title: string;
   status: MealPlanStatus;
   notes?: string | null;
+  target_energy_kcal?: number | null;
+  target_protein_g?: number | null;
+  target_carbohydrate_g?: number | null;
+  target_fat_g?: number | null;
   meals: MealPlanMealPayload[];
   weekly_slots?: MealPlanWeeklySlotPayload[];
   substitutions: MealPlanSubstitutionPayload[];
@@ -538,8 +557,21 @@ export async function updateMealPlan(planId: string, clientId: string, input: {
     });
   }
   statements.push({
-    sql: "UPDATE meal_plans SET title = ?1, status = ?2, notes = ?3, version = version + 1, updated_at = ?4 WHERE id = ?5 AND client_id = ?6",
-    params: [input.title, input.status, input.notes ?? null, now, planId, clientId],
+    sql: `UPDATE meal_plans SET title = ?1, status = ?2, notes = ?3,
+            target_energy_kcal = ?4, target_protein_g = ?5, target_carbohydrate_g = ?6, target_fat_g = ?7,
+            version = version + 1, updated_at = ?8 WHERE id = ?9 AND client_id = ?10`,
+    params: [
+      input.title,
+      input.status,
+      input.notes ?? null,
+      input.target_energy_kcal ?? null,
+      input.target_protein_g ?? null,
+      input.target_carbohydrate_g ?? null,
+      input.target_fat_g ?? null,
+      now,
+      planId,
+      clientId,
+    ],
   });
   statements.push(...buildMealPlanDetailStatements(planId, input.meals, input.weekly_slots ?? [], input.substitutions, input.supplements, now));
   await d1Batch(statements);
@@ -574,7 +606,18 @@ function buildMealPlanDetailStatements(
     mealRows.push({ id: mealId, planId, name: meal.name, time: meal.suggested_time ?? null, notes: meal.notes ?? null, sourceRecipeId: meal.source_recipe_id ?? null, order: mealIndex, now });
     for (const [itemIndex, item] of meal.items.entries()) {
       if (!item.food.trim()) continue;
-      itemRows.push({ id: crypto.randomUUID(), mealId, food: item.food, quantity: item.quantity ?? null, unit: item.unit ?? null, notes: item.notes ?? null, order: itemIndex, now });
+      itemRows.push({
+        id: crypto.randomUUID(),
+        mealId,
+        food: item.food,
+        quantity: item.quantity ?? null,
+        unit: item.unit ?? null,
+        notes: item.notes ?? null,
+        foodSource: item.food_source ?? null,
+        foodRefId: item.food_ref_id ?? null,
+        order: itemIndex,
+        now,
+      });
     }
   }
   const weeklyRows = weeklySlots
@@ -610,8 +653,8 @@ function buildMealPlanDetailStatements(
     params: [JSON.stringify(mealRows)],
   });
   if (itemRows.length) statements.push({
-    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(itemRows)],
   });
   if (weeklyRows.length) statements.push({

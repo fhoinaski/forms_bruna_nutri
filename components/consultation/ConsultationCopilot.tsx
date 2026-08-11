@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Loader2, Send, Sparkles, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
+import { NUTRITION_TEXT_FIELD_LABELS, type NutritionRecordTextFieldKey } from "@/lib/clinical/nutrition-record-fields";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -38,6 +39,29 @@ const markdownComponents: Components = {
     </a>
   ),
 };
+
+// Mensagem de confirmacao especifica por tipo de proposta — generica demais
+// ("Aplicado com sucesso.") deixava a nutricionista sem saber O QUE mudou,
+// especialmente para nutrition_record, cujo resultado (campos do prontuario)
+// nao aparece em nenhuma aba do Modo Consulta (ver ConsultationRecordSummary).
+function describeAppliedProposal(proposal: ProposedActionLike): string {
+  if (proposal.kind === "nutrition_record" && proposal.fields) {
+    const labels = Object.keys(proposal.fields)
+      .map((key) => NUTRITION_TEXT_FIELD_LABELS[key as NutritionRecordTextFieldKey] ?? key)
+      .filter(Boolean);
+    return labels.length
+      ? `Prontuário atualizado: ${labels.join(", ")}. Confira em "Prontuário desta consulta", logo abaixo das anotações.`
+      : "Prontuário atualizado.";
+  }
+  if (proposal.kind === "meal_plan_change") return "Plano alimentar atualizado — confira na aba Plano.";
+  if (proposal.kind === "consultation_tasks_batch") {
+    const count = proposal.tasks?.length ?? 0;
+    return count ? `${count} tarefa${count > 1 ? "s" : ""} criada${count > 1 ? "s" : ""}.` : "Tarefas criadas.";
+  }
+  if (proposal.kind === "consultation_summary") return "Resumo da consulta salvo.";
+  if (proposal.kind === "client_protocol") return "Notas do protocolo atualizadas — confira na aba Protocolo.";
+  return "Aplicado com sucesso.";
+}
 
 const QUICK_SUGGESTIONS = [
   "Preparar consulta",
@@ -132,7 +156,7 @@ export function ConsultationCopilot({
       const response = await fetch(`/api/admin/ai/proposals/${proposal.proposalId}/confirm`, { method: "POST" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.message || "Não foi possível confirmar.");
-      setMessages((current) => [...current, { role: "assistant", content: "Aplicado com sucesso." }]);
+      setMessages((current) => [...current, { role: "assistant", content: describeAppliedProposal(proposal) }]);
       onProposalConfirmed(proposal.kind);
       setProposal(null);
     } catch (err) {

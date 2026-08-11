@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
 import { MealItemsEditor, cleanMealsForSave, type Meal } from "@/components/dashboard/MealItemsEditor";
+import { MealPlanNutritionSummary } from "@/components/nutrition/MealPlanNutritionSummary";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
   PROTOCOL_TEMPLATE_TARGET_GROUPS,
@@ -32,6 +33,10 @@ type MealPlan = {
   status: MealPlanStatus;
   version: number;
   notes: string | null;
+  target_energy_kcal?: number | null;
+  target_protein_g?: number | null;
+  target_carbohydrate_g?: number | null;
+  target_fat_g?: number | null;
   meals: Meal[];
   weekly_slots: WeeklySlot[];
   substitutions: Substitution[];
@@ -129,6 +134,10 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         title: plan.title,
         status: nextStatus ?? plan.status,
         notes: plan.notes,
+        target_energy_kcal: plan.target_energy_kcal ?? null,
+        target_protein_g: plan.target_protein_g ?? null,
+        target_carbohydrate_g: plan.target_carbohydrate_g ?? null,
+        target_fat_g: plan.target_fat_g ?? null,
         meals: cleanMealsForSave(plan.meals),
         weekly_slots: cleanWeeklySlotsForSave(plan.weekly_slots ?? []),
         substitutions: plan.substitutions
@@ -288,6 +297,16 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             </div>
           </div>
 
+          <div className="rounded-xl border border-[#EDE1D6] bg-[#FAF7F2]/60 p-4">
+            <p className="brand-label mb-2">Meta nutricional do plano (opcional)</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <NutrientTargetInput label="Energia (kcal)" value={plan.target_energy_kcal} onChange={(value) => setPlan({ ...plan, target_energy_kcal: value })} />
+              <NutrientTargetInput label="Proteína (g)" value={plan.target_protein_g} onChange={(value) => setPlan({ ...plan, target_protein_g: value })} />
+              <NutrientTargetInput label="Carboidrato (g)" value={plan.target_carbohydrate_g} onChange={(value) => setPlan({ ...plan, target_carbohydrate_g: value })} />
+              <NutrientTargetInput label="Gordura (g)" value={plan.target_fat_g} onChange={(value) => setPlan({ ...plan, target_fat_g: value })} />
+            </div>
+          </div>
+
           <MealItemsEditor
             meals={plan.meals}
             onChange={(meals) => setPlan({ ...plan, meals })}
@@ -298,6 +317,16 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             recipeDescriptionPrefix={`Receita criada a partir do plano "${plan.title}"`}
             onMessage={setMessage}
             onError={setError}
+          />
+
+          <MealPlanNutritionSummary
+            meals={plan.meals}
+            target={{
+              energyKcal: plan.target_energy_kcal ?? null,
+              proteinG: plan.target_protein_g ?? null,
+              carbohydrateG: plan.target_carbohydrate_g ?? null,
+              fatG: plan.target_fat_g ?? null,
+            }}
           />
 
           <WeeklyMealGridEditor
@@ -419,6 +448,26 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         </div>,
         document.body
       )}
+    </div>
+  );
+}
+
+function NutrientTargetInput({ label, value, onChange }: { label: string; value: number | null | undefined; onChange: (value: number | null) => void }) {
+  return (
+    <div>
+      <label className="brand-label">{label}</label>
+      <input
+        type="number"
+        min={0}
+        inputMode="decimal"
+        value={value ?? ""}
+        onChange={(event) => {
+          const raw = event.target.value;
+          onChange(raw === "" ? null : Number(raw));
+        }}
+        className="brand-input"
+        placeholder="—"
+      />
     </div>
   );
 }

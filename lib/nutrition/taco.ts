@@ -10,6 +10,12 @@ type TacoRow = {
   proteina_g: unknown;
   carboidrato_g: unknown;
   lipidios_g: unknown;
+  fibra_g?: unknown;
+  sodio_mg?: unknown;
+  calcio_mg?: unknown;
+  ferro_mg?: unknown;
+  potassio_mg?: unknown;
+  vitamina_c_mg?: unknown;
 };
 
 type TacoFile = TacoRow[] | { alimentos?: TacoRow[] };
@@ -28,6 +34,21 @@ export function coerceTacoNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// Usada apenas nos 6 nutrientes novos da FASE 2 — preserva `null` quando o
+// dado nao existe na fonte (NA/ausente), em vez de forcar 0 como
+// `coerceTacoNumber` faz para os 4 macros legados. "Tr" (traco) e um valor
+// real muito pequeno, nao "sem dado": mantemos como 0 aqui tambem, mas nunca
+// confundimos "NA"/ausente com zero.
+export function coerceTacoNumberOrNull(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === "na") return null;
+  if (normalized === "tr") return 0;
+  const parsed = Number(normalized.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function toReferenceFood(row: TacoRow, fonte: "taco" | "complementar"): MacroReferenceFood {
   return {
     numero: row.numero,
@@ -38,10 +59,16 @@ function toReferenceFood(row: TacoRow, fonte: "taco" | "complementar"): MacroRef
     proteina_g: coerceTacoNumber(row.proteina_g),
     carboidrato_g: coerceTacoNumber(row.carboidrato_g),
     lipidios_g: coerceTacoNumber(row.lipidios_g),
+    fibra_g: coerceTacoNumberOrNull(row.fibra_g),
+    sodio_mg: coerceTacoNumberOrNull(row.sodio_mg),
+    calcio_mg: coerceTacoNumberOrNull(row.calcio_mg),
+    ferro_mg: coerceTacoNumberOrNull(row.ferro_mg),
+    potassio_mg: coerceTacoNumberOrNull(row.potassio_mg),
+    vitamina_c_mg: coerceTacoNumberOrNull(row.vitamina_c_mg),
   };
 }
 
-const TACO_REFERENCES: MacroReferenceFood[] = [
+export const TACO_REFERENCES: MacroReferenceFood[] = [
   ...tacoRows(tacoData as TacoFile).map((row) => toReferenceFood(row, "taco")),
   ...tacoRows(tacoComplementarData as TacoFile).map((row) => toReferenceFood(row, "complementar")),
 ];

@@ -10,7 +10,7 @@ import { sumMacros, roundedMacros, type MacroTotals } from "@/lib/nutrition/macr
 import { calculateWeightDelta } from "@/lib/clinical/anthropometry";
 import type { Client } from "@/lib/repositories/clients";
 import { generateStructured } from "@/lib/ai/gateway/ai-gateway";
-import { sanitizeClinicalContext } from "@/lib/ai/privacy/sanitize-context";
+import { sanitizeClinicalContext, stripInternalPatientAlias } from "@/lib/ai/privacy/sanitize-context";
 import { AiConfigError, AiProviderError, AiValidationError } from "@/lib/ai/core/ai-errors";
 import { assertCategoryAllowed } from "@/lib/ai/policies/clinical-context-policy";
 
@@ -220,7 +220,7 @@ export async function generateConsultationAiBrief(
     const { pseudonym, contextBlock } = sanitizeClinicalContext(client.name, [
       { label: "FATOS_DO_SISTEMA", content: formatSystemDataForPrompt(systemData) },
     ]);
-    return await generateStructured({
+    const brief = await generateStructured({
       agent: "consultation-briefing",
       adminId,
       system: CONSULTATION_BRIEF_SYSTEM_PROMPT,
@@ -228,6 +228,16 @@ export async function generateConsultationAiBrief(
       schema: consultationAiBriefSchema,
       maxOutputTokens: 900,
     });
+    // Defesa server-side adicional (nunca so a instrucao de prompt) contra o
+    // pseudonimo interno vazar para a nutricionista — secao 41 da FASE 2.
+    return {
+      clinicalSummary: stripInternalPatientAlias(brief.clinicalSummary),
+      changesSinceLastVisit: brief.changesSinceLastVisit.map(stripInternalPatientAlias),
+      attentionPoints: brief.attentionPoints.map(stripInternalPatientAlias),
+      pendingItems: brief.pendingItems.map(stripInternalPatientAlias),
+      suggestedTopics: brief.suggestedTopics.map(stripInternalPatientAlias),
+      missingData: brief.missingData.map(stripInternalPatientAlias),
+    };
   } catch (error) {
     if (error instanceof AiConfigError || error instanceof AiProviderError || error instanceof AiValidationError) {
       return null;
