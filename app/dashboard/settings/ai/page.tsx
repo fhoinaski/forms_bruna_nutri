@@ -13,6 +13,8 @@ type AISettingsForm = {
   model: string;
   protocol_system_prompt: string;
   chat_system_prompt: string;
+  patient_intake_ai_enabled: boolean;
+  patient_intake_mode: "optional" | "default";
   has_api_key: boolean;
   updated_at: string;
 };
@@ -43,6 +45,8 @@ const emptyForm: AISettingsForm = {
   model: "gpt-4o",
   protocol_system_prompt: "",
   chat_system_prompt: "",
+  patient_intake_ai_enabled: false,
+  patient_intake_mode: "optional",
   has_api_key: false,
   updated_at: "",
 };
@@ -68,6 +72,8 @@ export default function AISettingsPage() {
           model: data.model,
           protocol_system_prompt: data.protocol_system_prompt ?? "",
           chat_system_prompt: data.chat_system_prompt ?? "",
+          patient_intake_ai_enabled: Boolean(data.patient_intake_ai_enabled),
+          patient_intake_mode: data.patient_intake_mode ?? "optional",
           has_api_key: Boolean(data.has_api_key),
           updated_at: data.updated_at ?? "",
         });
@@ -95,6 +101,8 @@ export default function AISettingsPage() {
           model: form.model,
           protocol_system_prompt: form.protocol_system_prompt || null,
           chat_system_prompt: form.chat_system_prompt || null,
+          patient_intake_ai_enabled: form.patient_intake_ai_enabled,
+          patient_intake_mode: form.patient_intake_mode,
         }),
       });
       const data = await response.json();
@@ -105,6 +113,8 @@ export default function AISettingsPage() {
         model: data.model,
         protocol_system_prompt: data.protocol_system_prompt ?? "",
         chat_system_prompt: data.chat_system_prompt ?? "",
+        patient_intake_ai_enabled: Boolean(data.patient_intake_ai_enabled),
+        patient_intake_mode: data.patient_intake_mode ?? "optional",
         has_api_key: Boolean(data.has_api_key),
         updated_at: data.updated_at ?? "",
       });
@@ -205,6 +215,63 @@ export default function AISettingsPage() {
             />
             <p className="mt-2 text-xs leading-5 text-[#8A7B70]">
               Usado pelo botão de chat flutuante em todas as telas do dashboard. Ele só orienta sobre o uso do sistema — nunca dá conduta clínica.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-[#D9E4D3] bg-[#F4F8F1] p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-[#3A2B1F]">Pré-consulta guiada por IA</label>
+                <p className="mt-1 text-xs leading-5 text-[#75675E]">
+                  Ativa a experiência conversacional no formulário público. A IA apenas coleta as respostas — nunca diagnostica nem prescreve.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.patient_intake_ai_enabled}
+                onClick={() => setForm({ ...form, patient_intake_ai_enabled: !form.patient_intake_ai_enabled })}
+                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${
+                  form.patient_intake_ai_enabled ? "bg-[#607A56]" : "bg-[#D9C9B8]"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    form.patient_intake_ai_enabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            <fieldset className="mt-4">
+              <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#75675E]">Modo de oferta</legend>
+              <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
+                <label className="flex items-center gap-2 text-sm text-[#5F554D]">
+                  <input
+                    type="radio"
+                    name="patient_intake_mode"
+                    value="optional"
+                    checked={form.patient_intake_mode === "optional"}
+                    onChange={() => setForm({ ...form, patient_intake_mode: "optional" })}
+                    className="accent-[#607A56]"
+                  />
+                  IA guiada oferecida como opção
+                </label>
+                <label className="flex items-center gap-2 text-sm text-[#5F554D]">
+                  <input
+                    type="radio"
+                    name="patient_intake_mode"
+                    value="default"
+                    checked={form.patient_intake_mode === "default"}
+                    onChange={() => setForm({ ...form, patient_intake_mode: "default" })}
+                    className="accent-[#607A56]"
+                  />
+                  IA guiada como padrão
+                </label>
+              </div>
+            </fieldset>
+            <p className="mt-3 text-xs leading-5 text-[#75675E]">
+              O formulário tradicional continua acessível nos dois modos.
             </p>
           </div>
 

@@ -8,6 +8,7 @@ import React from "react";
 import Image from "next/image";
 import { ArrowLeft, CheckCircle2, Clock3, HeartHandshake, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { PreConsultationIntake } from "@/components/public/intake/PreConsultationIntake";
 
 const AUTOSAVE_KEY = "bruna-nutri-preconsulta-draft-v1";
 
@@ -159,6 +160,9 @@ export default function FormularioPage() {
   const [submitError, setSubmitError] = useState("");
   const [draftStatus, setDraftStatus] = useState<"restored" | "saved" | "cleared" | "">("");
   const [draftReady, setDraftReady] = useState(false);
+  const [aiAvailability, setAiAvailability] = useState<{ available: boolean; mode: "optional" | "default" } | null>(null);
+  const [showIntake, setShowIntake] = useState(false);
+  const [intakePrefill, setIntakePrefill] = useState<Record<string, unknown> | null>(null);
 
   const { control, register, handleSubmit, setValue, getValues, reset, setFocus, formState: { errors } } = useForm<FormResponseInput>({
     resolver: zodResolver(FormResponseSchema),
@@ -226,6 +230,33 @@ export default function FormularioPage() {
     return () => window.clearTimeout(timer);
   }, [autosaveValues, draftReady, getValues, isSuccess]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/public/pre-consultation/intake/availability", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setAiAvailability({ available: Boolean(data.available), mode: data.mode ?? "optional" });
+      })
+      .catch(() => {
+        if (!cancelled) setAiAvailability({ available: false, mode: "optional" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Aplica prefill vindo do fallback da IA no formulário tradicional.
+  useEffect(() => {
+    if (!intakePrefill) return;
+    const prefill = { ...DEFAULT_VALUES } as Record<string, unknown>;
+    for (const [key, value] of Object.entries(intakePrefill)) {
+      if (value === undefined || value === null) continue;
+      prefill[key] = value;
+    }
+    reset(prefill as Partial<FormResponseInput>);
+    setDraftStatus("restored");
+  }, [intakePrefill, reset]);
+
   const onSubmit = async (data: FormResponseInput) => {
     setIsSubmitting(true);
     setSubmitError("");
@@ -282,6 +313,21 @@ export default function FormularioPage() {
     }
     setValue(field, Array.from(selected).join(", "), { shouldValidate: true });
   };
+
+  // Fallback da IA → formulário tradicional pré-preenchido.
+  if (showIntake && !intakePrefill) {
+    return (
+      <div className="min-h-screen bg-[#FBF7F1]">
+        <PreConsultationIntake
+          onFallback={(answers) => {
+            setIntakePrefill(answers);
+            setShowIntake(false);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
+      </div>
+    );
+  }
 
   if (isSuccess) {
     return (
@@ -390,6 +436,34 @@ export default function FormularioPage() {
           </div>
         </div>
       </header>
+
+      {aiAvailability?.available && (
+        <div className="mx-auto max-w-3xl px-5 pt-10">
+          <div className="rounded-[1.35rem] border border-[#D9E4D3] bg-[#F4F8F1] p-6">
+            <h2 className="font-serif text-xl font-semibold text-[#3A3028]">Prefere uma pré-consulta guiada?</h2>
+            <p className="mt-2 text-sm leading-6 text-[#5F554D]">
+              Você pode responder com suas próprias palavras e a pré-consulta é preenchida com ajuda de inteligência artificial.
+              Quando uma informação precisar de esclarecimento, farei uma pergunta complementar. As respostas são revisadas pela nutricionista e a IA não realiza diagnóstico ou prescrição.
+            </p>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setShowIntake(true)}
+                className="rounded-full bg-[#7F9A74] px-6 py-3.5 font-sans text-sm font-bold uppercase tracking-[0.08em] text-white shadow-[0_18px_42px_rgba(127,154,116,0.22)] transition hover:bg-[#607A56]"
+              >
+                Começar pré-consulta guiada
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowIntake(false)}
+                className="rounded-full border border-[#EDE1D6] bg-[#FFFDFC] px-6 py-3.5 font-sans text-sm font-bold uppercase tracking-[0.08em] text-[#75675E] transition hover:bg-[#F5ECE4]"
+              >
+                Usar formulário tradicional
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto max-w-3xl px-5 py-12 pb-24">
         <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-8">

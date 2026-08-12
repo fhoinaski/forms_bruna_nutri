@@ -15,6 +15,8 @@ const UpdateSchema = z.object({
   model: z.string().min(1).max(120),
   protocol_system_prompt: z.string().max(20000).nullable().optional(),
   chat_system_prompt: z.string().max(20000).nullable().optional(),
+  patient_intake_ai_enabled: z.boolean().optional(),
+  patient_intake_mode: z.enum(["optional", "default"]).optional(),
 }).strict();
 
 export async function GET(req: NextRequest) {
@@ -43,6 +45,8 @@ export async function PUT(req: NextRequest) {
     metadata: {
       provider: settings.provider,
       model: settings.model,
+      patientIntakeAiEnabled: parsed.data.patient_intake_ai_enabled ?? settings.patient_intake_ai_enabled === 1,
+      patientIntakeMode: parsed.data.patient_intake_mode ?? settings.patient_intake_mode,
       apiKeyChanged: parsed.data.api_key ? !parsed.data.api_key.includes("...") : false,
     },
   });

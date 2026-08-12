@@ -1,6 +1,8 @@
 import { d1Query, d1Execute } from "@/lib/d1/client";
 import { decryptJsonValue, encryptJsonValue } from "@/lib/security/encrypted-fields";
 
+export type SubmissionSource = "traditional" | "ai_guided";
+
 export interface Submission {
   id: string;
   patient_name: string;
@@ -9,6 +11,7 @@ export interface Submission {
   child_name: string | null;
   child_age: string | null;
   form_type: string;
+  submission_source: SubmissionSource | null;
   answers_json: string;
   status: string;
   notes: string | null;
@@ -21,12 +24,16 @@ export interface SubmissionWithAnswers extends Omit<Submission, "answers_json"> 
 }
 
 export interface CreateSubmissionInput {
+  /** ID opcional (para idempotência do fluxo de intake). Gerado se ausente. */
+  id?: string;
   patient_name: string;
   patient_email?: string | null;
   patient_phone?: string | null;
   child_name?: string | null;
   child_age?: string | null;
   form_type?: string;
+  /** Origem da submissão (analytics). NULL = legado/anterior à coluna. */
+  source?: SubmissionSource | null;
   answers: Record<string, string>;
 }
 
@@ -107,7 +114,7 @@ function buildWhereClause(
 export async function createSubmission(
   input: CreateSubmissionInput
 ): Promise<string> {
-  const id = crypto.randomUUID();
+  const id = input.id ?? crypto.randomUUID();
   const now = new Date().toISOString();
 
   const cleanAnswers: Record<string, string> = {};
@@ -117,11 +124,13 @@ export async function createSubmission(
     }
   }
 
+  // INSERT OR IGNORE torna a criação idempotente por id (o fluxo de intake
+  // reserva um UUID e pode reexecutar a gravação com segurança).
   await d1Execute(
-    `INSERT INTO form_submissions
+    `INSERT OR IGNORE INTO form_submissions
       (id, patient_name, patient_email, patient_phone, child_name, child_age,
-       form_type, answers_json, status, notes, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'novo', NULL, ?9, ?10)`,
+       form_type, submission_source, answers_json, status, notes, created_at, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'novo', NULL, ?10, ?11)`,
     [
       id,
       input.patient_name,
@@ -130,6 +139,7 @@ export async function createSubmission(
       input.child_name || null,
       input.child_age || null,
       input.form_type || "pre_consulta",
+      input.source ?? null,
       encryptJsonValue(cleanAnswers),
       now,
       now,
@@ -156,7 +166,7 @@ export async function getSubmissions(
 
   const rows = await d1Query<Submission>(
     `SELECT id, patient_name, patient_email, patient_phone, child_name, child_age,
-            form_type, answers_json, status, created_at, updated_at
+            form_type, submission_source, answers_json, status, created_at, updated_at
      FROM form_submissions ${clause}
      ORDER BY created_at DESC
      LIMIT ?${params.length + 1} OFFSET ?${params.length + 2}`,

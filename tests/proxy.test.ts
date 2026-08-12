@@ -259,6 +259,30 @@ describe("proxy (auth gateway)", () => {
     expect(response.status).toBe(403);
   });
 
+  it("blocks a cross-origin mutation against the public intake API (CSRF/origin check)", async () => {
+    const { proxy } = await import("../proxy");
+
+    const request = makeRequest("/api/public/pre-consultation/intake/message", {
+      method: "POST",
+      origin: "https://evil-attacker.example",
+    });
+    const response = await proxy(request, makeEvent());
+
+    expect(response.status).toBe(403);
+  });
+
+  it("allows a same-origin mutation against the public intake API", async () => {
+    const { proxy } = await import("../proxy");
+
+    const request = makeRequest("/api/public/pre-consultation/intake/message", {
+      method: "POST",
+      origin: BASE_URL,
+    });
+    const response = await proxy(request, makeEvent());
+
+    expect(response.status).toBe(200);
+  });
+
   it("allows a cron job with a valid shared secret to bypass session auth on the whitelisted cron endpoint", async () => {
     const { proxy } = await import("../proxy");
     verifyCronSecret.mockReturnValue(true);
@@ -281,7 +305,7 @@ describe("proxy (auth gateway)", () => {
     expect(response.status).toBe(401);
   });
 
-  it("exports the matcher config covering /login, /dashboard, /api/admin, /api/auth and /api/portal", async () => {
+  it("exports the matcher config covering protected routes and the public API", async () => {
     const { config } = await import("../proxy");
 
     expect(config.matcher).toEqual(
@@ -291,6 +315,7 @@ describe("proxy (auth gateway)", () => {
         "/api/admin/:path*",
         "/api/auth/:path*",
         "/api/portal/:path*",
+        "/api/public/:path*",
       ])
     );
   });

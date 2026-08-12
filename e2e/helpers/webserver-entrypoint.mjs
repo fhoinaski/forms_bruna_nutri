@@ -74,9 +74,29 @@ async function seedAdmins(db) {
   }
 }
 
+async function seedAiSettings(db) {
+  // Marca a pré-consulta guiada por IA como configurável, MAS SEM api_key
+  // real (para não interferir no teste que garante que o chat admin/portal
+  // nunca responde sem provedor). A disponibilidade do intake sob o executor
+  // determinístico é resolvida por `isDeterministicTestProvider()` na camada
+  // de serviço, sem exigir chave.
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO ai_settings
+       (id, provider, api_key, model, protocol_system_prompt, chat_system_prompt,
+        patient_intake_ai_enabled, patient_intake_mode, updated_at)
+     VALUES ('default', 'openai', NULL, 'gpt-4o', NULL, NULL, 1, 'optional', ?1)
+     ON CONFLICT(id) DO UPDATE SET
+       api_key = NULL,
+       patient_intake_ai_enabled = 1,
+       patient_intake_mode = 'optional'`
+  ).run(now);
+}
+
 async function main() {
   const shim = await startD1Shim();
   await seedAdmins(shim.db);
+  await seedAiSettings(shim.db);
 
   mkdirSync(dirname(fixturesPath), { recursive: true });
   writeFileSync(
@@ -94,6 +114,13 @@ async function main() {
     MFA_ENCRYPTION_KEY: process.env.MFA_ENCRYPTION_KEY || TEST_AUTH_SECRET,
     CLINICAL_DATA_ENCRYPTION_KEY: process.env.CLINICAL_DATA_ENCRYPTION_KEY || TEST_AUTH_SECRET,
     BACKUP_ENCRYPTION_KEY: process.env.BACKUP_ENCRYPTION_KEY || TEST_AUTH_SECRET,
+    PATIENT_INTAKE_SESSION_SECRET: process.env.PATIENT_INTAKE_SESSION_SECRET || `${TEST_AUTH_SECRET}-intake`,
+    // Fake determinístico para o Intake Agent — substitui o executor do agente
+    // (lib/ai/agents/patient/intake/intake-agent.ts) por respostas previsíveis
+    // por campo, SEM depender de OpenAI/DeepSeek/Anthropic. Só tem efeito sob
+    // E2E_TEST_MODE=1 (o executor resolve para o gateway real em qualquer
+    // outro ambiente) — não há backdoor público.
+    INTAKE_AI_TEST_PROVIDER: "deterministic",
     // Sem provedor de IA real configurado: os fluxos que dependem de LLM
     // devolvem AiConfigError de forma graciosa (comportamento ja existente
     // e testado) — os testes de IA seedam proposals diretamente, nunca

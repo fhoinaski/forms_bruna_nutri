@@ -26,12 +26,14 @@ export async function recordConsent(input: {
   submissionId: string;
   ipHash: string;
   userAgentHash: string;
+  /** ID determinístico opcional p/ idempotência (fluxo de intake). */
+  id?: string;
 }) {
   await d1Execute(
-    `INSERT INTO consent_records
+    `INSERT OR IGNORE INTO consent_records
       (id, submission_id, form_version, policy_version, consent_scope, accepted_at, ip_hash, user_agent_hash)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
-    [crypto.randomUUID(), input.submissionId, PRE_CONSULTATION_FORM_VERSION,
+    [input.id ?? crypto.randomUUID(), input.submissionId, PRE_CONSULTATION_FORM_VERSION,
       PRIVACY_POLICY_VERSION, "pre_consulta_e_contato_assistencial",
       new Date().toISOString(), input.ipHash, input.userAgentHash]
   );

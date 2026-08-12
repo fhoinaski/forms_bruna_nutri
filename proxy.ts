@@ -29,10 +29,11 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const isAdminApi = pathname.startsWith("/api/admin");
   const isAuthApi = pathname.startsWith("/api/auth");
   const isPortalApi = pathname.startsWith("/api/portal");
+  const isPublicApi = pathname.startsWith("/api/public");
   const isLoginPage = pathname === "/login";
   const isMutation = MUTATION_METHODS.includes(request.method);
 
-  if (!isDashboard && !isAdminApi && !isAuthApi && !isPortalApi && !isLoginPage) {
+  if (!isDashboard && !isAdminApi && !isAuthApi && !isPortalApi && !isPublicApi && !isLoginPage) {
     return NextResponse.next();
   }
 
@@ -40,7 +41,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return NextResponse.json({ message: "Origem nao permitida." }, { status: 403 });
   }
 
-  if (isPortalApi) {
+  if (isPortalApi || isPublicApi) {
     return noStore(NextResponse.next(), true);
   }
 
@@ -85,5 +86,12 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ["/login", "/dashboard/:path*", "/api/admin/:path*", "/api/auth/:path*", "/api/portal/:path*"],
+  matcher: [
+    "/login",
+    "/dashboard/:path*",
+    "/api/admin/:path*",
+    "/api/auth/:path*",
+    "/api/portal/:path*",
+    "/api/public/:path*",
+  ],
 };

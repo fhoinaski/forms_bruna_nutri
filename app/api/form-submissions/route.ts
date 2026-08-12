@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { LegacyFormSchema } from "@/lib/validators/submission";
-import { createSubmission } from "@/lib/repositories/submissions";
-import { recordConsent } from "@/lib/repositories/privacy";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { getRequestFingerprint } from "@/lib/security/request";
-import { ensureOpportunityForSubmission } from "@/lib/repositories/lead-opportunities";
+import {
+  submitPreConsultation,
+  SubmissionValidationError,
+} from "@/lib/clinical/submit-pre-consultation";
 import { logger } from "@/lib/observability/logger";
 
 export const runtime = "nodejs";
@@ -32,40 +32,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, id: crypto.randomUUID() }, { status: 201 });
     }
 
-    const result = LegacyFormSchema.safeParse(body);
-
-    if (!result.success) {
-      return NextResponse.json(
-        { success: false, message: "Dados inválidos." },
-        { status: 400 }
-      );
-    }
-
-    const data = result.data;
-    const { nome, email, whatsapp, child_name, child_age, privacyAccepted: _, companyWebsite: __, ...rest } = data;
-
-    const answers: Record<string, string> = {};
-    for (const [key, value] of Object.entries(rest)) {
-      if (value !== undefined && value !== null && value !== "") {
-        answers[key] = String(value);
-      }
-    }
-
-    const id = await createSubmission({
-      patient_name: nome,
-      patient_email: email || null,
-      patient_phone: whatsapp || null,
-      child_name: child_name || null,
-      child_age: child_age || null,
-      form_type: "pre_consulta",
-      answers,
-    });
     const fingerprint = getRequestFingerprint(req);
-    await recordConsent({ submissionId: id, ...fingerprint });
-    await ensureOpportunityForSubmission(id);
+    const { id } = await submitPreConsultation(body, {
+      ipHash: fingerprint.ipHash,
+      userAgentHash: fingerprint.userAgentHash,
+      source: "traditional",
+    });
 
     return NextResponse.json({ success: true, id }, { status: 201 });
   } catch (error) {
+    if (error instanceof SubmissionValidationError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: 400 }
+      );
+    }
     logger.error("form_submission_create_failed", { error });
     return NextResponse.json(
       { success: false, message: "Não foi possível enviar o formulário." },
