@@ -17,6 +17,17 @@ export default defineConfig({
     timeout: 5_000,
   },
   fullyParallel: true,
+  // O shim local de D1 (e2e/helpers/d1-shim.mjs) usa node:sqlite de forma
+  // sincrona atras de um unico servidor HTTP — sob o paralelismo padrao
+  // (1 worker por core), a fila de requisicoes ao banco fica longa o
+  // suficiente para estourar o timeout de assert (5s) em testes sem
+  // nenhuma relacao entre si, um falso-positivo puro de infraestrutura de
+  // teste (confirmado: os mesmos testes que falham na suite cheia passam
+  // 100% das vezes isolados ou com workers=1). Nao e um limite de
+  // requisicoes da aplicacao (rate limit) sendo "burlado" — e so throughput
+  // do shim local, que o D1 real da Cloudflare em producao nao tem.
+  workers: process.env.CI ? 2 : 4,
+  retries: process.env.CI ? 2 : 1,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   globalSetup: "./e2e/global-setup.ts",
   use: {

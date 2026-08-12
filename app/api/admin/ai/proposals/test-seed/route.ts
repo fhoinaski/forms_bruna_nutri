@@ -14,6 +14,15 @@ const BodySchema = z.object({
   action: z.record(z.string(), z.unknown()),
   clientId: z.string().optional(),
   submissionId: z.string().optional(),
+  /**
+   * Propostas do PATIENT_ASSISTANT sao persistidas com o proprio clientId
+   * como "adminId" (reaproveitamento pragmatico da coluna — ver
+   * lib/ai/core/patient-orchestrator.ts:221), nunca o id de um admin real.
+   * Sem este flag, a proposta nunca seria reivindicavel via
+   * /api/portal/ai/proposals/[id]/confirm (que so aceita admin_id = clientId
+   * da sessao do portal). Exige clientId quando true.
+   */
+  asPatient: z.boolean().optional(),
 }).strict();
 
 /**
@@ -53,7 +62,12 @@ export async function POST(req: NextRequest) {
     requiresConfirmation: requiresConfirmation(risk),
   } as ProposedAction;
 
-  const persisted = await persistProposedAction(admin.sub, parsed.data.toolName, action, {
+  if (parsed.data.asPatient && !parsed.data.clientId) {
+    return NextResponse.json({ message: "clientId é obrigatório quando asPatient=true." }, { status: 400 });
+  }
+  const persistingId = parsed.data.asPatient ? parsed.data.clientId! : admin.sub;
+
+  const persisted = await persistProposedAction(persistingId, parsed.data.toolName, action, {
     clientId: parsed.data.clientId,
     submissionId: parsed.data.submissionId,
   });

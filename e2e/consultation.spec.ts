@@ -58,9 +58,13 @@ test.describe("Modo Consulta", () => {
     await expect(page.getByText(/nenhum protocolo ativo/i)).toBeVisible();
 
     // Pendências visíveis no cabeçalho/resumo (paciente novo: tudo zerado).
+    // {exact:true} evita colidir com o "0" que aparece como substring dentro
+    // de um id de cliente (uuid) em outro lugar da página — achado real ao
+    // rodar a suíte em viewport mobile, onde a ordem/composição do DOM
+    // muda o suficiente para esse falso-positivo aparecer no primeiro match.
     await page.getByRole("tab", { name: "Consulta" }).click();
     await expect(page.getByText("Tarefas pendentes")).toBeVisible();
-    await expect(page.getByText("0").first()).toBeVisible();
+    await expect(page.getByText("0", { exact: true }).first()).toBeVisible();
 
     // Finalizar consulta.
     await page.getByRole("button", { name: /^finalizar consulta$/i }).click();

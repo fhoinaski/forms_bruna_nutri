@@ -38,7 +38,7 @@ test.describe("guardrails de IA", () => {
     expect(readTool.risk).toBe("read");
     expect(readTool.requiresConfirmation).toBe(false);
 
-    const lowTool = await seedAiProposal(request, { toolName: "navigate", action: { kind: "low_probe" }, clientId: patient.id });
+    const lowTool = await seedAiProposal(request, { toolName: "navigateInSystem", action: { kind: "low_probe" }, clientId: patient.id });
     expect(lowTool.risk).toBe("low");
     expect(lowTool.requiresConfirmation).toBe(false);
 
@@ -56,7 +56,15 @@ test.describe("guardrails de IA", () => {
 
   test("tool sensitive (agendamento): proposta pendente nao cria nada; so a confirmacao explicita grava, e confirmar duas vezes nao duplica", async ({ request }) => {
     const patient = await createTestPatient(request);
-    const startsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    // Horario aleatorio dentro de uma janela de dias (nao so "+3 dias" fixo):
+    // hasAppointmentConflict() e uma checagem real de conflito de agenda —
+    // com um horario fixo, os dois projetos do Playwright (chromium-desktop
+    // e mobile-chrome) rodando este mesmo teste em paralelo podiam calcular
+    // o mesmo horario e colidir de verdade, fazendo a confirmacao do
+    // SEGUNDO projeto falhar com 409 legitimamente (nao e bug de app).
+    const startsAt = new Date(
+      Date.now() + (3 + Math.floor(Math.random() * 5)) * 24 * 60 * 60 * 1000 + Math.floor(Math.random() * 24 * 60 * 60 * 1000)
+    ).toISOString();
 
     const proposal = await seedAiProposal(request, {
       toolName: "proposeNewAppointment",
@@ -172,6 +180,7 @@ test.describe("guardrails de IA", () => {
   test("uma proposta gerada pelo admin nunca pode ser confirmada pelo canal do portal do paciente, mesmo pertencendo ao mesmo paciente (isolamento entre canais)", async ({ request, browser }) => {
     const patient = await createTestPatient(request);
     const { code } = await enablePortalAccess(request, patient.id);
+    const plan = await (await request.post(`/api/admin/clients/${patient.id}/meal-plans`, { data: { targetGroup: "ADULTO_SAUDAVEL" } })).json();
 
     const proposal = await seedAiProposal(request, {
       toolName: "proposeMealPlanChange",
@@ -179,14 +188,14 @@ test.describe("guardrails de IA", () => {
       action: {
         kind: "meal_plan_change",
         clientId: patient.id,
-        mealPlanId: "irrelevante-para-este-teste",
-        baseVersion: 1,
+        mealPlanId: plan.id,
+        baseVersion: plan.version,
         changes: [{ operation: "add_meal", name: "x" }],
-        preview: { mealPlanTitle: "x", changeSummaries: [], totalImpact: { kcal: 0, protein: 0, carbs: 0, fat: 0 } },
+        preview: { mealPlanTitle: plan.title, changeSummaries: [], totalImpact: { kcal: 0, protein: 0, carbs: 0, fat: 0 } },
       },
     });
 
-    const portalContext = await browser.newContext();
+    const portalContext = await browser.newContext({ storageState: undefined });
     const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, code } });
     expect(loginResponse.ok()).toBe(true);
 

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
 import { calculatePlanNutrients, roundedNutrients, type FoodReferenceLookup, type NutrientKey } from "@/lib/nutrition/nutrients";
 import { compareTargetVsPrescribed, type NutrientTarget } from "@/lib/nutrition/targets";
+import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
+import type { FoodPortion } from "@/lib/repositories/food-portions";
 
 type SummaryItem = {
   food: string;
@@ -11,6 +13,7 @@ type SummaryItem = {
   unit?: string | null;
   food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | null;
   food_ref_id?: string | null;
+  household_measure_id?: string | null;
 };
 type SummaryMeal = { id?: string; name: string; items: SummaryItem[] };
 
@@ -54,6 +57,7 @@ const MICRONUTRIENTS: NutrientKey[] = ["fiberG", "sodiumMg", "calciumMg", "ironM
 export function MealPlanNutritionSummary({ meals, target }: { meals: SummaryMeal[]; target: NutrientTarget }) {
   const [refByText, setRefByText] = useState<Record<string, MacroReferenceFood>>({});
   const [refById, setRefById] = useState<Record<string, MacroReferenceFood>>({});
+  const [measuresById, setMeasuresById] = useState<Record<string, HouseholdMeasureOption>>({});
 
   useEffect(() => {
     const uniqueFoods = Array.from(
@@ -95,13 +99,50 @@ export function MealPlanNutritionSummary({ meals, target }: { meals: SummaryMeal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(meals.map((meal) => meal.items.map((item) => item.food)))]);
 
+  useEffect(() => {
+    const pairs = Array.from(
+      new Set(
+        meals
+          .flatMap((meal) => meal.items)
+          .filter((item) => item.food_ref_id && (item.food_source === "TACO" || item.food_source === "CUSTOM"))
+          .map((item) => `${item.food_source}:${item.food_ref_id}`)
+      )
+    );
+    if (!pairs.length) return;
+    const controller = new AbortController();
+    Promise.all(
+      pairs.map(async (pair) => {
+        const [source, refId] = pair.split(":");
+        try {
+          const response = await fetch(`/api/admin/foods/portions?source=${source}&refId=${encodeURIComponent(refId)}`, { cache: "no-store", signal: controller.signal });
+          const data = response.ok ? ((await response.json()) as { items?: FoodPortion[] }) : { items: [] as FoodPortion[] };
+          return data.items ?? [];
+        } catch (cause) {
+          if (cause instanceof Error && cause.name === "AbortError") return [];
+          return [];
+        }
+      })
+    ).then((results) => {
+      setMeasuresById((current) => {
+        const next = { ...current };
+        for (const portion of results.flat()) {
+          next[portion.id] = { id: portion.id, description: portion.description, gramEquivalent: portion.gram_equivalent, source: portion.source, confidence: portion.confidence };
+        }
+        return next;
+      });
+    });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(meals.map((meal) => meal.items.map((item) => `${item.food_source ?? ""}:${item.food_ref_id ?? ""}`)))]);
+
   const lookup: FoodReferenceLookup = useMemo(
     () => ({
       byTacoNumber: (numero) => refById[numero] ?? null,
       byCustomId: (id) => refById[id] ?? null,
       fuzzyMatch: (food) => refByText[food.trim().toLowerCase()] ?? null,
+      byMeasureId: (id) => measuresById[id] ?? null,
     }),
-    [refById, refByText]
+    [refById, refByText, measuresById]
   );
 
   const result = useMemo(
@@ -123,6 +164,14 @@ export function MealPlanNutritionSummary({ meals, target }: { meals: SummaryMeal
         <p className="brand-kicker mb-1">Resumo nutricional</p>
         <h3 className="font-serif text-lg font-semibold text-[#3A3028]">Meta x prescrito</h3>
       </div>
+
+      {result.quality.total > 0 && (
+        <p className="text-xs leading-5 text-[#75675E]">
+          <span className="font-semibold text-[#607A56]">{result.quality.highConfidence}/{result.quality.total} itens</span> calculados com alta confiança
+          {result.quality.estimated > 0 && <span> · <span className="font-semibold text-[#9A6B28]">{result.quality.estimated}</span> estimado{result.quality.estimated > 1 ? "s" : ""}</span>}
+          {result.quality.unresolved > 0 && <span> · <span className="font-semibold text-[#B4573F]">{result.quality.unresolved}</span> não calculado{result.quality.unresolved > 1 ? "s" : ""}</span>}
+        </p>
+      )}
 
       {hasTarget ? (
         <div className="overflow-x-auto">

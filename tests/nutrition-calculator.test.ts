@@ -10,6 +10,7 @@ import {
 } from "@/lib/nutrition/nutrients";
 import { getTacoFoodByNumber } from "@/lib/nutrition/taco";
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
+import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
 
 const arroz = getTacoFoodByNumber("3")!; // Arroz, tipo 1, cozido
 const banana = getTacoFoodByNumber("179")!; // Banana, nanica, crua
@@ -172,5 +173,62 @@ describe("calculatePlanNutrients — total por refeicao e por dia", () => {
     const result = calculatePlanNutrients(plan, lookup);
     expect(result.total.values.energyKcal).toBeNull();
     expect(result.total.coverage.energyKcal).toEqual({ known: 0, total: 1 });
+  });
+});
+
+describe("calculateItemNutrients — medida caseira vinculada tem prioridade sobre a conversão genérica", () => {
+  it("usa a medida caseira quando fornecida, reportando confidence high e o measureId usado", () => {
+    const measure: HouseholdMeasureOption = { id: "measure-179-media", description: "1 unidade média", gramEquivalent: 86, source: "TBCA", confidence: "high" };
+    const { grams, resolution, values } = calculateItemNutrients("1", "unidade", banana, measure);
+    expect(grams).toBe(86);
+    expect(resolution).toMatchObject({ method: "food_household_measure", confidence: "high", measureId: "measure-179-media" });
+    expect(values.energyKcal).toBeCloseTo((banana.energia_kcal * 86) / 100, 3);
+  });
+
+  it("sem medida caseira, cai para a conversão genérica marcada como estimativa (nunca 'precisa')", () => {
+    const { resolution } = calculateItemNutrients("1", "unidade", banana);
+    expect(resolution.method).toBe("estimated");
+    expect(resolution.confidence).toBe("low");
+  });
+});
+
+describe("calculatePlanNutrients — resumo de qualidade (quantos itens com alta confiança vs estimados)", () => {
+  const lookupWithMeasure: FoodReferenceLookup = {
+    byTacoNumber: (numero) => getTacoFoodByNumber(numero),
+    byCustomId: () => null,
+    fuzzyMatch: () => null,
+    byMeasureId: (id) => (id === "m-banana-media" ? { id, description: "1 unidade média", gramEquivalent: 86, source: "TBCA", confidence: "high" } : null),
+  };
+
+  it("conta itens explícitos em gramas e com medida caseira como alta confiança, e itens com unidade genérica como estimados", () => {
+    const plan = {
+      meals: [
+        {
+          id: "m1",
+          name: "Café da manhã",
+          items: [
+            { food: "Arroz", quantity: "100", unit: "g", food_source: "TACO" as const, food_ref_id: "3" }, // explicit_grams -> high
+            { food: "Banana", quantity: "1", food_source: "TACO" as const, food_ref_id: "179", household_measure_id: "m-banana-media" }, // food_household_measure -> high
+            { food: "Banana", quantity: "1", unit: "unidade", food_source: "TACO" as const, food_ref_id: "179" }, // generico sem medida -> estimated
+          ],
+        },
+      ],
+    };
+    const result = calculatePlanNutrients(plan, lookupWithMeasure);
+    expect(result.quality).toEqual({ total: 3, highConfidence: 2, estimated: 1, unresolved: 0 });
+  });
+
+  it("nunca conta um item com alimento vazio (linha de 'adicionar novo item' ainda não preenchida)", () => {
+    const plan = { meals: [{ id: "m1", name: "Lanche", items: [{ food: "", quantity: "", unit: "" }] }] };
+    const result = calculatePlanNutrients(plan, lookupWithMeasure);
+    expect(result.quality.total).toBe(0);
+  });
+
+  it("plano legado (sem food_source/food_ref_id/household_measure_id em nenhum item) continua funcionando via match textual, marcado como estimativa quando aplicável", () => {
+    const legacyLookup: FoodReferenceLookup = { byTacoNumber: () => null, byCustomId: () => null, fuzzyMatch: (food) => (food.toLowerCase().includes("banana") ? banana : null) };
+    const plan = { meals: [{ id: "m1", name: "Lanche", items: [{ food: "Banana prata", quantity: "1", unit: "unidade" }] }] };
+    const result = calculatePlanNutrients(plan, legacyLookup);
+    expect(result.total.values.energyKcal).not.toBeNull();
+    expect(result.quality).toEqual({ total: 1, highConfidence: 0, estimated: 1, unresolved: 0 });
   });
 });

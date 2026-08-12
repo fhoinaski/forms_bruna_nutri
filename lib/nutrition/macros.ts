@@ -1,3 +1,8 @@
+import { normalize } from "@/lib/nutrition/normalize";
+import { resolveQuantity, type HouseholdMeasureOption, type QuantityResolution } from "@/lib/nutrition/quantity-resolution";
+
+export { normalize };
+
 export interface MacroTotals {
   kcal: number;
   protein: number;
@@ -31,35 +36,50 @@ export interface MacroReferenceFood {
 
 const EMPTY: MacroTotals = { kcal: 0, protein: 0, carbs: 0, fat: 0, recognizedItems: 0, totalItems: 0 };
 
-export function normalize(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-}
-
+/**
+ * Wrapper fino sobre o motor central de resolucao de quantidade
+ * (lib/nutrition/quantity-resolution.ts) \u2014 preserva o contrato sincrono
+ * numerico que todo chamador legado (recipes.ts, ProtocolBuilder.tsx,
+ * estimateFoodMacros abaixo, etc.) ja espera, sem duplicar a logica de
+ * conversao. Quando a quantidade nao pode ser resolvida com nenhuma
+ * confianca (method="unresolved"), devolve 0 \u2014 mesmo sinal de "sem grama
+ * calculavel" que o resto do app ja trata hoje (nunca inventa um numero).
+ * Quem precisa saber O PORQUE (metodo/confianca/aviso) deve chamar
+ * `resolveQuantity` diretamente em vez desta funcao.
+ */
 export function quantityInGrams(quantity?: string | number | null, unit?: string | null) {
-  const amount = typeof quantity === "number" ? quantity : Number(String(quantity ?? "").replace(",", ".").match(/[\d.]+/)?.[0] ?? 0);
-  if (!Number.isFinite(amount) || amount <= 0) return 0;
-  const normalizedUnit = normalize(unit ?? "g");
-  if (["kg", "quilo", "quilos"].includes(normalizedUnit)) return amount * 1000;
-  if (["ml", "mililitro", "mililitros", "g", "grama", "gramas"].includes(normalizedUnit)) return amount;
-  // Conversoes de unidade, colher e xicara sao aproximacoes praticas para estimativa rapida no editor.
-  if (["colher", "colheres", "colher de sopa"].includes(normalizedUnit)) return amount * 15;
-  if (["xicara", "xicaras"].includes(normalizedUnit)) return amount * 160;
-  if (["un", "unidade", "unidades", "fatia", "fatias"].includes(normalizedUnit)) return amount * 50;
-  return amount;
+  return resolveQuantity({ quantity, unit }).grams ?? 0;
 }
 
+/**
+ * Match textual puro (ultimo recurso da cadeia de prioridade — ver
+ * `resolveFoodReference` abaixo, que tenta o vinculo por id ANTES de cair
+ * aqui). Ranking em 3 niveis (exato > comeca-com > contem), mesmo criterio
+ * ja usado em lib/nutrition/food-search.ts — antes so tinha exato/contem, o
+ * que empatava com frequencia entre varias descricoes "contem" sem
+ * priorizar a mais provavel.
+ *
+ * So compara na direcao "a descricao do alimento contem o texto digitado"
+ * (ex.: usuario digita "arroz", bate com "Arroz, tipo 1, cozido"). A
+ * direcao inversa (texto digitado contem a descricao) foi removida: ela
+ * causava falsos positivos reais, ex. o texto livre "arroz com feijao e
+ * salsicha" batendo com a referencia curta "sal" so porque a substring
+ * aparece dentro de "salsicha".
+ */
 export function findBestFoodReference(food: string, references: MacroReferenceFood[]): MacroReferenceFood | null {
   const normalizedFood = normalize(food);
   if (!normalizedFood) return null;
   const scored = references
     .map((reference) => {
       const normalizedDescription = normalize(reference.descricao);
-      const exact = normalizedDescription === normalizedFood;
-      const contains = normalizedDescription.includes(normalizedFood) || normalizedFood.includes(normalizedDescription);
-      if (!exact && !contains) return null;
+      let score: number;
+      if (normalizedDescription === normalizedFood) score = 0;
+      else if (normalizedDescription.startsWith(normalizedFood)) score = 1;
+      else if (normalizedDescription.includes(normalizedFood)) score = 2;
+      else return null;
       return {
         reference,
-        score: exact ? 0 : 1,
+        score,
         distance: Math.abs(normalizedDescription.length - normalizedFood.length),
         length: normalizedDescription.length,
       };
@@ -67,6 +87,84 @@ export function findBestFoodReference(food: string, references: MacroReferenceFo
     .filter((item): item is { reference: MacroReferenceFood; score: number; distance: number; length: number } => item !== null)
     .sort((a, b) => a.score - b.score || a.distance - b.distance || a.length - b.length);
   return scored[0]?.reference ?? null;
+}
+
+/**
+ * Busca por identidade estruturada (food_source/food_ref_id) — prioridade
+ * maxima na cadeia de resolucao (secao 11 do pedido: uma vez vinculado, o
+ * calculo nunca mais depende do nome). `numero` guarda tanto o numero TACO
+ * quanto o id de um alimento personalizado (ver custom-foods.ts#toMacroReferenceFood).
+ */
+export function findFoodReferenceByIdentity(
+  references: MacroReferenceFood[],
+  foodSource: string | null | undefined,
+  foodRefId: string | null | undefined
+): MacroReferenceFood | null {
+  if (!foodSource || !foodRefId) return null;
+  const expectedFonte = foodSource === "TACO" ? null : foodSource === "MANUFACTURER" ? "manufacturer" : "custom";
+  return references.find((reference) => {
+    if (String(reference.numero ?? "") !== foodRefId) return false;
+    if (expectedFonte === null) return reference.fonte === "taco" || reference.fonte === "complementar";
+    return reference.fonte === expectedFonte;
+  }) ?? null;
+}
+
+export interface FoodIdentity {
+  food: string;
+  food_source?: string | null;
+  food_ref_id?: string | null;
+}
+
+/**
+ * Resolve a referencia respeitando a prioridade correta: vinculo
+ * estruturado primeiro, texto so como fallback (secao 11 do pedido). Mesmo
+ * criterio ja usado no motor do resumo nutricional
+ * (lib/nutrition/nutrients.ts#resolveItemReference), aqui reaproveitado
+ * para o calculo client-side "ao vivo" do editor (que trabalha com um
+ * array plano de referencias ja buscadas, nao com lookups async por id).
+ */
+export function resolveFoodReference(item: FoodIdentity, references: MacroReferenceFood[]): MacroReferenceFood | null {
+  return findFoodReferenceByIdentity(references, item.food_source, item.food_ref_id) ?? findBestFoodReference(item.food, references);
+}
+
+export interface FoodMacroResolution {
+  macros: MacroTotals;
+  reference: MacroReferenceFood | null;
+  quantity: QuantityResolution;
+}
+
+/**
+ * Versao "rica" de estimateFoodMacros: usa a prioridade correta de
+ * resolucao de alimento (vinculo estruturado > texto) E devolve o
+ * QuantityResolution completo (metodo/confianca/aviso), para a UI poder
+ * mostrar quando um valor e estimado. Usada pelo editor (rodape de macros
+ * "ao vivo" por item) — `estimateFoodMacros` abaixo continua existindo tal
+ * como esta para os chamadores que so precisam do numero (recipes.ts,
+ * ProtocolBuilder.tsx), sem duplicar a logica de calculo em si.
+ */
+export function resolveFoodItemMacros(
+  item: FoodIdentity & { quantity?: string | number | null; unit?: string | null },
+  references: MacroReferenceFood[],
+  householdMeasure?: HouseholdMeasureOption | null
+): FoodMacroResolution {
+  const quantity = resolveQuantity({ quantity: item.quantity, unit: item.unit, householdMeasure });
+  if (!item.food.trim()) return { macros: EMPTY, reference: null, quantity };
+  const reference = resolveFoodReference(item, references);
+  if (!reference) return { macros: { ...EMPTY, totalItems: 1 }, reference: null, quantity };
+  if (!quantity.grams) return { macros: { ...EMPTY, recognizedItems: 1, totalItems: 1 }, reference, quantity };
+  const factor = quantity.grams / 100;
+  return {
+    reference,
+    quantity,
+    macros: {
+      kcal: reference.energia_kcal * factor,
+      protein: reference.proteina_g * factor,
+      carbs: reference.carboidrato_g * factor,
+      fat: reference.lipidios_g * factor,
+      recognizedItems: 1,
+      totalItems: 1,
+    },
+  };
 }
 
 export function estimateFoodMacros(

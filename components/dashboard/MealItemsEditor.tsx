@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Beef, Flame, Plus, Save, Sparkles, Trash2, Utensils, Wheat } from "lucide-react";
-import { estimateFoodMacros, roundedMacros, sumMacros, type MacroReferenceFood } from "@/lib/nutrition/macros";
+import { AlertTriangle, Beef, Flame, Plus, Save, Sparkles, Trash2, Utensils, Wheat } from "lucide-react";
+import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
+import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
+import type { FoodPortion } from "@/lib/repositories/food-portions";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
 
@@ -19,7 +21,13 @@ export type MealItem = {
   // digitacao livre mantem os dois como null (mesmo comportamento de hoje).
   food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | null;
   food_ref_id?: string | null;
+  // Vinculo a uma medida caseira especifica (food_portions.id) — FASE 3.
+  household_measure_id?: string | null;
 };
+
+function toMeasureOption(portion: FoodPortion): HouseholdMeasureOption {
+  return { id: portion.id, description: portion.description, gramEquivalent: portion.gram_equivalent, source: portion.source, confidence: portion.confidence };
+}
 
 export type Meal = {
   name: string;
@@ -79,6 +87,7 @@ export function cleanMealsForSave(meals: Meal[]): Meal[] {
           notes: item.notes ?? null,
           food_source: item.food_source ?? null,
           food_ref_id: item.food_ref_id ?? null,
+          household_measure_id: item.household_measure_id ?? null,
         })),
     }))
     .filter((meal) => meal.name.trim() && meal.items.length);
@@ -120,6 +129,7 @@ export function MealItemsEditor({
   const [aiLoadingMeal, setAiLoadingMeal] = useState<number | null>(null);
   const [aiModalMealIndex, setAiModalMealIndex] = useState<number | null>(null);
   const [portalReady, setPortalReady] = useState(false);
+  const [measuresByFood, setMeasuresByFood] = useState<Record<string, FoodPortion[]>>({});
 
   useEffect(() => {
     setPortalReady(true);
@@ -168,6 +178,42 @@ export function MealItemsEditor({
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(meals.map((meal) => meal.items.map((item) => item.food)))]);
+
+  useEffect(() => {
+    const pairs = Array.from(
+      new Set(
+        meals
+          .flatMap((meal) => meal.items)
+          .filter((item) => item.food_ref_id && (item.food_source === "TACO" || item.food_source === "CUSTOM"))
+          .map((item) => `${item.food_source}:${item.food_ref_id}`)
+          .filter((pair) => !measuresByFood[pair])
+      )
+    );
+    if (!pairs.length) return;
+    const controller = new AbortController();
+    Promise.all(pairs.map(async (pair) => {
+      const [source, refId] = pair.split(":");
+      try {
+        const response = await fetch(`/api/admin/foods/portions?source=${source}&refId=${encodeURIComponent(refId)}`, { cache: "no-store", signal: controller.signal });
+        const data = response.ok ? await response.json() as { items?: FoodPortion[] } : { items: [] as FoodPortion[] };
+        return [pair, data.items ?? []] as const;
+      } catch (cause) {
+        if (cause instanceof Error && cause.name === "AbortError") return null;
+        return [pair, [] as FoodPortion[]] as const;
+      }
+    })).then((entries) => {
+      setMeasuresByFood((current) => {
+        const next = { ...current };
+        for (const entry of entries) {
+          if (!entry) continue;
+          next[entry[0]] = entry[1];
+        }
+        return next;
+      });
+    });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(meals.map((meal) => meal.items.map((item) => `${item.food_source ?? ""}:${item.food_ref_id ?? ""}`)))]);
 
   useEffect(() => {
     const query = foodSearch.query.trim();
@@ -223,9 +269,39 @@ export function MealItemsEditor({
     return Array.from(byKey.values());
   }, [foodSuggestions]);
 
-  const mealMacros = useMemo(() => meals.map((meal) => roundedMacros(sumMacros(
-    meal.items.filter((item) => item.food.trim()).map((item) => estimateFoodMacros(item.food, item.quantity, item.unit, knownFoodReferences))
-  ))), [meals, knownFoodReferences]);
+  function measureOptionsFor(item: MealItem): FoodPortion[] {
+    if (!item.food_ref_id || (item.food_source !== "TACO" && item.food_source !== "CUSTOM")) return [];
+    return measuresByFood[`${item.food_source}:${item.food_ref_id}`] ?? [];
+  }
+
+  function selectedMeasureFor(item: MealItem): HouseholdMeasureOption | null {
+    if (!item.household_measure_id) return null;
+    const portion = measureOptionsFor(item).find((candidate) => candidate.id === item.household_measure_id);
+    return portion ? toMeasureOption(portion) : null;
+  }
+
+  /**
+   * Resolucao completa (macros + metodo/confianca) por item, usando o motor
+   * central (lib/nutrition/quantity-resolution.ts via resolveFoodItemMacros)
+   * — respeita o vinculo estruturado (food_ref_id) e a medida caseira
+   * selecionada quando presentes, em vez de so casar por texto como antes
+   * (secao 11 do pedido: uma vez vinculado, nunca mais depende do nome).
+   */
+  const itemResolutions = useMemo(() => {
+    const map: Record<string, ReturnType<typeof resolveFoodItemMacros>> = {};
+    meals.forEach((meal, mealIndex) => {
+      meal.items.forEach((item, itemIndex) => {
+        if (!item.food.trim()) return;
+        map[`${mealIndex}:${itemIndex}`] = resolveFoodItemMacros(item, knownFoodReferences, selectedMeasureFor(item));
+      });
+    });
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meals, knownFoodReferences, measuresByFood]);
+
+  const mealMacros = useMemo(() => meals.map((meal, mealIndex) => roundedMacros(sumMacros(
+    meal.items.map((_, itemIndex) => itemResolutions[`${mealIndex}:${itemIndex}`]?.macros).filter((value): value is MacroTotals => Boolean(value))
+  ))), [meals, itemResolutions]);
 
   const planMacros = useMemo(() => roundedMacros(sumMacros(mealMacros)), [mealMacros]);
 
@@ -463,7 +539,7 @@ export function MealItemsEditor({
                       value={item.food}
                       onChange={(event) => {
                         const key = `${mealIndex}:${itemIndex}`;
-                        updateMealItem(mealIndex, itemIndex, { food: event.target.value, taco_number: null, food_source: null, food_ref_id: null });
+                        updateMealItem(mealIndex, itemIndex, { food: event.target.value, taco_number: null, food_source: null, food_ref_id: null, household_measure_id: null });
                         setActiveFoodField(key);
                         setFoodSearch({ key, query: event.target.value });
                       }}
@@ -481,6 +557,26 @@ export function MealItemsEditor({
                         sugerido por IA
                       </span>
                     )}
+                    {(() => {
+                      const resolution = itemResolutions[`${mealIndex}:${itemIndex}`]?.quantity;
+                      // "food_household_measure" e sua propria categoria (secao 9 do
+                      // pedido: preciso / baseado em medida especifica / estimado /
+                      // nao calculado) — mesmo quando a confianca da medida e
+                      // "medium" (ex.: referencia de mercado, nao dado oficial
+                      // publicado), isso NAO e a mesma coisa que a conversao
+                      // generica estimada, entao nunca mostra este aviso aqui.
+                      if (!resolution || resolution.method === "explicit_grams" || resolution.method === "generic_unit_conversion" || resolution.method === "food_household_measure") return null;
+                      const label = resolution.method === "unresolved" ? "Não foi possível calcular" : "Valor estimado";
+                      return (
+                        <span
+                          className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#FFF3E9] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9A6B28]"
+                          title={resolution.warning}
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          {label}
+                        </span>
+                      );
+                    })()}
                     {activeFoodField === `${mealIndex}:${itemIndex}` && (foodSuggestions[`${mealIndex}:${itemIndex}`]?.length ?? 0) > 0 && (
                       <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 overflow-y-auto rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
                         {foodSuggestions[`${mealIndex}:${itemIndex}`].map((suggestion) => (
@@ -494,6 +590,8 @@ export function MealItemsEditor({
                                 taco_number: suggestion.numero,
                                 food_source: toFoodSourceTag(suggestion.fonte),
                                 food_ref_id: String(suggestion.numero),
+                                // Alimento trocado: a medida caseira anterior (se havia) era de outro alimento e nao se aplica mais.
+                                household_measure_id: null,
                               });
                               setFoodSuggestions((current) => ({ ...current, [`${mealIndex}:${itemIndex}`]: [suggestion] }));
                               setActiveFoodField("");
@@ -513,7 +611,26 @@ export function MealItemsEditor({
                     )}
                   </div>
                   <input value={item.quantity ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { quantity: event.target.value })} className="brand-input" placeholder="Qtd." />
-                  <input value={item.unit ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { unit: event.target.value })} className="brand-input" placeholder="Un." />
+                  {item.food_ref_id ? (
+                    <select
+                      value={item.household_measure_id ?? "__grams__"}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        updateMealItem(mealIndex, itemIndex, value === "__grams__"
+                          ? { household_measure_id: null, unit: "g" }
+                          : { household_measure_id: value, unit: null });
+                      }}
+                      className="brand-input"
+                      title="Medida especifica do alimento — quando disponivel, o calculo usa o peso exato cadastrado em vez de uma aproximacao generica."
+                    >
+                      <option value="__grams__">Gramas (g)</option>
+                      {measureOptionsFor(item).map((measure) => (
+                        <option key={measure.id} value={measure.id}>{measure.description}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input value={item.unit ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { unit: event.target.value })} className="brand-input" placeholder="Un." />
+                  )}
                   <button type="button" onClick={() => updateMeal(mealIndex, { items: meal.items.filter((_, index) => index !== itemIndex) })} className="inline-flex h-11 items-center justify-center rounded-xl px-3 text-red-600 hover:bg-red-50" aria-label="Remover alimento" title="Remover alimento">
                     <Trash2 className="h-4 w-4" />
                   </button>

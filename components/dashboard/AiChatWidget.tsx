@@ -181,6 +181,7 @@ type ChatProposal =
       mealPlanTitle: string;
       changeSummaries: MealPlanChangeSummary[];
       totalImpact: MealPlanChangeImpact;
+      hasEstimatedValues?: boolean;
     });
 
 type ChatMessage = {
@@ -327,6 +328,7 @@ function buildProposal(update: Record<string, unknown>): ChatProposal | null {
       mealPlanTitle: string;
       changeSummaries: MealPlanChangeSummary[];
       totalImpact: MealPlanChangeImpact;
+      hasEstimatedValues?: boolean;
     };
     return {
       kind: "meal_plan_change",
@@ -336,6 +338,7 @@ function buildProposal(update: Record<string, unknown>): ChatProposal | null {
       mealPlanTitle: preview.mealPlanTitle,
       changeSummaries: preview.changeSummaries,
       totalImpact: preview.totalImpact,
+      hasEstimatedValues: preview.hasEstimatedValues,
       title: "Proposta de alteração do plano alimentar",
       applyLabel: "Aplicar no plano alimentar",
       status: "pending",
@@ -1021,6 +1024,11 @@ function ProposalCard({ proposal, belongsToOtherContext, onDiscard, onApply, onF
               <MacroImpact label="Carbo." value={proposal.totalImpact.carbs} unit="g" />
               <MacroImpact label="Gordura" value={proposal.totalImpact.fat} unit="g" />
             </div>
+            {proposal.hasEstimatedValues && (
+              <p className="mt-1.5 text-[10px] leading-4 text-[#9A6B28]">
+                Impacto inclui pelo menos uma quantidade estimada (sem medida caseira específica cadastrada) — confira antes de confirmar.
+              </p>
+            )}
           </div>
         </div>
       )}

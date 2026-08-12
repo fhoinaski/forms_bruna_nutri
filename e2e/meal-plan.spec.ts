@@ -37,7 +37,10 @@ test.describe("plano alimentar", () => {
     await expect(suggestion).toBeVisible();
     await suggestion.click();
     await page.getByPlaceholder("Qtd.").last().fill("100");
-    await page.getByPlaceholder("Un.").last().fill("g");
+    // Alimento vinculado (veio da busca TACO): a coluna de unidade agora e um
+    // seletor de medida, nunca mais texto livre — "Gramas (g)" ja e o valor
+    // padrao, mas seleciona explicitamente para fixar unit="g".
+    await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
 
     // Macros em tempo real no rodape refletem o alimento adicionado (nao fica zerado).
     const kcalMetric = page.getByText(/^\d+ kcal$/).first();
@@ -88,5 +91,75 @@ test.describe("plano alimentar", () => {
 
     await expect(page.getByRole("heading", { name: "Plano alimentar" })).toBeVisible();
     await expect(page.getByText("v3", { exact: true })).toBeVisible();
+  });
+
+  test("seleciona uma medida caseira específica, altera a quantidade, recarrega e a medida/macro persistem; item sem medida cadastrada é sinalizado como estimativa", async ({ page, request }) => {
+    const patient = await createTestPatient(request);
+
+    await page.goto(`/dashboard/clients/${patient.id}`);
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await page.getByRole("button", { name: /^criar por modelo$/i }).click();
+    await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
+
+    // 1. Escolher um alimento vinculado (Banana, nanica, crua — TACO 179, que
+    // tem uma medida caseira semeada pela migration 0034: "1 unidade media").
+    // O plano criado por modelo pode ja trazer itens do modelo com unidade
+    // generica (ex.: "xicara") sem medida especifica vinculada — por isso a
+    // checagem de "sem estimativa" abaixo e escopada so ao card da NOVA
+    // refeicao (a ultima da lista), nunca a pagina inteira.
+    await page.getByRole("button", { name: /^refeicao$/i }).click();
+    const newMealCard = page.locator("article").last();
+    const foodInput = page.getByPlaceholder("Digite para buscar na TACO").last();
+    await foodInput.fill("Banana, nanica");
+    const suggestion = page.locator("button", { hasText: /banana, nanica/i }).first();
+    await expect(suggestion).toBeVisible();
+    await suggestion.click();
+
+    // 2. Selecionar a medida especifica (nunca mais um "Un." de texto livre para um alimento vinculado).
+    const measureSelect = page.locator('select[title*="Medida"]').last();
+    await expect(measureSelect).toBeVisible();
+    await measureSelect.selectOption({ label: "1 unidade media" });
+    await page.getByPlaceholder("Qtd.").last().fill("1");
+
+    const kcalMetric = page.getByText(/^\d+ kcal$/).first();
+    const kcalSingle = Number(((await kcalMetric.textContent()) ?? "").replace(/\D/g, "") || "0");
+    expect(kcalSingle).toBeGreaterThan(0);
+    // Medida especifica cadastrada -> alta confianca, sem aviso de estimativa para este item.
+    await expect(newMealCard.getByText(/valor estimado/i)).toHaveCount(0);
+
+    // 3. Alterar quantidade -> macros mudam (dobrar a quantidade aproximadamente dobra o impacto — tolerância de arredondamento de exibição).
+    await page.getByPlaceholder("Qtd.").last().fill("2");
+    await expect(async () => {
+      const value = Number(((await kcalMetric.textContent()) ?? "").replace(/\D/g, "") || "0");
+      expect(value).toBeGreaterThan(kcalSingle);
+      expect(Math.abs(value - kcalSingle * 2)).toBeLessThanOrEqual(2);
+    }).toPass();
+    const kcalDouble = Number(((await kcalMetric.textContent()) ?? "").replace(/\D/g, "") || "0");
+
+    // 5. Salvar.
+    await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
+    await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
+
+    // 6. Recarregar.
+    await page.reload();
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+
+    // 7. A medida continua selecionada.
+    const measureSelectAfterReload = page.locator('select[title*="Medida"]').last();
+    await expect(measureSelectAfterReload.locator("option:checked")).toHaveText("1 unidade media");
+
+    // 8. Macros permanecem iguais.
+    await expect(page.getByText(/^\d+ kcal$/).first()).toHaveText(`${kcalDouble} kcal`);
+
+    // 9/10. Um segundo item, digitado livremente sem vinculo a um alimento
+    // estruturado (mesmo comportamento de plano legado), com unidade
+    // generica sem medida cadastrada, e sinalizado como estimativa na UI —
+    // nunca silenciosamente tratado como preciso.
+    await page.getByRole("button", { name: /^refeicao$/i }).click();
+    const freeTextFoodInput = page.getByPlaceholder("Digite para buscar na TACO").last();
+    await freeTextFoodInput.fill("Petisco caseiro nao cadastrado");
+    await page.getByPlaceholder("Qtd.").last().fill("1");
+    await page.getByPlaceholder("Un.").last().fill("unidade");
+    await expect(page.getByText(/valor estimado/i).last()).toBeVisible();
   });
 });

@@ -25,6 +25,7 @@ import {
 import { CLIENT_CREATION_ASSISTANT_INSTRUCTIONS, PROPOSE_NEW_CLIENT_TOOL_NAME } from "@/lib/ai/agents/clients/client-creation-agent";
 import { RECIPE_CREATION_ASSISTANT_INSTRUCTIONS, PROPOSE_NEW_RECIPE_TOOL_NAME } from "@/lib/ai/agents/nutrition/recipe-creation-agent";
 import { BLOG_CREATION_ASSISTANT_INSTRUCTIONS, PROPOSE_NEW_BLOG_POST_TOOL_NAME } from "@/lib/ai/agents/content/blog-creation-agent";
+import { SEARCH_EDITORIAL_SOURCES_TOOL_NAME } from "@/lib/ai/research/editorial-sources";
 import {
   PRONTUARIO_ASSISTANT_INSTRUCTIONS,
   PROPOSE_NUTRITION_RECORD_TOOL_NAME,
@@ -255,7 +256,7 @@ export async function runAssistantTurn(
 
   if (!client && !submission) {
     systemPromptParts.push(BLOG_CREATION_ASSISTANT_INSTRUCTIONS);
-    activeToolNames.push(PROPOSE_NEW_BLOG_POST_TOOL_NAME);
+    activeToolNames.push(PROPOSE_NEW_BLOG_POST_TOOL_NAME, SEARCH_EDITORIAL_SOURCES_TOOL_NAME);
   }
 
   // O cliente so entra em contexto se currentClientId veio explicitamente

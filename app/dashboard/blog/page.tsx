@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { HelpPopover } from "@/components/dashboard/HelpPopover";
 import { MarkdownEditor } from "@/components/dashboard/MarkdownEditor";
+import type { BlogContentDomain, BlogReference } from "@/lib/ai/research/editorial-sources";
 
 type BlogStatus = "draft" | "published" | "archived";
 
@@ -33,6 +34,8 @@ interface BlogPost {
   seo_title: string | null;
   seo_description: string | null;
   ai_generated: number;
+  references_json: string;
+  content_domain: BlogContentDomain | null;
   published_at: string | null;
   created_at: string;
 }
@@ -47,7 +50,21 @@ interface FormState {
   cover_image_url: string;
   seo_title: string;
   seo_description: string;
+  content_domain: BlogContentDomain | "";
+  references: BlogReference[];
 }
+
+const CONTENT_DOMAIN_LABELS: Record<BlogContentDomain, string> = {
+  nutrition: "Nutrição",
+  maternal_child: "Materno-infantil",
+  clinical_condition: "Condição clínica",
+  medication: "Medicamento",
+  supplement: "Suplemento",
+  behavior: "Comportamento alimentar",
+  general_health: "Saúde geral",
+};
+
+const DOMAINS_NEEDING_REVIEW: readonly BlogContentDomain[] = ["medication", "clinical_condition", "supplement"];
 
 const statusLabels: Record<BlogStatus, string> = {
   draft: "Rascunho",
@@ -65,6 +82,8 @@ const emptyForm: FormState = {
   cover_image_url: "",
   seo_title: "",
   seo_description: "",
+  content_domain: "",
+  references: [],
 };
 
 function statusTone(status: BlogStatus) {
@@ -76,6 +95,15 @@ function statusTone(status: BlogStatus) {
 function parseTags(tagsJson: string): string[] {
   try {
     return JSON.parse(tagsJson || "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+
+function parseReferences(referencesJson: string): BlogReference[] {
+  try {
+    const parsed = JSON.parse(referencesJson || "[]");
+    return Array.isArray(parsed) ? (parsed as BlogReference[]) : [];
   } catch {
     return [];
   }
@@ -154,8 +182,14 @@ export default function DashboardBlogPage() {
       cover_image_url: post.cover_image_url || "",
       seo_title: post.seo_title || "",
       seo_description: post.seo_description || "",
+      content_domain: post.content_domain ?? "",
+      references: parseReferences(post.references_json),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function removeReference(index: number) {
+    setForm((current) => ({ ...current, references: current.references.filter((_, i) => i !== index) }));
   }
 
   async function savePost(event: React.FormEvent) {
@@ -180,6 +214,8 @@ export default function DashboardBlogPage() {
       cover_image_url: form.cover_image_url || null,
       seo_title: form.seo_title || form.title,
       seo_description: form.seo_description || form.excerpt,
+      content_domain: form.content_domain || null,
+      references: form.references,
     };
 
     try {
@@ -503,6 +539,62 @@ export default function DashboardBlogPage() {
                   placeholder="introducao alimentar, seletividade, rotina"
                 />
               </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <label className="brand-label">Domínio editorial</label>
+                  {form.content_domain && DOMAINS_NEEDING_REVIEW.includes(form.content_domain) && (
+                    <span className="rounded-full bg-[#FFF3E9] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9A6B28]">
+                      Revisar com atenção antes de publicar
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={form.content_domain}
+                  onChange={(event) => updateForm("content_domain", event.target.value as BlogContentDomain | "")}
+                  className="brand-input"
+                >
+                  <option value="">Não classificado</option>
+                  {Object.entries(CONTENT_DOMAIN_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {form.references.length > 0 && (
+                <div className="space-y-2 rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-3">
+                  <p className="brand-label">
+                    Referências citadas pela IA ({form.references.length}) — confira antes de publicar; remova qualquer uma que pareça duvidosa.
+                  </p>
+                  <ul className="space-y-2">
+                    {form.references.map((reference, index) => (
+                      <li key={`${reference.title}-${index}`} className="flex items-start justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs text-[#75675E]">
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-[#3A3028]">{reference.title}</p>
+                          <p className="truncate">
+                            {[reference.organization, reference.year].filter(Boolean).join(" · ")}
+                            {reference.url && (
+                              <>
+                                {" "}
+                                <a href={reference.url} target="_blank" rel="noreferrer" className="underline">
+                                  link
+                                </a>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeReference(index)}
+                          className="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-600 hover:bg-red-50"
+                        >
+                          Remover
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div>
                 <label className="brand-label">Imagem de capa URL</label>
                 <input

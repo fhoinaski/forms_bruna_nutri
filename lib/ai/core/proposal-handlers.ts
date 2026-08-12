@@ -13,6 +13,7 @@ import { NUTRITION_TEXT_FIELDS, type NutritionRecordTextFieldKey } from "@/lib/c
 import { getSubmissionById } from "@/lib/repositories/submissions";
 import { upsertPreAnalysis } from "@/lib/repositories/pre-analyses";
 import { createBlogPost } from "@/lib/repositories/blog-posts";
+import { blogContentDomainSchema, blogReferenceSchema, type BlogReference } from "@/lib/ai/research/editorial-sources";
 import { getActiveMealPlan, getMealPlanById, updateMealPlan } from "@/lib/repositories/meal-plans";
 import { applyMealPlanChangesWithPreview, MealPlanChangeValidationError } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { normalize } from "@/lib/nutrition/macros";
@@ -298,6 +299,25 @@ const executeNewBlogPost: ProposalHandler<"new_blog_post"> = async (action) => {
 
   const tags = (action.fields.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean);
 
+  // Revalida no momento da execucao — nunca confia cegamente no que a tool
+  // devolveu antes da revisao humana (mesmo padrao de todo outro handler
+  // aqui): dominio invalido vira null, referencias mal-formadas viram [].
+  const domainParsed = blogContentDomainSchema.safeParse(action.fields.content_domain);
+  const contentDomain = domainParsed.success ? domainParsed.data : null;
+
+  let references: BlogReference[] = [];
+  try {
+    const raw = JSON.parse(action.fields.references_json || "[]");
+    if (Array.isArray(raw)) {
+      references = raw
+        .map((item) => blogReferenceSchema.safeParse(item))
+        .filter((result): result is { success: true; data: BlogReference } => result.success)
+        .map((result) => result.data);
+    }
+  } catch {
+    references = [];
+  }
+
   const blogPostId = await createBlogPost({
     title,
     excerpt,
@@ -308,6 +328,8 @@ const executeNewBlogPost: ProposalHandler<"new_blog_post"> = async (action) => {
     seo_description: action.fields.seo_description || excerpt,
     status: "draft",
     ai_generated: true,
+    content_domain: contentDomain,
+    references,
   });
 
   return { data: { blogPostId } };

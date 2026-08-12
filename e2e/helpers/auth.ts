@@ -12,9 +12,22 @@ export interface AdminFixture {
   mustChangePassword: number;
 }
 
-/** Le os admins semeados por e2e/helpers/webserver-entrypoint.mjs antes do servidor subir. */
-export function adminFixtures(): { admin: AdminFixture; adminMustChange: AdminFixture; adminMfaCandidate: AdminFixture } {
-  return JSON.parse(readFileSync(fixturesPath, "utf8"));
+/**
+ * Le os admins semeados por e2e/helpers/webserver-entrypoint.mjs antes do
+ * servidor subir. `admin` e compartilhado (nenhum teste muta essa conta
+ * permanentemente). `adminMustChange`/`adminMfaCandidate` SAO mutados de
+ * verdade pelos proprios testes (troca de senha, ativacao de MFA) — por
+ * isso existe uma copia isolada por projeto do Playwright, e `projectName`
+ * (ex.: testInfo.project.name) escolhe a copia certa; sem `projectName`,
+ * cai na primeira copia semeada (uso fora de auth.spec.ts, que so le `admin`).
+ */
+export function adminFixtures(projectName?: string): { admin: AdminFixture; adminMustChange: AdminFixture; adminMfaCandidate: AdminFixture } {
+  const fixtures = JSON.parse(readFileSync(fixturesPath, "utf8")) as {
+    admin: AdminFixture;
+    byProject: Record<string, { adminMustChange: AdminFixture; adminMfaCandidate: AdminFixture }>;
+  };
+  const projectFixtures = (projectName && fixtures.byProject[projectName]) || Object.values(fixtures.byProject)[0];
+  return { admin: fixtures.admin, ...projectFixtures };
 }
 
 export const ADMIN_STORAGE_STATE = join(__dirname, "..", ".tmp", "admin-storage-state.json");

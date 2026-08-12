@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient, uniqueSuffix } from "./helpers/test-data";
+import { ADMIN_STORAGE_STATE, suppressDailyBriefingPopup } from "./helpers/auth";
+import { createTestPatient, uniquePhone, uniqueSuffix } from "./helpers/test-data";
 
 /**
  * CRUD de pacientes — usa a sessao admin ja pronta (storageState), porque o
@@ -13,10 +13,11 @@ test.describe("pacientes", () => {
     const suffix = uniqueSuffix();
     const name = `E2E UI Paciente ${suffix}`;
 
+    await suppressDailyBriefingPopup(page);
     await page.goto("/dashboard/clients");
     await page.getByRole("button", { name: /novo paciente/i }).click();
     await page.getByPlaceholder("Nome do paciente").fill(name);
-    await page.getByPlaceholder("(00) 00000-0000").fill("11999998888");
+    await page.getByPlaceholder("(00) 00000-0000").fill(uniquePhone());
     await page.getByPlaceholder("paciente@email.com").fill(`e2e-ui-${suffix}@test.local`);
     await page.getByRole("button", { name: /criar paciente/i }).click();
 
@@ -27,17 +28,27 @@ test.describe("pacientes", () => {
   test("localiza um paciente pela busca por nome", async ({ page, request }) => {
     const patient = await createTestPatient(request);
 
+    await suppressDailyBriefingPopup(page);
     await page.goto("/dashboard/clients");
     await page.getByPlaceholder("Nome, e-mail ou telefone...").fill(patient.name);
     await page.keyboard.press("Enter");
 
-    await expect(page.getByText(patient.name).first()).toBeVisible();
+    // A lista responsiva troca a tabela (desktop) por cards (mobile) — um
+    // locator por role="cell" so existe na variante desktop e getByText
+    // solto colide com o widget de IA. O link para a ficha do paciente
+    // existe em QUALQUER layout com o mesmo href, entao e o unico jeito
+    // realmente agnostico de viewport de mirar esta linha.
+    // ":visible" (nao so .first()) porque desktop e mobile podem ter os dois
+    // layouts no DOM ao mesmo tempo (um oculto por CSS) — pegar so o primeiro
+    // do DOM correria o risco de mirar exatamente a copia oculta.
+    await expect(page.locator(`a[href="/dashboard/clients/${patient.id}"]:visible`).first()).toBeVisible();
   });
 
   test("edita um dado nao critico (notas internas) e a alteracao persiste apos recarregar", async ({ page, request }) => {
     const patient = await createTestPatient(request);
     const note = `Observação de teste ${uniqueSuffix()}`;
 
+    await suppressDailyBriefingPopup(page);
     await page.goto(`/dashboard/clients/${patient.id}`);
     await expect(page.getByRole("heading", { level: 1, name: patient.name })).toBeVisible();
 

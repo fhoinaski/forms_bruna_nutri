@@ -121,6 +121,9 @@ const BUILDERS: Record<string, ProposalBuilder> = {
         tags: (typed.tags ?? []).join(", "),
         seo_title: typed.seo_title ?? "",
         seo_description: typed.seo_description ?? "",
+        content_domain: typed.content_domain ?? "",
+        // Nunca inventadas pelo builder — so repassa o que a tool devolveu (ver proposeNewBlogPostInputSchema).
+        references_json: JSON.stringify(typed.references ?? []),
       },
     };
   },

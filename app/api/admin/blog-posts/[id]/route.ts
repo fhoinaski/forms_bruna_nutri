@@ -6,6 +6,7 @@ import {
   getBlogPostById,
   updateBlogPost,
 } from "@/lib/repositories/blog-posts";
+import { blogContentDomainSchema, blogReferenceSchema } from "@/lib/ai/research/editorial-sources";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,8 @@ const UpdateSchema = z
     seo_description: z.string().trim().max(300).nullable().optional(),
     ai_generated: z.boolean().optional(),
     ai_prompt: z.string().trim().max(4000).nullable().optional(),
+    references: z.array(blogReferenceSchema).max(20).optional(),
+    content_domain: blogContentDomainSchema.nullable().optional(),
     published_at: z.string().datetime().nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0);

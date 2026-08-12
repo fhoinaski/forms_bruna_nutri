@@ -29,20 +29,37 @@ const ADMIN = {
   password: "E2eAdmin!2026Senha",
   mustChangePassword: 0,
 };
-const ADMIN_MUST_CHANGE = {
-  id: "e2e-admin-mustchange",
-  name: "Admin Novo E2E",
-  email: "e2e-admin-mustchange@test.local",
-  password: "E2eTemp!2026Senha",
-  mustChangePassword: 1,
-};
-const ADMIN_MFA_CANDIDATE = {
-  id: "e2e-admin-mfa",
-  name: "Admin MFA E2E",
-  email: "e2e-admin-mfa@test.local",
-  password: "E2eMfa!2026Senha",
-  mustChangePassword: 0,
-};
+
+// adminMustChange/adminMfaCandidate sao mutados PARA VALER pelos proprios
+// testes que os usam (troca de senha real, ativacao real de MFA) — uma
+// unica conta compartilhada entre os projetos do Playwright (chromium-desktop
+// e mobile-chrome, rodando em paralelo contra o MESMO servidor/banco) fazia
+// o projeto que roda por ultimo herdar o estado ja mutado pelo primeiro
+// (ex.: senha ja trocada), falhando login com "credenciais invalidas" de
+// forma legitima, mas por colisao de fixture, nao por bug de app. Cada
+// projeto ganha sua PROPRIA copia isolada dessas duas contas.
+const PROJECT_NAMES = ["chromium-desktop", "mobile-chrome"];
+
+function buildProjectAdmins(projectName) {
+  return {
+    adminMustChange: {
+      id: `e2e-admin-mustchange-${projectName}`,
+      name: "Admin Novo E2E",
+      email: `e2e-admin-mustchange-${projectName}@test.local`,
+      password: "E2eTemp!2026Senha",
+      mustChangePassword: 1,
+    },
+    adminMfaCandidate: {
+      id: `e2e-admin-mfa-${projectName}`,
+      name: "Admin MFA E2E",
+      email: `e2e-admin-mfa-${projectName}@test.local`,
+      password: "E2eMfa!2026Senha",
+      mustChangePassword: 0,
+    },
+  };
+}
+
+const BY_PROJECT = Object.fromEntries(PROJECT_NAMES.map((name) => [name, buildProjectAdmins(name)]));
 
 async function seedAdmins(db) {
   const now = new Date().toISOString();
@@ -50,7 +67,8 @@ async function seedAdmins(db) {
     `INSERT INTO admin_users (id, name, email, password_hash, must_change_password, created_at, updated_at)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`
   );
-  for (const admin of [ADMIN, ADMIN_MUST_CHANGE, ADMIN_MFA_CANDIDATE]) {
+  const allAdmins = [ADMIN, ...PROJECT_NAMES.flatMap((name) => [BY_PROJECT[name].adminMustChange, BY_PROJECT[name].adminMfaCandidate])];
+  for (const admin of allAdmins) {
     const passwordHash = await bcrypt.hash(admin.password, 10);
     insert.run(admin.id, admin.name, admin.email, passwordHash, admin.mustChangePassword, now);
   }
@@ -63,7 +81,7 @@ async function main() {
   mkdirSync(dirname(fixturesPath), { recursive: true });
   writeFileSync(
     fixturesPath,
-    JSON.stringify({ admin: ADMIN, adminMustChange: ADMIN_MUST_CHANGE, adminMfaCandidate: ADMIN_MFA_CANDIDATE }, null, 2)
+    JSON.stringify({ admin: ADMIN, byProject: BY_PROJECT }, null, 2)
   );
 
   const env = {
@@ -88,7 +106,7 @@ async function main() {
   };
 
   console.log(`[e2e] D1 shim up on ${shim.baseUrl} (${shim.migrationCount} migrations aplicadas).`);
-  console.log(`[e2e] Admins semeados: ${ADMIN.email}, ${ADMIN_MUST_CHANGE.email}, ${ADMIN_MFA_CANDIDATE.email}`);
+  console.log(`[e2e] Admins semeados: ${ADMIN.email}, ${PROJECT_NAMES.map((name) => BY_PROJECT[name].adminMustChange.email).join(", ")}, ${PROJECT_NAMES.map((name) => BY_PROJECT[name].adminMfaCandidate.email).join(", ")}`);
 
   const child = spawn("npm", ["run", "start"], { cwd: root, env, stdio: "inherit", shell: true });
 

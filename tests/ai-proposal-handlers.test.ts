@@ -296,6 +296,50 @@ describe("executeProposedAction — new_blog_post", () => {
     };
     const result = await executeProposedAction(action, ctx);
     expect(result.data).toEqual({ blogPostId: "post-1" });
-    expect(createBlogPost).toHaveBeenCalledWith(expect.objectContaining({ status: "draft", tags: ["a", "b"] }));
+    expect(createBlogPost).toHaveBeenCalledWith(expect.objectContaining({ status: "draft", tags: ["a", "b"], content_domain: null, references: [] }));
+  });
+
+  it("repassa content_domain e references reais (medicamento) para o repositório", async () => {
+    const createBlogPost = vi.fn().mockResolvedValue("post-2");
+    vi.doMock("@/lib/repositories/blog-posts", () => ({ createBlogPost }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    const action: ProposedAction = {
+      kind: "new_blog_post",
+      fields: {
+        title: "Mounjaro: o que é a tirzepatida",
+        excerpt: "Resumo educativo sobre tirzepatida.",
+        content_markdown: "Conteúdo educativo sobre tirzepatida e acompanhamento nutricional.",
+        category: "", tags: "",
+        seo_title: "", seo_description: "",
+        content_domain: "medication",
+        references_json: JSON.stringify([{ title: "Bula oficial", organization: "ANVISA", year: 2024 }]),
+      },
+      risk: "sensitive", requiresConfirmation: true,
+    };
+    await executeProposedAction(action, ctx);
+    expect(createBlogPost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content_domain: "medication",
+        references: [{ title: "Bula oficial", organization: "ANVISA", year: 2024 }],
+      })
+    );
+  });
+
+  it("nunca deixa um content_domain inválido ou references malformadas quebrar a execução — cai para null/[] (revalida no momento de salvar, não confia no que a tool devolveu)", async () => {
+    const createBlogPost = vi.fn().mockResolvedValue("post-3");
+    vi.doMock("@/lib/repositories/blog-posts", () => ({ createBlogPost }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    const action: ProposedAction = {
+      kind: "new_blog_post",
+      fields: {
+        title: "Título", excerpt: "Resumo", content_markdown: "Conteúdo completo.",
+        category: "", tags: "", seo_title: "", seo_description: "",
+        content_domain: "algo-que-nao-existe",
+        references_json: "isto não é um JSON válido {",
+      },
+      risk: "sensitive", requiresConfirmation: true,
+    };
+    await executeProposedAction(action, ctx);
+    expect(createBlogPost).toHaveBeenCalledWith(expect.objectContaining({ content_domain: null, references: [] }));
   });
 });

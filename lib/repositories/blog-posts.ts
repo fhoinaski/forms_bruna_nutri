@@ -1,4 +1,5 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
+import type { BlogContentDomain, BlogReference } from "@/lib/ai/research/editorial-sources";
 
 export interface BlogPost {
   id: string;
@@ -15,6 +16,8 @@ export interface BlogPost {
   seo_description: string | null;
   ai_generated: number;
   ai_prompt: string | null;
+  references_json: string;
+  content_domain: BlogContentDomain | null;
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -34,6 +37,9 @@ export interface BlogPostInput {
   seo_description?: string | null;
   ai_generated?: boolean;
   ai_prompt?: string | null;
+  /** Nunca inventadas pela IA — so preenchidas quando uma fonte real foi confirmada (ver editorial-sources.ts). */
+  references?: BlogReference[];
+  content_domain?: BlogContentDomain | null;
   published_at?: string | null;
 }
 
@@ -159,8 +165,8 @@ export async function createBlogPost(input: BlogPostInput): Promise<string> {
     `INSERT INTO blog_posts
        (id, title, slug, excerpt, content_markdown, category, tags_json, status,
         author_name, cover_image_url, seo_title, seo_description, ai_generated,
-        ai_prompt, published_at, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)`,
+        ai_prompt, references_json, content_domain, published_at, created_at, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`,
     [
       id,
       input.title,
@@ -176,6 +182,8 @@ export async function createBlogPost(input: BlogPostInput): Promise<string> {
       input.seo_description ?? null,
       input.ai_generated ? 1 : 0,
       input.ai_prompt ?? null,
+      JSON.stringify(input.references ?? []),
+      input.content_domain ?? null,
       publishedAt,
       now,
       now,
@@ -216,6 +224,12 @@ export async function updateBlogPost(
   }
   if (data.tags !== undefined) {
     fieldMap.tags_json = JSON.stringify(data.tags);
+  }
+  if (data.references !== undefined) {
+    fieldMap.references_json = JSON.stringify(data.references);
+  }
+  if (data.content_domain !== undefined) {
+    fieldMap.content_domain = data.content_domain;
   }
 
   for (const [key, value] of Object.entries(fieldMap)) {

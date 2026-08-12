@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { createBlogPost, getBlogPosts } from "@/lib/repositories/blog-posts";
+import { blogContentDomainSchema, blogReferenceSchema } from "@/lib/ai/research/editorial-sources";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,8 @@ const CreateSchema = z.object({
   seo_description: z.string().trim().max(300).nullable().optional(),
   ai_generated: z.boolean().optional(),
   ai_prompt: z.string().trim().max(4000).nullable().optional(),
+  references: z.array(blogReferenceSchema).max(20).optional(),
+  content_domain: blogContentDomainSchema.nullable().optional(),
   published_at: z.string().datetime().nullable().optional(),
 });
 

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ADMIN_STORAGE_STATE } from "./helpers/auth";
+import { ADMIN_STORAGE_STATE, suppressDailyBriefingPopup } from "./helpers/auth";
 import { createTestSubmission } from "./helpers/test-data";
 
 /**
@@ -24,15 +24,18 @@ test.describe("pré-consulta", () => {
   test("converter submissão em cliente cria o paciente e navega para a ficha dele", async ({ page, request }) => {
     const submission = await createTestSubmission(request);
 
+    // NOTA (achado de UX real, ainda nao corrigido na aplicacao — fora do
+    // escopo desta fase): o copiloto de IA pode abrir sozinho com o resumo
+    // do dia na primeira visita do dashboard na sessao, e o painel fixo
+    // cobre botoes de acao da pagina por baixo dele (bloqueio real de
+    // clique, nao so cosmetico). Um `{force:true}` no clique chegou a ser
+    // usado como contorno, mas se mostrou instavel sob execucao repetida
+    // (o clique podia ser "engolido" pelo elemento por cima antes do
+    // widget realmente abrir) — suprimir o popup e o contorno confiavel ja
+    // padronizado no resto desta suite para este mesmo problema.
+    await suppressDailyBriefingPopup(page);
     await page.goto(`/dashboard/submissions/${submission.id}`);
-    // NOTA (achado de UX, nao corrigido nesta fase — fora do escopo de
-    // FASE 1): o copiloto de IA pode abrir sozinho com o resumo do dia na
-    // primeira visita do dashboard na sessao, e o painel fixo cobre botoes
-    // de acao da pagina por baixo dele (bloqueio real de clique, nao so
-    // cosmetico). O teste usa force:true para nao acoplar este fluxo ao
-    // comportamento do widget, mas o overlap em si e um problema de
-    // layout real que vale revisar numa fase de UI dedicada.
-    await page.getByRole("button", { name: /criar cliente/i }).click({ force: true });
+    await page.getByRole("button", { name: /criar cliente/i }).click();
 
     await expect(page).toHaveURL(/\/dashboard\/clients\/[^/]+$/);
     await expect(page.getByRole("heading", { level: 1, name: submission.patientName })).toBeVisible();

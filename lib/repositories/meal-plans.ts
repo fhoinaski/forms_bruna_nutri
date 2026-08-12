@@ -48,6 +48,10 @@ export type MealPlanItemPayload = {
   // match aproximado por texto ja existente (findBestFoodReference).
   food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | null;
   food_ref_id?: string | null;
+  // Vinculo a uma medida caseira especifica (food_portions.id) — FASE 3.
+  // Quando presente, tem prioridade maxima na resolucao de quantidade
+  // (lib/nutrition/quantity-resolution.ts), independente do texto de `unit`.
+  household_measure_id?: string | null;
 };
 
 export type MealPlanWeeklySlotPayload = {
@@ -350,6 +354,7 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
         notes: item.notes,
         food_source: item.food_source ?? null,
         food_ref_id: item.food_ref_id ?? null,
+        household_measure_id: item.household_measure_id ?? null,
         })),
       })),
     weekly_slots: (weeklySlotsByPlan.get(row.id) ?? []).map(({ id, weekday, meal_type, title, notes, source_meal_id }) => ({
@@ -615,6 +620,7 @@ function buildMealPlanDetailStatements(
         notes: item.notes ?? null,
         foodSource: item.food_source ?? null,
         foodRefId: item.food_ref_id ?? null,
+        householdMeasureId: item.household_measure_id ?? null,
         order: itemIndex,
         now,
       });
@@ -653,8 +659,8 @@ function buildMealPlanDetailStatements(
     params: [JSON.stringify(mealRows)],
   });
   if (itemRows.length) statements.push({
-    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, household_measure_id, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(itemRows)],
   });
   if (weeklyRows.length) statements.push({

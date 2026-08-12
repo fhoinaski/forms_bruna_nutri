@@ -1,4 +1,5 @@
-import { quantityInGrams, type MacroReferenceFood } from "@/lib/nutrition/macros";
+import type { MacroReferenceFood } from "@/lib/nutrition/macros";
+import { resolveQuantity, type HouseholdMeasureOption, type QuantityResolution } from "@/lib/nutrition/quantity-resolution";
 import type { MealPlanPayload } from "@/lib/repositories/meal-plans";
 
 /**
@@ -68,13 +69,16 @@ function scale(value: number | null | undefined, factor: number): number | null 
 export function calculateItemNutrients(
   quantity: string | number | null | undefined,
   unit: string | null | undefined,
-  reference: MacroReferenceFood | null
-): { values: NutrientValues; grams: number } {
-  const grams = quantityInGrams(quantity, unit);
-  if (!reference || !grams) return { values: { ...EMPTY_NUTRIENTS }, grams };
+  reference: MacroReferenceFood | null,
+  householdMeasure?: HouseholdMeasureOption | null
+): { values: NutrientValues; grams: number; resolution: QuantityResolution } {
+  const resolution = resolveQuantity({ quantity, unit, householdMeasure });
+  const grams = resolution.grams ?? 0;
+  if (!reference || !grams) return { values: { ...EMPTY_NUTRIENTS }, grams, resolution };
   const factor = grams / 100;
   return {
     grams,
+    resolution,
     values: {
       energyKcal: scale(reference.energia_kcal, factor),
       proteinG: scale(reference.proteina_g, factor),
@@ -136,6 +140,7 @@ export interface MealPlanItemLike {
   unit?: string | null;
   food_source?: string | null;
   food_ref_id?: string | null;
+  household_measure_id?: string | null;
 }
 
 /**
@@ -152,6 +157,13 @@ export interface FoodReferenceLookup {
   byTacoNumber(numero: string): MacroReferenceFood | null;
   byCustomId(id: string): MacroReferenceFood | null;
   fuzzyMatch(food: string): MacroReferenceFood | null;
+  /**
+   * Opcional para nao quebrar lookups existentes que ainda nao sabem
+   * resolver medida caseira (ex.: testes, TACO_ONLY_LOOKUP do agente de
+   * IA). Quando ausente, o item simplesmente nunca tem household measure
+   * disponivel — cai para a conversao generica/estimada, nunca quebra.
+   */
+  byMeasureId?(id: string): HouseholdMeasureOption | null;
 }
 
 export function resolveItemReference(item: MealPlanItemLike, lookup: FoodReferenceLookup): MacroReferenceFood | null {
@@ -169,9 +181,18 @@ export interface MealNutrition {
   coverage: Record<NutrientKey, NutrientCoverage>;
 }
 
+/** Contagem de itens por confianca do calculo (secao 9 do pedido: "12/14 itens calculados com alta confianca"). Itens sem alimento preenchido nao entram na contagem. */
+export interface QuantityQualitySummary {
+  total: number;
+  highConfidence: number;
+  estimated: number;
+  unresolved: number;
+}
+
 export interface MealPlanNutritionResult {
   perMeal: MealNutrition[];
   total: { values: NutrientValues; coverage: Record<NutrientKey, NutrientCoverage> };
+  quality: QuantityQualitySummary;
 }
 
 /** Totais por refeicao e por dia (secoes 13-15 do pedido), sempre derivados — nunca confia num total enviado pronto. */
@@ -180,14 +201,28 @@ export function calculatePlanNutrients(
   lookup: FoodReferenceLookup
 ): MealPlanNutritionResult {
   const allItemValues: NutrientValues[] = [];
+  const quality: QuantityQualitySummary = { total: 0, highConfidence: 0, estimated: 0, unresolved: 0 };
   const perMeal = plan.meals.map((meal) => {
-    const itemValues = meal.items.map(
-      (item) => calculateItemNutrients(item.quantity, item.unit, resolveItemReference(item, lookup)).values
-    );
+    const itemValues = meal.items
+      .filter((item) => item.food.trim())
+      .map((item) => {
+        const householdMeasure = item.household_measure_id ? lookup.byMeasureId?.(item.household_measure_id) ?? null : null;
+        const { values, resolution } = calculateItemNutrients(item.quantity, item.unit, resolveItemReference(item, lookup), householdMeasure);
+        quality.total += 1;
+        // Mesmo criterio do badge por item (MealItemsEditor): gramas explicitas,
+        // conversao generica seguran (kg) e medida caseira especifica contam
+        // como "alta confianca" mesmo quando a confidence da MEDIDA e "medium"
+        // (ex.: referencia de mercado, nao dado oficial) — isso ainda e uma
+        // medida especifica, categoria distinta de "estimado" (secao 9 do pedido).
+        if (resolution.method === "unresolved") quality.unresolved += 1;
+        else if (resolution.method === "estimated") quality.estimated += 1;
+        else quality.highConfidence += 1;
+        return values;
+      });
     allItemValues.push(...itemValues);
     const { values, coverage } = sumNutrients(itemValues);
     return { mealId: meal.id, name: meal.name, values, coverage };
   });
   const { values, coverage } = sumNutrients(allItemValues);
-  return { perMeal, total: { values, coverage } };
+  return { perMeal, total: { values, coverage }, quality };
 }

@@ -58,6 +58,11 @@ import {
   proposeNewBlogPostInputSchema,
 } from "@/lib/ai/agents/content/blog-creation-agent";
 import {
+  SEARCH_EDITORIAL_SOURCES_TOOL_NAME,
+  searchEditorialSourcesInputSchema,
+  executeSearchEditorialSources,
+} from "@/lib/ai/research/editorial-sources";
+import {
   GET_PATIENTS_WITH_PENDENCIES_TOOL_NAME,
   executeGetPatientsWithPendenciesForDate,
   getPatientsWithPendenciesInputSchema,
@@ -248,12 +253,22 @@ defineTool({
 
 defineTool({
   name: PROPOSE_NEW_BLOG_POST_TOOL_NAME,
-  description: "Registra uma proposta de rascunho de post novo para o blog do site (titulo, resumo, conteudo em markdown, categoria e tags), para revisao humana antes de salvar.",
+  description: "Registra uma proposta de rascunho de post novo para o blog do site (titulo, resumo, conteudo em markdown, categoria, tags, dominio editorial e referencias), para revisao humana antes de salvar. Cobre nutricao, saude materno-infantil, condicoes clinicas, medicamentos e demais temas de educacao em saude — nunca so 'nutricao geral'.",
   inputSchema: proposeNewBlogPostInputSchema,
   risk: "sensitive",
   profiles: ADMIN,
   contextRequirement: "none",
   execute: async (input) => input,
+});
+
+defineTool({
+  name: SEARCH_EDITORIAL_SOURCES_TOOL_NAME,
+  description: "Busca fontes editoriais confiaveis (ANVISA, Ministerio da Saude, FDA, EMA, OMS, sociedades cientificas, guidelines) sobre um assunto de saude/medicamento para embasar um post do blog. So consulta, nunca grava nada. Se nenhum provedor de busca estiver configurado, devolve available:false e results:[] — nunca invente uma fonte quando isso acontecer.",
+  inputSchema: searchEditorialSourcesInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  execute: executeSearchEditorialSources,
 });
 
 defineTool({

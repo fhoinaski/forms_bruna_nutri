@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { getMealPlanById, type MealPlanMealPayload, type MealPlanItemPayload } from "@/lib/repositories/meal-plans";
-import { searchTacoFoods, getTacoFoodByNumber, findBestTacoFood, estimateFoodMacrosFromTaco, TACO_REFERENCES } from "@/lib/nutrition/taco";
-import { estimateFoodMacros, roundedMacros, type MacroReferenceFood } from "@/lib/nutrition/macros";
+import { searchTacoFoods, getTacoFoodByNumber, findBestTacoFood, TACO_REFERENCES } from "@/lib/nutrition/taco";
+import { resolveFoodItemMacros, roundedMacros, type MacroReferenceFood } from "@/lib/nutrition/macros";
+import type { QuantityResolution } from "@/lib/nutrition/quantity-resolution";
 import { calculatePlanNutrients, roundedNutrients, type FoodReferenceLookup } from "@/lib/nutrition/nutrients";
 import { compareTargetVsPrescribed, type NutrientTarget } from "@/lib/nutrition/targets";
 import { findEquivalentFoods as findEquivalentFoodsEngine } from "@/lib/nutrition/equivalence";
@@ -77,11 +78,18 @@ function describeItem(food: string, quantity?: string | null, unit?: string | nu
   return quantity ? `${food} — ${quantity}${unit ?? ""}` : food;
 }
 
+/**
+ * Usa a descricao REAL do registro (nao o texto digitado) como "food" para
+ * garantir match exato dentro do motor central — nunca reimplementa o
+ * calculo de kcal/proteina/carboidrato/gordura que ja existe ali
+ * (lib/nutrition/macros.ts#resolveFoodItemMacros). A IA so trabalha com
+ * unidades genericas hoje (MealPlanMeasureUnit fechado), entao nunca chega
+ * a acionar o metodo "food_household_measure" — isso fica marcado
+ * honestamente como estimativa no preview (quality.hasEstimatedValues
+ * abaixo), em vez de fingir precisao que a tool nao tem hoje.
+ */
 function macrosFromTacoReference(reference: MacroReferenceFood, quantity: number, unit: MealPlanMeasureUnit) {
-  // Usa a descricao REAL do registro (nao o texto digitado) como "food" para
-  // garantir match exato dentro de estimateFoodMacros — nunca reimplementa
-  // o calculo de kcal/proteina/carboidrato/gordura que ja existe ali.
-  return estimateFoodMacros(reference.descricao, quantity, unit, [reference]);
+  return resolveFoodItemMacros({ food: reference.descricao, quantity, unit }, [reference]);
 }
 
 function resolveFoodMacros(food: MealPlanFoodReference, quantity: number, unit: MealPlanMeasureUnit) {
@@ -89,11 +97,11 @@ function resolveFoodMacros(food: MealPlanFoodReference, quantity: number, unit: 
     const reference = getTacoFoodByNumber(food.tacoNumber);
     if (reference) return macrosFromTacoReference(reference, quantity, unit);
   }
-  return estimateFoodMacrosFromTaco(food.foodName, quantity, unit);
+  return resolveFoodItemMacros({ food: food.foodName, quantity, unit }, TACO_REFERENCES);
 }
 
 function existingItemMacros(item: MealPlanItemPayload) {
-  return estimateFoodMacrosFromTaco(item.food, item.quantity, item.unit);
+  return resolveFoodItemMacros({ food: item.food, quantity: item.quantity, unit: item.unit, food_source: item.food_source, food_ref_id: item.food_ref_id }, TACO_REFERENCES);
 }
 
 interface MacroDelta { kcal: number; protein: number; carbs: number; fat: number }
@@ -142,6 +150,16 @@ export function applyMealPlanChangesWithPreview(
   const working: MealPlanMealPayload[] = meals.map((meal) => ({ ...meal, items: meal.items.map((item) => ({ ...item })) }));
   const summaries: MealPlanChangePreview["changeSummaries"] = [];
   let totalImpact: MacroDelta = ZERO_DELTA;
+  // FASE 3 (precisao nutricional): registra a resolucao de quantidade de
+  // toda ponta "depois" tocada por uma mudanca — se qualquer uma nao for
+  // confidence="high", o preview inteiro avisa que ha estimativa envolvida
+  // (nunca afirma precisao que o motor central nao confirmou).
+  const resolutions: QuantityResolution[] = [];
+
+  function applyDelta(before: MacroDelta, after: MacroDelta, afterResolution?: QuantityResolution) {
+    totalImpact = addDelta(totalImpact, before, after);
+    if (afterResolution) resolutions.push(afterResolution);
+  }
 
   for (const change of changes) {
     switch (change.operation) {
@@ -154,7 +172,7 @@ export function applyMealPlanChangesWithPreview(
         const meal = findMeal(working, change.mealId);
         const before = meal.items.map((item) => describeItem(item.food, item.quantity, item.unit)).join("; ") || "(sem itens)";
         for (const item of meal.items) {
-          totalImpact = addDelta(totalImpact, existingItemMacros(item), ZERO_DELTA);
+          applyDelta(existingItemMacros(item).macros, ZERO_DELTA);
         }
         summaries.push({ operation: change.operation, mealName: meal.name, before, after: null });
         working.splice(working.indexOf(meal), 1);
@@ -180,7 +198,8 @@ export function applyMealPlanChangesWithPreview(
       case "add_item": {
         const meal = findMeal(working, change.mealId);
         const after = describeItem(change.food.foodName, String(change.quantity), change.unit);
-        totalImpact = addDelta(totalImpact, ZERO_DELTA, resolveFoodMacros(change.food, change.quantity, change.unit));
+        const result = resolveFoodMacros(change.food, change.quantity, change.unit);
+        applyDelta(ZERO_DELTA, result.macros, result.quantity);
         summaries.push({ operation: change.operation, mealName: meal.name, before: null, after });
         meal.items.push({ food: change.food.foodName, quantity: String(change.quantity), unit: change.unit, notes: change.notes ?? null });
         break;
@@ -189,7 +208,7 @@ export function applyMealPlanChangesWithPreview(
         const meal = findMeal(working, change.mealId);
         const index = findItemIndex(meal, change.itemId);
         const item = meal.items[index];
-        totalImpact = addDelta(totalImpact, existingItemMacros(item), ZERO_DELTA);
+        applyDelta(existingItemMacros(item).macros, ZERO_DELTA);
         summaries.push({ operation: change.operation, mealName: meal.name, before: describeItem(item.food, item.quantity, item.unit), after: null });
         meal.items.splice(index, 1);
         break;
@@ -198,7 +217,8 @@ export function applyMealPlanChangesWithPreview(
         const meal = findMeal(working, change.mealId);
         const index = findItemIndex(meal, change.itemId);
         const oldItem = meal.items[index];
-        totalImpact = addDelta(totalImpact, existingItemMacros(oldItem), resolveFoodMacros(change.food, change.quantity, change.unit));
+        const result = resolveFoodMacros(change.food, change.quantity, change.unit);
+        applyDelta(existingItemMacros(oldItem).macros, result.macros, result.quantity);
         summaries.push({
           operation: change.operation,
           mealName: meal.name,
@@ -217,7 +237,8 @@ export function applyMealPlanChangesWithPreview(
         const meal = findMeal(working, change.mealId);
         const index = findItemIndex(meal, change.itemId);
         const item = meal.items[index];
-        totalImpact = addDelta(totalImpact, existingItemMacros(item), estimateFoodMacrosFromTaco(item.food, change.quantity, item.unit));
+        const result = resolveFoodItemMacros({ food: item.food, quantity: change.quantity, unit: item.unit, food_source: item.food_source, food_ref_id: item.food_ref_id }, TACO_REFERENCES);
+        applyDelta(existingItemMacros(item).macros, result.macros, result.quantity);
         summaries.push({
           operation: change.operation,
           mealName: meal.name,
@@ -231,20 +252,27 @@ export function applyMealPlanChangesWithPreview(
         const meal = findMeal(working, change.mealId);
         const index = findItemIndex(meal, change.itemId);
         const item = meal.items[index];
-        totalImpact = addDelta(totalImpact, existingItemMacros(item), estimateFoodMacrosFromTaco(item.food, item.quantity, change.unit));
+        const result = resolveFoodItemMacros({ food: item.food, quantity: item.quantity, unit: change.unit, food_source: item.food_source, food_ref_id: item.food_ref_id }, TACO_REFERENCES);
+        applyDelta(existingItemMacros(item).macros, result.macros, result.quantity);
         summaries.push({
           operation: change.operation,
           mealName: meal.name,
           before: describeItem(item.food, item.quantity, item.unit),
           after: describeItem(item.food, item.quantity, change.unit),
         });
+        // change_measure so troca a unidade generica (colher/xicara/etc) —
+        // nunca vincula automaticamente a um household_measure_id real, que
+        // exige uma medida especifica CADASTRADA para este alimento; a IA
+        // hoje so conhece o vocabulario generico (MealPlanMeasureUnit).
         item.unit = change.unit;
+        item.household_measure_id = null;
         break;
       }
     }
   }
 
   const rounded = roundedMacros({ ...totalImpact, recognizedItems: 0, totalItems: 0 });
+  const hasEstimatedValues = resolutions.some((resolution) => resolution.confidence !== "high");
 
   // totalVsTarget (FASE 2): so calcula quando o plano tem alguma meta
   // definida — nunca IA, so o motor determinístico (nutrients.ts/targets.ts).
@@ -267,6 +295,7 @@ export function applyMealPlanChangesWithPreview(
       changeSummaries: summaries,
       totalImpact: { kcal: rounded.kcal, protein: rounded.protein, carbs: rounded.carbs, fat: rounded.fat },
       ...(totalVsTarget ? { totalVsTarget } : {}),
+      ...(hasEstimatedValues ? { hasEstimatedValues: true } : {}),
     },
   };
 }

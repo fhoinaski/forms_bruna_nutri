@@ -58,8 +58,11 @@ test.describe("logout", () => {
 });
 
 test.describe("troca obrigatoria de senha", () => {
-  test("admin com must_change_password e forcado para /dashboard/settings/security antes de qualquer outra pagina", async ({ page }) => {
-    const { adminMustChange } = adminFixtures();
+  test("admin com must_change_password e forcado para /dashboard/settings/security antes de qualquer outra pagina", async ({ page }, testInfo) => {
+    // Conta isolada por projeto (ver comentario em adminFixtures): este
+    // teste MUTA a senha de verdade, e chromium-desktop/mobile-chrome rodam
+    // em paralelo contra o mesmo servidor/banco.
+    const { adminMustChange } = adminFixtures(testInfo.project.name);
     await loginAsAdminUI(page, adminMustChange.email, adminMustChange.password);
     await expect(page).toHaveURL(/\/dashboard\/settings\/security$/);
 
@@ -81,8 +84,11 @@ test.describe("troca obrigatoria de senha", () => {
 });
 
 test.describe("MFA — fluxo real (setup, codigo invalido, codigo valido)", () => {
-  test("habilita MFA, rejeita codigo invalido no login e aceita um codigo TOTP valido", async ({ page }) => {
-    const { adminMfaCandidate } = adminFixtures();
+  test("habilita MFA, rejeita codigo invalido no login e aceita um codigo TOTP valido", async ({ page }, testInfo) => {
+    // Conta isolada por projeto (ver comentario em adminFixtures): este
+    // teste ATIVA MFA de verdade, e chromium-desktop/mobile-chrome rodam
+    // em paralelo contra o mesmo servidor/banco.
+    const { adminMfaCandidate } = adminFixtures(testInfo.project.name);
     await loginAsAdminUI(page, adminMfaCandidate.email, adminMfaCandidate.password);
     await expect(page).toHaveURL(/\/dashboard$/);
 

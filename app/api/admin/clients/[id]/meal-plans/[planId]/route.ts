@@ -6,6 +6,7 @@ import { deleteMealPlan, getClientMealPlans, updateMealPlan } from "@/lib/reposi
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
+import { getFoodPortionById } from "@/lib/repositories/food-portions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,8 @@ const itemSchema = z.object({
   // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2.
   food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER"]).nullable().optional(),
   food_ref_id: z.string().max(120).nullable().optional(),
+  // Vinculo a uma medida caseira especifica (food_portions.id) — FASE 3, validado abaixo contra o food_ref_id real.
+  household_measure_id: z.string().max(120).nullable().optional(),
 }).strict();
 
 const mealSchema = z.object({
@@ -81,6 +84,28 @@ export async function PUT(
   const parsed = UpdateSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
+  }
+
+  // Nunca confia num household_measure_id vindo do browser sem revalidar
+  // server-side que ele realmente pertence ao mesmo alimento do item —
+  // aceitar um id trocado (ex.: da medida de outro alimento) corromperia o
+  // calculo em silencio (secao 19 do pedido).
+  const measureIds = Array.from(
+    new Set(parsed.data.meals.flatMap((meal) => meal.items.map((item) => item.household_measure_id).filter((value): value is string => Boolean(value))))
+  );
+  if (measureIds.length) {
+    const portions = await Promise.all(measureIds.map((measureId) => getFoodPortionById(measureId)));
+    const portionById = new Map(portions.filter((portion) => portion !== null).map((portion) => [portion.id, portion]));
+    for (const meal of parsed.data.meals) {
+      for (const item of meal.items) {
+        if (!item.household_measure_id) continue;
+        const portion = portionById.get(item.household_measure_id);
+        const matches = portion && portion.food_source === item.food_source && portion.food_ref_id === item.food_ref_id;
+        if (!matches) {
+          return NextResponse.json({ message: `Medida caseira inválida para o alimento "${item.food}".` }, { status: 400 });
+        }
+      }
+    }
   }
 
   const previousPlan = (await getClientMealPlans(id)).find((item) => item.id === planId) ?? null;

@@ -26,7 +26,7 @@ export interface TestPatient {
  * chamadas paralelas na mesma execucao. Usa os digitos MENOS
  * significativos (mais volateis) + um sufixo aleatorio.
  */
-function uniquePhone(): string {
+export function uniquePhone(): string {
   const timePart = String(Date.now()).slice(-8);
   const randomPart = String(Math.floor(Math.random() * 900) + 100);
   return `11${timePart}${randomPart}`;
@@ -80,7 +80,12 @@ export async function createTestSubmission(api: APIRequestContext, overrides: Pa
   const suffix = uniqueSuffix();
   const nome = overrides.nome ?? `E2E PréConsulta ${suffix}`;
   const email = overrides.email ?? `e2e-submission-${suffix}@test.local`;
-  const whatsapp = overrides.whatsapp ?? "11988887777";
+  // Precisa ser unico por chamada, nao um numero fixo: converter uma
+  // submissao em cliente cria um registro com este telefone e
+  // clients.phone_normalized tem indice UNIQUE — duas submissoes com o
+  // mesmo numero (ex.: os dois projetos do Playwright rodando o mesmo
+  // teste em paralelo) colidiam de verdade na conversao para cliente.
+  const whatsapp = overrides.whatsapp ?? uniquePhone();
 
   const response = await api.post("/api/form-submissions", {
     data: { nome, email, whatsapp, privacyAccepted: true, companyWebsite: "" },
@@ -117,7 +122,7 @@ export async function createTestTask(api: APIRequestContext, clientId: string, o
  */
 export async function seedAiProposal(
   api: APIRequestContext,
-  params: { toolName: string; action: Record<string, unknown>; clientId?: string; submissionId?: string }
+  params: { toolName: string; action: Record<string, unknown>; clientId?: string; submissionId?: string; asPatient?: boolean }
 ): Promise<{ proposalId: string; expiresAt: string; risk: string; requiresConfirmation: boolean }> {
   const response = await api.post("/api/admin/ai/proposals/test-seed", { data: params });
   await expectOk(response, "seedAiProposal");

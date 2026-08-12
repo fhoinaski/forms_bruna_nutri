@@ -173,6 +173,11 @@ export const mealPlanChangePreviewSchema = z.object({
   // So presente quando o plano tem alguma meta definida — compara o total
   // PRESCRITO (nao so o delta) apos aplicar as mudancas contra a meta.
   totalVsTarget: z.array(mealPlanTargetComparisonRowSchema).optional(),
+  // FASE 3 (precisao nutricional): true quando pelo menos uma quantidade
+  // envolvida nesta mudanca foi resolvida por conversao generica/estimada
+  // (sem medida caseira especifica cadastrada) — nunca a IA afirmando
+  // precisao que o motor central nao confirmou.
+  hasEstimatedValues: z.boolean().optional(),
 });
 export type MealPlanChangePreview = z.infer<typeof mealPlanChangePreviewSchema>;
 
