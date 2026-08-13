@@ -29,7 +29,7 @@ import {
   stepKeyOf,
   type TopicCoverage,
 } from "@/lib/ai/agents/patient/intake/intake-flow";
-import { getTopicDefinition, findStepForField } from "@/lib/ai/agents/patient/intake/intake-topics";
+import { getTopicDefinition, findStepForField, getRephrasePrompt } from "@/lib/ai/agents/patient/intake/intake-topics";
 import {
   createIntakeSession,
   getIntakeSession,
@@ -118,6 +118,10 @@ export interface IntakeMessageResult {
   fallback?: boolean;
   fallbackReason?: string;
   fallbackCategory?: string;
+  /** true quando a extração estruturada falhou — paciente deve reformular. */
+  keepSmart?: boolean;
+  needsRephrase?: boolean;
+  rephrasePrompt?: string;
 }
 
 export class IntakeConcurrencyError extends Error {}
@@ -353,6 +357,32 @@ export async function runIntakeMessage(input: IntakeMessageInput): Promise<Intak
       throw error;
     }
 
+    // AiValidationError é RECUPERÁVEL: não cai para o tradicional. Pede
+    // reformulação do passo e continua no fluxo smart.
+    if (error instanceof AiValidationError) {
+      logger.warn("intake_message_rephrase", {
+        sessionId: input.sessionId,
+        failureCategory: error.failureCategory,
+        truncated: error.truncated,
+      });
+      const rephraseState = cloneState(state);
+      const next = getNextInteraction(rephraseState);
+      return {
+        state: rephraseState,
+        assistantMessage: "Vamos tentar de outro jeito.",
+        interaction: next.interaction,
+        transitionMessage: null,
+        steps: getTopicStepProgress(rephraseState),
+        clarification: null,
+        sessionVersion: row.version,
+        reviewReady: false,
+        completed: false,
+        keepSmart: true,
+        needsRephrase: true,
+        rephrasePrompt: getRephrasePrompt(topic.id, step.stepKey),
+      };
+    }
+
     // Somente falhas genuínas do subsistema de IA degradam graciosamente para
     // o formulário tradicional. Um erro de programação (TypeError etc.) NÃO é
     // falha de provedor: sobe como 500 para não mascarar bug como fallback.
@@ -365,6 +395,7 @@ export async function runIntakeMessage(input: IntakeMessageInput): Promise<Intak
       sessionId: input.sessionId,
       errorName: error instanceof Error ? error.name : "UnknownError",
       errorMessage: error instanceof Error ? error.message : String(error),
+      issues: error instanceof AiValidationError ? error.issues : undefined,
     });
 
     const fallbackState = cloneState(state);

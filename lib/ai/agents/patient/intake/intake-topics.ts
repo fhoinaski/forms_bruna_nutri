@@ -421,3 +421,24 @@ export const LOW_VALUE_AUTOSKIPPED_FIELDS = new Set<string>([
   "disposicao",
   "espacoLivre",
 ]);
+
+/**
+ * Reformulação determinística por passo (§21/§44). Quando a extração
+ * estruturada falha repetidamente, o servidor pede uma reformulação natural —
+ * NUNCA pede ao modelo que invente outro prompt após falhar.
+ */
+const INTAKE_REPHRASE_PROMPTS: Record<string, string> = {
+  "current_moment:motivo_inicial": "Não consegui organizar essa resposta. Pode resumir em poucas palavras o que te trouxe aqui?",
+  "current_moment:objetivo": "Pode me contar, de um jeito mais simples, o que você mais quer melhorar?",
+  "health:saude_aberta": "Pode resumir seus diagnósticos e medicamentos em uma frase curta?",
+  "routine:rotina_aberta": "Pode descrever sua rotina pensando em manhã, tarde e noite?",
+  "nutrition:dia_alimentar": "Pode resumir seu dia alimentar pensando em café da manhã, almoço, tarde e noite?",
+  "expectations:expectativas": "Pode resumir, em uma frase, o que você espera do acompanhamento?",
+};
+
+const DEFAULT_REPHRASE_PROMPT =
+  "Não consegui organizar completamente essa resposta. Pode me contar de outra forma?";
+
+export function getRephrasePrompt(topicId: IntakeTopicId, stepKey: string): string {
+  return INTAKE_REPHRASE_PROMPTS[`${topicId}:${stepKey}`] ?? DEFAULT_REPHRASE_PROMPT;
+}

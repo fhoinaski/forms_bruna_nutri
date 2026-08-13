@@ -23,3 +23,36 @@ export function tryParseJsonFromText(text: string): unknown | null {
     return null;
   }
 }
+
+/**
+ * Detecta JSON truncado (estrutura não fechada) sem depender da mensagem do
+ * `JSON.parse`. Usado para classificar `structured_truncated` e encaminhar
+ * para retry em vez de fallback tradicional.
+ */
+export function isTruncatedJsonText(text: string): boolean {
+  const candidate = extractJsonFromText(text);
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (const ch of candidate) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") depth--;
+  }
+  return depth > 0 || inString;
+}

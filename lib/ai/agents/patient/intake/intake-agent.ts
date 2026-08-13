@@ -1,5 +1,6 @@
-import { generateStructured } from "@/lib/ai/gateway/ai-gateway";
-import { AiProviderError } from "@/lib/ai/core/ai-errors";
+import { generateStructured, generateStructuredResult } from "@/lib/ai/gateway/ai-gateway";
+import { AiProviderError, AiValidationError } from "@/lib/ai/core/ai-errors";
+import { logger } from "@/lib/observability/logger";
 import type { AISettings } from "@/lib/repositories/ai-settings";
 import {
   getIntakeField,
@@ -8,6 +9,7 @@ import {
 import {
   IntakeTurnSchema,
   IntakeTopicExtractionSchema,
+  normalizeTopicExtractionJson,
   type IntakeTurnParsed,
   type IntakeTopicExtractionParsed,
 } from "@/lib/ai/agents/patient/intake/intake-schema";
@@ -36,7 +38,7 @@ export const PATIENT_INTAKE_ASSISTANT = "PATIENT_INTAKE_ASSISTANT";
 
 export const INTAKE_MAX_TURNS = 60;
 export const INTAKE_TURN_TIMEOUT_MS = 15_000;
-export const INTAKE_MAX_OUTPUT_TOKENS = 1024;
+export const INTAKE_MAX_OUTPUT_TOKENS = 2048;
 
 /** Bloqueia gravação silenciosa de campo sensível com confiança baixa/média. */
 function shouldClarifySensitive(turn: IntakeTurnParsed, fieldKey: string): boolean {
@@ -238,9 +240,65 @@ export function isDeterministicFailTrigger(message: string | null | undefined): 
   return isE2EDeterministicEnabled() && process.env.INTAKE_AI_TEST_PROVIDER === "deterministic" && message === DETERMINISTIC_FAIL_TRIGGER;
 }
 
-async function deterministicExecutor(input: IntakeAgentRunInput): Promise<{ turn: IntakeTurnResult; provider: string; model: string }> {
-  if (input.userMessage === DETERMINISTIC_FAIL_TRIGGER) {
+/** Cenários determinísticos de E2E (simulação do fluxo de IA). */
+export type DeterministicIntakeScenario =
+  | "normal"
+  | "invalid_once_then_valid"
+  | "invalid_twice_then_valid"
+  | "always_invalid"
+  | "provider_error"
+  | "unexpected_error";
+
+const DETERMINISTIC_SCENARIO_MARKERS: ReadonlyArray<{ marker: string; scenario: DeterministicIntakeScenario }> = [
+  { marker: "__TEST_INTAKE_INVALID_ONCE__", scenario: "invalid_once_then_valid" },
+  { marker: "__TEST_INTAKE_INVALID_TWICE__", scenario: "invalid_twice_then_valid" },
+  { marker: "__TEST_INTAKE_ALWAYS_INVALID__", scenario: "always_invalid" },
+  { marker: "__TEST_INTAKE_UNEXPECTED__", scenario: "unexpected_error" },
+  { marker: DETERMINISTIC_FAIL_TRIGGER, scenario: "provider_error" },
+];
+
+/**
+ * Resolve o cenário a partir da mensagem. Só ativo sob
+ * `isDeterministicTestProvider()` (E2E_TEST_MODE=1 + provider determinístico);
+ * em produção retorna sempre "normal" — sem backdoor.
+ */
+export function resolveDeterministicScenario(message: string | null | undefined): DeterministicIntakeScenario {
+  if (!isDeterministicTestProvider() || !message) return "normal";
+  for (const { marker, scenario } of DETERMINISTIC_SCENARIO_MARKERS) {
+    if (message.includes(marker)) return scenario;
+  }
+  return "normal";
+}
+
+/** Tentativas simuladas por cenário (observável em log). */
+function scenarioAttempts(scenario: DeterministicIntakeScenario): number {
+  switch (scenario) {
+    case "invalid_once_then_valid":
+      return 2;
+    case "invalid_twice_then_valid":
+    case "always_invalid":
+      return 3;
+    default:
+      return 1;
+  }
+}
+
+/** Lança o erro real correspondente ao cenário de falha. */
+function throwScenarioFailure(scenario: DeterministicIntakeScenario): never {
+  if (scenario === "provider_error") {
     throw new AiProviderError("Deterministic provider error for E2E fallback test.");
+  }
+  if (scenario === "unexpected_error") {
+    throw new Error("Deterministic unexpected error for E2E test.");
+  }
+  // always_invalid → esgota structured output (recuperável, sem fallback).
+  throw new AiValidationError("A IA nao retornou um resultado no formato esperado.", [], "structured_invalid", false);
+}
+
+async function deterministicExecutor(input: IntakeAgentRunInput): Promise<{ turn: IntakeTurnResult; provider: string; model: string }> {
+  const scenario = resolveDeterministicScenario(input.userMessage);
+  if (scenario === "provider_error" || scenario === "unexpected_error" || scenario === "always_invalid") {
+    throwScenarioFailure(scenario);
   }
 
   const field = getIntakeField(input.fieldKey)!;
@@ -301,11 +359,15 @@ export async function runIntakeTopicExtraction(
   const deterministic = process.env.INTAKE_AI_TEST_PROVIDER === "deterministic" && isE2EDeterministicEnabled();
 
   if (deterministic) {
-    if (input.userMessage === DETERMINISTIC_FAIL_TRIGGER) {
-      throw new AiProviderError("Deterministic provider error for E2E fallback test.");
+    const scenario = resolveDeterministicScenario(input.userMessage);
+    const attempts = scenarioAttempts(scenario);
+    logger.warn("intake_deterministic_scenario", { scenario, attempts, topic: input.topic.id });
+
+    if (scenario === "provider_error" || scenario === "unexpected_error" || scenario === "always_invalid") {
+      throwScenarioFailure(scenario);
     }
-    // Teste determinístico: devolve o primeiro campo permitido com valor
-    // previsível (sempre string curta), sem depender de provedor.
+
+    // normal / invalid_once / invalid_twice → sucesso (após "attempts" tentativas).
     const fieldKey = input.allowedFields[0];
     const field = getIntakeField(fieldKey);
     const value = field ? deterministicValueForField(field, { state: input.state, fieldKey, userMessage: input.userMessage }) : "ok";
@@ -326,23 +388,24 @@ export async function runIntakeTopicExtraction(
     userMessage: input.userMessage,
   });
 
-  const parsed = await generateStructured<IntakeTopicExtractionParsed>({
+  const result = await generateStructuredResult<IntakeTopicExtractionParsed>({
     agent: "patient-intake-topic",
     system: INTAKE_TOPIC_SYSTEM_PROMPT,
     prompt,
     schema: IntakeTopicExtractionSchema,
     maxOutputTokens: INTAKE_MAX_OUTPUT_TOKENS,
+    timeoutMs: INTAKE_TURN_TIMEOUT_MS,
+    normalize: normalizeTopicExtractionJson,
   });
 
-  const settings = await getSettingsSnapshot();
   return {
     extraction: {
-      assistantText: parsed.assistantText,
-      extractedAnswers: parsed.extractedAnswers,
-      clarification: parsed.clarification,
+      assistantText: result.data.assistantText,
+      extractedAnswers: result.data.extractedAnswers,
+      clarification: result.data.clarification ?? undefined,
     },
-    provider: settings.provider,
-    model: settings.model,
+    provider: result.provider,
+    model: result.model,
     promptVersion: INTAKE_PROMPT_VERSION,
   };
 }

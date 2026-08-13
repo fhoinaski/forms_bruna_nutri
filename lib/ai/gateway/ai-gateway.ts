@@ -3,8 +3,8 @@ import type { z } from "zod";
 import { createConfiguredModel } from "@/lib/ai/model-factory";
 import { getAISettings, type AISettings } from "@/lib/repositories/ai-settings";
 import { writeAuditLog } from "@/lib/security/audit";
-import { AiConfigError, AiProviderError, AiValidationError } from "@/lib/ai/core/ai-errors";
-import { tryParseJsonFromText } from "@/lib/ai/schemas/json-extract";
+import { AiConfigError, AiProviderError, AiValidationError, RETRYABLE_FAILURE_CATEGORIES, STRUCTURED_FAILURE_CATEGORIES, classifyAiError } from "@/lib/ai/core/ai-errors";
+import { isTruncatedJsonText, tryParseJsonFromText } from "@/lib/ai/schemas/json-extract";
 
 /**
  * Unica porta para chamar o provedor de IA configurado. Nenhum agente deve
@@ -38,7 +38,7 @@ async function resolveSettingsAndModel(): Promise<{ settings: AISettings; model:
 
 async function logUsage(
   ctx: AiGatewayCallContext,
-  params: { settings: AISettings; durationMs: number; success: boolean; errorMessage?: string; usage?: UsageInfo }
+  params: { settings: AISettings; durationMs: number; success: boolean; errorMessage?: string; usage?: UsageInfo; extra?: Record<string, unknown> }
 ): Promise<void> {
   try {
     await writeAuditLog({
@@ -54,6 +54,7 @@ async function logUsage(
         inputTokens: params.usage?.inputTokens ?? null,
         outputTokens: params.usage?.outputTokens ?? null,
         errorMessage: params.success ? null : (params.errorMessage ?? null),
+        ...(params.extra ?? {}),
       },
     });
   } catch (auditError) {
@@ -112,63 +113,110 @@ export interface GenerateStructuredOptions<T> extends AiGatewayCallContext {
   prompt: string;
   schema: z.ZodType<T>;
   maxOutputTokens?: number;
+  /** Tempo máximo (ms) para o turno inteiro, compartilhado entre as tentativas. */
+  timeoutMs?: number;
+  /** Número máximo de tentativas de structured output. */
+  maxAttempts?: number;
+  /** Normaliza a saída crua ANTES do `safeParse` (usado no caminho textual). */
+  normalize?: (raw: unknown) => unknown;
 }
 
+/** Resultado normalizado — o chamador não precisa saber o provider/estratégia. */
+export interface StructuredGenerationResult<T> {
+  data: T;
+  provider: string;
+  model: string;
+  attempts: number;
+  repaired: boolean;
+}
+
+export const MAX_STRUCTURED_ATTEMPTS = 3;
+export const DEFAULT_STRUCTURED_TIMEOUT_MS = 15_000;
+
+const STRUCTURED_RECOVERY_PROMPT =
+  "Sua resposta anterior não correspondeu ao formato solicitado. Responda exclusivamente no formato estruturado solicitado, sem reasoning, sem markdown e sem explicações adicionais.";
+
 /**
- * Chamada de texto com validacao Zod obrigatoria da saida. Faz UMA
- * tentativa de reparo (reenviando os erros de validacao ao modelo) antes de
- * desistir — nunca devolve dado nao validado para o chamador.
+ * Structured output resiliente e provider-agnostic (camada textual universal):
+ * - `generateText` → extrair JSON → normalizar → Zod;
+ * - retry com prompt mínimo de recuperação (até `MAX_STRUCTURED_ATTEMPTS`);
+ * - classificação de falha e detecção de JSON truncado.
+ * Funciona com qualquer schema Zod e qualquer provider do model-factory.
+ * Nunca devolve dado não validado.
  */
-export async function generateStructured<T>(options: GenerateStructuredOptions<T>): Promise<T> {
+export async function generateStructuredResult<T>(options: GenerateStructuredOptions<T>): Promise<StructuredGenerationResult<T>> {
   const { settings, model } = await resolveSettingsAndModel();
   const startedAt = Date.now();
+  const maxAttempts = options.maxAttempts ?? MAX_STRUCTURED_ATTEMPTS;
+  const maxOutputTokens = options.maxOutputTokens ?? 1024;
+  const abortSignal = AbortSignal.timeout(options.timeoutMs ?? DEFAULT_STRUCTURED_TIMEOUT_MS);
 
-  const attempt = async (system: string) =>
-    generateText({ model, system, prompt: options.prompt, maxOutputTokens: options.maxOutputTokens ?? 4096 });
+  let repaired = false;
+  let truncated = false;
+  let lastIssues: unknown;
+  let lastFailureCategory: ReturnType<typeof classifyAiError> = "structured_invalid";
 
-  try {
-    const first = await attempt(options.system);
-    const firstParsed = options.schema.safeParse(tryParseJsonFromText(first.text));
-    if (firstParsed.success) {
-      await logUsage(options, {
-        settings,
-        durationMs: Date.now() - startedAt,
-        success: true,
-        usage: { inputTokens: first.usage?.inputTokens, outputTokens: first.usage?.outputTokens },
-      });
-      return firstParsed.data;
+  const wrapProviderError = (cause: unknown): AiProviderError => {
+    const message = cause instanceof Error && cause.name === "TimeoutError"
+      ? "O assistente demorou demais para responder."
+      : cause instanceof Error ? cause.message : "Falha ao chamar o provedor de IA.";
+    return new AiProviderError(message, cause);
+  };
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const system = attempt === 1 ? options.system : `${options.system}\n\n${STRUCTURED_RECOVERY_PROMPT}`;
+
+    // Texto + JSON + normalização + Zod.
+    try {
+      const result = await generateText({ model, system, prompt: options.prompt, maxOutputTokens, abortSignal });
+      const raw = tryParseJsonFromText(result.text);
+      const normalized = options.normalize ? options.normalize(raw) : raw;
+      const parsed = options.schema.safeParse(normalized);
+      if (parsed.success) {
+        await logUsage(options, {
+          settings,
+          durationMs: Date.now() - startedAt,
+          success: true,
+          usage: { inputTokens: result.usage?.inputTokens, outputTokens: result.usage?.outputTokens },
+          extra: { attempts: attempt, repaired, strategy: "text" },
+        });
+        return { data: parsed.data, provider: settings.provider, model: settings.model, attempts: attempt, repaired };
+      }
+      lastIssues = parsed.error.issues;
+      truncated = truncated || isTruncatedJsonText(result.text);
+      repaired = true;
+      lastFailureCategory = truncated ? "structured_truncated" : "structured_invalid";
+    } catch (cause) {
+      const wrapped = wrapProviderError(cause);
+      const category = classifyAiError(wrapped);
+      if (!RETRYABLE_FAILURE_CATEGORIES.has(category)) {
+        await logUsage(options, { settings, durationMs: Date.now() - startedAt, success: false, errorMessage: wrapped.message, extra: { attempts: attempt, failureCategory: category } });
+        throw wrapped;
+      }
+      lastFailureCategory = category;
+      await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 250 : 750));
     }
-
-    const repairSystem = `${options.system}\n\nA resposta anterior nao seguiu exatamente o formato JSON pedido. Erros de validacao: ${JSON.stringify(
-      firstParsed.error.issues.slice(0, 5)
-    )}\nGere novamente a resposta, respeitando estritamente a estrutura pedida, sem texto fora do JSON.`;
-    const second = await attempt(repairSystem);
-    const secondParsed = options.schema.safeParse(tryParseJsonFromText(second.text));
-
-    if (secondParsed.success) {
-      await logUsage(options, {
-        settings,
-        durationMs: Date.now() - startedAt,
-        success: true,
-        usage: { inputTokens: second.usage?.inputTokens, outputTokens: second.usage?.outputTokens },
-      });
-      return secondParsed.data;
-    }
-
-    await logUsage(options, {
-      settings,
-      durationMs: Date.now() - startedAt,
-      success: false,
-      errorMessage: "Saida invalida apos tentativa de reparo.",
-    });
-    throw new AiValidationError(
-      "A IA nao retornou um resultado no formato esperado, mesmo apos nova tentativa.",
-      secondParsed.error.issues
-    );
-  } catch (cause) {
-    if (cause instanceof AiValidationError || cause instanceof AiConfigError) throw cause;
-    const message = cause instanceof Error ? cause.message : "Falha ao chamar o provedor de IA.";
-    await logUsage(options, { settings, durationMs: Date.now() - startedAt, success: false, errorMessage: message });
-    throw new AiProviderError(message, cause);
   }
+
+  await logUsage(options, {
+    settings,
+    durationMs: Date.now() - startedAt,
+    success: false,
+    errorMessage: "Saida estruturada invalida apos todas as tentativas.",
+    extra: { attempts: maxAttempts, repaired, failureCategory: lastFailureCategory },
+  });
+  if (STRUCTURED_FAILURE_CATEGORIES.has(lastFailureCategory)) {
+    throw new AiValidationError(
+      "A IA nao retornou um resultado no formato esperado.",
+      lastIssues,
+      lastFailureCategory,
+      truncated
+    );
+  }
+  throw new AiProviderError("Falha persistente do provedor de IA.", new Error(`failureCategory: ${lastFailureCategory}`));
+}
+
+/** Chamada estruturada com validação Zod — retorna apenas os dados validados. */
+export async function generateStructured<T>(options: GenerateStructuredOptions<T>): Promise<T> {
+  return (await generateStructuredResult(options)).data;
 }

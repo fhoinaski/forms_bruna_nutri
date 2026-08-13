@@ -160,9 +160,10 @@ export function buildTopicExtractionPrompt(opts: {
   );
 
   lines.push("");
-  lines.push(
-    "Devolva SOMENTE um JSON valido com: assistantText, extractedAnswers (array de {field, value, confidence}) e, se necessário, clarification ({required, question}). Extraia APENAS campos da allowed-list acima."
-  );
+  lines.push("Formato EXATO da resposta — devolva SOMENTE um JSON valido, sem texto fora dele:");
+  lines.push('{"assistantText":"<uma frase curta e acolhedora confirmando o que entendeu>","extractedAnswers":[{"field":"<chave permitida>","value":"<valor>","confidence":"high"}]}');
+  lines.push('Se faltar informacao para preencher, devolva "extractedAnswers":[]. Se precisar de esclarecimento, acrescente "clarification":{"required":true,"question":"<pergunta>"}.');
+  lines.push('"confidence" deve ser exatamente "high", "medium" ou "low". Extraia APENAS chaves da lista de CAMPOS PERMITIDOS.');
 
   return lines.join("\n");
 }

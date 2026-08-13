@@ -11,7 +11,13 @@ test("home presents the public offer and navigates to the pre-consultation form"
 
   await preConsultLink.click();
   await expect(page).toHaveURL(/\/formulario$/);
-  await expect(page.getByRole("button", { name: /enviar pr[eé]-consulta/i })).toBeVisible();
+  // O modo (dinâmico ou tradicional) é definido no dashboard — o fluxo público
+  // não deve depender de um modo específico. Aceita qualquer um dos dois.
+  await expect(
+    page
+      .getByTestId("pre-consultation-dynamic")
+      .or(page.getByRole("button", { name: /enviar pr[eé]-consulta/i })),
+  ).toBeVisible();
 });
 
 test("login screen keeps the dashboard behind authentication", async ({ page }) => {

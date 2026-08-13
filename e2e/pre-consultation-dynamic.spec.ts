@@ -116,4 +116,82 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.getByTestId("pre-consultation-dynamic")).toHaveCount(0);
     await expect(page.getByRole("heading", { level: 1, name: /Conte seu momento/i })).toBeVisible();
   });
+
+  test("resposta estruturada inválida 1x é recuperada (smart continua)", async ({ page, request }) => {
+    await setIntakeAi(request, true);
+
+    await page.goto("/formulario");
+    await page.locator("[data-intake-input='textarea']").fill("__TEST_INTAKE_INVALID_ONCE__");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    // Continua smart: próximo passo (objetivo) aparece; tradicional não.
+    await expect(page.getByTestId("pre-consultation-dynamic")).toBeVisible();
+    await expect(page.getByText(/E o que você mais gostaria de melhorar hoje/i)).toBeVisible();
+  });
+
+  test("resposta estruturada inválida 2x é recuperada (smart continua)", async ({ page, request }) => {
+    await setIntakeAi(request, true);
+
+    await page.goto("/formulario");
+    await page.locator("[data-intake-input='textarea']").fill("__TEST_INTAKE_INVALID_TWICE__");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    await expect(page.getByTestId("pre-consultation-dynamic")).toBeVisible();
+    await expect(page.getByText(/E o que você mais gostaria de melhorar hoje/i)).toBeVisible();
+  });
+
+  test("falha persistente de formato → reformula e continua smart (sem tradicional)", async ({ page, request }) => {
+    await setIntakeAi(request, true);
+
+    await page.goto("/formulario");
+    await page.locator("[data-intake-input='textarea']").fill("__TEST_INTAKE_ALWAYS_INVALID__");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    // NÃO cai no tradicional; mostra a reformulação determinística; pode re-responder.
+    await expect(page.getByTestId("pre-consultation-dynamic")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /Conte seu momento/i })).toHaveCount(0);
+    await expect(page.getByText(/Não consegui organizar essa resposta/i)).toBeVisible();
+
+    // Re-responde normalmente e continua.
+    await page.locator("[data-intake-input='textarea']").fill("Quero melhorar minha rotina");
+    await page.getByRole("button", { name: /continuar/i }).click();
+    await expect(page.getByText(/E o que você mais gostaria de melhorar hoje/i)).toBeVisible();
+  });
+
+  test("provider error após várias respostas → fallback preservando dados", async ({ page, request }) => {
+    await setIntakeAi(request, true);
+
+    await page.goto("/formulario");
+
+    await page.locator("[data-intake-input='textarea']").fill("Quero cuidar da minha saúde.");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    await page.getByRole("button", { name: "Rotina mais leve" }).click(); // objetivo
+    await page.getByRole("button", { name: "Emagrecimento" }).click(); // tipo de atendimento
+
+    // Nome (texto direto) — dispara provider error e derruba para o tradicional.
+    await page.getByRole("textbox", { name: /nome completo/i }).fill("__TEST_INTAKE_FAIL__");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    // Fallback → tradicional, com prefill.
+    await expect(page.getByTestId("pre-consultation-dynamic")).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1, name: /Conte seu momento/i })).toBeVisible();
+
+    // Respostas anteriores preservadas e a falha NÃO vazou para nome.
+    await expect(page.locator('textarea[name="motivacao"]')).toHaveValue("ok");
+    await expect(page.locator('input[name="nome"]')).toHaveValue("");
+  });
+
+  test("erro inesperado NÃO é mascarado como falha de IA (sem fallback)", async ({ page, request }) => {
+    await setIntakeAi(request, true);
+
+    await page.goto("/formulario");
+    await page.locator("[data-intake-input='textarea']").fill("__TEST_INTAKE_UNEXPECTED__");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    // Continua no dinâmico (não faz fallback silencioso); mensagem de erro, sem stack.
+    await expect(page.getByTestId("pre-consultation-dynamic")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /Conte seu momento/i })).toHaveCount(0);
+    await expect(page.getByText(/Não foi possível processar sua mensagem/i)).toBeVisible();
+  });
 });

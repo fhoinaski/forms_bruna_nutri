@@ -45,14 +45,22 @@ export type IntakeTurnParsed = z.infer<typeof IntakeTurnSchema>;
  * cada resposta extraída deve estar na allow-list fornecida pelo servidor;
  * o servidor re-valida cada campo contra o schema real e aplica a barreira
  * de confiança para campos sensíveis. A IA nunca escolhe chave arbitrária.
+ *
+ * Schema mantido compatível com JSON Schema para permitir structured output
+ * nativo (`generateObject`). A "tolerância de formatação" (capitalização de
+ * confidence, chaves extras, clarificação nula) fica em
+ * `normalizeTopicExtractionJson`, aplicada apenas no caminho textual de
+ * fallback — nunca no conteúdo clínico.
  */
+export const INTAKE_EXTRACTION_SCHEMA_VERSION = "2";
+
 export const IntakeTopicExtractionSchema = z.object({
-  assistantText: z.string().min(1).max(800),
+  assistantText: z.string().max(800).default(""),
   extractedAnswers: z
     .array(
       z.object({
         field: z.string().min(1).max(80),
-        value: z.unknown(),
+        value: z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()]),
         confidence: z.enum(["high", "medium", "low"]),
       })
     )
@@ -63,10 +71,61 @@ export const IntakeTopicExtractionSchema = z.object({
       required: z.boolean(),
       question: z.string().max(300).optional(),
     })
-    .optional(),
-}).strict();
+    .nullish(),
+});
 
 export type IntakeTopicExtractionParsed = z.infer<typeof IntakeTopicExtractionSchema>;
+
+/** Normalização técnica de enums (não transforma valores clínicos). */
+export function normalizeConfidence(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const normalized = value.toLowerCase().trim();
+  if (["alta", "alto", "high"].includes(normalized)) return "high";
+  if (["media", "média", "medio", "medium"].includes(normalized)) return "medium";
+  if (["baixa", "baixo", "low"].includes(normalized)) return "low";
+  return normalized;
+}
+
+/**
+ * Normaliza a saída crua do modelo (caminho textual) ANTES do `safeParse`:
+ * remove chaves extras (ex.: `reasoning`), tolera `assistantText` vazio e
+ * `clarification: null`, e normaliza confidence. NÃO persiste nada — só
+ * prepara para validação.
+ */
+export function normalizeTopicExtractionJson(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const obj = raw as Record<string, unknown>;
+
+  const out: Record<string, unknown> = {
+    assistantText: typeof obj.assistantText === "string" ? obj.assistantText : "",
+    extractedAnswers: Array.isArray(obj.extractedAnswers)
+      ? obj.extractedAnswers
+          .slice(0, 8)
+          .map((answer) => {
+            if (!answer || typeof answer !== "object" || Array.isArray(answer)) return null;
+            const item = answer as Record<string, unknown>;
+            if (typeof item.field !== "string" || item.field.length === 0) return null;
+            return {
+              field: item.field.slice(0, 80),
+              value: item.value ?? null,
+              confidence: normalizeConfidence(item.confidence),
+            };
+          })
+          .filter((item) => item !== null)
+      : [],
+  };
+
+  const clarification = obj.clarification;
+  if (clarification && typeof clarification === "object" && !Array.isArray(clarification)) {
+    const c = clarification as Record<string, unknown>;
+    out.clarification = {
+      required: c.required === true || c.required === "true",
+      question: typeof c.question === "string" ? c.question : undefined,
+    };
+  }
+
+  return out;
+}
 
 export const IntakeSessionStateSchema = z.object({
   id: z.string().min(1),

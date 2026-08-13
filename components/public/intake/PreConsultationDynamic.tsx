@@ -199,6 +199,13 @@ export function PreConsultationDynamic({ onFallback }: { onFallback: (answers: R
         return;
       }
 
+      if (data.rephrasePrompt) {
+        setError(data.rephrasePrompt);
+        setInteraction(data.interaction ?? interaction);
+        setTransition(data.transitionMessage ?? null);
+        return;
+      }
+
       setPrevInteraction(interaction);
       setInteraction(data.interaction ?? null);
       setTransition(data.transitionMessage ?? null);
