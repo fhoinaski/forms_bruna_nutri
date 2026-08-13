@@ -74,9 +74,25 @@ export function maskApiKey(apiKey: string | null): string | null {
 }
 
 function decryptAISettings(settings: AISettings): AISettings {
+  let apiKey: string | null = null;
+  try {
+    apiKey = decryptNullableText(settings.api_key);
+  } catch (error) {
+    // A api_key foi cifrada com uma chave de criptografia que não está mais
+    // presente/igual no ambiente atual (env rotacionada ou banco restaurado de
+    // outro ambiente). O AES-256-GCM falha com "Unsupported state or unable to
+    // authenticate data" quando a tag não bate. Em vez de derrubar a rota com
+    // um 502 ilegível, tratamos como "sem chave": a tela de IA carrega e o
+    // admin consegue reconfigurar a chave normalmente.
+    console.error(
+      "[ai-settings] Não foi possível descriptografar a api_key armazenada — tratando como não configurada. Verifique CLINICAL_DATA_ENCRYPTION_KEY / MFA_ENCRYPTION_KEY / AUTH_SECRET no ambiente.",
+      error instanceof Error ? error.message : error
+    );
+    apiKey = null;
+  }
   return {
     ...settings,
-    api_key: decryptNullableText(settings.api_key),
+    api_key: apiKey,
   };
 }
 
