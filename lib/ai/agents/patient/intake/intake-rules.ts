@@ -7,7 +7,8 @@ import {
   getSintomasOptions,
   type IntakeFieldDefinition,
 } from "@/lib/clinical/pre-consultation-fields";
-import type { IntakeSessionState, IntakeTurnResult } from "@/lib/ai/agents/patient/intake/intake-types";
+import type { IntakeSessionState, IntakeTopicExtractionResult, IntakeTopicId, IntakeTurnResult } from "@/lib/ai/agents/patient/intake/intake-types";
+import { stepKeyOf } from "@/lib/ai/agents/patient/intake/intake-flow";
 
 /**
  * Motor determinístico do intake. O SERVIDOR decide tudo o que o LLM não
@@ -167,6 +168,7 @@ export function validateFieldValue(
       return validateSingleChoice(raw, field.options);
     }
     case "multiple_choice":
+      if (field.key === "sintomas") return validateMultipleChoice(raw, getSintomasOptions(answers));
       return validateMultipleChoice(raw, field.options);
     case "boolean":
       return validateBoolean(raw);
@@ -331,16 +333,12 @@ export function applyTurnToState(
     next.answers[field.key] = validation.value;
   }
 
-  if (field.key === "tipoAtendimento" && !isPediatricProfile(validation.value)) {
-    // Ao trocar para um perfil não-pediátrico, limpa dados pediátricos já coletados.
-    for (const childKey of [
-      "child_name", "child_age", "child_weight_kg", "child_height_cm",
-      "child_birth_date", "child_breastfeeding", "child_food_repertoire",
-      "child_feeding_difficulties", "child_school_routine",
-    ]) {
-      delete next.answers[childKey];
-      next.completedFields = next.completedFields.filter((key) => key !== childKey);
-    }
+  if (field.key === "tipoAtendimento") {
+    // Ao trocar o tipo de atendimento, recalcula a visibilidade de TODOS os
+    // campos que dependem de branch e remove dos dados coletados aqueles que
+    // deixaram de se aplicar (§12 do produto). Cobre pediátrico, gestação,
+    // bariátrica e quaisquer outros `visibleWhen` de forma uniforme.
+    purgeHiddenBranchFields(next);
   }
 
   if (!next.completedFields.includes(field.key)) next.completedFields.push(field.key);
@@ -359,6 +357,8 @@ export function cloneState(state: IntakeSessionState): IntakeSessionState {
     ...state,
     answers: { ...state.answers },
     completedFields: [...state.completedFields],
+    completedSteps: [...(state.completedSteps ?? [])],
+    skippedSteps: [...(state.skippedSteps ?? [])],
     missingRequiredFields: [...state.missingRequiredFields],
     clarification: state.clarification ? { ...state.clarification } : null,
   };
@@ -372,11 +372,15 @@ export function createInitialState(id: string): IntakeSessionState {
     status: "active",
     currentSection: null,
     currentField: null,
+    currentTopic: null,
     answers: {},
     completedFields: [],
+    completedSteps: [],
+    skippedSteps: [],
     missingRequiredFields: [],
     clarification: null,
     editField: null,
+    interactionCount: 0,
     progress: 0,
     createdAt: now,
     updatedAt: now,
@@ -386,4 +390,110 @@ export function createInitialState(id: string): IntakeSessionState {
 /** Ordena um array de chaves conforme a ordem canônica — p/ revisão/enfileiramento determinístico. */
 export function orderFieldKeys(keys: string[]): string[] {
   return [...keys].sort((a, b) => getIntakeFieldOrder(a) - getIntakeFieldOrder(b));
+}
+
+/**
+ * Remove respostas/status de qualquer campo que não é mais aplicável ao
+ * perfil atual. Usado quando o tipo de atendimento muda e branches são
+ * ativados/desativados — evita enviar silenciosamente dados de branch não
+ * aplicável (§12).
+ */
+export function purgeHiddenBranchFields(state: Pick<IntakeSessionState, "answers" | "completedFields">): void {
+  const hiddenKeys = PRECONSULTATION_FIELDS
+    .filter((field) => field.visibleWhen && !isFieldVisible(field, state.answers))
+    .map((field) => field.key);
+
+  if (hiddenKeys.length === 0) return;
+
+  for (const key of hiddenKeys) {
+    delete state.answers[key];
+  }
+  state.completedFields = state.completedFields.filter((key) => !hiddenKeys.includes(key));
+}
+
+/**
+ * Saída da aplicação de uma extração multi-campo de um tópico (§8/§9/§10).
+ * Cada valor é validado individualmente; um campo inválido não derruba os
+ * demais. Campos fora da allow-list são descartados. Sensíveis com confiança
+ * < high nunca são gravados.
+ */
+export interface ApplyTopicExtractionOutput {
+  state: IntakeSessionState;
+  applied: boolean;
+  /** Campos efetivamente gravados neste turno. */
+  appliedFields: string[];
+  clarification?: { field: string; reason: string };
+}
+
+export function applyTopicExtraction(
+  state: IntakeSessionState,
+  topicId: IntakeTopicId,
+  stepKey: string,
+  extraction: IntakeTopicExtractionResult,
+  allowedFields: string[]
+): ApplyTopicExtractionOutput {
+  const next = cloneState(state);
+  const allowed = new Set(allowedFields);
+  const appliedFields: string[] = [];
+  const pendingClarifications: { field: string; reason: string }[] = [];
+
+  for (const answer of extraction.extractedAnswers) {
+    // 1. Allow-list + chave canônica válida.
+    if (!allowed.has(answer.field) || !SET_CONSTANTS.has(answer.field)) continue;
+    const field = getIntakeField(answer.field);
+    if (!field) continue;
+
+    // 2. Campo sensível exige confiança alta (nunca grava silenciosamente).
+    if (field.sensitive && answer.confidence !== "high") {
+      pendingClarifications.push({
+        field: field.key,
+        reason: extraction.clarification?.question ?? "Só para confirmar: poderia repetir essa informação?",
+      });
+      continue;
+    }
+
+    // 3. Validação individual contra o schema real do campo.
+    const validation = validateFieldValue(field, answer.value, next.answers);
+    if (!validation.valid) continue;
+
+    // 4. Contradição — não resolve automaticamente.
+    const contradiction = detectContradiction(field.key, validation.value, next.answers);
+    if (contradiction !== null) {
+      pendingClarifications.push({
+        field: field.key,
+        reason:
+          field.key === "medicacao"
+            ? "Você informou anteriormente uma informação diferente sobre medicamentos. Qual informação devemos considerar?"
+            : "Você informou anteriormente uma informação diferente. Qual devemos considerar?",
+      });
+      continue;
+    }
+
+    if (field.key === "privacyAccepted") {
+      next.answers.privacyAccepted = validation.value === "true";
+    } else {
+      next.answers[field.key] = validation.value;
+    }
+    if (!next.completedFields.includes(field.key)) next.completedFields.push(field.key);
+    appliedFields.push(field.key);
+  }
+
+  const stepFullKey = stepKeyOf(topicId, stepKey);
+  // Marca o passo como concluído quando ao menos um campo foi extraído.
+  if (appliedFields.length > 0) {
+    if (!next.completedSteps.includes(stepFullKey)) next.completedSteps.push(stepFullKey);
+    next.skippedSteps = next.skippedSteps.filter((s) => s !== stepFullKey);
+  }
+
+  next.missingRequiredFields = computeMissingRequired(next);
+  next.progress = computeProgress(next);
+  next.interactionCount = (next.interactionCount ?? 0) + 1;
+  next.updatedAt = new Date().toISOString();
+
+  if (pendingClarifications.length > 0) {
+    next.clarification = pendingClarifications[0];
+    return { state: next, applied: true, appliedFields, clarification: next.clarification };
+  }
+
+  return { state: next, applied: true, appliedFields };
 }

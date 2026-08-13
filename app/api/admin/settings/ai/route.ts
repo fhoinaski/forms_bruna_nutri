@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { AI_PROVIDERS } from "@/db/schema";
 import { getAdminFromRequest } from "@/lib/auth/session";
-import { getPublicAISettings, updateAISettings } from "@/lib/repositories/ai-settings";
+import { getAISettings, getPublicAISettings, updateAISettings } from "@/lib/repositories/ai-settings";
+import { resolvePublicPreConsultationMode } from "@/lib/clinical/pre-consultation-mode";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
 
@@ -15,15 +16,21 @@ const UpdateSchema = z.object({
   model: z.string().min(1).max(120),
   protocol_system_prompt: z.string().max(20000).nullable().optional(),
   chat_system_prompt: z.string().max(20000).nullable().optional(),
-  patient_intake_ai_enabled: z.boolean().optional(),
-  patient_intake_mode: z.enum(["optional", "default"]).optional(),
+  patient_intake_mode: z.enum(["smart", "traditional"]).optional(),
 }).strict();
+
+async function publicSettingsResponse() {
+  return {
+    ...(await getPublicAISettings()),
+    pre_consultation: await resolvePublicPreConsultationMode(),
+  };
+}
 
 export async function GET(req: NextRequest) {
   const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
 
-  return NextResponse.json(await getPublicAISettings());
+  return NextResponse.json(await publicSettingsResponse());
 }
 
 export async function PUT(req: NextRequest) {
@@ -35,21 +42,37 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
   }
 
+  const previous = await getAISettings();
   const settings = await updateAISettings(parsed.data);
+  const ipHash = getRequestFingerprint(req).ipHash;
+
   await writeAuditLog({
     action: "ai_settings_updated",
     adminId: admin.sub,
     entityType: "ai_settings",
     entityId: "default",
-    ipHash: getRequestFingerprint(req).ipHash,
+    ipHash,
     metadata: {
       provider: settings.provider,
       model: settings.model,
-      patientIntakeAiEnabled: parsed.data.patient_intake_ai_enabled ?? settings.patient_intake_ai_enabled === 1,
-      patientIntakeMode: parsed.data.patient_intake_mode ?? settings.patient_intake_mode,
+      patientIntakeMode: settings.patient_intake_mode,
       apiKeyChanged: parsed.data.api_key ? !parsed.data.api_key.includes("...") : false,
     },
   });
 
-  return NextResponse.json(await getPublicAISettings());
+  if (parsed.data.patient_intake_mode && parsed.data.patient_intake_mode !== previous.patient_intake_mode) {
+    await writeAuditLog({
+      action: "pre_consultation_mode_changed",
+      adminId: admin.sub,
+      entityType: "ai_settings",
+      entityId: "default",
+      ipHash,
+      metadata: {
+        oldMode: previous.patient_intake_mode,
+        newMode: settings.patient_intake_mode,
+      },
+    });
+  }
+
+  return NextResponse.json(await publicSettingsResponse());
 }

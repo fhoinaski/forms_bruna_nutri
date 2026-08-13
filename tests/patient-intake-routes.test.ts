@@ -51,6 +51,10 @@ describe("POST /api/public/pre-consultation/intake/session", () => {
       computeProgress: vi.fn().mockReturnValue(0),
       computeMissingRequired: vi.fn().mockReturnValue([]),
     }));
+    vi.doMock("@/lib/ai/agents/patient/intake/intake-flow", () => ({
+      getNextInteraction: vi.fn(() => ({ interaction: null, transitionMessage: null, reviewReady: false })),
+      getTopicStepProgress: vi.fn(() => []),
+    }));
     vi.doMock("@/lib/clinical/pre-consultation-fields", () => ({
       getIntakeField: vi.fn().mockReturnValue(undefined),
       getSintomasOptions: vi.fn().mockReturnValue([]),
@@ -154,7 +158,7 @@ describe("POST /api/public/pre-consultation/intake/message", () => {
     const { POST } = await import("../app/api/public/pre-consultation/intake/message/route");
     const res = await POST(request("/api/public/pre-consultation/intake/message", {
       method: "POST",
-      body: JSON.stringify({ message: "olá", sessionVersion: 1 }),
+      body: JSON.stringify({ message: "olá", sessionVersion: 1, topic: "current_moment", stepKey: "motivo_inicial" }),
     }));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -183,7 +187,7 @@ describe("POST /api/public/pre-consultation/intake/message", () => {
     const { POST } = await import("../app/api/public/pre-consultation/intake/message/route");
     const res = await POST(request("/api/public/pre-consultation/intake/message", {
       method: "POST",
-      body: JSON.stringify({ message: "olá", sessionVersion: 1 }),
+      body: JSON.stringify({ message: "olá", sessionVersion: 1, topic: "current_moment", stepKey: "motivo_inicial" }),
     }));
     expect(res.status).toBe(429);
   });

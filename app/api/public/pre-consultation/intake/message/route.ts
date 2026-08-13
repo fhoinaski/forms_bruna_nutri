@@ -9,8 +9,6 @@ import {
   IntakeConcurrencyError,
   IntakeTurnLimitError,
 } from "@/lib/ai/agents/patient/intake/intake-service";
-import { selectNextField } from "@/lib/ai/agents/patient/intake/intake-rules";
-import { toFieldView } from "@/lib/clinical/pre-consultation-fields";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
 
@@ -20,9 +18,27 @@ export const dynamic = "force-dynamic";
 const MAX_TURNS_PER_IP_PER_HOUR = 120;
 const MAX_MESSAGE_LENGTH = 4000;
 
+const INTAKE_TOPIC_IDS = [
+  "welcome",
+  "current_moment",
+  "service_type",
+  "identity",
+  "health",
+  "gestational",
+  "postpartum",
+  "pediatric",
+  "bariatric",
+  "routine",
+  "nutrition",
+  "expectations",
+  "review",
+] as const;
+
 const MessageSchema = z.object({
   message: z.string().min(1, "Mensagem obrigatória").max(MAX_MESSAGE_LENGTH, "Mensagem muito longa."),
   sessionVersion: z.number().int().positive(),
+  topic: z.enum(INTAKE_TOPIC_IDS),
+  stepKey: z.string().min(1).max(80),
 }).strict();
 
 export async function POST(req: NextRequest) {
@@ -60,6 +76,8 @@ export async function POST(req: NextRequest) {
       sessionId,
       message: parsed.data.message,
       sessionVersion: parsed.data.sessionVersion,
+      topic: parsed.data.topic,
+      stepKey: parsed.data.stepKey,
     });
 
     await writeAuditLog({
@@ -68,13 +86,11 @@ export async function POST(req: NextRequest) {
       entityId: sessionId,
       ipHash: getRequestFingerprint(req).ipHash,
       metadata: {
-        turnCount: result.state.completedFields.length,
+        interactionCount: result.state.interactionCount,
         progress: result.state.progress,
         fallbackCategory: result.fallbackCategory ?? null,
       },
     });
-
-    const nextField = selectNextField(result.state) ?? null;
 
     return NextResponse.json({
       message: result.assistantMessage,
@@ -82,8 +98,12 @@ export async function POST(req: NextRequest) {
       progress: result.state.progress,
       completed: result.completed,
       fallback: result.fallback === true,
-      nextField: nextField ? toFieldView(nextField, result.state.answers) : null,
+      interaction: result.interaction,
+      transitionMessage: result.transitionMessage,
+      steps: result.steps,
+      clarification: result.clarification,
       answers: result.state.answers,
+      reviewReady: result.reviewReady,
       sessionVersion: result.sessionVersion,
     });
   } catch (error) {

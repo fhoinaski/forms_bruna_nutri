@@ -5,6 +5,7 @@ import {
 } from "@/lib/clinical/pre-consultation-fields";
 import type { IntakePromptContext } from "@/lib/ai/agents/patient/intake/intake-schema";
 import type { IntakeSessionState } from "@/lib/ai/agents/patient/intake/intake-types";
+import type { IntakeTopicDefinition } from "@/lib/ai/agents/patient/intake/intake-topics";
 
 /** Versão do prompt de intake — usada para rastreabilidade/auditoria. */
 export const INTAKE_PROMPT_VERSION = "v1";
@@ -114,4 +115,54 @@ export function buildMinimalRelevantAnswers(state: IntakeSessionState, fieldKey:
     if (state.answers[key] !== undefined) relevant[key] = state.answers[key];
   }
   return relevant;
+}
+
+export const INTAKE_TOPIC_SYSTEM_PROMPT = `
+Você é o assistente de preenchimento da pré-consulta nutricional, atuando como uma entrevista humana curta e acolhedora — NÃO como um chatbot.
+
+Sua única função é ORGANIZAR a resposta da pessoa nos campos permitidos. Você é apenas a INTERFACE de coleta.
+
+Regras absolutas:
+- Você só pode preencher os campos listados em "CAMPOS PERMITIDOS".
+- Nunca invente, diagnostique, prescreva, recomende dose ou interprete sintomas como doença.
+- Campo sensível (sensivel = sim) só pode ser devolvido com confiança "high"; senão, omita o campo e peça esclarecimento.
+- Se a pessoa mencionar algo possível mas ambíguo (ex.: "problema de tireoide"), NÃO registre um diagnóstico específico. Registre fielmente "problema de tireoide" ou peça confirmação.
+- Se a informação atual contradisser uma anterior, NÃO resolva sozinho: devolva clarification.required = true com uma pergunta natural.
+- Devolva SOMENTE o JSON no formato solicitado, sem texto fora dele.
+`.trim();
+
+/**
+ * Prompt mínimo de extração MULTI-CAMPO para UM tópico. Envia apenas as
+ * chaves permitidas (allow-list) + tipo + sensibilidade, nunca o formulário
+ * inteiro, nunca PHI desnecessário.
+ */
+export function buildTopicExtractionPrompt(opts: {
+  topic: IntakeTopicDefinition;
+  allowedFields: string[];
+  userMessage: string;
+}): string {
+  const lines: string[] = [];
+
+  lines.push("TÓPICO");
+  lines.push(`- pergunta feita: "${opts.topic.steps[0]?.prompt ?? ""}"`);
+
+  lines.push("");
+  lines.push("CAMPOS PERMITIDOS");
+  for (const key of opts.allowedFields) {
+    const field = getIntakeField(key);
+    if (!field) continue;
+    lines.push(`- chave: ${key} | tipo: ${field.type} | sensivel: ${field.sensitive === true ? "sim" : "nao"} | label: ${field.label}`);
+  }
+
+  lines.push("");
+  lines.push(
+    wrapUntrustedData("RESPOSTA_DA_PESSOA", opts.userMessage)
+  );
+
+  lines.push("");
+  lines.push(
+    "Devolva SOMENTE um JSON valido com: assistantText, extractedAnswers (array de {field, value, confidence}) e, se necessário, clarification ({required, question}). Extraia APENAS campos da allowed-list acima."
+  );
+
+  return lines.join("\n");
 }

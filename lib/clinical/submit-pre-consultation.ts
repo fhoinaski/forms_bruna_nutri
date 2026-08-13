@@ -71,6 +71,13 @@ export async function submitPreConsultation(
   });
   await ensureOpportunityForSubmission(id);
 
+  // Pré-análise automática (§20): dispara de forma NÃO bloqueante após a
+  // submissão confirmada. Reusa `submission_pre_analyses` existente; só roda
+  // quando a IA está configurada e falha silenciosamente sem afetar o envio.
+  void import("@/lib/ai/agents/clinical/pre-analysis-generator")
+    .then(({ maybeGeneratePreAnalysis }) => maybeGeneratePreAnalysis(id))
+    .catch(() => null);
+
   return { id };
 }
 

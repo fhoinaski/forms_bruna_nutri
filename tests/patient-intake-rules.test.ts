@@ -77,6 +77,50 @@ describe("intake-rules — campos condicionais", () => {
   it("detecta perfil bariátrico via tipo de atendimento", () => {
     expect(isPediatricProfile("Bariátrico")).toBe(false);
   });
+
+  it("ativa bloco gestacional somente no perfil gestação", () => {
+    const state = createInitialState("s1");
+    state.answers.tipoAtendimento = "Gestação";
+    const keys = getAskableFields(state.answers).map((f) => f.key);
+    expect(keys).toContain("gestational_details");
+
+    const adult = createInitialState("s2");
+    adult.answers.tipoAtendimento = "Emagrecimento";
+    const adultKeys = getAskableFields(adult.answers).map((f) => f.key);
+    expect(adultKeys).not.toContain("gestational_details");
+  });
+
+  it("ativa bloco bariátrico somente no perfil bariátrico", () => {
+    const bariatric = createInitialState("s1");
+    bariatric.answers.tipoAtendimento = "Bariátrico";
+    expect(getAskableFields(bariatric.answers).map((f) => f.key)).toContain("bariatric_details");
+
+    const other = createInitialState("s2");
+    other.answers.tipoAtendimento = "Renal";
+    expect(getAskableFields(other.answers).map((f) => f.key)).not.toContain("bariatric_details");
+  });
+
+  it("limpa dados de branch ao trocar de gestação para adulto", () => {
+    const state = createInitialState("s1");
+    state.answers.tipoAtendimento = "Gestação";
+    state.answers.gestational_details = "Idade gestacional 20 semanas";
+    state.completedFields.push("gestational_details");
+
+    const output = applyTurnToState(state, answeredTurn("tipoAtendimento", "Emagrecimento"));
+    expect(output.state.answers.gestational_details).toBeUndefined();
+    expect(output.state.completedFields).not.toContain("gestational_details");
+  });
+
+  it("limpa dados pediátricos ao trocar de infantil para adulto", () => {
+    const state = createInitialState("s1");
+    state.answers.tipoAtendimento = "Infantil";
+    state.answers.child_name = "Bia";
+    state.completedFields.push("child_name");
+
+    const output = applyTurnToState(state, answeredTurn("tipoAtendimento", "Emagrecimento"));
+    expect(output.state.answers.child_name).toBeUndefined();
+    expect(output.state.completedFields).not.toContain("child_name");
+  });
 });
 
 describe("intake-rules — validação de valor", () => {

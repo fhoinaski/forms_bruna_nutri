@@ -6,13 +6,30 @@ import {
   IntakeNotFoundError,
   IntakeConcurrencyError,
 } from "@/lib/ai/agents/patient/intake/intake-service";
-import { getIntakeField, toFieldView } from "@/lib/clinical/pre-consultation-fields";
+import { getNextInteraction, getTopicStepProgress } from "@/lib/ai/agents/patient/intake/intake-flow";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const INTAKE_TOPIC_IDS = [
+  "welcome",
+  "current_moment",
+  "service_type",
+  "identity",
+  "health",
+  "gestational",
+  "postpartum",
+  "pediatric",
+  "bariatric",
+  "routine",
+  "nutrition",
+  "expectations",
+  "review",
+] as const;
+
 const EditSchema = z.object({
-  field: z.string().min(1).max(80),
+  topic: z.enum(INTAKE_TOPIC_IDS),
+  stepKey: z.string().min(1).max(80),
   sessionVersion: z.number().int().positive(),
 }).strict();
 
@@ -34,17 +51,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
   }
 
-  const field = getIntakeField(parsed.data.field);
-  if (!field) {
-    return NextResponse.json({ message: "Campo inválido." }, { status: 400 });
-  }
-
   try {
-    const next = await editIntakeField(sessionId, parsed.data.sessionVersion, parsed.data.field);
+    const next = await editIntakeField(sessionId, parsed.data.sessionVersion, parsed.data.topic, parsed.data.stepKey);
+    const interaction = getNextInteraction(next);
     return NextResponse.json({
-      field: toFieldView(field, next.answers),
       status: next.status,
       progress: next.progress,
+      interaction: interaction.interaction,
+      transitionMessage: interaction.transitionMessage ?? null,
+      steps: getTopicStepProgress(next),
       sessionVersion: parsed.data.sessionVersion + 1,
     });
   } catch (error) {

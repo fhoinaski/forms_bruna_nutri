@@ -30,6 +30,18 @@ export interface IntakeFieldOption {
 
 export type IntakeVisibilityRule = (answers: Record<string, unknown>) => boolean;
 
+/**
+ * Modo de captura de um campo na experiência dinâmica:
+ * - "direct": o valor é capturado por um controle objetivo (escolha, data,
+ *   número, booleano, ou texto factual como nome/contato) e aplicado
+ *   deterministicamente pelo servidor, SEM chamada ao LLM. Isso minimiza
+ *   envio de PHI (nome/e-mail/telefone) e elimina custo de IA para dados que
+ *   não precisam de interpretação.
+ * - "ai": o campo é respondido em linguagem natural e a IA interpreta,
+ *   normaliza e pode pedir follow-up (§8 do produto).
+ */
+export type IntakeCaptureMode = "direct" | "ai";
+
 export interface IntakeFieldDefinition {
   /** Chave idêntica à coluna do schema de submissão (LegacyFormSchema). */
   key: string;
@@ -49,6 +61,12 @@ export interface IntakeFieldDefinition {
   sensitive?: boolean;
   /** Texto de unidade, exibido visualmente (ex.: "kg", "cm"). */
   unit?: string;
+  /**
+   * Modo de captura. Ausente → inferido pelo tipo: estruturados são "direct",
+   * text/textarea são "ai". Campos de identificação/contato são marcados
+   * explicitamente como "direct" para nunca enviar PHI ao LLM.
+   */
+  capture?: IntakeCaptureMode;
 }
 
 export type IntakeSectionId =
@@ -152,7 +170,10 @@ const SINTOMAS_PEDIATRIC: IntakeFieldOption[] = [
   { value: "Alergias", label: "Alergias" },
 ];
 
-/** Mesma heurística determinística usada no schema de submissão e no formulário. */
+/**
+ * Mesma heurística determinística usada no schema de submissão e no formulário.
+ * Cobre infantil, TEA, introdução alimentar e seletividade.
+ */
 export function isPediatricProfile(value: string | null | undefined): boolean {
   const normalized = (value ?? "").toLowerCase();
   return (
@@ -163,8 +184,29 @@ export function isPediatricProfile(value: string | null | undefined): boolean {
   );
 }
 
+/** Normaliza acentos para casar tokens sem acento ("Bariátrico" → "bariatrico"). */
+function normalize(value: string): string {
+  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 export function isBariatricProfile(value: string | null | undefined): boolean {
-  return (value ?? "").toLowerCase().includes("bariatri");
+  const normalized = (value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return normalized.includes("bariatri");
+}
+
+function profileIs(value: string | null | undefined, token: string): boolean {
+  return normalize(value ?? "").includes(token);
+}
+
+export function isGestationalProfile(value: string | null | undefined): boolean {
+  return profileIs(value, "gesta");
+}
+
+export function isPostpartumProfile(value: string | null | undefined): boolean {
+  return profileIs(value, "parto") || profileIs(value, "pós");
 }
 
 function pediatricOnly(): IntakeVisibilityRule {
@@ -175,68 +217,78 @@ function nonPediatricOnly(): IntakeVisibilityRule {
   return (answers) => !isPediatricProfile(typeof answers.tipoAtendimento === "string" ? answers.tipoAtendimento : undefined);
 }
 
+function gestationalOnly(): IntakeVisibilityRule {
+  return (answers) => isGestationalProfile(typeof answers.tipoAtendimento === "string" ? answers.tipoAtendimento : undefined);
+}
+
+function bariatricOnly(): IntakeVisibilityRule {
+  return (answers) => isBariatricProfile(typeof answers.tipoAtendimento === "string" ? answers.tipoAtendimento : undefined);
+}
+
 /**
  * Definição canônica completa, em ordem de apresentação. `sintomas` aparece
  * uma única vez, com opções resolvidas em runtime conforme o perfil
  * (pediátrico vs adulto) — exatamente como o formulário tradicional faz.
  */
 export const PRECONSULTATION_FIELDS: IntakeFieldDefinition[] = [
-  { key: "tipoAtendimento", section: "tipo_atendimento", type: "single_choice", label: "Tipo de atendimento", conversationalPrompt: "Qual tipo de atendimento você procura?", required: false, options: TIPO_ATENDIMENTO_OPTIONS },
+  { key: "tipoAtendimento", section: "tipo_atendimento", type: "single_choice", label: "Tipo de atendimento", conversationalPrompt: "Qual tipo de atendimento você procura?", required: false, options: TIPO_ATENDIMENTO_OPTIONS, capture: "direct" },
 
-  { key: "nome", section: "sobre_voce", type: "text", label: "Nome completo", conversationalPrompt: "Qual é o seu nome completo?", required: true },
-  { key: "idade", section: "sobre_voce", type: "text", label: "Idade", conversationalPrompt: "Qual é a sua idade?", required: false, unit: "anos" },
-  { key: "nascimento", section: "sobre_voce", type: "date", label: "Data de nascimento", conversationalPrompt: "Qual é a sua data de nascimento?", required: false },
-  { key: "whatsapp", section: "sobre_voce", type: "text", label: "WhatsApp", conversationalPrompt: "Qual é o seu WhatsApp (com DDD)?", required: true, sensitive: true },
-  { key: "email", section: "sobre_voce", type: "text", label: "E-mail", conversationalPrompt: "Qual é o seu e-mail?", required: true, sensitive: true },
-  { key: "profissao", section: "sobre_voce", type: "text", label: "Profissão", conversationalPrompt: "Qual é a sua profissão?", required: false },
-  { key: "cidade", section: "sobre_voce", type: "text", label: "Cidade / Estado", conversationalPrompt: "Em qual cidade e estado você mora?", required: false },
+  { key: "nome", section: "sobre_voce", type: "text", label: "Nome completo", conversationalPrompt: "Qual é o seu nome completo?", required: true, capture: "direct" },
+  { key: "idade", section: "sobre_voce", type: "text", label: "Idade", conversationalPrompt: "Qual é a sua idade?", required: false, unit: "anos", capture: "direct" },
+  { key: "nascimento", section: "sobre_voce", type: "date", label: "Data de nascimento", conversationalPrompt: "Qual é a sua data de nascimento?", required: false, capture: "direct" },
+  { key: "whatsapp", section: "sobre_voce", type: "text", label: "WhatsApp", conversationalPrompt: "Qual é o seu WhatsApp (com DDD)?", required: true, sensitive: true, capture: "direct" },
+  { key: "email", section: "sobre_voce", type: "text", label: "E-mail", conversationalPrompt: "Qual é o seu e-mail?", required: true, sensitive: true, capture: "direct" },
+  { key: "profissao", section: "sobre_voce", type: "text", label: "Profissão", conversationalPrompt: "Qual é a sua profissão?", required: false, capture: "direct" },
+  { key: "cidade", section: "sobre_voce", type: "text", label: "Cidade / Estado", conversationalPrompt: "Em qual cidade e estado você mora?", required: false, capture: "direct" },
 
-  { key: "child_name", section: "crianca", type: "text", label: "Nome da criança", conversationalPrompt: "Qual é o nome da criança?", required: false, visibleWhen: pediatricOnly() },
-  { key: "child_age", section: "crianca", type: "text", label: "Idade da criança", conversationalPrompt: "Qual é a idade da criança?", required: false, visibleWhen: pediatricOnly() },
-  { key: "child_weight_kg", section: "crianca", type: "number", label: "Peso atual", conversationalPrompt: "Qual é o peso atual da criança?", required: false, unit: "kg", visibleWhen: pediatricOnly() },
-  { key: "child_height_cm", section: "crianca", type: "number", label: "Estatura atual", conversationalPrompt: "Qual é a estatura atual da criança?", required: false, unit: "cm", visibleWhen: pediatricOnly() },
-  { key: "child_birth_date", section: "crianca", type: "date", label: "Nascimento da criança", conversationalPrompt: "Qual é a data de nascimento da criança?", required: false, visibleWhen: pediatricOnly() },
+  { key: "child_name", section: "crianca", type: "text", label: "Nome da criança", conversationalPrompt: "Qual é o nome da criança?", required: false, visibleWhen: pediatricOnly(), capture: "direct" },
+  { key: "child_age", section: "crianca", type: "text", label: "Idade da criança", conversationalPrompt: "Qual é a idade da criança?", required: false, visibleWhen: pediatricOnly(), capture: "direct" },
+  { key: "child_weight_kg", section: "crianca", type: "number", label: "Peso atual", conversationalPrompt: "Qual é o peso atual da criança?", required: false, unit: "kg", visibleWhen: pediatricOnly(), capture: "direct" },
+  { key: "child_height_cm", section: "crianca", type: "number", label: "Estatura atual", conversationalPrompt: "Qual é a estatura atual da criança?", required: false, unit: "cm", visibleWhen: pediatricOnly(), capture: "direct" },
+  { key: "child_birth_date", section: "crianca", type: "date", label: "Nascimento da criança", conversationalPrompt: "Qual é a data de nascimento da criança?", required: false, visibleWhen: pediatricOnly(), capture: "direct" },
   { key: "child_breastfeeding", section: "crianca", type: "textarea", label: "Aleitamento / fórmula / mamadeiras", conversationalPrompt: "Conte sobre aleitamento, fórmula ou mamadeiras.", required: false, visibleWhen: pediatricOnly() },
   { key: "child_food_repertoire", section: "crianca", type: "textarea", label: "Repertório alimentar atual", conversationalPrompt: "Quais alimentos a criança aceita ou recusa?", required: false, visibleWhen: pediatricOnly() },
   { key: "child_feeding_difficulties", section: "crianca", type: "textarea", label: "Dificuldades percebidas na alimentação", conversationalPrompt: "Há dificuldades como engasgos, seletividade ou recusas?", required: false, visibleWhen: pediatricOnly() },
   { key: "child_school_routine", section: "crianca", type: "textarea", label: "Rotina familiar, escola e cuidadores", conversationalPrompt: "Como é a rotina familiar, de escola e de cuidadores?", required: false, visibleWhen: pediatricOnly() },
 
   { key: "motivacao", section: "momento_atual", type: "textarea", label: "O que te motivou a buscar acompanhamento agora?", conversationalPrompt: "O que te motivou a buscar acompanhamento agora?", required: false },
-  { key: "objetivo", section: "momento_atual", type: "single_choice", label: "Qual seu principal objetivo?", conversationalPrompt: "Qual é o seu principal objetivo?", required: false, options: OBJETIVO_OPTIONS },
+  { key: "objetivo", section: "momento_atual", type: "single_choice", label: "Qual seu principal objetivo?", conversationalPrompt: "Qual é o seu principal objetivo?", required: false, options: OBJETIVO_OPTIONS, capture: "direct" },
   { key: "incomodo", section: "momento_atual", type: "textarea", label: "O que mais te incomoda hoje?", conversationalPrompt: "O que mais te incomoda hoje?", required: false },
 
   { key: "diagnostico", section: "historico_saude", type: "text", label: "Possui algum diagnóstico?", conversationalPrompt: "Possui algum diagnóstico de saúde? Se não, pode seguir sem preencher.", required: false, sensitive: true },
   { key: "medicacao", section: "historico_saude", type: "text", label: "Faz uso de medicação contínua? Qual?", conversationalPrompt: "Faz uso de medicação contínua? Quais?", required: false, sensitive: true },
-  { key: "anticoncepcional", section: "historico_saude", type: "single_choice", label: "Usa anticoncepcional?", conversationalPrompt: "Você usa anticoncepcional?", required: false, options: SIM_NAO, visibleWhen: nonPediatricOnly() },
-  { key: "gestante", section: "historico_saude", type: "single_choice", label: "Gestante ou amamentando?", conversationalPrompt: "Você está gestante ou amamentando?", required: false, options: SIM_NAO, visibleWhen: nonPediatricOnly() },
-  { key: "sintomas", section: "historico_saude", type: "multiple_choice", label: "Apresenta com frequência:", conversationalPrompt: "Quais destes sintomas você apresenta com frequência?", required: false, options: SINTOMAS_ADULT, sensitive: true },
+  { key: "gestante", section: "historico_saude", type: "single_choice", label: "Gestante ou amamentando?", conversationalPrompt: "Você está gestante ou amamentando?", required: false, options: SIM_NAO, visibleWhen: nonPediatricOnly(), capture: "direct" },
+  { key: "gestational_details", section: "historico_saude", type: "textarea", label: "Sobre a gestação", conversationalPrompt: "Conte um pouco sobre a gestação: idade gestacional, data prevista para o parto, peso pré-gestacional, ganho de peso e sintomas como náuseas, vômitos, constipação ou azia.", required: false, visibleWhen: gestationalOnly() },
+  { key: "bariatric_details", section: "historico_saude", type: "textarea", label: "Seu histórico bariátrico", conversationalPrompt: "Conte sobre a cirurgia bariátrica: quando foi, qual tipo e como está a suplementação e o acompanhamento.", required: false, visibleWhen: bariatricOnly() },
+  { key: "anticoncepcional", section: "historico_saude", type: "single_choice", label: "Usa anticoncepcional?", conversationalPrompt: "Você usa anticoncepcional?", required: false, options: SIM_NAO, visibleWhen: nonPediatricOnly(), capture: "direct" },
+  { key: "sintomas", section: "historico_saude", type: "multiple_choice", label: "Apresenta com frequência:", conversationalPrompt: "Quais destes sintomas você apresenta com frequência?", required: false, options: SINTOMAS_ADULT, sensitive: true, capture: "direct" },
 
-  { key: "suplementos", section: "suplementacao", type: "text", label: "Usa suplementos atualmente? Quais?", conversationalPrompt: "Você usa suplementos atualmente? Quais?", required: false },
-  { key: "suplementosNegativo", section: "suplementacao", type: "text", label: "Já usou algo que não se adaptou?", conversationalPrompt: "Já usou algum suplemento que não se adaptou?", required: false },
+  { key: "suplementos", section: "suplementacao", type: "text", label: "Usa suplementos atualmente? Quais?", conversationalPrompt: "Você usa suplementos atualmente? Quais?", required: false, capture: "direct" },
+  { key: "suplementosNegativo", section: "suplementacao", type: "text", label: "Já usou algo que não se adaptou?", conversationalPrompt: "Já usou algum suplemento que não se adaptou?", required: false, capture: "direct" },
 
   { key: "rotina", section: "rotina_comportamento", type: "textarea", label: "Como é sua rotina diária?", conversationalPrompt: "Como é a sua rotina diária (horários, trabalho, refeições)?", required: false },
-  { key: "semComer", section: "rotina_comportamento", type: "single_choice", label: "Fica muito tempo sem comer?", conversationalPrompt: "Você fica muito tempo sem comer?", required: false, options: SIM_NAO_AS_VEZES, visibleWhen: nonPediatricOnly() },
-  { key: "comerEmocao", section: "rotina_comportamento", type: "single_choice", label: "Come mais por fome ou emoção?", conversationalPrompt: "Você come mais por fome ou por emoção?", required: false, options: [{ value: "Fome", label: "Fome" }, { value: "Emoção", label: "Emoção" }, { value: "Os dois", label: "Os dois" }], visibleWhen: nonPediatricOnly() },
+  { key: "semComer", section: "rotina_comportamento", type: "single_choice", label: "Fica muito tempo sem comer?", conversationalPrompt: "Você fica muito tempo sem comer?", required: false, options: SIM_NAO_AS_VEZES, visibleWhen: nonPediatricOnly(), capture: "direct" },
+  { key: "comerEmocao", section: "rotina_comportamento", type: "single_choice", label: "Come mais por fome ou emoção?", conversationalPrompt: "Você come mais por fome ou por emoção?", required: false, options: [{ value: "Fome", label: "Fome" }, { value: "Emoção", label: "Emoção" }, { value: "Os dois", label: "Os dois" }], visibleWhen: nonPediatricOnly(), capture: "direct" },
   { key: "fomeDia", section: "rotina_comportamento", type: "textarea", label: "Como avalia sua fome ao longo do dia?", conversationalPrompt: "Como você avalia sua fome ao longo do dia?", required: false },
 
-  { key: "sonoHoras", section: "estilo_vida", type: "text", label: "Horas de sono", conversationalPrompt: "Quantas horas você dorme por noite?", required: false, unit: "horas" },
-  { key: "descansada", section: "estilo_vida", type: "single_choice", label: "Acorda descansada?", conversationalPrompt: "Você acorda descansada?", required: false, options: SIM_NAO_AS_VEZES },
-  { key: "estresse", section: "estilo_vida", type: "single_choice", label: "Nível de estresse", conversationalPrompt: "Como está o seu nível de estresse?", required: false, options: [{ value: "Baixo", label: "Baixo" }, { value: "Moderado", label: "Moderado" }, { value: "Alto", label: "Alto" }] },
+  { key: "sonoHoras", section: "estilo_vida", type: "text", label: "Horas de sono", conversationalPrompt: "Quantas horas você dorme por noite?", required: false, unit: "horas", capture: "direct" },
+  { key: "descansada", section: "estilo_vida", type: "single_choice", label: "Acorda descansada?", conversationalPrompt: "Você acorda descansada?", required: false, options: SIM_NAO_AS_VEZES, capture: "direct" },
+  { key: "estresse", section: "estilo_vida", type: "single_choice", label: "Nível de estresse", conversationalPrompt: "Como está o seu nível de estresse?", required: false, options: [{ value: "Baixo", label: "Baixo" }, { value: "Moderado", label: "Moderado" }, { value: "Alto", label: "Alto" }], capture: "direct" },
   { key: "atividadeFisica", section: "estilo_vida", type: "textarea", label: "Pratica atividade física? Frequência?", conversationalPrompt: "Você pratica atividade física? Com que frequência?", required: false },
 
-  { key: "intestinoFreq", section: "saude_intestinal", type: "single_choice", label: "Frequência intestinal", conversationalPrompt: "Com que frequência você vai ao banheiro?", required: false, options: [{ value: "1x ou menos", label: "1x ou menos" }, { value: "2-3x", label: "2-3x" }, { value: "Todo dia", label: "Todo dia" }, { value: "Mais de 1x/dia", label: "Mais de 1x/dia" }] },
-  { key: "desconforto", section: "saude_intestinal", type: "single_choice", label: "Sente estufamento/desconforto?", conversationalPrompt: "Você sente estufamento ou desconforto abdominal?", required: false, options: [{ value: "Sempre", label: "Sempre" }, { value: "Às vezes", label: "Às vezes" }, { value: "Raramente", label: "Raramente" }, { value: "Não", label: "Não" }] },
+  { key: "intestinoFreq", section: "saude_intestinal", type: "single_choice", label: "Frequência intestinal", conversationalPrompt: "Com que frequência você vai ao banheiro?", required: false, options: [{ value: "1x ou menos", label: "1x ou menos" }, { value: "2-3x", label: "2-3x" }, { value: "Todo dia", label: "Todo dia" }, { value: "Mais de 1x/dia", label: "Mais de 1x/dia" }], capture: "direct" },
+  { key: "desconforto", section: "saude_intestinal", type: "single_choice", label: "Sente estufamento/desconforto?", conversationalPrompt: "Você sente estufamento ou desconforto abdominal?", required: false, options: [{ value: "Sempre", label: "Sempre" }, { value: "Às vezes", label: "Às vezes" }, { value: "Raramente", label: "Raramente" }, { value: "Não", label: "Não" }], capture: "direct" },
 
-  { key: "naoGosta", section: "preferencias", type: "text", label: "Alimentos que não gosta/tolera", conversationalPrompt: "Quais alimentos você não gosta ou não tolera?", required: false },
-  { key: "favoritos", section: "preferencias", type: "text", label: "Alimentos que não podem faltar", conversationalPrompt: "Quais alimentos não podem faltar para você?", required: false },
+  { key: "naoGosta", section: "preferencias", type: "text", label: "Alimentos que não gosta/tolera", conversationalPrompt: "Quais alimentos você não gosta ou não tolera?", required: false, capture: "direct" },
+  { key: "favoritos", section: "preferencias", type: "text", label: "Alimentos que não podem faltar", conversationalPrompt: "Quais alimentos não podem faltar para você?", required: false, capture: "direct" },
 
   { key: "diaAlimentar", section: "rotina_essencial", type: "textarea", label: "Descreva um dia alimentar típico", conversationalPrompt: "Descreva um dia alimentar típico, com horários e quantidades.", required: false },
 
   { key: "expectativas", section: "expectativas", type: "textarea", label: "O que espera do acompanhamento?", conversationalPrompt: "O que você espera do acompanhamento?", required: false },
-  { key: "disposicao", section: "expectativas", type: "number", label: "De 0 a 10, disposta a mudar?", conversationalPrompt: "De 0 a 10, o quanto você está disposta a mudar?", required: false, unit: "0–10" },
+  { key: "disposicao", section: "expectativas", type: "number", label: "De 0 a 10, disposta a mudar?", conversationalPrompt: "De 0 a 10, o quanto você está disposta a mudar?", required: false, unit: "0–10", capture: "direct" },
 
   { key: "espacoLivre", section: "espaco_livre", type: "textarea", label: "Mais alguma coisa?", conversationalPrompt: "Tem mais alguma coisa que você gostaria de compartilhar?", required: false },
-  { key: "privacyAccepted", section: "espaco_livre", type: "boolean", label: "Aceite da Política de Privacidade", conversationalPrompt: "Você leu e aceita a Política de Privacidade?", required: true },
+  { key: "privacyAccepted", section: "espaco_livre", type: "boolean", label: "Aceite da Política de Privacidade", conversationalPrompt: "Você leu e aceita a Política de Privacidade?", required: true, capture: "direct" },
 ];
 
 /**
@@ -269,6 +321,35 @@ export function getSintomasOptions(answers: Record<string, unknown>): IntakeFiel
     : SINTOMAS_ADULT;
 }
 
+/**
+ * Campos de identificação/contato que NUNCA devem ir ao LLM: captura direta,
+ * mesmo sendo `text`. Minimiza PHI enviado ao provedor externo (§13/§22).
+ */
+const DIRECT_PII_FIELD_KEYS = new Set<string>([
+  "nome",
+  "idade",
+  "nascimento",
+  "whatsapp",
+  "email",
+  "profissao",
+  "cidade",
+  "child_name",
+  "child_age",
+]);
+
+/** Retorna o modo de captura efetivo de um campo (ou inferido pelo tipo). */
+export function getCaptureMode(field: IntakeFieldDefinition): IntakeCaptureMode {
+  if (field.capture) return field.capture;
+  return field.type === "text" || field.type === "textarea" ? "ai" : "direct";
+}
+
+/** Indica se o campo é capturado por controle objetivo, sem chamada ao LLM. */
+export function isDirectCaptureField(field: IntakeFieldDefinition): boolean {
+  return getCaptureMode(field) === "direct";
+}
+
+export { DIRECT_PII_FIELD_KEYS };
+
 /** Representação serializável (JSON-safe) de um campo — sem `visibleWhen`. */
 export interface IntakeFieldView {
   key: string;
@@ -280,6 +361,7 @@ export interface IntakeFieldView {
   sensitive: boolean;
   unit: string | null;
   options: IntakeFieldOption[];
+  capture: IntakeCaptureMode;
 }
 
 export function toFieldView(field: IntakeFieldDefinition, answers: Record<string, unknown>): IntakeFieldView {
@@ -294,5 +376,6 @@ export function toFieldView(field: IntakeFieldDefinition, answers: Record<string
     sensitive: field.sensitive === true,
     unit: field.unit ?? null,
     options,
+    capture: getCaptureMode(field),
   };
 }

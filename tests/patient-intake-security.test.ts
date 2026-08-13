@@ -32,7 +32,7 @@ describe("expiração de sessão", () => {
     }));
 
     const { runIntakeMessage, IntakeExpiredError } = await import("@/lib/ai/agents/patient/intake/intake-service");
-    await expect(runIntakeMessage({ sessionId: "s1", message: "oi", sessionVersion: 1 })).rejects.toBeInstanceOf(IntakeExpiredError);
+    await expect(runIntakeMessage({ sessionId: "s1", message: "oi", sessionVersion: 1, topic: "service_type", stepKey: "tipo_atendimento" })).rejects.toBeInstanceOf(IntakeExpiredError);
   });
 
   it("edit rejeita sessão expirada", async () => {
@@ -49,7 +49,7 @@ describe("expiração de sessão", () => {
     });
 
     const { editIntakeField, IntakeExpiredError } = await import("@/lib/ai/agents/patient/intake/intake-service");
-    await expect(editIntakeField("s1", 1, "nome")).rejects.toBeInstanceOf(IntakeExpiredError);
+    await expect(editIntakeField("s1", 1, "identity", "nome")).rejects.toBeInstanceOf(IntakeExpiredError);
   });
 
   it("complete rejeita sessão expirada", async () => {
@@ -70,6 +70,8 @@ describe("corrida message/edit/complete — versão otimista", () => {
     // Agente determinístico evita chamada externa ao provedor.
     vi.doMock("@/lib/ai/agents/patient/intake/intake-agent", () => ({
       INTAKE_MAX_TURNS: 60,
+      isDeterministicTestProvider: vi.fn(() => false),
+      isDeterministicFailTrigger: vi.fn(() => false),
       runIntakeTurn: vi.fn(async () => ({
         turn: {
           assistantMessage: "ok",
@@ -82,10 +84,11 @@ describe("corrida message/edit/complete — versão otimista", () => {
         provider: "test",
         model: "test",
       })),
+      runIntakeTopicExtraction: vi.fn(),
     }));
     vi.doMock("@/lib/repositories/patient-intake-sessions", () => ({
       getIntakeSession: vi.fn(async () => ({
-        state: { id: "s1", status: "active", answers: {}, completedFields: [], missingRequiredFields: [], clarification: null, editField: null, progress: 0, createdAt: "", updatedAt: "", currentSection: null, currentField: null },
+        state: { id: "s1", status: "active", currentSection: null, currentField: null, currentTopic: "service_type", answers: {}, completedFields: [], completedSteps: [], skippedSteps: [], missingRequiredFields: [], clarification: null, editField: null, interactionCount: 0, progress: 0, createdAt: "", updatedAt: "" },
         row: sessionRow({ version: 1 }),
       })),
       updateIntakeSession: vi.fn(async () => updateResult),
@@ -96,14 +99,16 @@ describe("corrida message/edit/complete — versão otimista", () => {
   it("mensagem: perda de atualização (row null) vira ConcurrencyError, nunca sobrescreve", async () => {
     mockMessagePath(null);
     const { runIntakeMessage, IntakeConcurrencyError } = await import("@/lib/ai/agents/patient/intake/intake-service");
-    await expect(runIntakeMessage({ sessionId: "s1", message: "ok", sessionVersion: 1 }))
+    await expect(runIntakeMessage({ sessionId: "s1", message: "Emagrecimento", sessionVersion: 1, topic: "service_type", stepKey: "tipo_atendimento" }))
       .rejects.toBeInstanceOf(IntakeConcurrencyError);
   });
 
   it("mensagem: gravação bem-sucedida retorna o estado e a nova versão", async () => {
     mockMessagePath({ version: 2 });
     const { runIntakeMessage } = await import("@/lib/ai/agents/patient/intake/intake-service");
-    const result = await runIntakeMessage({ sessionId: "s1", message: "ok", sessionVersion: 1 });
+    // `tipoAtendimento` é um campo de captura direta: a resposta é aplicada
+    // sem chamar o agente. O valor enviado precisa ser uma opção válida.
+    const result = await runIntakeMessage({ sessionId: "s1", message: "Emagrecimento", sessionVersion: 1, topic: "service_type", stepKey: "tipo_atendimento" });
     expect(result.sessionVersion).toBe(2);
     expect(result.state.answers.tipoAtendimento).toBe("Emagrecimento");
   });

@@ -93,6 +93,8 @@ const ANSWER_SECTIONS = [
       { key: "anticoncepcional", label: "Anticoncepcional" },
       { key: "gestante", label: "Gestante/Amamentando" },
       { key: "sintomas", label: "Sintomas frequentes", full: true },
+      { key: "gestational_details", label: "Dados da gestação", full: true },
+      { key: "bariatric_details", label: "Histórico bariátrico", full: true },
     ],
   },
   {

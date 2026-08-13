@@ -75,21 +75,19 @@ async function seedAdmins(db) {
 }
 
 async function seedAiSettings(db) {
-  // Marca a pré-consulta guiada por IA como configurável, MAS SEM api_key
-  // real (para não interferir no teste que garante que o chat admin/portal
-  // nunca responde sem provedor). A disponibilidade do intake sob o executor
-  // determinístico é resolvida por `isDeterministicTestProvider()` na camada
-  // de serviço, sem exigir chave.
+  // Pré-consulta em modo inteligente, MAS SEM api_key real (para não interferir
+  // no teste que garante que o chat admin/portal nunca responde sem provedor).
+  // A disponibilidade do intake sob o executor determinístico é resolvida por
+  // resolvePublicPreConsultationMode() — sem exigir chave.
   const now = new Date().toISOString();
   db.prepare(
     `INSERT INTO ai_settings
        (id, provider, api_key, model, protocol_system_prompt, chat_system_prompt,
-        patient_intake_ai_enabled, patient_intake_mode, updated_at)
-     VALUES ('default', 'openai', NULL, 'gpt-4o', NULL, NULL, 1, 'optional', ?1)
+        patient_intake_mode, updated_at)
+     VALUES ('default', 'openai', NULL, 'gpt-4o', NULL, NULL, 'smart', ?1)
      ON CONFLICT(id) DO UPDATE SET
        api_key = NULL,
-       patient_intake_ai_enabled = 1,
-       patient_intake_mode = 'optional'`
+       patient_intake_mode = 'smart'`
   ).run(now);
 }
 

@@ -8,7 +8,7 @@ import React from "react";
 import Image from "next/image";
 import { ArrowLeft, CheckCircle2, Clock3, HeartHandshake, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { PreConsultationIntake } from "@/components/public/intake/PreConsultationIntake";
+import { PreConsultationDynamic } from "@/components/public/intake/PreConsultationDynamic";
 
 const AUTOSAVE_KEY = "bruna-nutri-preconsulta-draft-v1";
 
@@ -65,6 +65,8 @@ const FORM_FIELD_ORDER = [
   "medicacao",
   "anticoncepcional",
   "gestante",
+  "gestational_details",
+  "bariatric_details",
   "sintomas",
   "suplementos",
   "suplementosNegativo",
@@ -92,7 +94,7 @@ const AUTOSAVE_SECTIONS: Array<{ id: string; fields: readonly (keyof FormRespons
   { id: "sobre_voce", fields: ["nome", "idade", "nascimento", "whatsapp", "email", "profissao", "cidade"] },
   { id: "crianca", fields: ["child_name", "child_age", "child_weight_kg", "child_height_cm", "child_birth_date", "child_breastfeeding", "child_food_repertoire", "child_feeding_difficulties", "child_school_routine"] },
   { id: "momento_atual", fields: ["motivacao", "objetivo", "incomodo"] },
-  { id: "historico_saude", fields: ["diagnostico", "medicacao", "anticoncepcional", "gestante", "sintomas"] },
+  { id: "historico_saude", fields: ["diagnostico", "medicacao", "anticoncepcional", "gestante", "gestational_details", "bariatric_details", "sintomas"] },
   { id: "suplementacao", fields: ["suplementos", "suplementosNegativo"] },
   { id: "rotina_comportamento", fields: ["rotina", "semComer", "comerEmocao", "fomeDia"] },
   { id: "estilo_vida", fields: ["sonoHoras", "descansada", "estresse", "atividadeFisica"] },
@@ -153,6 +155,10 @@ function isPregnancyProfile(value: string | null | undefined) {
   return normalized.includes("gesta") || normalized.includes("parto");
 }
 
+function isBariatricProfile(value: string | null | undefined) {
+  return (value ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("bariatri");
+}
+
 export default function FormularioPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -160,8 +166,8 @@ export default function FormularioPage() {
   const [submitError, setSubmitError] = useState("");
   const [draftStatus, setDraftStatus] = useState<"restored" | "saved" | "cleared" | "">("");
   const [draftReady, setDraftReady] = useState(false);
-  const [aiAvailability, setAiAvailability] = useState<{ available: boolean; mode: "optional" | "default" } | null>(null);
-  const [showIntake, setShowIntake] = useState(false);
+  const [aiAvailability, setAiAvailability] = useState<{ available: boolean; effectiveMode: "smart" | "traditional"; aiAvailable: boolean; reason?: string } | null>(null);
+  const [dynamicActive, setDynamicActive] = useState(false);
   const [intakePrefill, setIntakePrefill] = useState<Record<string, unknown> | null>(null);
 
   const { control, register, handleSubmit, setValue, getValues, reset, setFocus, formState: { errors } } = useForm<FormResponseInput>({
@@ -185,6 +191,7 @@ export default function FormularioPage() {
   const disposicao = useWatch({ control, name: "disposicao" });
   const isPediatric = isPediatricProfile(tipoAtendimento);
   const isPregnancy = isPregnancyProfile(tipoAtendimento);
+  const isBariatric = isBariatricProfile(tipoAtendimento);
 
   useEffect(() => {
     if (!isPediatric) {
@@ -235,10 +242,26 @@ export default function FormularioPage() {
     fetch("/api/public/pre-consultation/intake/availability", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled) setAiAvailability({ available: Boolean(data.available), mode: data.mode ?? "optional" });
+        if (cancelled) return;
+        const effectiveMode = (data.effectiveMode === "smart" ? "smart" : "traditional") as "smart" | "traditional";
+        const availability: {
+          available: boolean;
+          effectiveMode: "smart" | "traditional";
+          aiAvailable: boolean;
+          reason?: string;
+        } = {
+          available: Boolean(data.available),
+          effectiveMode,
+          aiAvailable: Boolean(data.aiAvailable),
+          reason: typeof data.reason === "string" ? data.reason : undefined,
+        };
+        setAiAvailability(availability);
+        // Decisão centralizada no servidor (resolvePublicPreConsultationMode):
+        // o paciente NÃO escolhe; só a nutricionista decide no dashboard.
+        if (availability.effectiveMode === "smart") setDynamicActive(true);
       })
       .catch(() => {
-        if (!cancelled) setAiAvailability({ available: false, mode: "optional" });
+        if (!cancelled) setAiAvailability({ available: false, effectiveMode: "traditional", aiAvailable: false });
       });
     return () => {
       cancelled = true;
@@ -314,21 +337,6 @@ export default function FormularioPage() {
     setValue(field, Array.from(selected).join(", "), { shouldValidate: true });
   };
 
-  // Fallback da IA → formulário tradicional pré-preenchido.
-  if (showIntake && !intakePrefill) {
-    return (
-      <div className="min-h-screen bg-[#FBF7F1]">
-        <PreConsultationIntake
-          onFallback={(answers) => {
-            setIntakePrefill(answers);
-            setShowIntake(false);
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-        />
-      </div>
-    );
-  }
-
   if (isSuccess) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#FBF7F1] p-8 text-center">
@@ -357,6 +365,28 @@ export default function FormularioPage() {
           <ArrowLeft className="h-4 w-4" />
           Voltar para o site
         </Link>
+      </div>
+    );
+  }
+
+  // Fluxo dinâmico (IA configurada) — sem chooser, sem chat.
+  if (dynamicActive && !intakePrefill) {
+    return (
+      <PreConsultationDynamic
+        onFallback={(answers) => {
+          setIntakePrefill(answers);
+          setDynamicActive(false);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+      />
+    );
+  }
+
+  // Resolvendo disponibilidade (config validada, sem chamada ao LLM).
+  if (aiAvailability === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#FBF7F1]">
+        <p className="text-sm text-[#A9978A]">Preparando sua pré-consulta...</p>
       </div>
     );
   }
@@ -436,34 +466,6 @@ export default function FormularioPage() {
           </div>
         </div>
       </header>
-
-      {aiAvailability?.available && (
-        <div className="mx-auto max-w-3xl px-5 pt-10">
-          <div className="rounded-[1.35rem] border border-[#D9E4D3] bg-[#F4F8F1] p-6">
-            <h2 className="font-serif text-xl font-semibold text-[#3A3028]">Prefere uma pré-consulta guiada?</h2>
-            <p className="mt-2 text-sm leading-6 text-[#5F554D]">
-              Você pode responder com suas próprias palavras e a pré-consulta é preenchida com ajuda de inteligência artificial.
-              Quando uma informação precisar de esclarecimento, farei uma pergunta complementar. As respostas são revisadas pela nutricionista e a IA não realiza diagnóstico ou prescrição.
-            </p>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={() => setShowIntake(true)}
-                className="rounded-full bg-[#7F9A74] px-6 py-3.5 font-sans text-sm font-bold uppercase tracking-[0.08em] text-white shadow-[0_18px_42px_rgba(127,154,116,0.22)] transition hover:bg-[#607A56]"
-              >
-                Começar pré-consulta guiada
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowIntake(false)}
-                className="rounded-full border border-[#EDE1D6] bg-[#FFFDFC] px-6 py-3.5 font-sans text-sm font-bold uppercase tracking-[0.08em] text-[#75675E] transition hover:bg-[#F5ECE4]"
-              >
-                Usar formulário tradicional
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="mx-auto max-w-3xl px-5 py-12 pb-24">
         <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-8">
@@ -609,6 +611,16 @@ export default function FormularioPage() {
             <Field label="Faz uso de medicação contínua? Qual?" className="mb-5">
               <Input {...register("medicacao")} placeholder="Nome dos medicamentos" />
             </Field>
+            {isPregnancy && (
+              <Field label="Sobre a gestação" className="mb-5">
+                <Textarea {...register("gestational_details")} placeholder="Idade gestacional, data prevista para o parto, peso pré-gestacional, ganho de peso, náuseas, vômitos, constipação, azia..." />
+              </Field>
+            )}
+            {isBariatric && (
+              <Field label="Seu histórico bariátrico" className="mb-5">
+                <Textarea {...register("bariatric_details")} placeholder="Quando foi a cirurgia, tipo e como está a suplementação e o acompanhamento." />
+              </Field>
+            )}
             {!isPediatric && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
                 <Field label="Usa anticoncepcional?">

@@ -2,7 +2,7 @@ import { d1Execute, d1Query } from "@/lib/d1/client";
 import { type AIProvider } from "@/db/schema";
 import { decryptNullableText, encryptNullableText } from "@/lib/security/encrypted-fields";
 
-export type PatientIntakeMode = "optional" | "default";
+export type PreConsultationMode = "smart" | "traditional";
 
 export interface AISettings {
   id: "default";
@@ -11,8 +11,7 @@ export interface AISettings {
   model: string;
   protocol_system_prompt: string | null;
   chat_system_prompt: string | null;
-  patient_intake_ai_enabled: number;
-  patient_intake_mode: PatientIntakeMode;
+  patient_intake_mode: PreConsultationMode;
   updated_at: string;
 }
 
@@ -24,8 +23,7 @@ export interface PublicAISettings {
   model: string;
   protocol_system_prompt: string | null;
   chat_system_prompt: string | null;
-  patient_intake_ai_enabled: boolean;
-  patient_intake_mode: PatientIntakeMode;
+  patient_intake_mode: PreConsultationMode;
   updated_at: string;
 }
 
@@ -35,8 +33,7 @@ export interface UpdateAISettingsInput {
   model?: string;
   protocol_system_prompt?: string | null;
   chat_system_prompt?: string | null;
-  patient_intake_ai_enabled?: boolean;
-  patient_intake_mode?: PatientIntakeMode;
+  patient_intake_mode?: PreConsultationMode;
 }
 
 export const DEFAULT_PROTOCOL_SYSTEM_PROMPT = `Você é um assistente de apoio a nutricionistas. Seu papel é gerar rascunhos de conduta nutricional para revisão profissional.
@@ -84,15 +81,14 @@ function decryptAISettings(settings: AISettings): AISettings {
 }
 
 /**
- * Cobre migrations antigas que podem não ter `patient_intake_ai_enabled`.
- * Após 20260812_0037 a coluna sempre existe; o fallback mantém a leitura
- * resiliente a bancos ainda não migrados.
+ * Cobre migrations antigas que podem não ter `patient_intake_mode` com os
+ * valores novos ('smart'/'traditional'). Após 20260813_0038 a coluna sempre
+ * existe; o fallback mantém a leitura resiliente a bancos ainda não migrados.
  */
 function normalizeIntakeFields(settings: AISettings): AISettings {
   return {
     ...settings,
-    patient_intake_ai_enabled: settings.patient_intake_ai_enabled ?? 0,
-    patient_intake_mode: settings.patient_intake_mode ?? "optional",
+    patient_intake_mode: settings.patient_intake_mode ?? "traditional",
   };
 }
 
@@ -121,8 +117,7 @@ export async function getAISettings(): Promise<AISettings> {
       model: "gpt-4o",
       protocol_system_prompt: null,
       chat_system_prompt: null,
-      patient_intake_ai_enabled: 0,
-      patient_intake_mode: "optional",
+      patient_intake_mode: "traditional",
       updated_at: new Date().toISOString(),
     };
   }
@@ -139,7 +134,6 @@ export async function getPublicAISettings(): Promise<PublicAISettings> {
     model: settings.model,
     protocol_system_prompt: settings.protocol_system_prompt,
     chat_system_prompt: settings.chat_system_prompt,
-    patient_intake_ai_enabled: settings.patient_intake_ai_enabled === 1,
     patient_intake_mode: settings.patient_intake_mode,
     updated_at: settings.updated_at,
   };
@@ -166,10 +160,6 @@ export async function updateAISettings(data: UpdateAISettingsInput): Promise<AIS
   if (data.chat_system_prompt !== undefined) {
     updates.push(`chat_system_prompt = ?${idx++}`);
     params.push(data.chat_system_prompt);
-  }
-  if (data.patient_intake_ai_enabled !== undefined) {
-    updates.push(`patient_intake_ai_enabled = ?${idx++}`);
-    params.push(data.patient_intake_ai_enabled ? 1 : 0);
   }
   if (data.patient_intake_mode !== undefined) {
     updates.push(`patient_intake_mode = ?${idx++}`);

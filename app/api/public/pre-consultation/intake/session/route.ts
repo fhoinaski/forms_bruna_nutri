@@ -11,8 +11,8 @@ import {
   verifyIntakeSessionToken,
 } from "@/lib/security/intake-session-token";
 import { getIntakeSession } from "@/lib/repositories/patient-intake-sessions";
-import { selectNextField, computeProgress, computeMissingRequired } from "@/lib/ai/agents/patient/intake/intake-rules";
-import { toFieldView } from "@/lib/clinical/pre-consultation-fields";
+import { computeProgress, computeMissingRequired } from "@/lib/ai/agents/patient/intake/intake-rules";
+import { getNextInteraction, getTopicStepProgress } from "@/lib/ai/agents/patient/intake/intake-flow";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
 
@@ -53,14 +53,16 @@ export async function POST(req: NextRequest) {
     metadata: {},
   });
 
+  const next = getNextInteraction(state);
+
   const response = NextResponse.json({
     sessionId,
-    state: {
-      status: state.status,
-      progress: state.progress,
-    },
+    status: state.status,
+    progress: state.progress,
     sessionVersion: 1,
-    nextField: selectNextField(state) ? toFieldView(selectNextField(state)!, state.answers) : null,
+    interaction: next.interaction,
+    transitionMessage: next.transitionMessage ?? null,
+    steps: getTopicStepProgress(state),
   });
 
   setIntakeSessionCookie(response, token);
@@ -83,7 +85,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { state, row } = found;
-  const nextField = selectNextField(state) ?? null;
+  const next = getNextInteraction(state);
 
   return NextResponse.json({
     sessionId: state.id,
@@ -91,7 +93,9 @@ export async function GET(req: NextRequest) {
     progress: computeProgress(state),
     sessionVersion: row.version,
     missingRequiredFields: computeMissingRequired(state),
-    nextField: nextField ? toFieldView(nextField, state.answers) : null,
+    interaction: next.interaction,
+    transitionMessage: next.transitionMessage ?? null,
+    steps: getTopicStepProgress(state),
     answers: state.answers,
     completed: state.status === "completed",
     completedSubmissionId: row.completed_submission_id ?? null,

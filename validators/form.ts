@@ -32,6 +32,8 @@ export const FormResponseSchema = z.object({
   medicacao: z.string().optional(),
   anticoncepcional: z.string().optional(),
   gestante: z.string().optional(),
+  gestational_details: z.string().optional(),
+  bariatric_details: z.string().optional(),
   sintomas: z.string().optional(),
   
   suplementos: z.string().optional(),

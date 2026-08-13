@@ -1,17 +1,26 @@
 import { generateStructured } from "@/lib/ai/gateway/ai-gateway";
+import { AiProviderError } from "@/lib/ai/core/ai-errors";
 import type { AISettings } from "@/lib/repositories/ai-settings";
 import {
   getIntakeField,
   getSintomasOptions,
 } from "@/lib/clinical/pre-consultation-fields";
-import { IntakeTurnSchema, type IntakeTurnParsed } from "@/lib/ai/agents/patient/intake/intake-schema";
+import {
+  IntakeTurnSchema,
+  IntakeTopicExtractionSchema,
+  type IntakeTurnParsed,
+  type IntakeTopicExtractionParsed,
+} from "@/lib/ai/agents/patient/intake/intake-schema";
 import {
   INTAKE_SYSTEM_PROMPT,
+  INTAKE_TOPIC_SYSTEM_PROMPT,
   INTAKE_PROMPT_VERSION,
   buildIntakePrompt,
   buildMinimalRelevantAnswers,
+  buildTopicExtractionPrompt,
 } from "@/lib/ai/agents/patient/intake/intake-prompts";
-import type { IntakeSessionState, IntakeTurnResult } from "@/lib/ai/agents/patient/intake/intake-types";
+import type { IntakeSessionState, IntakeTopicExtractionResult, IntakeTurnResult } from "@/lib/ai/agents/patient/intake/intake-types";
+import type { IntakeTopicDefinition } from "@/lib/ai/agents/patient/intake/intake-topics";
 
 /**
  * Agente dedicado PATIENT_INTAKE_ASSISTANT.
@@ -224,9 +233,14 @@ function deterministicValueForField(
  */
 const DETERMINISTIC_FAIL_TRIGGER = "__TEST_INTAKE_FAIL__";
 
+/** Indica se a mensagem dispara o erro determinístico de E2E (só no teste). */
+export function isDeterministicFailTrigger(message: string | null | undefined): boolean {
+  return isE2EDeterministicEnabled() && process.env.INTAKE_AI_TEST_PROVIDER === "deterministic" && message === DETERMINISTIC_FAIL_TRIGGER;
+}
+
 async function deterministicExecutor(input: IntakeAgentRunInput): Promise<{ turn: IntakeTurnResult; provider: string; model: string }> {
   if (input.userMessage === DETERMINISTIC_FAIL_TRIGGER) {
-    throw new Error("Deterministic provider error for E2E fallback test.");
+    throw new AiProviderError("Deterministic provider error for E2E fallback test.");
   }
 
   const field = getIntakeField(input.fieldKey)!;
@@ -250,4 +264,85 @@ async function getSettingsSnapshot(): Promise<Pick<AISettings, "provider" | "mod
   const { getAISettings } = await import("@/lib/repositories/ai-settings");
   const settings = await getAISettings();
   return { provider: settings.provider, model: settings.model };
+}
+
+export interface IntakeTopicExtractionRunInput {
+  state: IntakeSessionState;
+  topic: IntakeTopicDefinition;
+  /** Allow-list de campos que a IA pode devolver neste passo. */
+  allowedFields: string[];
+  userMessage: string;
+}
+
+export interface IntakeTopicExtractionRunOutput {
+  extraction: IntakeTopicExtractionResult;
+  provider: string;
+  model: string;
+  promptVersion: string;
+}
+
+/**
+ * Extrai MÚLTIPLOS campos de uma única resposta aberta dentro de um tópico
+ * (§7/§8). A allow-list é obrigatória: o servidor rejeitará no `applyTopicExtraction`
+ * qualquer campo fora dela, mas o prompt também a impõe.
+ */
+export async function runIntakeTopicExtraction(
+  input: IntakeTopicExtractionRunInput
+): Promise<IntakeTopicExtractionRunOutput> {
+  if (input.allowedFields.length === 0) {
+    return {
+      extraction: { assistantText: "", extractedAnswers: [] },
+      provider: "system",
+      model: "system",
+      promptVersion: INTAKE_PROMPT_VERSION,
+    };
+  }
+
+  const deterministic = process.env.INTAKE_AI_TEST_PROVIDER === "deterministic" && isE2EDeterministicEnabled();
+
+  if (deterministic) {
+    if (input.userMessage === DETERMINISTIC_FAIL_TRIGGER) {
+      throw new AiProviderError("Deterministic provider error for E2E fallback test.");
+    }
+    // Teste determinístico: devolve o primeiro campo permitido com valor
+    // previsível (sempre string curta), sem depender de provedor.
+    const fieldKey = input.allowedFields[0];
+    const field = getIntakeField(fieldKey);
+    const value = field ? deterministicValueForField(field, { state: input.state, fieldKey, userMessage: input.userMessage }) : "ok";
+    return {
+      extraction: {
+        assistantText: "Resposta de teste determinística.",
+        extractedAnswers: [{ field: fieldKey, value, confidence: "high" }],
+      },
+      provider: "deterministic-test",
+      model: "deterministic-test",
+      promptVersion: INTAKE_PROMPT_VERSION,
+    };
+  }
+
+  const prompt = buildTopicExtractionPrompt({
+    topic: input.topic,
+    allowedFields: input.allowedFields,
+    userMessage: input.userMessage,
+  });
+
+  const parsed = await generateStructured<IntakeTopicExtractionParsed>({
+    agent: "patient-intake-topic",
+    system: INTAKE_TOPIC_SYSTEM_PROMPT,
+    prompt,
+    schema: IntakeTopicExtractionSchema,
+    maxOutputTokens: INTAKE_MAX_OUTPUT_TOKENS,
+  });
+
+  const settings = await getSettingsSnapshot();
+  return {
+    extraction: {
+      assistantText: parsed.assistantText,
+      extractedAnswers: parsed.extractedAnswers,
+      clarification: parsed.clarification,
+    },
+    provider: settings.provider,
+    model: settings.model,
+    promptVersion: INTAKE_PROMPT_VERSION,
+  };
 }

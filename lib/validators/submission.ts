@@ -50,6 +50,8 @@ export const LegacyFormSchema = z.object({
   medicacao: z.string().max(2000).optional().or(z.literal("")),
   anticoncepcional: z.string().max(100).optional().or(z.literal("")),
   gestante: z.string().max(100).optional().or(z.literal("")),
+  gestational_details: z.string().max(5000).optional().or(z.literal("")),
+  bariatric_details: z.string().max(5000).optional().or(z.literal("")),
   sintomas: z.string().max(2000).optional().or(z.literal("")),
   suplementos: z.string().max(2000).optional().or(z.literal("")),
   suplementosNegativo: z.string().max(2000).optional().or(z.literal("")),
