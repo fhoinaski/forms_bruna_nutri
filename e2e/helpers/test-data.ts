@@ -135,3 +135,11 @@ export async function startConsultationSession(api: APIRequestContext, clientId:
   const body = (await response.json()) as { session: { id: string } };
   return body.session;
 }
+
+/** Conta submissões de um e-mail via busca administrativa — para garantir unicidade. */
+export async function countSubmissionsByEmail(api: APIRequestContext, email: string): Promise<number> {
+  const response = await api.get(`/api/admin/submissions?search=${encodeURIComponent(email)}`);
+  await expectOk(response, "countSubmissionsByEmail");
+  const body = (await response.json()) as { total: number };
+  return body.total;
+}

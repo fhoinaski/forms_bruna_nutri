@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
+import { countSubmissionsByEmail, uniqueSuffix } from "./helpers/test-data";
 
 /**
  * Pré-consulta dinâmica (E2E real de UI).
@@ -193,5 +194,92 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.getByTestId("pre-consultation-dynamic")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1, name: /Conte seu momento/i })).toHaveCount(0);
     await expect(page.getByText(/Não foi possível processar sua mensagem/i)).toBeVisible();
+  });
+
+  test("fallback preserva todos os tipos de dados (text, single, multi, branch)", async ({ page, request }) => {
+    await setIntakeAi(request, true);
+
+    await page.goto("/formulario");
+
+    // text (nome) + single (objetivo) + single (tipo → branch gestação) + text (whatsapp/email)
+    await page.locator("[data-intake-input='textarea']").fill("Quero cuidar da minha saúde.");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    await page.getByRole("button", { name: "Rotina mais leve" }).click(); // objetivo (single)
+    await page.getByRole("button", { name: "Gestação", exact: true }).click(); // tipo (single → branch)
+
+    await page.getByRole("textbox", { name: /nome completo/i }).fill("Paciente E2E Prefill");
+    await page.getByRole("button", { name: /continuar/i }).click();
+    await page.getByRole("textbox", { name: /whatsapp/i }).fill("11999999999");
+    await page.getByRole("button", { name: /continuar/i }).click();
+    await page.getByRole("textbox", { name: /e-mail/i }).fill("prefill-e2e@test.local");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    // multi_choice (sintomas)
+    await page.locator("[data-intake-input='textarea']").fill("Sem diagnósticos.");
+    await page.getByRole("button", { name: /continuar/i }).click();
+    await page.getByRole("button", { name: "Cansaço" }).click();
+    await page.getByRole("button", { name: "Inchaço" }).click();
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    // branch (gestação → gestational_details)
+    await page.locator("[data-intake-input='textarea']").fill("Segundo trimestre de gestação.");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    // Provider error na rotina (campo posterior) → fallback.
+    await page.locator("[data-intake-input='textarea']").fill("__TEST_INTAKE_FAIL__");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    // Fallback → tradicional.
+    await expect(page.getByTestId("pre-consultation-dynamic")).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1, name: /Conte seu momento/i })).toBeVisible();
+
+    // Prefill: text, single, multi e branch (valores reais de input).
+    await expect(page.locator('input[name="nome"]')).toHaveValue("Paciente E2E Prefill");
+    await expect(page.getByRole("button", { name: "Rotina mais leve" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Gestação", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Cansaço" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Inchaço" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator('textarea[name="gestational_details"]')).toHaveValue("ok");
+    // O campo que falhou (rotina) NÃO vazou.
+    await expect(page.locator('textarea[name="rotina"]')).toHaveValue("");
+  });
+
+  test("fallback + submit gera exatamente uma submission", async ({ page, request }) => {
+    await setIntakeAi(request, true);
+    const email = `e2e-unique-${uniqueSuffix()}@test.local`;
+
+    await page.goto("/formulario");
+
+    await page.locator("[data-intake-input='textarea']").fill("Quero cuidar da minha saúde.");
+    await page.getByRole("button", { name: /continuar/i }).click();
+    await page.getByRole("button", { name: "Rotina mais leve" }).click();
+    await page.getByRole("button", { name: "Emagrecimento" }).click();
+
+    await page.getByRole("textbox", { name: /nome completo/i }).fill("Paciente E2E Submit");
+    await page.getByRole("button", { name: /continuar/i }).click();
+    await page.getByRole("textbox", { name: /whatsapp/i }).fill("11988887777");
+    await page.getByRole("button", { name: /continuar/i }).click();
+    await page.getByRole("textbox", { name: /e-mail/i }).fill(email);
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    // Provider error na saúde (texto livre) → fallback.
+    await page.locator("[data-intake-input='textarea']").fill("__TEST_INTAKE_FAIL__");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    // Fallback → tradicional.
+    await expect(page.getByTestId("pre-consultation-dynamic")).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1, name: /Conte seu momento/i })).toBeVisible();
+
+    // Aceita privacidade e envia.
+    await page.locator("#privacyAccepted").check();
+    await page.getByRole("button", { name: /enviar pr[eé]-consulta/i }).click();
+
+    // Sucesso.
+    await expect(page.getByText(/Obrigada por compartilhar/i)).toBeVisible();
+
+    // Exatamente 1 submission para este e-mail.
+    const total = await countSubmissionsByEmail(request, email);
+    expect(total).toBe(1);
   });
 });

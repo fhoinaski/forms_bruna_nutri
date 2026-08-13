@@ -892,6 +892,7 @@ function Tag({ active, onClick, children }: { active: boolean, onClick: () => vo
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={`rounded-full border px-4 py-2 text-sm transition-all ${
         active 
           ? 'border-[#7F9A74] bg-[#7F9A74] text-white shadow-sm shadow-[#7F9A74]/15' 
