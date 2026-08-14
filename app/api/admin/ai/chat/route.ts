@@ -6,6 +6,8 @@ import { resolveAssistantContext } from "@/lib/ai/core/ai-context";
 import { runAssistantTurn } from "@/lib/ai/core/ai-orchestrator";
 import { toLegacyChatResponse } from "@/lib/ai/core/ai-response";
 import { AiConfigError, AiProviderError, AiValidationError } from "@/lib/ai/core/ai-errors";
+import { DataDecryptionError } from "@/lib/security/crypto";
+import { logger } from "@/lib/observability/logger";
 import {
   ALLOWED_ATTACHMENT_MEDIA_TYPES,
   MAX_ATTACHMENT_BASE64_LENGTH,
@@ -141,7 +143,23 @@ export async function POST(req: NextRequest) {
     if (cause instanceof AiProviderError) {
       return NextResponse.json({ message: cause.message }, { status: 502 });
     }
-    const message = cause instanceof Error ? cause.message : "Não foi possível responder agora.";
-    return NextResponse.json({ message }, { status: 502 });
+    if (cause instanceof DataDecryptionError) {
+      // Falha ao descriptografar dado protegido (prontuário/notas): nunca
+      // vazar o erro cru do Node nem o ciphertext — log estruturado interno
+      // e resposta genérica ao cliente.
+      logger.error("ai_chat_data_decryption_failed", {
+        errorCode: cause.errorCode,
+        purpose: cause.purpose,
+        clientId: parsed.data.context?.clientId ?? null,
+      });
+      return NextResponse.json(
+        { message: "Falha interna ao carregar dados protegidos. Tente novamente em instantes." },
+        { status: 500 }
+      );
+    }
+    logger.error("ai_chat_internal_error", {
+      errorName: cause instanceof Error ? cause.name : "UnknownError",
+    });
+    return NextResponse.json({ message: "Não foi possível responder agora. Tente novamente." }, { status: 502 });
   }
 }

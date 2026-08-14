@@ -48,21 +48,42 @@ export function encryptValue(value: string, purpose: EncryptionPurpose = "mfa"):
   return [iv, cipher.getAuthTag(), encrypted].map((part) => part.toString("base64url")).join(".");
 }
 
+export class DataDecryptionError extends Error {
+  readonly errorCode = "data_decryption_failed";
+  readonly purpose: EncryptionPurpose;
+
+  constructor(purpose: EncryptionPurpose) {
+    // Mensagem SEMPRE sanitizada: nunca expor o erro cru do Node
+    // ("Unsupported state or unable to authenticate data"), o ciphertext,
+    // o plaintext ou o nome da chave que falhou.
+    super("Falha interna ao carregar dados protegidos.");
+    this.name = "DataDecryptionError";
+    this.purpose = purpose;
+  }
+}
+
 /**
  * Tenta decifrar com a chave mais nova primeiro; se a tag GCM nao bater
  * (chave errada), tenta a proxima da cadeia — nunca a mais nova sozinha.
  * E assim que um valor cifrado ANTES de CLINICAL_DATA_ENCRYPTION_KEY
  * existir continua legivel depois que a variavel e definida, sem
  * nenhuma migracao/re-criptografia manual de dado existente.
+ *
+ * Quando NENHUMA chave da cadeia autentica o payload, lanca
+ * DataDecryptionError (sanitizado) em vez do erro cru do Node — o chamador
+ * decide como tratar (falhar fechado na borda HTTP com log estruturado).
  */
 export function decryptValue(payload: string, purpose: EncryptionPurpose = "mfa"): string {
   const [ivValue, tagValue, encryptedValue] = payload.split(".");
-  if (!ivValue || !tagValue || !encryptedValue) throw new Error("Invalid encrypted payload.");
+  if (!ivValue || !tagValue || !encryptedValue) {
+    throw new DataDecryptionError(purpose);
+  }
 
   const chain = keyChainForPurpose(purpose);
-  if (!chain.length) throw new Error(`No encryption key configured for purpose "${purpose}".`);
+  if (!chain.length) {
+    throw new DataDecryptionError(purpose);
+  }
 
-  let lastError: unknown;
   for (const secret of chain) {
     try {
       const decipher = createDecipheriv("aes-256-gcm", deriveKey(secret), Buffer.from(ivValue, "base64url"));
@@ -71,11 +92,12 @@ export function decryptValue(payload: string, purpose: EncryptionPurpose = "mfa"
         decipher.update(Buffer.from(encryptedValue, "base64url")),
         decipher.final(),
       ]).toString("utf8");
-    } catch (error) {
-      lastError = error;
+    } catch {
+      // tag GCM não bateu com esta chave — tenta a próxima da cadeia.
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("Failed to decrypt value with any configured key.");
+
+  throw new DataDecryptionError(purpose);
 }
 
 export function hashRecoveryCode(code: string) {
