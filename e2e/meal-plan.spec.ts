@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./fixtures";
+import type { Page } from "@playwright/test";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
 import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
 

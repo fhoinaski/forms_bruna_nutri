@@ -1,12 +1,21 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import * as OTPAuth from "otpauth";
-import { adminFixtures, fillLoginForm, submitLogin, fillMfaCode, loginAsAdminUI } from "./helpers/auth";
+import { adminFixtures, fillLoginForm, submitLogin, fillMfaCode, loginAsAdminUI, resetAdminForTest } from "./helpers/auth";
 
 /**
  * Autenticacao admin — login valido/invalido, rota protegida, logout, troca
  * obrigatoria de senha, MFA (fluxo real: setup -> verify -> login com TOTP
  * calculado de verdade, nunca hardcoded). Cada teste comeca sem sessao
  * (nao usa storageState) porque o proprio login e o objeto sob teste.
+ *
+ * "troca obrigatoria de senha" e "MFA" MUTAM contas de admin PARA VALER. Sob
+ * `--repeat-each`/fullyParallel as repeticoes rodam em paralelo; reutilizar a
+ * MESMA conta faria uma execucao sobrescrever o estado da outra (senha
+ * trocada, segredo TOTP pendente). Por isso cada instancia de teste usa um
+ * email UNICO (por repeat/worker) e cria/limpa a conta via
+ * /api/admin/e2e/reset-admin (UPSERT, so sob E2E_TEST_MODE=1). O
+ * `test.describe.serial` e defesa extra. Cada projeto continua rodando em
+ * paralelo com o outro, pois as contas sao distintas por projeto/instancia.
  */
 
 test.describe("login", () => {
@@ -57,13 +66,18 @@ test.describe("logout", () => {
   });
 });
 
-test.describe("troca obrigatoria de senha", () => {
+test.describe.serial("troca obrigatoria de senha", () => {
   test("admin com must_change_password e forcado para /dashboard/settings/security antes de qualquer outra pagina", async ({ page }, testInfo) => {
-    // Conta isolada por projeto (ver comentario em adminFixtures): este
-    // teste MUTA a senha de verdade, e chromium-desktop/mobile-chrome rodam
-    // em paralelo contra o mesmo servidor/banco.
+    // Conta ÚNICA por instância de teste (repeat/worker): o teste MUTA a senha
+    // de verdade, e sob `--repeat-each`/fullyParallel as repetições rodam em
+    // paralelo — compartilhar uma conta causaria corrida (a senha trocada por
+    // uma execução derrubaria o login da outra).
     const { adminMustChange } = adminFixtures(testInfo.project.name);
-    await loginAsAdminUI(page, adminMustChange.email, adminMustChange.password);
+    const email = `e2e-mustchange-${testInfo.project.name}-${testInfo.repeatEachIndex}-${testInfo.workerIndex}@test.local`;
+    const password = adminMustChange.password;
+    await resetAdminForTest(page, { email, password, mustChangePassword: true });
+
+    await loginAsAdminUI(page, email, password);
     await expect(page).toHaveURL(/\/dashboard\/settings\/security$/);
 
     // Tenta ir para outra pagina do dashboard — deve ser barrado de volta.
@@ -71,7 +85,7 @@ test.describe("troca obrigatoria de senha", () => {
     await expect(page).toHaveURL(/\/dashboard\/settings\/security$/);
 
     const newPassword = "NovaSenha!2026Xyz";
-    await page.getByLabel("Senha atual", { exact: true }).fill(adminMustChange.password);
+    await page.getByLabel("Senha atual", { exact: true }).fill(password);
     await page.getByLabel("Nova senha", { exact: true }).fill(newPassword);
     await page.getByLabel("Confirmar nova senha", { exact: true }).fill(newPassword);
     await page.getByRole("button", { name: /salvar nova senha/i }).click();
@@ -83,13 +97,19 @@ test.describe("troca obrigatoria de senha", () => {
   });
 });
 
-test.describe("MFA — fluxo real (setup, codigo invalido, codigo valido)", () => {
+test.describe.serial("MFA — fluxo real (setup, codigo invalido, codigo valido)", () => {
   test("habilita MFA, rejeita codigo invalido no login e aceita um codigo TOTP valido", async ({ page }, testInfo) => {
-    // Conta isolada por projeto (ver comentario em adminFixtures): este
-    // teste ATIVA MFA de verdade, e chromium-desktop/mobile-chrome rodam
-    // em paralelo contra o mesmo servidor/banco.
+    // Conta ÚNICA por instância de teste (repeat/worker): o teste ATIVA MFA
+    // de verdade, e sob `--repeat-each`/fullyParallel as repetições rodam em
+    // paralelo — compartilhar uma conta única causaria corrida (um setup
+    // sobrescrevendo o segredo pendente do outro). O email único isola a
+    // conta; o reset-admin faz o UPSERT criando/limpando antes do login.
     const { adminMfaCandidate } = adminFixtures(testInfo.project.name);
-    await loginAsAdminUI(page, adminMfaCandidate.email, adminMfaCandidate.password);
+    const email = `e2e-mfa-${testInfo.project.name}-${testInfo.repeatEachIndex}-${testInfo.workerIndex}@test.local`;
+    const password = adminMfaCandidate.password;
+    await resetAdminForTest(page, { email, password, mustChangePassword: false });
+
+    await loginAsAdminUI(page, email, password);
     await expect(page).toHaveURL(/\/dashboard$/);
 
     await page.goto("/dashboard/settings/security");
@@ -97,7 +117,7 @@ test.describe("MFA — fluxo real (setup, codigo invalido, codigo valido)", () =
     const manualKey = (await page.locator("code").first().textContent())?.trim();
     expect(manualKey).toBeTruthy();
 
-    const totp = new OTPAuth.TOTP({ issuer: "Bruna Flores Nutri", label: adminMfaCandidate.email, algorithm: "SHA1", digits: 6, period: 30, secret: OTPAuth.Secret.fromBase32(manualKey!) });
+    const totp = new OTPAuth.TOTP({ issuer: "Bruna Flores Nutri", label: email, algorithm: "SHA1", digits: 6, period: 30, secret: OTPAuth.Secret.fromBase32(manualKey!) });
 
     const codeInput = page.locator('input[inputmode="numeric"]').first();
     await codeInput.fill(totp.generate());
@@ -107,7 +127,7 @@ test.describe("MFA — fluxo real (setup, codigo invalido, codigo valido)", () =
     await page.request.post("/api/auth/logout");
 
     // Login com senha correta deve agora exigir o segundo fator.
-    await fillLoginForm(page, adminMfaCandidate.email, adminMfaCandidate.password);
+    await fillLoginForm(page, email, password);
     await submitLogin(page);
     await expect(page.getByPlaceholder(/6 dígitos ou código de recuperação/i)).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);

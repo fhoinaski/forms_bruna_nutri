@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE, suppressDailyBriefingPopup } from "./helpers/auth";
 import { createTestSubmission } from "./helpers/test-data";
 

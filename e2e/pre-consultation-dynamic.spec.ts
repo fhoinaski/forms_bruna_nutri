@@ -1,4 +1,5 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test, expect } from "./fixtures";
+import type { APIRequestContext } from "@playwright/test";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
 import { countSubmissionsByEmail, uniqueSuffix } from "./helpers/test-data";
 

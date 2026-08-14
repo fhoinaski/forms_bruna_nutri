@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
 import { createTestPatient, enablePortalAccess, seedAiProposal } from "./helpers/test-data";
 

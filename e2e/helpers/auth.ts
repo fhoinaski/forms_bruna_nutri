@@ -54,6 +54,34 @@ export async function fillMfaCode(page: Page, code: string) {
 }
 
 /**
+ * Cria (ou devolve ao estado semeado) uma conta de admin mutável antes de o
+ * teste rodar. Usa a sessão do admin padrão (compartilhado e nunca mutado)
+ * para chamar o endpoint de teste /api/admin/e2e/reset-admin (UPSERT), em vez
+ * de depender da sessão do próprio teste — assim o reset funciona mesmo que a
+ * execução anterior tenha morrido no meio (ex.: sem sessão válida). O logout
+ * final limpa a sessão helper para o teste começar do zero.
+ */
+export async function resetAdminForTest(
+  page: Page,
+  target: { email: string; password: string; mustChangePassword: boolean }
+): Promise<void> {
+  const { admin } = adminFixtures();
+  const login = await page.request.post("/api/auth/login", {
+    data: { email: admin.email, password: admin.password },
+  });
+  if (!login.ok()) throw new Error(`resetAdminForTest: login do admin falhou (${login.status()})`);
+  const reset = await page.request.post("/api/admin/e2e/reset-admin", {
+    data: {
+      email: target.email,
+      password: target.password,
+      mustChangePassword: target.mustChangePassword,
+    },
+  });
+  if (!reset.ok()) throw new Error(`resetAdminForTest: reset falhou (${reset.status()}): ${await reset.text()}`);
+  await page.request.post("/api/auth/logout").catch(() => null);
+}
+
+/**
  * O copiloto de IA (AiChatWidget) abre sozinho com o resumo do dia na
  * primeira visita do dashboard por sessao de browser (chave de
  * localStorage por dia, fuso America/Sao_Paulo) — o painel fixo cobre
