@@ -6,6 +6,7 @@ playwright-report/
 .DS_Store
 *.log
 backups/
+.backups/
 *.db
 *.sqlite
 *.sqlite3
