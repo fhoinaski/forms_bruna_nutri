@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 // Módulo .mjs (runtime Node, sem declarações) — usa `any` para evitar checagem.
 import * as core from "../scripts/lib/migrate-encrypted-core.mjs";
-const { PREFIX, deriveKey, encryptFieldValue, decryptPayload, classifyValue, validateKeyConfig, summarize, isEncryptedValue } = core as any;
+const { PREFIX, deriveKey, encryptFieldValue, decryptPayload, classifyValue, validateKeyConfig, summarize, isEncryptedValue, verifyBackupManifest, guardApply, applyConditionalUpdate, buildRollbackPlan } = core as any;
 
 const CURRENT = "chave-clinica-atual";
 const CURRENT_MFA = "chave-mfa-atual";
@@ -90,5 +90,36 @@ describe("migrate-encrypted-core — helpers", () => {
       { status: "failed" },
     ]);
     expect(s).toEqual(expect.objectContaining({ already_current: 1, legacy_recoverable: 2, failed: 1 }));
+  });
+});
+
+describe("migrate-encrypted-core — backup / apply / rollback (puros)", () => {
+  const entry = (over: Record<string, unknown> = {}) => ({ table: "t", field: "f", id: "1", oldValue: "OLD_CIPHER", newValue: "NEW_CIPHER", ...over });
+
+  it("apply sem backup → aborta (guardApply)", () => {
+    const plan = [1, 2, 3];
+    expect(guardApply({ plan, backup: null }).ok).toBe(false);
+    expect(guardApply({ plan, backup: { count: 2, entries: [entry(), entry()] } }).ok).toBe(false);
+    expect(guardApply({ plan, backup: { count: 3, entries: [entry(), entry(), entry()] } }).ok).toBe(true);
+  });
+
+  it("verifyBackupManifest valida estrutura (sem secret/plaintext)", () => {
+    expect(verifyBackupManifest({ count: 1, entries: [entry()] }, 1)).toEqual({ ok: true });
+    expect(verifyBackupManifest(null, 1).ok).toBe(false);
+    expect(verifyBackupManifest({ count: 1, entries: [{ table: "t", field: "f", id: "1", oldValue: "x" }] }, 1).ok).toBe(false); // sem newValue
+    expect(verifyBackupManifest({ count: 1, entries: [{ ...entry(), oldValue: "" }] }, 1).ok).toBe(false); // oldValue vazio
+  });
+
+  it("conflito de UPDATE não sobrescreve", () => {
+    expect(applyConditionalUpdate({ currentValue: "CHANGED", oldValue: "OLD", newValue: "NEW" })).toEqual({ status: "conflict", value: "CHANGED", conflict: true });
+    expect(applyConditionalUpdate({ currentValue: "OLD", oldValue: "OLD", newValue: "NEW" })).toEqual({ status: "migrated", value: "NEW", conflict: false });
+  });
+
+  it("rollback restaura ciphertext anterior condicionalmente (sem plaintext)", () => {
+    const backup = { count: 1, entries: [entry()] };
+    const plan = buildRollbackPlan(backup);
+    expect(plan.ok).toBe(true);
+    expect(plan.statements[0]).toEqual({ table: "t", field: "f", id: "1", setTo: "OLD_CIPHER", whereValue: "NEW_CIPHER" });
+    expect(buildRollbackPlan(null).ok).toBe(false);
   });
 });

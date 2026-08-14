@@ -9,18 +9,24 @@
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deriveKey, classifyValue, validateKeyConfig } from "./lib/migrate-encrypted-core.mjs";
+import { deriveKey, classifyValue, validateKeyConfig, verifyBackupManifest } from "./lib/migrate-encrypted-core.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BACKUP_DIR = join(root, ".backups");
 
 const NUTRITION = ["chief_complaint","life_stage","biological_sex","target_group","gestational_weeks","breastfeeding_context","clinical_history","diagnoses","medications","supplements","allergies","restrictions","food_preferences","food_aversions","eating_routine","intestinal_health","sleep_routine","stress_context","physical_activity","hydration","current_weight_kg","height_cm","bmi","pre_pregnancy_weight_kg","waist_cm","pre_surgery_weight_kg","bariatric_surgery_date","anthropometry_notes","pediatric_growth_notes","target_weight_kg","target_notes","exams","assessment","goals","care_plan","risk_flags","family_context","private_notes"];
 
+// Escopo = TODOS os campos cifrados com a finalidade "clinical"
+// (lib/security/encrypted-fields.ts), espelhando a auditoria: prontuários,
+// sessões de consulta (notas/resumo), formulário, evoluções, intake e a
+// credencial ai_settings.api_key (que ainda usa a cadeia "clinical").
 const TABLES = [
   { t: "nutrition_records", f: NUTRITION },
-  { t: "consultation_sessions", f: ["notes", "ai_brief_json"] },
+  { t: "consultation_sessions", f: ["notes", "ai_brief_json", "summary_json"] },
+  { t: "ai_settings", f: ["api_key"] },
   { t: "form_submissions", f: ["answers_json"] },
   { t: "client_evolutions", f: ["encrypted_payload"] },
+  { t: "patient_intake_sessions", f: ["state_json"] },
 ];
 
 const rawKeys = {};
@@ -144,7 +150,7 @@ function writeBackup(plan) {
   const payload = {
     createdAt: new Date().toISOString(),
     count: plan.length,
-    entries: plan.map((e) => ({ table: e.table, field: e.field, id: e.id, oldValue: e.oldValue })),
+    entries: plan.map((e) => ({ table: e.table, field: e.field, id: e.id, oldValue: e.oldValue, newValue: e.newValue })),
   };
   writeFileSync(file, JSON.stringify(payload, null, 2), "utf8");
   return file;
@@ -152,11 +158,8 @@ function writeBackup(plan) {
 
 function verifyBackup(file, expectedCount) {
   const data = JSON.parse(readFileSync(file, "utf8"));
-  if (data.count !== expectedCount) throw new Error(`backup count ${data.count} !== ${expectedCount}`);
-  if (!Array.isArray(data.entries) || data.entries.length !== expectedCount) throw new Error("backup entries inválido");
-  for (const e of data.entries) {
-    if (!e.table || !e.field || !e.id || typeof e.oldValue !== "string") throw new Error("backup entry malformado");
-  }
+  const r = verifyBackupManifest(data, expectedCount);
+  if (!r.ok) throw new Error(`backup inválido: ${r.reason}`);
   return true;
 }
 

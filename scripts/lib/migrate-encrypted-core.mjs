@@ -57,7 +57,9 @@ export function classifyValue(value, { currentChain, legacyChain, currentPrimary
 
   const newValue = encryptFieldValue(leg.plaintext, currentPrimaryKey);
   const verify = decryptPayload(newValue.slice(PREFIX.length), [currentPrimaryKey]);
-  if (!verify.ok) return { status: "failed" };
+  // Prova de migrabilidade: o valor recifrado com a chave atual deve decifrar de
+  // volta ao MESMO plaintext (comparação em memória — nada é logado/persistido).
+  if (!verify.ok || verify.plaintext !== leg.plaintext) return { status: "failed" };
 
   return { status: "legacy_recoverable", newValue };
 }
@@ -82,4 +84,65 @@ export function summarize(classified) {
   const s = { already_current: 0, legacy_recoverable: 0, failed: 0, invalid_format: 0, plaintext_legacy: 0, empty: 0 };
   for (const c of classified) s[c.status] = (s[c.status] ?? 0) + 1;
   return s;
+}
+
+/**
+ * Valida um manifesto de backup em memória (sem I/O). Deve cobrir exatamente
+ * `expectedCount` entradas, cada uma com table/field/id/oldValue (ciphertext
+ * anterior) e newValue (ciphertext novo, usado na condição do rollback).
+ * Nunca aceita secret/plaintext — apenas os campos estruturais + ciphertext.
+ */
+export function verifyBackupManifest(backup, expectedCount) {
+  if (!backup || typeof backup !== "object") return { ok: false, reason: "backup ausente" };
+  if (backup.count !== expectedCount) return { ok: false, reason: `count ${backup.count} !== ${expectedCount}` };
+  if (!Array.isArray(backup.entries) || backup.entries.length !== expectedCount) return { ok: false, reason: "entries inválido" };
+  for (const e of backup.entries) {
+    if (!e || !e.table || !e.field || !e.id || typeof e.oldValue !== "string" || !e.oldValue || typeof e.newValue !== "string" || !e.newValue) {
+      return { ok: false, reason: "entry malformado" };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * Guarda do --apply: só autoriza aplicar quando o backup está presente e
+ * cobre integralmente o plano. Retorna { ok, reason } — a CLI aborta se !ok.
+ */
+export function guardApply({ plan, backup }) {
+  const manifest = verifyBackupManifest(backup, plan.length);
+  if (!manifest.ok) return { ok: false, reason: `backup ausente/inválido: ${manifest.reason}` };
+  return { ok: true };
+}
+
+/**
+ * Simula o UPDATE condicional (WHERE id=? AND field=oldValue) de forma pura.
+ * Se o valor corrente ainda é o esperado (`oldValue`), grava `newValue`; senão,
+ * é conflito e NÃO sobrescreve — devolve o valor corrente intacto.
+ */
+export function applyConditionalUpdate({ currentValue, oldValue, newValue }) {
+  if (currentValue === oldValue) {
+    return { status: "migrated", value: newValue, conflict: false };
+  }
+  return { status: "conflict", value: currentValue, conflict: true };
+}
+
+/**
+ * Constrói o plano de rollback a partir do backup: para cada entrada, o UPDATE
+ * condicional restaura o ciphertext anterior (oldValue) apenas se o valor
+ * atual ainda for o gravado pela migração (newValue) — sem conhecer plaintext.
+ * Espelha a assinatura do UPDATE de ida (WHERE field = valor migrado).
+ */
+export function buildRollbackPlan(backup) {
+  const manifest = verifyBackupManifest(backup, backup?.count ?? 0);
+  if (!manifest.ok) return { ok: false, reason: manifest.reason };
+  return {
+    ok: true,
+    statements: backup.entries.map((e) => ({
+      table: e.table,
+      field: e.field,
+      id: e.id,
+      setTo: e.oldValue,
+      whereValue: e.newValue,
+    })),
+  };
 }
