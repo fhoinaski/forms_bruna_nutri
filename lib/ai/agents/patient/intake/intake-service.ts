@@ -40,7 +40,7 @@ import {
 import { getSubmissionById } from "@/lib/repositories/submissions";
 import { getAISettings } from "@/lib/repositories/ai-settings";
 import { submitPreConsultation } from "@/lib/clinical/submit-pre-consultation";
-import { resolvePublicPreConsultationMode, type PreConsultationMode } from "@/lib/clinical/pre-consultation-mode";
+import { resolvePublicPreConsultationMode, readE2EIntakeModeOverride, type PreConsultationMode } from "@/lib/clinical/pre-consultation-mode";
 import type {
   IntakeInteraction,
   IntakeSessionState,
@@ -56,8 +56,10 @@ export interface IntakeAvailability {
   reason?: string;
 }
 
-export async function getIntakeAvailability(): Promise<IntakeAvailability> {
-  const resolution = await resolvePublicPreConsultationMode();
+export async function getIntakeAvailability(
+  headers?: { get(name: string): string | null }
+): Promise<IntakeAvailability> {
+  const resolution = await resolvePublicPreConsultationMode(readE2EIntakeModeOverride(headers));
   return {
     available: resolution.effectiveMode === "smart",
     mode: resolution.configuredMode,

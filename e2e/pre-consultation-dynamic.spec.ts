@@ -1,5 +1,4 @@
 import { test, expect } from "./fixtures";
-import type { APIRequestContext } from "@playwright/test";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
 import { countSubmissionsByEmail, uniqueSuffix } from "./helpers/test-data";
 
@@ -18,25 +17,16 @@ import { countSubmissionsByEmail, uniqueSuffix } from "./helpers/test-data";
  * `patient_intake_mode` — alternado via API administrativa autenticada.
  */
 
+// `intakeMode` (fixture em ./fixtures.ts) define o modo por request via header
+// `x-e2e-intake-mode` (só em E2E_TEST_MODE=1). O default é "smart"; o cenário
+// "sem IA" sobrescreve para "traditional" via `test.use` — sem mutar o estado
+// global de ai_settings, então projetos paralelos não interferem entre si.
 test.use({ storageState: ADMIN_STORAGE_STATE });
-
-async function setIntakeAi(request: APIRequestContext, enabled: boolean): Promise<void> {
-  const res = await request.put("/api/admin/settings/ai", {
-    data: {
-      provider: "openai",
-      model: "gpt-4o",
-      patient_intake_mode: enabled ? "smart" : "traditional",
-    },
-  });
-  expect(res.ok(), `setIntakeAi(${enabled}) falhou: ${await res.text()}`).toBe(true);
-}
 
 test.describe("pré-consulta dinâmica", () => {
   test.describe.configure({ mode: "serial" });
 
-  test("IA ativa → formulário dinâmico abre sem chooser", async ({ page, request }) => {
-    await setIntakeAi(request, true);
-
+  test("IA ativa → formulário dinâmico abre sem chooser", async ({ page }) => {
     await page.goto("/formulario");
 
     // Não existe chooser IA/tradicional.
@@ -49,9 +39,7 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.getByText(/O que fez você procurar acompanhamento nutricional/i)).toBeVisible();
   });
 
-  test("branches mudam o fluxo (tipo de atendimento define tópicos)", async ({ page, request }) => {
-    await setIntakeAi(request, true);
-
+  test("branches mudam o fluxo (tipo de atendimento define tópicos)", async ({ page }) => {
     await page.goto("/formulario");
 
     // Tópico 1 — momento atual: pergunta aberta.
@@ -74,9 +62,7 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.getByRole("textbox", { name: /whatsapp/i })).toBeVisible();
   });
 
-  test("refresh restaura o estado da sessão", async ({ page, request }) => {
-    await setIntakeAi(request, true);
-
+  test("refresh restaura o estado da sessão", async ({ page }) => {
     await page.goto("/formulario");
 
     await page.locator("[data-intake-input='textarea']").fill("Quero melhorar minha rotina.");
@@ -91,23 +77,20 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.getByRole("textbox", { name: /nome completo/i })).toBeVisible();
   });
 
-  test("sem IA → formulário tradicional abre automaticamente", async ({ page, request }) => {
-    await setIntakeAi(request, false);
-    try {
+  test.describe("sem IA (modo tradicional por request)", () => {
+    test.use({ intakeMode: "traditional" });
+
+    test("sem IA → formulário tradicional abre automaticamente", async ({ page }) => {
       await page.goto("/formulario");
 
       // Formulário tradicional (não o dinâmico, sem chooser).
       await expect(page.getByTestId("pre-consultation-dynamic")).toHaveCount(0);
       await expect(page.getByRole("heading", { level: 1, name: /Conte seu momento/i })).toBeVisible();
       await expect(page.getByText(/Qual tipo de atendimento você procura/i)).toBeVisible();
-    } finally {
-      await setIntakeAi(request, true);
-    }
+    });
   });
 
-  test("falha da IA → fallback para o tradicional preservando resposta", async ({ page, request }) => {
-    await setIntakeAi(request, true);
-
+  test("falha da IA → fallback para o tradicional preservando resposta", async ({ page }) => {
     await page.goto("/formulario");
 
     // Dispara o provider error determinístico no primeiro turno (texto livre).
@@ -119,9 +102,7 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.getByRole("heading", { level: 1, name: /Conte seu momento/i })).toBeVisible();
   });
 
-  test("resposta estruturada inválida 1x é recuperada (smart continua)", async ({ page, request }) => {
-    await setIntakeAi(request, true);
-
+  test("resposta estruturada inválida 1x é recuperada (smart continua)", async ({ page }) => {
     await page.goto("/formulario");
     await page.locator("[data-intake-input='textarea']").fill("__TEST_INTAKE_INVALID_ONCE__");
     await page.getByRole("button", { name: /continuar/i }).click();
@@ -131,9 +112,7 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.getByText(/E o que você mais gostaria de melhorar hoje/i)).toBeVisible();
   });
 
-  test("resposta estruturada inválida 2x é recuperada (smart continua)", async ({ page, request }) => {
-    await setIntakeAi(request, true);
-
+  test("resposta estruturada inválida 2x é recuperada (smart continua)", async ({ page }) => {
     await page.goto("/formulario");
     await page.locator("[data-intake-input='textarea']").fill("__TEST_INTAKE_INVALID_TWICE__");
     await page.getByRole("button", { name: /continuar/i }).click();
@@ -142,9 +121,7 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.getByText(/E o que você mais gostaria de melhorar hoje/i)).toBeVisible();
   });
 
-  test("falha persistente de formato → reformula e continua smart (sem tradicional)", async ({ page, request }) => {
-    await setIntakeAi(request, true);
-
+  test("falha persistente de formato → reformula e continua smart (sem tradicional)", async ({ page }) => {
     await page.goto("/formulario");
     await page.locator("[data-intake-input='textarea']").fill("__TEST_INTAKE_ALWAYS_INVALID__");
     await page.getByRole("button", { name: /continuar/i }).click();
@@ -160,9 +137,7 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.getByText(/E o que você mais gostaria de melhorar hoje/i)).toBeVisible();
   });
 
-  test("provider error após várias respostas → fallback preservando dados", async ({ page, request }) => {
-    await setIntakeAi(request, true);
-
+  test("provider error após várias respostas → fallback preservando dados", async ({ page }) => {
     await page.goto("/formulario");
 
     await page.locator("[data-intake-input='textarea']").fill("Quero cuidar da minha saúde.");
@@ -184,9 +159,7 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.locator('input[name="nome"]')).toHaveValue("");
   });
 
-  test("erro inesperado NÃO é mascarado como falha de IA (sem fallback)", async ({ page, request }) => {
-    await setIntakeAi(request, true);
-
+  test("erro inesperado NÃO é mascarado como falha de IA (sem fallback)", async ({ page }) => {
     await page.goto("/formulario");
     await page.locator("[data-intake-input='textarea']").fill("__TEST_INTAKE_UNEXPECTED__");
     await page.getByRole("button", { name: /continuar/i }).click();
@@ -197,9 +170,7 @@ test.describe("pré-consulta dinâmica", () => {
     await expect(page.getByText(/Não foi possível processar sua mensagem/i)).toBeVisible();
   });
 
-  test("fallback preserva todos os tipos de dados (text, single, multi, branch)", async ({ page, request }) => {
-    await setIntakeAi(request, true);
-
+  test("fallback preserva todos os tipos de dados (text, single, multi, branch)", async ({ page }) => {
     await page.goto("/formulario");
 
     // text (nome) + single (objetivo) + single (tipo → branch gestação) + text (whatsapp/email)
@@ -247,7 +218,6 @@ test.describe("pré-consulta dinâmica", () => {
   });
 
   test("fallback + submit gera exatamente uma submission", async ({ page, request }) => {
-    await setIntakeAi(request, true);
     const email = `e2e-unique-${uniqueSuffix()}@test.local`;
 
     await page.goto("/formulario");

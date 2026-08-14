@@ -20,7 +20,7 @@ export { expect };
  */
 let ipCounter = 0;
 
-export const test = base.extend<{ clientIp: string }>({
+export const test = base.extend<{ clientIp: string; intakeMode: "smart" | "traditional" }>({
   clientIp: [
     async ({}, provide, testInfo) => {
       // Único por (worker, contador local do processo) — workerIndex distingue
@@ -32,16 +32,29 @@ export const test = base.extend<{ clientIp: string }>({
     { scope: "test" },
   ],
 
-  context: async ({ context, clientIp }, provide) => {
-    await context.setExtraHTTPHeaders({ "x-forwarded-for": clientIp });
+  // Modo da pré-consulta por request (header `x-e2e-intake-mode`, só em E2E).
+  // O default é "smart"; specs que precisam do fluxo tradicional sobrescrevem
+  // via `test.use({ intakeMode: "traditional" })` — sem mutar o estado global
+  // de ai_settings, então projetos paralelos não interferem entre si.
+  intakeMode: ["smart", { option: true }],
+
+  context: async ({ context, clientIp, intakeMode }, provide) => {
+    await context.setExtraHTTPHeaders({
+      "x-forwarded-for": clientIp,
+      "x-e2e-intake-mode": intakeMode,
+    });
     await provide(context);
   },
 
-  request: async ({ playwright, baseURL, storageState, extraHTTPHeaders, clientIp }, provide) => {
+  request: async ({ playwright, baseURL, storageState, extraHTTPHeaders, clientIp, intakeMode }, provide) => {
     const request = await playwright.request.newContext({
       baseURL,
       storageState,
-      extraHTTPHeaders: { ...(extraHTTPHeaders ?? {}), "x-forwarded-for": clientIp },
+      extraHTTPHeaders: {
+        ...(extraHTTPHeaders ?? {}),
+        "x-forwarded-for": clientIp,
+        "x-e2e-intake-mode": intakeMode,
+      },
     });
     await provide(request);
     await request.dispose();

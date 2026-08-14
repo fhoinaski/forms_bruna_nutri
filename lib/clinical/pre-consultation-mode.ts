@@ -62,8 +62,31 @@ export function resolvePreConsultationMode(
   };
 }
 
-/** Resolve o modo público lendo a configuração persistida. */
-export async function resolvePublicPreConsultationMode(): Promise<PreConsultationModeResolution> {
+/**
+ * Resolve o modo público lendo a configuração persistida. `configuredModeOverride`
+ * permite injetar o modo escolhido por request (usado apenas no E2E, via
+ * `readE2EIntakeModeOverride`) sem mutar o estado global — essencial para que
+ * testes paralelos não corrompam a decisão um do outro.
+ */
+export async function resolvePublicPreConsultationMode(
+  configuredModeOverride?: PreConsultationMode
+): Promise<PreConsultationModeResolution> {
   const settings = await getAISettings();
-  return resolvePreConsultationMode(settings.patient_intake_mode, isAiAvailable(settings));
+  return resolvePreConsultationMode(
+    configuredModeOverride ?? settings.patient_intake_mode,
+    isAiAvailable(settings)
+  );
+}
+
+/**
+ * Lê o override de modo a partir do header `x-e2e-intake-mode`. Só tem efeito
+ * sob `E2E_TEST_MODE=1` (sem backdoor em produção) e aceita apenas os valores
+ * do enum (`smart`/`traditional`) — qualquer outro valor é ignorado.
+ */
+export function readE2EIntakeModeOverride(
+  headers?: { get(name: string): string | null }
+): PreConsultationMode | undefined {
+  if (process.env.E2E_TEST_MODE !== "1") return undefined;
+  const value = headers?.get("x-e2e-intake-mode");
+  return value === "smart" || value === "traditional" ? value : undefined;
 }

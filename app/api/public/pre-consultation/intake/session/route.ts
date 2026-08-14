@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const availability = await getIntakeAvailability();
+  const availability = await getIntakeAvailability(req.headers);
   if (!availability.available) {
     return NextResponse.json(
       { message: "A pré-consulta guiada por IA não está disponível no momento." },

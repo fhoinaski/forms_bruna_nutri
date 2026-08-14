@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
-import { resolvePublicPreConsultationMode } from "@/lib/clinical/pre-consultation-mode";
+import { NextRequest, NextResponse } from "next/server";
+import { readE2EIntakeModeOverride, resolvePublicPreConsultationMode } from "@/lib/clinical/pre-consultation-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const resolution = await resolvePublicPreConsultationMode();
+    const resolution = await resolvePublicPreConsultationMode(readE2EIntakeModeOverride(req.headers));
     return NextResponse.json({
       configuredMode: resolution.configuredMode,
       effectiveMode: resolution.effectiveMode,
