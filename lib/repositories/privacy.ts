@@ -2,6 +2,7 @@ import { d1Execute, d1Query } from "@/lib/d1/client";
 import { decryptJsonValue, encryptJsonValue } from "@/lib/security/encrypted-fields";
 import { getClientEvolutions } from "@/lib/repositories/client-evolutions";
 import { getExistingNutritionRecord } from "@/lib/repositories/nutrition-records";
+import { getAllNutritionRecordVersions } from "@/lib/repositories/nutrition-record-versions";
 import { getConsultationSessionsForClient } from "@/lib/repositories/consultation-sessions";
 
 export const PRIVACY_POLICY_VERSION = "2026-08-04";
@@ -123,6 +124,7 @@ export async function anonymizePrivacyRequestData(request: PrivacyRequest) {
     await d1Execute("DELETE FROM consultation_sessions WHERE client_id = ?1", [client.id]);
     await d1Execute("DELETE FROM client_portal_access WHERE client_id = ?1", [client.id]);
     await d1Execute("DELETE FROM client_evolutions WHERE client_id = ?1", [client.id]);
+    await d1Execute("DELETE FROM nutrition_record_versions WHERE client_id = ?1", [client.id]);
     await d1Execute("DELETE FROM nutrition_records WHERE client_id = ?1", [client.id]);
     await d1Execute("DELETE FROM client_timeline_events WHERE client_id = ?1", [client.id]);
     await d1Execute("DELETE FROM client_protocols WHERE client_id = ?1", [client.id]);
@@ -165,7 +167,7 @@ export async function exportPrivacyRequestData(request: PrivacyRequest) {
   const clinicalRecords = [];
   for (const client of clients) {
     const clientId = String(client.id);
-    const [appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecord, protocols, personalizedProtocols, timeline, patientRequests, consultationSessions] = await Promise.all([
+    const [appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecord, nutritionRecordVersions, protocols, personalizedProtocols, timeline, patientRequests, consultationSessions] = await Promise.all([
       d1Query<Record<string, unknown>>("SELECT * FROM appointments WHERE client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>("SELECT w.* FROM appointment_workflow_items w INNER JOIN appointments a ON a.id = w.appointment_id WHERE a.client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>("SELECT * FROM payments WHERE client_id = ?1", [clientId]),
@@ -173,6 +175,7 @@ export async function exportPrivacyRequestData(request: PrivacyRequest) {
       d1Query<Record<string, unknown>>("SELECT id, client_id, is_active, last_used_at, created_at, updated_at FROM client_portal_access WHERE client_id = ?1", [clientId]),
       getClientEvolutions(clientId),
       getExistingNutritionRecord(clientId),
+      getAllNutritionRecordVersions(clientId),
       d1Query<Record<string, unknown>>("SELECT * FROM client_protocols WHERE client_id = ?1", [clientId]),
       d1Query<Record<string, unknown>>(
         `SELECT p.*, (SELECT json_group_array(json_object('title', pp.title, 'days', pp.days, 'objective', pp.objective, 'actions', pp.actions_json, 'notes', pp.notes)) FROM protocol_phases pp WHERE pp.protocol_id = p.id) as phases
@@ -183,7 +186,7 @@ export async function exportPrivacyRequestData(request: PrivacyRequest) {
       d1Query<Record<string, unknown>>("SELECT * FROM patient_requests WHERE client_id = ?1", [clientId]),
       getConsultationSessionsForClient(clientId),
     ]);
-    clinicalRecords.push({ clientId, appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecords: nutritionRecord ? [nutritionRecord] : [], protocols, personalizedProtocols, timeline, patientRequests, consultationSessions });
+    clinicalRecords.push({ clientId, appointments, appointmentWorkflows, payments, tasks, portalAccess, evolutions, nutritionRecords: nutritionRecord ? [nutritionRecord] : [], nutritionRecordVersions, protocols, personalizedProtocols, timeline, patientRequests, consultationSessions });
   }
   return { generatedAt: new Date().toISOString(), requestId: request.id, clients, submissions, opportunities, clinicalRecords };
 }

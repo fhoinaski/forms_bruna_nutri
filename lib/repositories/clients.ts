@@ -222,6 +222,7 @@ export async function deleteClient(id: string): Promise<Client | null> {
     { sql: "DELETE FROM client_tasks WHERE client_id = ?1", params: [id] },
     { sql: "DELETE FROM client_portal_access WHERE client_id = ?1", params: [id] },
     { sql: "DELETE FROM client_evolutions WHERE client_id = ?1", params: [id] },
+    { sql: "DELETE FROM nutrition_record_versions WHERE client_id = ?1", params: [id] },
     { sql: "DELETE FROM nutrition_records WHERE client_id = ?1", params: [id] },
     { sql: "DELETE FROM client_timeline_events WHERE client_id = ?1", params: [id] },
     { sql: "DELETE FROM client_protocols WHERE client_id = ?1", params: [id] },

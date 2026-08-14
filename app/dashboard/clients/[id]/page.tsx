@@ -15,6 +15,7 @@ import { format, parseISO, isValid } from "date-fns";
 import { MealPlanEditor } from "@/components/dashboard/MealPlanEditor";
 import { EvolutionChart } from "@/components/dashboard/EvolutionChart";
 import { ClinicalEvolutionForm } from "@/components/dashboard/ClinicalEvolutionForm";
+import { NutritionRecordHistory } from "@/components/dashboard/NutritionRecordHistory";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { suggestEducationCardsFromDiagnoses } from "@/lib/clinical/patient-education-suggestions";
 import {
@@ -111,6 +112,7 @@ interface NutritionRecord {
   target_weight_kg: string | null; target_notes: string | null; exams: string | null; assessment: string | null;
   goals: string | null; care_plan: string | null; risk_flags: string | null;
   family_context: string | null; private_notes: string | null;
+  version: number;
   created_at: string; updated_at: string;
 }
 
@@ -678,8 +680,13 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
       const res = await fetch(`/api/admin/clients/${clientId}/nutrition-record`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, expectedVersion: record.version }),
       });
+      if (res.status === 409) {
+        const body = await res.json().catch(() => null);
+        setError(body?.message ?? "O prontuário foi atualizado em outra sessão. Recarregue antes de salvar.");
+        return;
+      }
       if (!res.ok) throw new Error();
       setRecord(await res.json());
       setSaved(true);
@@ -1355,7 +1362,10 @@ export default function ClientDetailPage() {
 
           {/* ── Protocolos ─────────────────────────────────────── */}
           {activeTab === "anamnese" && (
-            <NutritionRecordEditor clientId={id} onSaved={reloadTimeline} />
+            <>
+              <NutritionRecordEditor clientId={id} onSaved={reloadTimeline} />
+              <NutritionRecordHistory clientId={id} />
+            </>
           )}
 
           {activeTab === "plano-alimentar" && planView === "dieta" && (

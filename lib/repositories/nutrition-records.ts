@@ -1,8 +1,9 @@
-import { d1Execute, d1Query } from "@/lib/d1/client";
+import { d1Batch, d1Execute, d1Query } from "@/lib/d1/client";
 import { calculateBmiValue, formatClinicalNumber } from "@/lib/clinical/anthropometry";
 import { getClientById } from "@/lib/repositories/clients";
 import { getSubmissionById } from "@/lib/repositories/submissions";
-import { decryptNullableText, encryptNullableText } from "@/lib/security/encrypted-fields";
+import { decryptNullableText, encryptJsonValue, encryptNullableText } from "@/lib/security/encrypted-fields";
+import { insertNutritionRecordVersion, type NutritionRecordSource } from "@/lib/repositories/nutrition-record-versions";
 
 export interface NutritionRecord {
   id: string;
@@ -45,16 +46,17 @@ export interface NutritionRecord {
   risk_flags: string | null;
   family_context: string | null;
   private_notes: string | null;
+  version: number;
   created_at: string;
   updated_at: string;
 }
 
 export type NutritionRecordInput = Omit<
   NutritionRecord,
-  "id" | "client_id" | "created_at" | "updated_at"
+  "id" | "client_id" | "version" | "created_at" | "updated_at"
 >;
 
-const FIELDS: (keyof NutritionRecordInput)[] = [
+export const FIELDS: (keyof NutritionRecordInput)[] = [
   "chief_complaint",
   "life_stage",
   "biological_sex",
@@ -106,6 +108,13 @@ function decryptNutritionRecord(row: NutritionRecord | undefined): NutritionReco
 
 function encryptNutritionField(value: string | null | undefined): string | null {
   return encryptNullableText(value);
+}
+
+/** Snapshot clínico (somente os campos do prontuário) — nunca metadados internos. */
+function snapshotOfRecord(record: NutritionRecord): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = {};
+  for (const field of FIELDS) snapshot[field] = record[field];
+  return snapshot;
 }
 
 function answer(answers: Record<string, unknown>, keys: string[]): string | null {
@@ -192,8 +201,8 @@ export async function createNutritionRecord(
   const now = new Date().toISOString();
   await d1Execute(
     `INSERT OR IGNORE INTO nutrition_records
-      (id, client_id, ${FIELDS.join(", ")}, created_at, updated_at)
-     VALUES (?1, ?2, ${FIELDS.map((_, index) => `?${index + 3}`).join(", ")}, ?${FIELDS.length + 3}, ?${FIELDS.length + 4})`,
+      (id, client_id, version, ${FIELDS.join(", ")}, created_at, updated_at)
+     VALUES (?1, ?2, 1, ${FIELDS.map((_, index) => `?${index + 3}`).join(", ")}, ?${FIELDS.length + 3}, ?${FIELDS.length + 4})`,
     [id, clientId, ...FIELDS.map((field) => encryptNutritionField(input[field])), now, now]
   );
   const record = await d1Query<NutritionRecord>(
@@ -202,40 +211,141 @@ export async function createNutritionRecord(
   );
   const decrypted = decryptNutritionRecord(record[0]);
   if (!decrypted) throw new Error("Nao foi possivel criar o prontuario nutricional.");
+
+  // Snapshot inicial (versão 1) — idempotente por (nutrition_record_id, version).
+  await insertNutritionRecordVersion({
+    nutritionRecordId: decrypted.id,
+    clientId,
+    version: 1,
+    snapshot: snapshotOfRecord(decrypted),
+    source: "system",
+    createdAt: now,
+  });
+
   return decrypted;
 }
 
+export class NutritionRecordVersionConflictError extends Error {
+  constructor() {
+    super("O prontuário foi atualizado em outra sessão. Recarregue antes de salvar.");
+    this.name = "NutritionRecordVersionConflictError";
+  }
+}
+
+export interface UpdateNutritionRecordOptions {
+  /** Versão esperada (optimistic concurrency). Se omitida, usa a versão atual lida. */
+  expectedVersion?: number;
+  source?: NutritionRecordSource;
+  changedByAdminId?: string | null;
+  consultationSessionId?: string | null;
+  reason?: string | null;
+}
+
+function isVersionConflictError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  // Conflito concorrente: outra escrita já criou a versão nextVersion, e o
+  // UNIQUE (nutrition_record_id, version) fez o batch (transação) dar rollback.
+  return /UNIQUE constraint failed: nutrition_record_versions/i.test(error.message);
+}
+
+/**
+ * Escrita CANÔNICA do prontuário (versionada e auditável).
+ *
+ * - valida/no-op: salvar os mesmos dados não cria versão;
+ * - optimistic concurrency: checagem antecipada (`expectedVersion` vs versão
+ *   atual) + `WHERE version = expected` → 409 em conflito;
+ * - atomicidade: snapshot + UPDATE num único `d1Batch` (transação D1); o
+ *   UNIQUE (nutrition_record_id, version) força ROLLBACK em corrida concorrente;
+ * - autoria/source SEMPRE do servidor (nunca do frontend);
+ * - snapshot histórico cifrado (finalidade clinical), nunca plaintext.
+ */
 export async function updateNutritionRecord(
   clientId: string,
-  input: Partial<NutritionRecordInput>
+  input: Partial<NutritionRecordInput>,
+  options: UpdateNutritionRecordOptions = {}
 ): Promise<NutritionRecord> {
-  const existing = await getNutritionRecord(clientId);
+  const source = options.source ?? "manual";
+  const existing = await getExistingNutritionRecord(clientId);
   if (!existing) throw new Error("Cliente nao encontrado.");
+
+  const normalized = { ...input } as Partial<NutritionRecordInput>;
+  if (normalized.bmi === undefined && (normalized.current_weight_kg !== undefined || normalized.height_cm !== undefined)) {
+    const weight = normalized.current_weight_kg ?? existing.current_weight_kg;
+    const height = normalized.height_cm ?? existing.height_cm;
+    normalized.bmi = formatClinicalNumber(calculateBmiValue(weight, height));
+  }
+
+  // No-op: nenhuma mudança semântica → retorna o estado atual sem criar versão.
+  const hasChanges = FIELDS.some(
+    (field) => normalized[field] !== undefined && normalized[field] !== existing[field]
+  );
+  if (!hasChanges) return existing;
+
+  const nextVersion = existing.version + 1;
+  const expected = options.expectedVersion ?? existing.version;
+
+  // Conflito detectado ANTES de qualquer escrita: o cliente informou uma versão
+  // esperada diferente da versão atual lida do servidor. Evita snapshot fantasma
+  // sem depender de RAISE() (que o SQLite só aceita dentro de trigger). A
+  // proteção contra corrida concorrente fica por conta do UNIQUE
+  // (nutrition_record_id, version): se outra escrita já criou a versão
+  // nextVersion, o INSERT falha e o batch (transação) faz rollback.
+  if (options.expectedVersion !== undefined && options.expectedVersion !== existing.version) {
+    throw new NutritionRecordVersionConflictError();
+  }
+
+  const now = new Date().toISOString();
+  const versionId = crypto.randomUUID();
+  const nextState = { ...existing, ...normalized } as NutritionRecord;
 
   const updates: string[] = [];
   const params: unknown[] = [];
   let index = 1;
-  const normalizedInput = { ...input };
-  if (normalizedInput.bmi === undefined && (normalizedInput.current_weight_kg !== undefined || normalizedInput.height_cm !== undefined)) {
-    const weight = normalizedInput.current_weight_kg ?? existing.current_weight_kg;
-    const height = normalizedInput.height_cm ?? existing.height_cm;
-    const bmi = calculateBmiValue(weight, height);
-    normalizedInput.bmi = formatClinicalNumber(bmi);
-  }
   for (const field of FIELDS) {
-    if (normalizedInput[field] !== undefined) {
+    if (normalized[field] !== undefined) {
       updates.push(`${field} = ?${index++}`);
-      params.push(encryptNutritionField(normalizedInput[field]));
+      params.push(encryptNutritionField(normalized[field]));
     }
   }
+  updates.push(`version = ?${index++}`);
+  params.push(nextVersion);
   updates.push(`updated_at = ?${index++}`);
-  params.push(new Date().toISOString());
-  params.push(clientId);
+  params.push(now);
 
-  await d1Execute(
-    `UPDATE nutrition_records SET ${updates.join(", ")} WHERE client_id = ?${index}`,
-    params
-  );
+  const whereClientIdParam = index;
+  const whereVersionParam = index + 1;
+  params.push(clientId); // WHERE client_id
+  params.push(expected); // WHERE version
+
+  try {
+    await d1Batch([
+      {
+        sql: `INSERT INTO nutrition_record_versions
+          (id, nutrition_record_id, client_id, version, encrypted_snapshot, changed_by_admin_id, source, consultation_session_id, reason, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+        params: [
+          versionId,
+          existing.id,
+          clientId,
+          nextVersion,
+          encryptJsonValue(snapshotOfRecord(nextState)),
+          options.changedByAdminId ?? null,
+          source,
+          options.consultationSessionId ?? null,
+          options.reason ?? null,
+          now,
+        ],
+      },
+      {
+        sql: `UPDATE nutrition_records SET ${updates.join(", ")} WHERE client_id = ?${whereClientIdParam} AND version = ?${whereVersionParam}`,
+        params,
+      },
+    ]);
+  } catch (error) {
+    if (isVersionConflictError(error)) throw new NutritionRecordVersionConflictError();
+    throw error;
+  }
+
   const rows = await d1Query<NutritionRecord>(
     "SELECT * FROM nutrition_records WHERE client_id = ?1 LIMIT 1",
     [clientId]

@@ -245,7 +245,7 @@ const executeClientProtocolNotes: ProposalHandler<"client_protocol"> = async (ac
 
 const NUTRITION_ALLOWED_KEYS = new Set<string>(NUTRITION_TEXT_FIELDS.map((field) => field.key));
 
-const executeNutritionRecord: ProposalHandler<"nutrition_record"> = async (action) => {
+const executeNutritionRecord: ProposalHandler<"nutrition_record"> = async (action, ctx) => {
   const client = await getClientById(action.clientId);
   if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
 
@@ -261,7 +261,12 @@ const executeNutritionRecord: ProposalHandler<"nutrition_record"> = async (actio
     throw new ProposalExecutionError("Nenhum campo válido para atualizar no prontuário.", 422);
   }
 
-  await updateNutritionRecord(action.clientId, updates);
+  // A IA NUNCA é autora clínica: source=ai_proposal e o autor é a
+  // nutricionista que CONFIRMOU a proposta (ctx.adminId), vindo do servidor.
+  await updateNutritionRecord(action.clientId, updates, {
+    source: "ai_proposal",
+    changedByAdminId: ctx.adminId,
+  });
 
   return { data: { clientId: action.clientId } };
 };

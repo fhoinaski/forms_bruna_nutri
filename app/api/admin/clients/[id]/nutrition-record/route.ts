@@ -7,6 +7,7 @@ import { getClientById } from "@/lib/repositories/clients";
 import {
   getNutritionRecord,
   updateNutritionRecord,
+  NutritionRecordVersionConflictError,
 } from "@/lib/repositories/nutrition-records";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 
@@ -55,6 +56,8 @@ const UpdateSchema = z.object({
   risk_flags: textField,
   family_context: textField,
   private_notes: textField,
+  expectedVersion: z.number().int().positive().optional(),
+  reason: z.string().max(300).nullable().optional(),
 }).strict();
 
 export async function GET(
@@ -96,13 +99,29 @@ export async function PATCH(
     return NextResponse.json({ message: "Dados invalidos." }, { status: 400 });
   }
 
-  const record = await updateNutritionRecord(id, parsed.data);
+  // Escrita canônica versionada: source=manual, autor = admin autenticado
+  // (nunca o frontend), optimistic concurrency via expectedVersion.
+  let record;
+  try {
+    record = await updateNutritionRecord(id, parsed.data, {
+      source: "manual",
+      changedByAdminId: admin.sub,
+      expectedVersion: parsed.data.expectedVersion,
+      reason: parsed.data.reason ?? null,
+    });
+  } catch (error) {
+    if (error instanceof NutritionRecordVersionConflictError) {
+      return NextResponse.json({ message: error.message }, { status: 409 });
+    }
+    throw error;
+  }
+
   await addTimelineEvent({
     client_id: id,
     type: "nutrition_record_updated",
     title: "Prontuario nutricional atualizado",
     description: "Ficha clinica, conduta ou dados nutricionais revisados.",
-    metadata: { fields: Object.keys(parsed.data) },
+    metadata: { fields: Object.keys(parsed.data), version: record.version },
   });
   await writeAuditLog({
     action: "nutrition_record_updated",
@@ -110,7 +129,7 @@ export async function PATCH(
     entityType: "nutrition_record",
     entityId: record.id,
     ipHash: getRequestFingerprint(req).ipHash,
-    metadata: { clientId: id, fields: Object.keys(parsed.data) },
+    metadata: { clientId: id, fields: Object.keys(parsed.data), version: record.version, source: "manual" },
   });
 
   return NextResponse.json(record);
