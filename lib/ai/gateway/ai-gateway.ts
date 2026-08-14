@@ -1,6 +1,7 @@
 import { generateText, type ModelMessage, type StopCondition, type ToolSet } from "ai";
 import type { z } from "zod";
 import { createConfiguredModel } from "@/lib/ai/model-factory";
+import { addAiTiming } from "@/lib/observability/trace";
 import { getAISettings, type AISettings } from "@/lib/repositories/ai-settings";
 import { writeAuditLog } from "@/lib/security/audit";
 import { AiConfigError, AiProviderError, AiValidationError, RETRYABLE_FAILURE_CATEGORIES, STRUCTURED_FAILURE_CATEGORIES, classifyAiError } from "@/lib/ai/core/ai-errors";
@@ -90,6 +91,7 @@ export async function generate(options: GenerateOptions): Promise<GenerateResult
       maxOutputTokens: options.maxOutputTokens ?? 4096,
       abortSignal: options.timeoutMs ? AbortSignal.timeout(options.timeoutMs) : undefined,
     });
+    addAiTiming(Date.now() - startedAt);
     await logUsage(options, {
       settings,
       durationMs: Date.now() - startedAt,
@@ -169,6 +171,7 @@ export async function generateStructuredResult<T>(options: GenerateStructuredOpt
     // Texto + JSON + normalização + Zod.
     try {
       const result = await generateText({ model, system, prompt: options.prompt, maxOutputTokens, abortSignal });
+      addAiTiming(Date.now() - startedAt);
       const raw = tryParseJsonFromText(result.text);
       const normalized = options.normalize ? options.normalize(raw) : raw;
       const parsed = options.schema.safeParse(normalized);

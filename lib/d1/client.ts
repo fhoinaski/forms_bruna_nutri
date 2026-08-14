@@ -1,3 +1,5 @@
+import { addDbRoundTrip } from "@/lib/observability/trace";
+
 type D1Result<T = unknown> = {
   results: T[];
   success: boolean;
@@ -72,7 +74,15 @@ async function requestD1<T>(body: D1RequestBody): Promise<Array<D1Result<T>>> {
       throw new Error(message);
     }
 
-    return data.result ?? [];
+    const results = data.result ?? [];
+    let dbMs = 0;
+    let rowsRead = 0;
+    for (const result of results) {
+      dbMs += result.meta?.duration ?? 0;
+      rowsRead += result.meta?.rows_read ?? 0;
+    }
+    addDbRoundTrip(dbMs, rowsRead, results.length);
+    return results;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`Cloudflare D1 request timed out after ${requestTimeoutMs}ms.`);

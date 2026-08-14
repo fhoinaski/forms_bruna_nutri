@@ -41,7 +41,7 @@ export async function addTimelineEvent(input: AddTimelineEventInput): Promise<st
 
 export async function getClientTimeline(clientId: string): Promise<TimelineEvent[]> {
   return d1Query<TimelineEvent>(
-    `SELECT * FROM client_timeline_events WHERE client_id = ?1 ORDER BY created_at DESC`,
+    `SELECT * FROM client_timeline_events WHERE client_id = ?1 ORDER BY created_at DESC LIMIT 500`,
     [clientId]
   );
 }

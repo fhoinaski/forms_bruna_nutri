@@ -259,7 +259,7 @@ export async function createClientEvolution(input: CreateEvolutionInput): Promis
 
 export async function getClientEvolutions(clientId: string): Promise<ClientEvolution[]> {
   const rows = await d1Query<ClientEvolution>(
-    `SELECT * FROM client_evolutions WHERE client_id = ?1 ORDER BY COALESCE(measured_at, created_at) DESC`,
+    `SELECT * FROM client_evolutions WHERE client_id = ?1 ORDER BY COALESCE(measured_at, created_at) DESC LIMIT 500`,
     [clientId]
   );
   return rows.map(decryptEvolution);
