@@ -122,26 +122,30 @@ function NavLink({ href, label, icon: Icon, collapsed, badgeCount = 0, onClick }
 }) {
   const pathname = usePathname();
   const active = href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  const badgeLabel = badgeCount > 0
+    ? `${label}, ${badgeCount > 99 ? "mais de 99" : badgeCount} pendente${badgeCount === 1 ? "" : "s"}`
+    : undefined;
   return (
     <Link
       href={href}
       onClick={onClick}
       title={collapsed ? label : undefined}
+      aria-label={badgeLabel}
       className={`group relative flex h-11 items-center rounded-lg text-sm font-medium transition-colors ${collapsed ? "justify-center px-2" : "gap-3 px-3"} ${
         active
           ? "bg-[#7F9A74] text-white shadow-[0_8px_22px_rgba(127,154,116,0.18)]"
           : "text-[#75675E] hover:bg-[#FBF7F1] hover:text-[#3A3028]"
       }`}
     >
-      <Icon className="h-[18px] w-[18px] shrink-0" />
+      <Icon aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
       {!collapsed && <span className="truncate">{label}</span>}
       {!collapsed && badgeCount > 0 && (
-        <span className={`ml-auto min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-[#EAF0E4] text-[#607A56]"}`}>
+        <span aria-hidden="true" className={`ml-auto min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold ${active ? "bg-white/20 text-white" : "bg-[#EAF0E4] text-[#607A56]"}`}>
           {badgeCount > 99 ? "99+" : badgeCount}
         </span>
       )}
       {collapsed && badgeCount > 0 && (
-        <span className={`absolute right-2 top-2 h-2 w-2 rounded-full ${active ? "bg-white" : "bg-[#C9937B]"}`} />
+        <span aria-hidden="true" className={`absolute right-2 top-2 h-2 w-2 rounded-full ${active ? "bg-white" : "bg-[#C9937B]"}`} />
       )}
     </Link>
   );
@@ -172,7 +176,7 @@ function Sidebar({ collapsed, mobile = false, onClose, badges = {} }: {
           </div>
         )}
         {mobile && (
-          <button onClick={onClose} className="ml-auto rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar menu">
+          <button onClick={onClose} className="ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar menu">
             <X className="h-5 w-5" />
           </button>
         )}
@@ -218,7 +222,7 @@ function Sidebar({ collapsed, mobile = false, onClose, badges = {} }: {
 }
 
 function IconButton({ label, children, onClick }: { label: string; children: ReactNode; onClick?: () => void }) {
-  return <button type="button" onClick={onClick} aria-label={label} title={label} className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] text-[#75675E] transition-colors hover:bg-[#FBF7F1] hover:text-[#3A3028]">{children}</button>;
+  return <button type="button" onClick={onClick} aria-label={label} title={label} className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] text-[#75675E] transition-colors hover:bg-[#FBF7F1] hover:text-[#3A3028]">{children}</button>;
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -356,7 +360,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className={`flex min-h-screen flex-col transition-[padding] duration-200 ${collapsed ? "lg:pl-20" : "lg:pl-64"}`}>
         <header className="sticky top-0 z-20 border-b border-[#EDE1D6] bg-[#FFFDFC]/95 backdrop-blur-xl">
           <div className="flex h-16 min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 lg:px-6">
-            <button type="button" onClick={() => setMobileOpen(true)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1] lg:hidden" aria-label="Abrir menu"><Menu className="h-5 w-5" /></button>
+            <button type="button" onClick={() => setMobileOpen(true)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1] lg:hidden" aria-label="Abrir menu"><Menu className="h-5 w-5" /></button>
             <nav className="hidden min-w-0 items-center gap-1 text-xs text-[#A9978A] md:flex" aria-label="Breadcrumb">
               {breadcrumbs.map((item, index) => <span key={item.href} className="flex items-center gap-1"><Link href={item.href} className={`max-w-32 truncate hover:text-[#607A56] ${index === breadcrumbs.length - 1 ? "font-semibold text-[#3A3028]" : ""}`}>{item.label}</Link>{index < breadcrumbs.length - 1 && <ChevronRight className="h-3 w-3" />}</span>)}
             </nav>
@@ -407,7 +411,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 )}
               </div>
               <div ref={profileRef} className="relative">
-                <button type="button" onClick={() => { setProfileOpen((value) => !value); setNotificationsOpen(false); }} className="flex h-10 min-w-10 shrink-0 items-center gap-2 rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] px-1 text-left hover:bg-[#FBF7F1] xl:px-1.5 xl:pr-2">
+                <button type="button" onClick={() => { setProfileOpen((value) => !value); setNotificationsOpen(false); }} className="flex h-11 min-w-11 shrink-0 items-center gap-2 rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] px-1 text-left hover:bg-[#FBF7F1] xl:px-1.5 xl:pr-2">
                   <Image src="/favicon-512.png" alt="Perfil de Bruna Flores" width={32} height={32} className="h-8 w-8 rounded-md object-contain" />
                   <span className="hidden text-xs font-semibold text-[#3A3028] xl:block">Bruna Flores</span>
                   <ChevronDown className="hidden h-3.5 w-3.5 text-[#75675E] xl:block" />

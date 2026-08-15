@@ -59,7 +59,7 @@ export function HelpPopover({ topicKey }: { topicKey: HelpTopicKey }) {
           event.stopPropagation();
           setOpen((value) => !value);
         }}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#EDE1D6] bg-[#FFFDFC] text-[#8C6E52] shadow-sm transition hover:border-[#D9E4D3] hover:bg-[#F7FAF5] hover:text-[#607A56]"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#EDE1D6] bg-[#FFFDFC] text-[#8C6E52] shadow-sm transition hover:border-[#D9E4D3] hover:bg-[#F7FAF5] hover:text-[#607A56]"
       >
         <CircleHelp className="h-4 w-4" />
       </button>

@@ -54,7 +54,7 @@ export function ConsultationFinishDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-2xl border border-[#EDE1D6] bg-white p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-serif text-lg font-semibold text-[#3A3028]">Finalizar consulta</h2>

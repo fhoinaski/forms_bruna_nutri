@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, Save, Phone, Mail, FileText, Printer,
+  ArrowLeft, ArrowDown, Save, Phone, Mail, FileText, Printer,
   User, BookOpen, CheckSquare, TrendingUp, Clock,
   Plus, Check, X, Trash2, ChevronRight, ChevronDown,
   CalendarDays, WalletCards, KeyRound, ShieldCheck, RefreshCw, ExternalLink,
@@ -723,11 +723,22 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
             Ficha clinica viva do atendimento, com dados essenciais para anamnese, acompanhamento e plano de cuidado.
           </p>
         </div>
-        <div className="text-xs text-[#A8927D] md:text-right">
-          <p>Atualizado em {formatDateSafe(record.updated_at, "dd/MM/yyyy HH:mm")}</p>
-          <p>Registro unico do paciente</p>
+        <div className="flex flex-col items-start gap-2 md:items-end">
+          <div className="text-xs text-[#A8927D] md:text-right">
+            <p>Atualizado em {formatDateSafe(record.updated_at, "dd/MM/yyyy HH:mm")}</p>
+            <p>Registro unico do paciente</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => document.getElementById("nutrition-record-save")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#D9C4B2] px-3 py-1.5 text-xs font-semibold text-[#8C6E52] transition hover:bg-white"
+          >
+            Ir para salvar
+            <ArrowDown className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-5">
         <h3 className="font-serif text-base font-semibold text-[#7A9A74]">Perfil clinico e fase de vida</h3>
@@ -850,7 +861,7 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex justify-end">
+      <div id="nutrition-record-save" className="flex justify-end">
         <button onClick={handleSave} disabled={saving} className="brand-btn-primary">
           <Save className="w-4 h-4" />
           {saving ? "Salvando..." : saved ? "Prontuario salvo" : "Salvar prontuario"}
@@ -1967,7 +1978,7 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
         </Tabs>
       </div>
       {deleteDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-4 py-6 backdrop-blur-sm">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-4 py-6 backdrop-blur-sm">
           <section className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
             <div className="border-b border-[#EDE1D6] px-5 py-4">
               <p className="brand-kicker text-[#9A5C4E]">Exclusao definitiva</p>

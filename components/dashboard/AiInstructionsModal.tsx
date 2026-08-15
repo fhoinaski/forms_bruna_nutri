@@ -41,7 +41,7 @@ export function AiInstructionsModal({
   if (!open || !portalReady) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
       <section className="flex w-full max-w-md flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
         <div className="shrink-0 border-b border-[#EDE1D6] px-5 py-4">
           <p className="brand-kicker">Sugerir com IA</p>

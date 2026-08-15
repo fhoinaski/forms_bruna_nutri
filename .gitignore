@@ -16,3 +16,4 @@ backups/
 .vercel
 lib/clinical/data/source/
 e2e/.tmp/
+*.cline/

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CalendarDays, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, CalendarDays, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
 import { MealItemsEditor, cleanMealsForSave, type Meal } from "@/components/dashboard/MealItemsEditor";
 import { MealPlanNutritionSummary } from "@/components/nutrition/MealPlanNutritionSummary";
 import {
@@ -277,6 +277,20 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       )}
 
       {plan && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#EDE1D6] bg-[#FAF7F2]/60 px-3 py-2">
+          <span className="text-xs text-[#8C6E52]">{saving ? "Salvando..." : "Plano carregado - edite abaixo"}</span>
+          <button
+            type="button"
+            onClick={() => document.getElementById("meal-plan-actions")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#D9C4B2] px-3 py-1.5 text-xs font-semibold text-[#8C6E52] transition hover:bg-white"
+          >
+            Ir para salvar/ativar
+            <ArrowDown className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {plan && (
         <section className="space-y-5 rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-5">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -352,7 +366,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             labels={["Alimento base", "Pode trocar por", "Qtd.", "Un."]}
           />
 
-          <div className="flex flex-col gap-3 border-t border-[#EDE1D6] pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <div id="meal-plan-actions" className="flex flex-col gap-3 border-t border-[#EDE1D6] pt-5 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
               onClick={() => setDeleteDraft({ planId: plan.id, title: plan.title, status: plan.status })}
@@ -381,7 +395,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       )}
 
       {portalReady && templateDraft && plan && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
           <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
             <div className="shrink-0 border-b border-[#EDE1D6] px-5 py-4">
               <p className="brand-kicker">Promover para biblioteca</p>
@@ -416,7 +430,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         document.body
       )}
       {portalReady && deleteDraft && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
           <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
             <div className="shrink-0 border-b border-[#EDE1D6] px-5 py-4">
               <p className="brand-kicker text-red-700">Excluir plano alimentar</p>

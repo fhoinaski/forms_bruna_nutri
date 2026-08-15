@@ -665,7 +665,7 @@ export default function DashboardPage() {
             </div>
             <Link
               href="/dashboard/financeiro"
-              className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#607A56] hover:text-[#8C5F50]"
+              className="mt-3 inline-flex items-center gap-2 py-3 text-sm font-semibold text-[#607A56] hover:text-[#8C5F50]"
             >
               Gerenciar financeiro
               <ArrowRight className="h-4 w-4" />
@@ -705,7 +705,7 @@ export default function DashboardPage() {
             </div>
             <Link
               href="/dashboard/blog"
-              className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#607A56] hover:text-[#8C5F50]"
+              className="mt-3 inline-flex items-center gap-2 py-3 text-sm font-semibold text-[#607A56] hover:text-[#8C5F50]"
             >
               Revisar conteudo
               <ArrowRight className="h-4 w-4" />
