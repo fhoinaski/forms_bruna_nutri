@@ -30,6 +30,7 @@ describe("lib/repositories/meal-plans.ts — vinculo estruturado e metas", () =>
     }]);
     vi.doMock("@/lib/d1/client", () => ({ d1Batch, d1Query, d1Execute: vi.fn() }));
     vi.doMock("@/lib/repositories/protocol-templates", () => ({ getAllTemplates: vi.fn() }));
+    vi.doMock("@/lib/security/encrypted-fields", () => ({ encryptJsonValue: (v: unknown) => `encj:${JSON.stringify(v)}` }));
     const { createMealPlan } = await import("../lib/repositories/meal-plans");
 
     await createMealPlan({
@@ -63,6 +64,7 @@ describe("lib/repositories/meal-plans.ts — vinculo estruturado e metas", () =>
     }]);
     vi.doMock("@/lib/d1/client", () => ({ d1Batch, d1Query, d1Execute: vi.fn() }));
     vi.doMock("@/lib/repositories/protocol-templates", () => ({ getAllTemplates: vi.fn() }));
+    vi.doMock("@/lib/security/encrypted-fields", () => ({ encryptJsonValue: (v: unknown) => `encj:${JSON.stringify(v)}` }));
     const { updateMealPlan } = await import("../lib/repositories/meal-plans");
 
     await updateMealPlan("plan-1", "client-1", {
@@ -93,6 +95,7 @@ describe("lib/repositories/meal-plans.ts — vinculo estruturado e metas", () =>
     const d1Query = vi.fn().mockResolvedValue([{ id: "plan-1", client_id: "client-1" }]);
     vi.doMock("@/lib/d1/client", () => ({ d1Batch, d1Query, d1Execute: vi.fn() }));
     vi.doMock("@/lib/repositories/protocol-templates", () => ({ getAllTemplates: vi.fn() }));
+    vi.doMock("@/lib/security/encrypted-fields", () => ({ encryptJsonValue: (v: unknown) => `encj:${JSON.stringify(v)}` }));
     const { updateMealPlan } = await import("../lib/repositories/meal-plans");
 
     await updateMealPlan("plan-1", "client-1", { title: "Plano", status: "draft", meals: [], substitutions: [], supplements: [] });

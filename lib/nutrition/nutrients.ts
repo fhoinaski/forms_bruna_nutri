@@ -1,6 +1,7 @@
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
 import { resolveQuantity, type HouseholdMeasureOption, type QuantityResolution } from "@/lib/nutrition/quantity-resolution";
 import type { MealPlanPayload } from "@/lib/repositories/meal-plans";
+import { referenceFromSnapshot } from "@/lib/nutrition/food-snapshot";
 
 /**
  * Motor nutricional central da FASE 2. `null` sempre significa "sem dado
@@ -141,6 +142,8 @@ export interface MealPlanItemLike {
   food_source?: string | null;
   food_ref_id?: string | null;
   household_measure_id?: string | null;
+  food_name_snapshot?: string | null;
+  nutrition_snapshot?: string | null;
 }
 
 /**
@@ -167,6 +170,11 @@ export interface FoodReferenceLookup {
 }
 
 export function resolveItemReference(item: MealPlanItemLike, lookup: FoodReferenceLookup): MacroReferenceFood | null {
+  // Snapshot historico (P1-A): quando o item foi prescrito com composicao
+  // congelada, usa o snapshot em vez de re-vincular — plano antigo nao muda
+  // retroativamente se a base (taco.json/custom_foods) mudar.
+  const fromSnapshot = referenceFromSnapshot(item.food, item.food_name_snapshot, item.nutrition_snapshot);
+  if (fromSnapshot) return fromSnapshot;
   if (item.food_ref_id) {
     if (item.food_source === "TACO") return lookup.byTacoNumber(item.food_ref_id);
     if (item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER") return lookup.byCustomId(item.food_ref_id);

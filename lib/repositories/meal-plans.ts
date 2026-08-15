@@ -1,6 +1,9 @@
 import { d1Batch, d1Query, type D1Statement } from "@/lib/d1/client";
 import { getAllTemplates } from "@/lib/repositories/protocol-templates";
 import type { ProtocolTemplateTargetGroup } from "@/lib/protocol-templates/constants";
+import { buildItemSnapshot } from "@/lib/nutrition/food-snapshot-server";
+import type { MealPlanVersionSource } from "@/lib/repositories/meal-plan-versions";
+import { encryptJsonValue } from "@/lib/security/encrypted-fields";
 
 export type MealPlanStatus = "draft" | "active" | "archived";
 
@@ -52,6 +55,10 @@ export type MealPlanItemPayload = {
   // Quando presente, tem prioridade maxima na resolucao de quantidade
   // (lib/nutrition/quantity-resolution.ts), independente do texto de `unit`.
   household_measure_id?: string | null;
+  // Snapshot de composicao congelado na prescricao (P1-A, FASE 20) — evita que
+  // o plano mude retroativamente se a base (taco.json/custom_foods) mudar.
+  food_name_snapshot?: string | null;
+  nutrition_snapshot?: string | null;
 };
 
 export type MealPlanWeeklySlotPayload = {
@@ -355,6 +362,8 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
         food_source: item.food_source ?? null,
         food_ref_id: item.food_ref_id ?? null,
         household_measure_id: item.household_measure_id ?? null,
+        food_name_snapshot: item.food_name_snapshot ?? null,
+        nutrition_snapshot: item.nutrition_snapshot ?? null,
         })),
       })),
     weekly_slots: (weeklySlotsByPlan.get(row.id) ?? []).map(({ id, weekday, meal_type, title, notes, source_meal_id }) => ({
@@ -503,6 +512,99 @@ export async function saveMealPlanAsDietTemplate(input: {
   return templateId;
 }
 
+export class MealPlanVersionConflictError extends Error {
+  constructor() {
+    super("O plano alimentar foi atualizado em outra sessao. Recarregue antes de salvar.");
+    this.name = "MealPlanVersionConflictError";
+  }
+}
+
+function isMealPlanVersionConflictError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /UNIQUE constraint failed: meal_plan_versions/i.test(error.message);
+}
+
+/** Congela nome + composicao de cada item vinculado (P1-A, FASE 20). */
+async function resolveMealsWithSnapshots(meals: MealPlanMealPayload[]): Promise<MealPlanMealPayload[]> {
+  return Promise.all(
+    meals.map(async (meal) => ({
+      ...meal,
+      items: await Promise.all(
+        meal.items.map(async (item) => {
+          if (!item.food.trim()) return item;
+          const snapshot = await buildItemSnapshot(item.food_source, item.food_ref_id);
+          return { ...item, ...snapshot };
+        })
+      ),
+    }))
+  );
+}
+
+/** Monta o snapshot clinico completo do plano para versionamento (FASE 21). */
+function buildMealPlanVersionSnapshot(
+  input: {
+    title: string;
+    status: MealPlanStatus;
+    notes?: string | null;
+    target_energy_kcal?: number | null;
+    target_protein_g?: number | null;
+    target_carbohydrate_g?: number | null;
+    target_fat_g?: number | null;
+    meals: MealPlanMealPayload[];
+    weekly_slots?: MealPlanWeeklySlotPayload[];
+    substitutions: MealPlanSubstitutionPayload[];
+    supplements: MealPlanSupplementPayload[];
+  },
+  version: number
+): Record<string, unknown> {
+  return {
+    version,
+    title: input.title,
+    status: input.status,
+    notes: input.notes ?? null,
+    target_energy_kcal: input.target_energy_kcal ?? null,
+    target_protein_g: input.target_protein_g ?? null,
+    target_carbohydrate_g: input.target_carbohydrate_g ?? null,
+    target_fat_g: input.target_fat_g ?? null,
+    meals: input.meals.map((meal) => ({
+      name: meal.name,
+      suggested_time: meal.suggested_time ?? null,
+      notes: meal.notes ?? null,
+      source_recipe_id: meal.source_recipe_id ?? null,
+      items: meal.items.map((item) => ({
+        food: item.food,
+        quantity: item.quantity ?? null,
+        unit: item.unit ?? null,
+        notes: item.notes ?? null,
+        food_source: item.food_source ?? null,
+        food_ref_id: item.food_ref_id ?? null,
+        household_measure_id: item.household_measure_id ?? null,
+        food_name_snapshot: item.food_name_snapshot ?? null,
+        nutrition_snapshot: item.nutrition_snapshot ?? null,
+      })),
+    })),
+    weekly_slots: input.weekly_slots ?? [],
+    substitutions: input.substitutions,
+    supplements: input.supplements,
+  };
+}
+
+function mealPlanVersionStatement(input: {
+  mealPlanId: string;
+  clientId: string;
+  version: number;
+  snapshot: Record<string, unknown>;
+  changedByAdminId?: string | null;
+  source: MealPlanVersionSource;
+  reason?: string | null;
+  now: string;
+}): D1Statement {
+  return {
+    sql: `INSERT OR IGNORE INTO meal_plan_versions (id, meal_plan_id, client_id, version, encrypted_snapshot, changed_by_admin_id, source, reason, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
+    params: [crypto.randomUUID(), input.mealPlanId, input.clientId, input.version, encryptJsonValue(input.snapshot), input.changedByAdminId ?? null, input.source, input.reason ?? null, input.now],
+  };
+}
+
 export async function createMealPlan(input: {
   clientId: string;
   title: string;
@@ -516,6 +618,7 @@ export async function createMealPlan(input: {
 }): Promise<MealPlanPayload> {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  const meals = await resolveMealsWithSnapshots(input.meals);
   const statements: D1Statement[] = [];
   if (input.status === "active") {
     statements.push({
@@ -528,10 +631,25 @@ export async function createMealPlan(input: {
           VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8)`,
     params: [id, input.clientId, input.title, input.targetGroup ?? null, input.status ?? "draft", input.notes ?? null, now, now],
   });
-  statements.push(...buildMealPlanDetailStatements(id, input.meals, input.weekly_slots ?? [], input.substitutions, input.supplements, now));
+  statements.push(mealPlanVersionStatement({
+    mealPlanId: id,
+    clientId: input.clientId,
+    version: 1,
+    snapshot: buildMealPlanVersionSnapshot({ title: input.title, status: input.status ?? "draft", notes: input.notes, meals, weekly_slots: input.weekly_slots, substitutions: input.substitutions, supplements: input.supplements }, 1),
+    source: "manual",
+    now,
+  }));
+  statements.push(...buildMealPlanDetailStatements(id, meals, input.weekly_slots ?? [], input.substitutions, input.supplements, now));
   await d1Batch(statements);
   const rows = await d1Query<MealPlanRow>("SELECT * FROM meal_plans WHERE id = ?1 LIMIT 1", [id]);
   return (await hydrateMealPlans(rows))[0];
+}
+
+export interface UpdateMealPlanOptions {
+  expectedVersion?: number;
+  changedByAdminId?: string | null;
+  source?: MealPlanVersionSource;
+  reason?: string | null;
 }
 
 export async function updateMealPlan(planId: string, clientId: string, input: {
@@ -546,14 +664,22 @@ export async function updateMealPlan(planId: string, clientId: string, input: {
   weekly_slots?: MealPlanWeeklySlotPayload[];
   substitutions: MealPlanSubstitutionPayload[];
   supplements: MealPlanSupplementPayload[];
-}): Promise<MealPlanPayload | null> {
+}, options: UpdateMealPlanOptions = {}): Promise<MealPlanPayload | null> {
   const existingRows = await d1Query<MealPlanRow>(
     "SELECT * FROM meal_plans WHERE id = ?1 AND client_id = ?2 LIMIT 1",
     [planId, clientId]
   );
   if (!existingRows[0]) return null;
+  const existing = existingRows[0];
+
+  const expected = options.expectedVersion ?? existing.version;
+  if (options.expectedVersion !== undefined && options.expectedVersion !== existing.version) {
+    throw new MealPlanVersionConflictError();
+  }
 
   const now = new Date().toISOString();
+  const nextVersion = existing.version + 1;
+  const meals = await resolveMealsWithSnapshots(input.meals);
   const statements: D1Statement[] = [];
   if (input.status === "active") {
     statements.push({
@@ -564,7 +690,7 @@ export async function updateMealPlan(planId: string, clientId: string, input: {
   statements.push({
     sql: `UPDATE meal_plans SET title = ?1, status = ?2, notes = ?3,
             target_energy_kcal = ?4, target_protein_g = ?5, target_carbohydrate_g = ?6, target_fat_g = ?7,
-            version = version + 1, updated_at = ?8 WHERE id = ?9 AND client_id = ?10`,
+            version = version + 1, updated_at = ?8 WHERE id = ?9 AND client_id = ?10 AND version = ?11`,
     params: [
       input.title,
       input.status,
@@ -576,10 +702,27 @@ export async function updateMealPlan(planId: string, clientId: string, input: {
       now,
       planId,
       clientId,
+      expected,
     ],
   });
-  statements.push(...buildMealPlanDetailStatements(planId, input.meals, input.weekly_slots ?? [], input.substitutions, input.supplements, now));
-  await d1Batch(statements);
+  statements.push(mealPlanVersionStatement({
+    mealPlanId: planId,
+    clientId,
+    version: nextVersion,
+    snapshot: buildMealPlanVersionSnapshot({ ...input, meals }, nextVersion),
+    changedByAdminId: options.changedByAdminId ?? null,
+    source: options.source ?? "manual",
+    reason: options.reason ?? null,
+    now,
+  }));
+  statements.push(...buildMealPlanDetailStatements(planId, meals, input.weekly_slots ?? [], input.substitutions, input.supplements, now));
+
+  try {
+    await d1Batch(statements);
+  } catch (error) {
+    if (isMealPlanVersionConflictError(error)) throw new MealPlanVersionConflictError();
+    throw error;
+  }
   const rows = await d1Query<MealPlanRow>("SELECT * FROM meal_plans WHERE id = ?1 LIMIT 1", [planId]);
   return rows[0] ? (await hydrateMealPlans(rows))[0] : null;
 }
@@ -621,6 +764,8 @@ function buildMealPlanDetailStatements(
         foodSource: item.food_source ?? null,
         foodRefId: item.food_ref_id ?? null,
         householdMeasureId: item.household_measure_id ?? null,
+        foodNameSnapshot: item.food_name_snapshot ?? null,
+        nutritionSnapshot: item.nutrition_snapshot ?? null,
         order: itemIndex,
         now,
       });
@@ -659,8 +804,8 @@ function buildMealPlanDetailStatements(
     params: [JSON.stringify(mealRows)],
   });
   if (itemRows.length) statements.push({
-    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, household_measure_id, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, household_measure_id, food_name_snapshot, nutrition_snapshot, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.foodNameSnapshot'), json_extract(value,'$.nutritionSnapshot'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(itemRows)],
   });
   if (weeklyRows.length) statements.push({

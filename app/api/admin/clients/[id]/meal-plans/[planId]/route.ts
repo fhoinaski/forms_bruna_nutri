@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
-import { deleteMealPlan, getClientMealPlans, updateMealPlan } from "@/lib/repositories/meal-plans";
+import { deleteMealPlan, getClientMealPlans, MealPlanVersionConflictError, updateMealPlan } from "@/lib/repositories/meal-plans";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
@@ -68,6 +68,8 @@ const UpdateSchema = z.object({
   weekly_slots: z.array(weeklySlotSchema).max(14).optional(),
   substitutions: z.array(substitutionSchema).max(120),
   supplements: z.array(supplementSchema).max(80),
+  // Optimistic concurrency (P1-A): versao esperada; 409 em save concorrente.
+  expectedVersion: z.number().int().positive().optional(),
 }).strict();
 
 export async function PUT(
@@ -110,7 +112,19 @@ export async function PUT(
 
   const previousPlan = (await getClientMealPlans(id)).find((item) => item.id === planId) ?? null;
   const previousRecipeIds = new Set(previousPlan?.meals.map((meal) => meal.source_recipe_id).filter(Boolean) ?? []);
-  const plan = await updateMealPlan(planId, id, parsed.data);
+  let plan: Awaited<ReturnType<typeof updateMealPlan>> = null;
+  try {
+    plan = await updateMealPlan(planId, id, parsed.data, {
+      expectedVersion: parsed.data.expectedVersion,
+      changedByAdminId: admin.sub,
+      source: "manual",
+    });
+  } catch (error) {
+    if (error instanceof MealPlanVersionConflictError) {
+      return NextResponse.json({ message: error.message }, { status: 409 });
+    }
+    throw error;
+  }
   if (!plan) return NextResponse.json({ message: "Plano não encontrado." }, { status: 404 });
 
   await addTimelineEvent({
