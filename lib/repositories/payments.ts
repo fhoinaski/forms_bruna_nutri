@@ -178,7 +178,7 @@ export async function createPayment(input: CreatePaymentInput): Promise<string> 
 export async function updatePayment(
   id: string,
   data: Partial<CreatePaymentInput>
-): Promise<void> {
+): Promise<boolean> {
   const updates: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
@@ -190,16 +190,25 @@ export async function updatePayment(
     }
   }
 
-  if (!updates.length) return;
+  if (!updates.length) {
+    const rows = await d1Query<{ id: string }>(`SELECT id FROM payments WHERE id = ?1`, [id]);
+    return Boolean(rows[0]);
+  }
+
   updates.push(`updated_at = ?${idx++}`);
   params.push(new Date().toISOString());
   params.push(id);
 
-  await d1Execute(`UPDATE payments SET ${updates.join(", ")} WHERE id = ?${idx}`, params);
+  const rows = await d1Query<{ id: string }>(
+    `UPDATE payments SET ${updates.join(", ")} WHERE id = ?${idx} RETURNING id`,
+    params
+  );
+  return Boolean(rows[0]);
 }
 
-export async function deletePayment(id: string): Promise<void> {
-  await d1Execute(`DELETE FROM payments WHERE id = ?1`, [id]);
+export async function deletePayment(id: string): Promise<boolean> {
+  const rows = await d1Query<{ id: string }>(`DELETE FROM payments WHERE id = ?1 RETURNING id`, [id]);
+  return Boolean(rows[0]);
 }
 
 export async function getPaymentMetrics(): Promise<PaymentMetrics> {

@@ -43,7 +43,10 @@ export async function PATCH(
     return NextResponse.json({ message: "Dados invalidos." }, { status: 400 });
   }
 
-  await updatePayment(id, parsed.data);
+  const found = await updatePayment(id, parsed.data);
+  if (!found) {
+    return NextResponse.json({ message: "Cobranca nao encontrada." }, { status: 404 });
+  }
   return NextResponse.json({ ok: true });
 }
 
@@ -57,6 +60,9 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  await deletePayment(id);
+  const found = await deletePayment(id);
+  if (!found) {
+    return NextResponse.json({ message: "Cobranca nao encontrada." }, { status: 404 });
+  }
   return NextResponse.json({ ok: true });
 }
