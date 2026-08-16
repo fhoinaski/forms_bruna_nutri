@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, CalendarDays, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, CalendarDays, CheckCircle2, Copy, Plus, Save, Trash2 } from "lucide-react";
 import { MealItemsEditor, cleanMealsForSave, type Meal } from "@/components/dashboard/MealItemsEditor";
 import { MealPlanNutritionSummary } from "@/components/nutrition/MealPlanNutritionSummary";
+import { useDebouncedFoodSearch, type FoodSuggestion } from "@/hooks/use-debounced-food-search";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
   PROTOCOL_TEMPLATE_TARGET_GROUPS,
@@ -53,6 +54,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState("");
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null);
   const [deleteDraft, setDeleteDraft] = useState<{ planId: string; title: string; status: MealPlanStatus } | null>(null);
   const [templateSaving, setTemplateSaving] = useState(false);
@@ -100,12 +102,16 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   function selectPlan(id: string) {
     setSelectedPlanId(id);
     setPlan(plans.find((item) => item.id === id) ?? null);
+    setConflict("");
+    setError("");
+    setMessage("");
   }
 
   async function createFromTemplate() {
     setCreating(true);
     setError("");
     setMessage("");
+    setConflict("");
     try {
       const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, {
         method: "POST",
@@ -124,11 +130,60 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     }
   }
 
+  /**
+   * Cria um plano novo (fluxo ja existente de "criar por modelo") e, antes
+   * do primeiro save, pre-preenche localmente refeicoes/substituicoes/
+   * suplementos a partir do plano atualmente selecionado. Nenhum endpoint
+   * novo: o backend sempre gera ids novos a cada save (meal-plans.ts), entao
+   * duplicar e so uma copia estrutural em memoria que a nutricionista revisa
+   * antes de persistir.
+   */
+  async function duplicateCurrentPlan() {
+    if (!plan) return;
+    const source = plan;
+    setCreating(true);
+    setError("");
+    setMessage("");
+    setConflict("");
+    try {
+      const groupForNewPlan = PROTOCOL_TEMPLATE_TARGET_GROUPS.find((group) => group === source.target_group) ?? targetGroup;
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetGroup: groupForNewPlan }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Nao foi possivel duplicar o plano.");
+      await loadPlans(data.id);
+      setPlan((current) => current && current.id === data.id
+        ? {
+            ...current,
+            title: `${source.title} (cópia)`,
+            meals: source.meals.map((meal) => ({ ...meal, items: meal.items.map((item) => ({ ...item })) })),
+            weekly_slots: (source.weekly_slots ?? []).map((slot) => ({ ...slot })),
+            substitutions: source.substitutions.map((item) => ({ ...item })),
+            supplements: source.supplements.map((item) => ({ ...item })),
+            target_energy_kcal: source.target_energy_kcal ?? null,
+            target_protein_g: source.target_protein_g ?? null,
+            target_carbohydrate_g: source.target_carbohydrate_g ?? null,
+            target_fat_g: source.target_fat_g ?? null,
+          }
+        : current);
+      setMessage("Plano duplicado a partir do selecionado. Revise e salve — nada foi persistido ainda.");
+      onSaved?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Nao foi possivel duplicar o plano.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function save(nextStatus?: MealPlanStatus) {
     if (!plan) return;
     setSaving(true);
     setError("");
     setMessage("");
+    setConflict("");
     try {
       const payload = {
         title: plan.title,
@@ -158,6 +213,11 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             instructions: item.instructions ?? null,
             notes: item.notes ?? null,
           })),
+        // Optimistic concurrency: o backend ja suporta este campo (409 se
+        // outra sessao salvou por cima); antes desta mudanca o cliente
+        // nunca enviava expectedVersion, entao esse caminho nunca era
+        // exercitado pela UI e uma sobrescrita silenciosa era possivel.
+        expectedVersion: plan.version,
       };
       const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/${plan.id}`, {
         method: "PUT",
@@ -165,7 +225,13 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         body: JSON.stringify(payload),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message ?? "Nao foi possivel salvar o plano.");
+      if (!response.ok) {
+        if (response.status === 409) {
+          setConflict(data.message ?? "O plano alimentar foi atualizado em outra sessao. Recarregue antes de salvar.");
+          return;
+        }
+        throw new Error(data.message ?? "Nao foi possivel salvar o plano.");
+      }
       await loadPlans(data.id);
       setMessage(nextStatus === "active" ? "Plano ativado no portal do cliente." : "Plano alimentar salvo.");
       onSaved?.();
@@ -174,6 +240,11 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     } finally {
       setSaving(false);
     }
+  }
+
+  async function reloadAfterConflict() {
+    setConflict("");
+    await loadPlans(plan?.id);
   }
 
   async function confirmRemovePlan() {
@@ -258,6 +329,19 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
 
       {message && <p className="rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] px-4 py-3 text-sm text-[#607A56]">{message}</p>}
       {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {conflict && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p>{conflict}</p>
+          <p className="mt-1 text-xs text-amber-700">Suas edicoes nesta tela ainda nao foram salvas. Recarregar traz a versao mais recente, descartando o que voce editou aqui.</p>
+          <button
+            type="button"
+            onClick={() => void reloadAfterConflict()}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+          >
+            Recarregar plano
+          </button>
+        </div>
+      )}
 
       {plans.length > 0 && (
         <div className="flex min-w-0 gap-2 overflow-x-auto pb-1">
@@ -357,13 +441,9 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             labels={["Nome", "Dose", "Un.", "Como usar"]}
           />
 
-          <EditableList
-            title="Substituicoes"
+          <SubstitutionsEditor
             items={plan.substitutions}
             onChange={(substitutions) => setPlan({ ...plan, substitutions })}
-            emptyItem={{ base_food: "", option_food: "", quantity: "", unit: "", notes: "" }}
-            fields={["base_food", "option_food", "quantity", "unit"]}
-            labels={["Alimento base", "Pode trocar por", "Qtd.", "Un."]}
           />
 
           <div id="meal-plan-actions" className="flex flex-col gap-3 border-t border-[#EDE1D6] pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -377,6 +457,10 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               {deleting ? "Excluindo..." : "Excluir plano"}
             </button>
             <div className="flex flex-col gap-3 sm:flex-row">
+              <button type="button" onClick={() => void duplicateCurrentPlan()} disabled={saving || deleting || creating || plan.meals.length === 0} className="brand-btn-secondary w-full sm:w-auto">
+                <Copy className="h-4 w-4" />
+                Duplicar este plano
+              </button>
               <button type="button" onClick={openSavePlanAsTemplate} disabled={saving || deleting || plan.meals.length === 0} className="brand-btn-secondary w-full sm:w-auto">
                 <Save className="h-4 w-4" />
                 Salvar como modelo
@@ -631,6 +715,125 @@ export function EditableList<T extends Record<string, string | null | undefined>
           </button>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Lista de substituicoes com autocomplete de alimento nos campos base/opcao
+ * (reaproveita a mesma busca do editor de refeicoes via useDebouncedFoodSearch).
+ * Continua sendo uma lista plana sem vinculo com food_ref_id — so poupa
+ * digitacao repetida do nome do alimento (sem mudanca de schema/contrato).
+ */
+function SubstitutionsEditor({ items, onChange }: { items: Substitution[]; onChange: (items: Substitution[]) => void }) {
+  const [activeField, setActiveField] = useState("");
+  const [query, setQuery] = useState("");
+  const { results, loading } = useDebouncedFoodSearch(activeField ? query : "");
+
+  function updateItem(index: number, patch: Partial<Substitution>) {
+    onChange(items.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Substituicoes</h3>
+        <button
+          type="button"
+          onClick={() => onChange([...items, { base_food: "", option_food: "", quantity: "", unit: "", notes: "" }])}
+          className="brand-btn-secondary w-full sm:w-auto"
+        >
+          <Plus className="h-4 w-4" />
+          Adicionar
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-[#D9C4B2] px-4 py-5 text-center text-sm text-[#9A8B80]">Nenhum item cadastrado.</p>
+      ) : items.map((item, index) => (
+        <div key={index} className="grid min-w-0 gap-2 md:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
+          <FoodAutocompleteField
+            value={item.base_food}
+            placeholder="Alimento base"
+            active={activeField === `${index}:base`}
+            results={results}
+            loading={loading}
+            onFocus={() => { setActiveField(`${index}:base`); setQuery(item.base_food); }}
+            onBlur={() => window.setTimeout(() => setActiveField(""), 140)}
+            onChange={(value) => { updateItem(index, { base_food: value }); setQuery(value); }}
+            onSelect={(name) => { updateItem(index, { base_food: name }); setActiveField(""); }}
+          />
+          <FoodAutocompleteField
+            value={item.option_food}
+            placeholder="Pode trocar por"
+            active={activeField === `${index}:option`}
+            results={results}
+            loading={loading}
+            onFocus={() => { setActiveField(`${index}:option`); setQuery(item.option_food); }}
+            onBlur={() => window.setTimeout(() => setActiveField(""), 140)}
+            onChange={(value) => { updateItem(index, { option_food: value }); setQuery(value); }}
+            onSelect={(name) => { updateItem(index, { option_food: name }); setActiveField(""); }}
+          />
+          <input value={item.quantity ?? ""} onChange={(event) => updateItem(index, { quantity: event.target.value })} className="brand-input" placeholder="Qtd." aria-label="Quantidade da substituicao" />
+          <input value={item.unit ?? ""} onChange={(event) => updateItem(index, { unit: event.target.value })} className="brand-input" placeholder="Un." aria-label="Unidade da substituicao" />
+          <button type="button" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))} className="inline-flex h-11 items-center justify-center rounded-xl px-3 text-red-600 hover:bg-red-50" aria-label="Remover substituicao" title="Remover">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FoodAutocompleteField({
+  value,
+  placeholder,
+  active,
+  results,
+  loading,
+  onFocus,
+  onBlur,
+  onChange,
+  onSelect,
+}: {
+  value: string;
+  placeholder: string;
+  active: boolean;
+  results: FoodSuggestion[];
+  loading: boolean;
+  onFocus: () => void;
+  onBlur: () => void;
+  onChange: (value: string) => void;
+  onSelect: (name: string) => void;
+}) {
+  const showDropdown = active && value.trim().length >= 2 && (loading || results.length > 0);
+  return (
+    <div className="relative min-w-0">
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        className="brand-input"
+        placeholder={placeholder}
+        aria-label={placeholder}
+      />
+      {showDropdown && (
+        <div aria-label="Sugestoes de alimentos" className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-56 overflow-y-auto rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
+          {loading ? (
+            <p className="px-3 py-2 text-sm text-[#8C6E52]">Buscando...</p>
+          ) : results.map((suggestion) => (
+            <button
+              key={suggestion.numero}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onSelect(suggestion.descricao)}
+              className="block w-full rounded-lg px-3 py-2 text-left text-sm text-[#3A3028] transition-colors hover:bg-[#FAF7F2]"
+            >
+              {suggestion.descricao}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
