@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Database, Edit3, Loader2, Plus, Save, Search, ShieldCheck, X } from "lucide-react";
+import { AlertCircle, BarChart3, Calculator, Database, Edit3, Loader2, Plus, Save, Search, ShieldCheck, X } from "lucide-react";
 import {
   FOOD_CLINICAL_TRAIT_CODES,
   FOOD_CLINICAL_TRAIT_LABELS,
@@ -37,6 +37,7 @@ type NutrientValue = {
   label: string;
   unit: string;
   value: number | null;
+  basis?: { amount: number; unit: "g" | "ml" };
 };
 
 type FoodPortion = {
@@ -64,6 +65,19 @@ type FoodDetail = {
   };
 };
 
+type NutrientCalculation = {
+  quantity: string;
+  unit: string;
+  portionId: string | null;
+  grams: number;
+  resolution: {
+    method: string;
+    confidence: string;
+    warning?: string;
+  };
+  nutrients: NutrientValue[];
+};
+
 type EditableTrait = {
   code: FoodClinicalTraitCode;
   relation: FoodClinicalTraitRelation | "";
@@ -78,6 +92,13 @@ type NewFoodForm = {
   carbohydrate_g: string;
   fat_g: string;
   fiber_g: string;
+};
+
+type PortionForm = {
+  description: string;
+  gram_equivalent: string;
+  source: string;
+  confidence: "high" | "medium" | "low";
 };
 
 const sourceFilters: Array<{ value: "ALL" | FoodSource; label: string; empty: string }> = [
@@ -104,6 +125,9 @@ const relationLabels: Record<FoodClinicalTraitRelation, string> = {
 };
 
 const macroCodes = new Set(["ENERGY_KCAL", "PROTEIN", "CARBOHYDRATE", "TOTAL_FAT", "FIBER"]);
+const macroGroupCodes = new Set(["ENERGY_KCAL", "ENERGY_KJ", "PROTEIN", "CARBOHYDRATE", "SUGARS", "TOTAL_FAT", "SATURATED_FAT", "MONOUNSATURATED_FAT", "POLYUNSATURATED_FAT", "TRANS_FAT", "FIBER"]);
+const mineralCodes = new Set(["SODIUM", "CALCIUM", "IRON", "MAGNESIUM", "PHOSPHORUS", "POTASSIUM", "ZINC", "COPPER", "MANGANESE", "SELENIUM"]);
+const vitaminCodes = new Set(["VITAMIN_A", "VITAMIN_C", "VITAMIN_D", "VITAMIN_E", "VITAMIN_K", "THIAMIN", "RIBOFLAVIN", "NIACIN", "PANTOTHENIC_ACID", "VITAMIN_B6", "FOLATE", "VITAMIN_B12"]);
 const emptyNewFood: NewFoodForm = {
   source: "CUSTOM",
   name: "",
@@ -114,6 +138,7 @@ const emptyNewFood: NewFoodForm = {
   fat_g: "",
   fiber_g: "",
 };
+const emptyPortionForm: PortionForm = { description: "", gram_equivalent: "", source: "professional", confidence: "medium" };
 
 export default function FoodsPage() {
   const [foods, setFoods] = useState<FoodSearchItem[]>([]);
@@ -129,6 +154,14 @@ export default function FoodsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [quantity, setQuantity] = useState("100");
+  const [unit, setUnit] = useState("g");
+  const [portionId, setPortionId] = useState("__grams__");
+  const [calculation, setCalculation] = useState<NutrientCalculation | null>(null);
+  const [calculationLoading, setCalculationLoading] = useState(false);
+  const [portionForm, setPortionForm] = useState<PortionForm>(emptyPortionForm);
+  const [savingPortion, setSavingPortion] = useState(false);
+  const [compare, setCompare] = useState<FoodDetail[]>([]);
   const [error, setError] = useState("");
   const [detailError, setDetailError] = useState("");
 
@@ -179,12 +212,47 @@ export default function FoodsPage() {
       if (!response.ok) throw new Error(data.message ?? "Nao foi possivel carregar o detalhe.");
       setDetail(data);
       setDraft(toDraft(data.clinical.profile.traits));
+      setQuantity("100");
+      setUnit("g");
+      setPortionId("__grams__");
+      setCalculation(null);
     } catch (cause) {
       setDetailError(cause instanceof Error ? cause.message : "Nao foi possivel carregar o detalhe.");
     } finally {
       setDetailLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!detail) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setCalculationLoading(true);
+      const params = new URLSearchParams({
+        source: detail.food.ref.source,
+        sourceId: detail.food.ref.sourceId,
+        quantity,
+        unit,
+      });
+      if (portionId !== "__grams__") params.set("portionId", portionId);
+      try {
+        const response = await fetch(`/api/admin/foods/nutrients?${params}`, { cache: "no-store", signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Nao foi possivel calcular nutrientes.");
+        setCalculation(data);
+      } catch (cause) {
+        if ((cause as Error).name === "AbortError") return;
+        setCalculation(null);
+        setDetailError(cause instanceof Error ? cause.message : "Nao foi possivel calcular nutrientes.");
+      } finally {
+        setCalculationLoading(false);
+      }
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [detail, quantity, unit, portionId]);
 
   async function saveProfile() {
     if (!detail || !detail.clinical.editable) return;
@@ -249,10 +317,46 @@ export default function FoodsPage() {
     }
   }
 
+  async function createPortion() {
+    if (!detail || !canEditPortions(detail.food.ref.source)) return;
+    setSavingPortion(true);
+    setDetailError("");
+    try {
+      const response = await fetch("/api/admin/foods/portions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          food_source: detail.food.ref.source,
+          food_ref_id: detail.food.ref.sourceId,
+          description: portionForm.description.trim(),
+          gram_equivalent: parseNumber(portionForm.gram_equivalent),
+          source: portionForm.source.trim() || "professional",
+          confidence: portionForm.confidence,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Nao foi possivel cadastrar a medida.");
+      setPortionForm(emptyPortionForm);
+      await loadDetail(detail.food.ref);
+    } catch (cause) {
+      setDetailError(cause instanceof Error ? cause.message : "Nao foi possivel cadastrar a medida.");
+    } finally {
+      setSavingPortion(false);
+    }
+  }
+
+  function addToCompare(foodDetail: FoodDetail) {
+    setCompare((current) => {
+      if (current.some((item) => sameRef(item.food.ref, foodDetail.food.ref))) return current;
+      return [...current, foodDetail].slice(-4);
+    });
+  }
+
   const selectedGroups = useMemo(() => groupTraits(detail?.clinical.profile.traits ?? []), [detail]);
   const activeEmptyText = sourceFilters.find((item) => item.value === source)?.empty ?? "Nenhum alimento encontrado.";
   const macros = detail?.food.nutrients.filter((nutrient) => macroCodes.has(nutrient.code)) ?? [];
-  const micros = detail?.food.nutrients.filter((nutrient) => !macroCodes.has(nutrient.code) && nutrient.value !== null) ?? [];
+  const calculatedMacros = calculation?.nutrients.filter((nutrient) => macroCodes.has(nutrient.code)) ?? [];
+  const nutrientGroups = useMemo(() => groupNutrients(detail?.food.nutrients ?? []), [detail]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 animate-fade-up">
@@ -344,7 +448,7 @@ export default function FoodsPage() {
                   <strong className="block truncate text-sm text-[#3A3028]">{food.name}</strong>
                   <span className="mt-1 block text-xs text-[#75675E]">{[food.brand, food.group].filter(Boolean).join(" · ") || "Sem marca informada"}</span>
                   <span className="mt-2 flex flex-wrap gap-3 text-xs text-[#75675E]">
-                    <NutrientInline label="kcal" value={food.energyKcal} unit="" />
+                    <NutrientInline label="kcal/100g" value={food.energyKcal} unit="" />
                     <NutrientInline label="P" value={food.proteinG} unit="g" />
                     <NutrientInline label="C" value={food.carbohydrateG} unit="g" />
                     <NutrientInline label="G" value={food.fatG} unit="g" />
@@ -363,6 +467,7 @@ export default function FoodsPage() {
             <div>
               <p className="brand-kicker">Detalhe do alimento</p>
               <h2 className="mt-1 font-serif text-2xl font-semibold text-[#3A3028]">{detail?.food.name ?? "Selecione um alimento"}</h2>
+              {detail && <p className="mt-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">Valores de composicao por 100g</p>}
             </div>
             {detail && <SourceBadge source={detail.food.ref.source} label={detail.food.sourceLabel} />}
           </div>
@@ -383,16 +488,77 @@ export default function FoodsPage() {
                 <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                   <InfoTerm label="Nome" value={detail.food.name} />
                   <InfoTerm label="Marca" value={detail.food.brand ?? "Sem informacao"} />
+                  <InfoTerm label="Grupo/categoria" value={detail.food.group ?? "Sem informacao"} />
                   <InfoTerm label="Source" value={detail.food.ref.source} />
                   <InfoTerm label="SourceId" value={detail.food.ref.sourceId} mono />
+                  <InfoTerm label="Descricao oficial" value={detail.food.name} />
+                  <InfoTerm label="Preparo estruturado" value="Nao informado pela fonte" />
                 </dl>
               </section>
 
-              <NutrientSection title="Macronutrientes" nutrients={macros} showMissing />
-              <NutrientSection title="Micronutrientes" nutrients={micros} emptyText="Sem micronutrientes informados para esta fonte." />
+              <NutrientSection title="Referencia por 100g" nutrients={macros} showMissing />
+
+              <section className="rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-4">
+                <div className="flex items-start gap-2">
+                  <Calculator className="mt-0.5 h-4 w-4 text-[#8C6E52]" />
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-[#8C6E52]">Calculadora de quantidade</h3>
+                    <p className="mt-1 text-xs text-[#75675E]">Calculado pelo motor nutricional central a partir da referencia do alimento e gramas resolvidos.</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)]">
+                  <label className="space-y-1">
+                    <span className="brand-label">Quantidade</span>
+                    <input value={quantity} onChange={(event) => setQuantity(event.target.value)} inputMode="decimal" className="brand-input bg-white" />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="brand-label">Medida</span>
+                    <select
+                      value={portionId}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setPortionId(value);
+                        setUnit(value === "__grams__" ? "g" : "");
+                      }}
+                      className="brand-input bg-white"
+                    >
+                      <option value="__grams__">Gramas (g)</option>
+                      {detail.portions.filter((portion) => typeof portion.gramWeight === "number").map((portion) => (
+                        <option key={portion.id} value={portion.id}>{portion.label} ({formatNullable(portion.gramWeight)} g)</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {portionId === "__grams__" && (
+                  <label className="mt-2 block space-y-1">
+                    <span className="brand-label">Unidade</span>
+                    <input value={unit} onChange={(event) => setUnit(event.target.value)} className="brand-input bg-white" />
+                  </label>
+                )}
+                <div className="mt-3">
+                  {calculationLoading ? (
+                    <p className="flex items-center gap-2 text-sm text-[#75675E]"><Loader2 className="h-4 w-4 animate-spin" /> Calculando...</p>
+                  ) : calculation ? (
+                    <>
+                      <p className="text-xs font-semibold text-[#75675E]">
+                        Gramas resolvidos: <strong className="text-[#3A3028]">{formatNullable(calculation.grams)} g</strong> · confiança {calculation.resolution.confidence}
+                      </p>
+                      {calculation.resolution.warning && <p className="mt-1 text-xs text-[#8C5F50]">{calculation.resolution.warning}</p>}
+                      <NutrientSection title="Nutrientes calculados" nutrients={calculatedMacros} showMissing compact />
+                    </>
+                  ) : (
+                    <p className="text-sm text-[#75675E]">Informe uma quantidade valida para calcular.</p>
+                  )}
+                </div>
+              </section>
+
+              <NutrientGroupSections groups={nutrientGroups} />
 
               <section>
-                <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-[#8C6E52]">Porcoes</h3>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-[#8C6E52]">Porcoes</h3>
+                  {canEditPortions(detail.food.ref.source) && <span className="text-xs font-semibold text-[#607A56]">Editavel</span>}
+                </div>
                 {detail.portions.length ? (
                   <div className="mt-3 grid gap-2">
                     {detail.portions.map((portion) => (
@@ -405,6 +571,52 @@ export default function FoodsPage() {
                 ) : (
                   <p className="mt-3 rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-4 text-sm text-[#75675E]">Sem medidas caseiras cadastradas.</p>
                 )}
+                {canEditPortions(detail.food.ref.source) && (
+                  <div className="mt-3 rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-3">
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px]">
+                      <label className="space-y-1">
+                        <span className="brand-label">Nova medida</span>
+                        <input value={portionForm.description} onChange={(event) => setPortionForm({ ...portionForm, description: event.target.value })} className="brand-input bg-white" placeholder="1 colher de sopa" />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="brand-label">Gramas</span>
+                        <input value={portionForm.gram_equivalent} onChange={(event) => setPortionForm({ ...portionForm, gram_equivalent: event.target.value })} inputMode="decimal" className="brand-input bg-white" />
+                      </label>
+                    </div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+                      <label className="space-y-1">
+                        <span className="brand-label">Fonte da medida</span>
+                        <input value={portionForm.source} onChange={(event) => setPortionForm({ ...portionForm, source: event.target.value })} className="brand-input bg-white" />
+                      </label>
+                      <label className="space-y-1">
+                        <span className="brand-label">Confiança</span>
+                        <select value={portionForm.confidence} onChange={(event) => setPortionForm({ ...portionForm, confidence: event.target.value as PortionForm["confidence"] })} className="brand-input bg-white">
+                          <option value="high">Alta</option>
+                          <option value="medium">Media</option>
+                          <option value="low">Baixa</option>
+                        </select>
+                      </label>
+                    </div>
+                    <button type="button" onClick={() => void createPortion()} disabled={savingPortion || !portionForm.description.trim() || !portionForm.gram_equivalent.trim()} className="brand-btn-secondary mt-3 w-full">
+                      <Plus className="h-4 w-4" />
+                      {savingPortion ? "Salvando..." : "Cadastrar medida"}
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-xl border border-[#EDE1D6] bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-[#8C6E52]">Comparador</h3>
+                    <p className="mt-1 text-xs text-[#75675E]">Padrao 100g vs 100g. Use alimentos com gramagem conhecida para comparar por porcao.</p>
+                  </div>
+                  <button type="button" onClick={() => addToCompare(detail)} className="brand-btn-secondary">
+                    <BarChart3 className="h-4 w-4" />
+                    Comparar
+                  </button>
+                </div>
+                <ComparisonTable items={compare} onRemove={(ref) => setCompare((current) => current.filter((item) => !sameRef(item.food.ref, ref)))} />
               </section>
 
               <section>
@@ -497,6 +709,18 @@ function groupTraits(traits: FoodClinicalTrait[]): Record<FoodClinicalTraitRelat
   };
 }
 
+function groupNutrients(nutrients: NutrientValue[]) {
+  return {
+    minerals: nutrients.filter((nutrient) => mineralCodes.has(nutrient.code)),
+    vitamins: nutrients.filter((nutrient) => vitaminCodes.has(nutrient.code)),
+    others: nutrients.filter((nutrient) => !macroGroupCodes.has(nutrient.code) && !mineralCodes.has(nutrient.code) && !vitaminCodes.has(nutrient.code)),
+  };
+}
+
+function canEditPortions(source: FoodSource): source is "CUSTOM" | "MANUFACTURER" {
+  return source === "CUSTOM" || source === "MANUFACTURER";
+}
+
 function formatNullable(value: number | null | undefined, fractionDigits = 1): string {
   if (value === null || value === undefined) return "Sem informacao";
   return Number(value).toLocaleString("pt-BR", { maximumFractionDigits: fractionDigits });
@@ -523,13 +747,13 @@ function InfoTerm({ label, value, mono = false }: { label: string; value: string
   );
 }
 
-function NutrientSection({ title, nutrients, showMissing = false, emptyText }: { title: string; nutrients: NutrientValue[]; showMissing?: boolean; emptyText?: string }) {
+function NutrientSection({ title, nutrients, showMissing = false, emptyText, compact = false }: { title: string; nutrients: NutrientValue[]; showMissing?: boolean; emptyText?: string; compact?: boolean }) {
   const visible = showMissing ? nutrients : nutrients.filter((nutrient) => nutrient.value !== null);
   return (
     <section>
       <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-[#8C6E52]">{title}</h3>
       {visible.length ? (
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className={`mt-3 grid grid-cols-2 gap-2 ${compact ? "sm:grid-cols-5" : "sm:grid-cols-3"}`}>
           {visible.map((nutrient) => (
             <div key={nutrient.code} className="rounded-xl border border-[#EDE1D6] bg-white px-3 py-2">
               <p className="text-xs text-[#75675E]">{nutrient.label}</p>
@@ -543,6 +767,59 @@ function NutrientSection({ title, nutrients, showMissing = false, emptyText }: {
         <p className="mt-3 rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-4 text-sm text-[#75675E]">{emptyText ?? "Sem dados para exibir."}</p>
       )}
     </section>
+  );
+}
+
+function NutrientGroupSections({ groups }: { groups: ReturnType<typeof groupNutrients> }) {
+  return (
+    <div className="space-y-4">
+      <NutrientSection title="Minerais" nutrients={groups.minerals} emptyText="Sem minerais informados para esta fonte." />
+      <NutrientSection title="Vitaminas" nutrients={groups.vitamins} emptyText="Sem vitaminas informadas para esta fonte." />
+      <NutrientSection title="Outros nutrientes" nutrients={groups.others} emptyText="Sem outros nutrientes informados para esta fonte." />
+    </div>
+  );
+}
+
+function ComparisonTable({ items, onRemove }: { items: FoodDetail[]; onRemove: (ref: FoodReference) => void }) {
+  const rows = ["ENERGY_KCAL", "PROTEIN", "CARBOHYDRATE", "TOTAL_FAT", "FIBER", "SODIUM", "CALCIUM", "IRON"];
+  if (items.length < 2) {
+    return <p className="mt-3 rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-3 text-sm text-[#75675E]">Adicione pelo menos 2 alimentos para comparar por 100g.</p>;
+  }
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="min-w-full text-left text-sm">
+        <thead>
+          <tr className="border-b border-[#EDE1D6] text-xs uppercase tracking-[0.08em] text-[#8C6E52]">
+            <th className="py-2 pr-3">Nutriente</th>
+            {items.map((item) => (
+              <th key={`${item.food.ref.source}:${item.food.ref.sourceId}`} className="min-w-40 px-3 py-2">
+                <span className="block truncate normal-case tracking-normal text-[#3A3028]">{item.food.name}</span>
+                <button type="button" onClick={() => onRemove(item.food.ref)} className="mt-1 text-[10px] font-semibold uppercase text-[#8C5F50]">Remover</button>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((code) => {
+            const definition = items.flatMap((item) => item.food.nutrients).find((nutrient) => nutrient.code === code);
+            if (!definition) return null;
+            return (
+              <tr key={code} className="border-b border-[#F2E8DE]">
+                <td className="py-2 pr-3 font-medium text-[#3A3028]">{definition.label}</td>
+                {items.map((item) => {
+                  const nutrient = item.food.nutrients.find((candidate) => candidate.code === code);
+                  return (
+                    <td key={`${item.food.ref.source}:${item.food.ref.sourceId}:${code}`} className="px-3 py-2 text-[#75675E]">
+                      {nutrient?.value === null || nutrient?.value === undefined ? "Sem informacao" : `${formatNullable(nutrient.value)} ${nutrient.unit}`}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

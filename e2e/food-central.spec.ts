@@ -35,8 +35,10 @@ test.describe("Central de Alimentos", () => {
     await expect(page.getByRole("heading", { name: /arroz/i })).toBeVisible();
     await expect(page.getByText("TACO").first()).toBeVisible();
     await expect(page.getByText("Somente leitura para esta fonte.")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Macronutrientes" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Micronutrientes" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Referencia por 100g" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Calculadora de quantidade" })).toBeVisible();
+    await expect(page.getByText(/Gramas resolvidos:/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Minerais" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Porcoes" })).toBeVisible();
 
     await page.getByLabel("Buscar alimento").fill("rice");
@@ -47,6 +49,7 @@ test.describe("Central de Alimentos", () => {
     await expect(page.getByText(/Perfil clinico estruturado ainda nao disponivel/i)).toBeVisible();
     await expect(page.getByText("Cálcio")).toBeVisible();
     await expect(page.getByText("10 mg")).toBeVisible();
+    await expect(page.getByText("Sem medidas caseiras cadastradas.")).toBeVisible();
 
     await page.getByRole("button", { name: "Personalizados" }).click();
     await page.getByLabel("Buscar alimento").fill(customName);
