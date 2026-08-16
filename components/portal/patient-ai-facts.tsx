@@ -96,6 +96,20 @@ function FoodAlternativesFacts({
   onRequestReview?: (alternative: FoodAlternativeOption) => void;
 }) {
   if (!data.found) {
+    if (data.reason === "ambiguous_item") {
+      return (
+        <div className="space-y-1.5">
+          <p className="text-xs text-[#75675E]">Encontrei mais de uma refeição com esse alimento — qual delas?</p>
+          <ul className="space-y-1 text-sm text-[#3A3028]">
+            {data.matches.map((match) => (
+              <li key={match.itemId} className="rounded-lg border border-[#E6D5C5] bg-white px-3 py-2">
+                <strong>{match.food}</strong> — {match.mealName}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
     return (
       <p className="text-xs text-[#75675E]">
         {data.reason === "item_not_in_plan" ? "Não encontrei esse alimento no seu plano atual." : "Não encontrei um plano alimentar ativo."}
@@ -105,6 +119,7 @@ function FoodAlternativesFacts({
   return (
     <div className="space-y-2">
       <p className="text-xs text-[#75675E]">Em {data.mealName}: <strong>{data.currentFood}</strong></p>
+      {data.substitution && <FoodSubstitutionFacts substitution={data.substitution} />}
       {data.alternatives.length === 0 ? (
         <p className="text-xs text-[#75675E]">Não encontrei opções parecidas na base de alimentos.</p>
       ) : (
@@ -127,6 +142,39 @@ function FoodAlternativesFacts({
       )}
       <p className="text-[11px] italic text-[#9A8B80]">Essas opções não alteram seu plano automaticamente — enviar um pedido só avisa sua nutricionista para revisar.</p>
     </div>
+  );
+}
+
+/**
+ * Renderiza o resultado ESTRUTURADO da engine determinística
+ * (lib/nutrition/food-substitution.ts) — a quantidade em "safe" vem pronta
+ * do campo `targetQuantity`, nunca reformatada/recalculada aqui (secao 2/12
+ * do pedido: linguagem simples, sem jargão, mas o número nunca muda).
+ */
+function FoodSubstitutionFacts({ substitution }: { substitution: NonNullable<Extract<SearchAllowedFoodAlternativesOutput, { found: true }>["substitution"]> }) {
+  if (substitution.status === "safe") {
+    return (
+      <p className="rounded-lg border border-[#D9E4D3] bg-[#EEF3EA] px-3 py-2 text-sm text-[#3A3028]">
+        Você pode substituir <strong>{substitution.sourceQuantity} g de {substitution.sourceFoodName}</strong> por aproximadamente{" "}
+        <strong>{substitution.targetQuantity} g de {substitution.targetFoodName}</strong>, mantendo uma equivalência compatível com essa refeição.
+        Essa sugestão considera o seu plano atual e ainda precisa passar pela sua nutricionista.
+      </p>
+    );
+  }
+  if (substitution.status === "ambiguous") {
+    return (
+      <div className="rounded-lg border border-[#E6D5C5] bg-white px-3 py-2 text-sm text-[#3A3028]">
+        <p>Encontrei mais de uma opção parecida — qual delas você quis dizer?</p>
+        <ul className="mt-1 list-disc pl-4 text-xs text-[#75675E]">
+          {substitution.candidates.map((candidate) => <li key={candidate.id}>{candidate.name}</li>)}
+        </ul>
+      </div>
+    );
+  }
+  return (
+    <p className="rounded-lg border border-[#E7C9A9] bg-white px-3 py-2 text-xs leading-5 text-[#9B6F59]">
+      Essa troca precisa de uma avaliação da sua nutricionista. Você pode registrar sua dúvida para análise.
+    </p>
   );
 }
 

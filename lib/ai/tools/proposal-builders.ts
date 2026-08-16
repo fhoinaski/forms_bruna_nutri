@@ -207,6 +207,7 @@ const BUILDERS: Record<string, ProposalBuilder> = {
       itemId: output.itemId,
       appointmentId: output.appointmentId,
       clientTaskId: output.clientTaskId,
+      desiredFood: output.desiredFood,
       preview: output.preview,
     };
   },

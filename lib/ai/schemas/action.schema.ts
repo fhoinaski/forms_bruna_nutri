@@ -244,6 +244,16 @@ export const patientChangeRequestActionSchema = z.object({
   itemId: z.string().min(1).nullable().optional(),
   appointmentId: z.string().min(1).nullable().optional(),
   clientTaskId: z.string().min(1).nullable().optional(),
+  /**
+   * Alimento desejado no lugar do atual (so para requestType
+   * "food_substitution") — texto livre, NUNCA uma quantidade. O handler de
+   * confirmacao (proposal-handlers.ts) usa isto para RECALCULAR a
+   * substituicao pela engine determinística no momento de gravar — nunca
+   * confia num numero vindo daqui, porque nao existe campo de numero aqui
+   * (Killer Feature 4, secao 2/16/20 do pedido: estruturalmente impossivel
+   * o LLM injetar uma quantidade pronta).
+   */
+  desiredFood: z.string().max(120).nullable().optional(),
   preview: patientChangeRequestPreviewSchema,
   ...actionEnvelopeFields,
 });

@@ -18,6 +18,9 @@ import { getActiveMealPlan, getMealPlanById, updateMealPlan } from "@/lib/reposi
 import { applyMealPlanChangesWithPreview, MealPlanChangeValidationError } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { normalize } from "@/lib/nutrition/macros";
 import { createPatientRequest, findSimilarPendingPatientRequest } from "@/lib/repositories/patient-requests";
+import { computeFoodSubstitution } from "@/lib/ai/agents/patient/patient-portal-agent";
+import { writeAuditLog } from "@/lib/security/audit";
+import type { MealPlanItemPayload } from "@/lib/repositories/meal-plans";
 import { ClientDuplicateError } from "@/lib/clinical/client-identity";
 import { createProtocolAndApplyToClient } from "@/lib/repositories/client-protocols";
 import { createClientTasksBatch } from "@/lib/repositories/client-tasks";
@@ -459,16 +462,21 @@ const executePatientChangeRequest: ProposalHandler<"patient_change_request"> = a
   // Revalida ownership de CADA referencia opcional de novo — nunca confia
   // no que foi validado quando a proposta foi criada (secao 15 do pedido:
   // "toda entidade precisa ser revalidada contra o paciente autenticado").
+  let matchedItem: MealPlanItemPayload | null = null;
+  let matchedPlanVersion: number | null = null;
   if (action.mealPlanId) {
     const plan = await getActiveMealPlan(action.clientId);
     if (!plan || plan.id !== action.mealPlanId) {
       throw new ProposalExecutionError("O plano alimentar referenciado não pertence a este paciente.", 403);
     }
+    matchedPlanVersion = plan.version;
     if (action.mealId) {
       const meal = plan.meals.find((candidate) => candidate.id === action.mealId);
       if (!meal) throw new ProposalExecutionError("A refeição referenciada não pertence a esse plano.", 422);
-      if (action.itemId && !meal.items.some((candidate) => candidate.id === action.itemId)) {
-        throw new ProposalExecutionError("O item referenciado não pertence a essa refeição.", 422);
+      if (action.itemId) {
+        const item = meal.items.find((candidate) => candidate.id === action.itemId);
+        if (!item) throw new ProposalExecutionError("O item referenciado não pertence a essa refeição.", 422);
+        matchedItem = item;
       }
     }
   }
@@ -501,19 +509,64 @@ const executePatientChangeRequest: ProposalHandler<"patient_change_request"> = a
     throw new ProposalExecutionError("Você já tem uma solicitação parecida aguardando revisão.", 409);
   }
 
+  // Killer Feature 4 (secao 16/20 do pedido): se for um pedido de
+  // substituicao alimentar referenciando um item real do plano, RECALCULA a
+  // equivalencia agora, contra o plano ATUAL — nunca reutiliza um numero
+  // computado antes (proposta pode ter ficado pendente por um tempo, o
+  // plano pode ter mudado) e nunca aceita uma quantidade vinda do modelo:
+  // nao existe nenhum campo de quantidade em `action` para isso, so
+  // `desiredFood` (texto). O resultado vira parte do resumo persistido,
+  // nunca um numero solto que alguem poderia ter forjado no meio do caminho.
+  let aiSummary = action.aiSummary ?? null;
+  let substitutionAuditMetadata: Record<string, unknown> | null = null;
+  if (action.requestType === "food_substitution" && matchedItem && action.desiredFood) {
+    const substitution = await computeFoodSubstitution(matchedItem, action.desiredFood);
+    const versionLabel = matchedPlanVersion !== null ? ` (calculado contra a versão ${matchedPlanVersion} do plano)` : "";
+    if (substitution.status === "safe") {
+      aiSummary = `Sugestão calculada pela engine: trocar ${substitution.sourceQuantity} g de ${substitution.sourceFoodName} por ${substitution.targetQuantity} g de ${substitution.targetFoodName} (equivalência de energia, ${substitution.deltaPercent >= 0 ? "+" : ""}${substitution.deltaPercent}%)${versionLabel}.`;
+    } else {
+      aiSummary = `${action.aiSummary ?? "Pedido de substituição alimentar."} — cálculo automático não disponível: ${substitution.reason}${versionLabel}.`;
+    }
+    substitutionAuditMetadata = {
+      status: substitution.status,
+      mealPlanVersion: matchedPlanVersion,
+      sourceFood: matchedItem.food,
+      sourceQuantity: matchedItem.quantity,
+      sourceUnit: matchedItem.unit,
+      desiredFood: action.desiredFood,
+      result: substitution.status === "safe"
+        ? { sourceFoodId: substitution.sourceFoodId, sourceQuantity: substitution.sourceQuantity, targetFoodId: substitution.targetFoodId, targetFoodName: substitution.targetFoodName, targetQuantity: substitution.targetQuantity, equivalenceBasis: substitution.equivalenceBasis, deltaPercent: substitution.deltaPercent }
+        : { reason: substitution.reason },
+    };
+  }
+
   // O UNICO side effect desta confirmacao e criar a linha do pedido — nunca
   // updateMealPlan, updateNutritionRecord ou qualquer outra escrita clinica.
   const requestId = await createPatientRequest({
     clientId: action.clientId,
     requestType: action.requestType,
     patientText: action.patientText,
-    aiSummary: action.aiSummary ?? null,
+    aiSummary,
     mealPlanId: action.mealPlanId ?? null,
     mealId: action.mealId ?? null,
     itemId: action.itemId ?? null,
     appointmentId: action.appointmentId ?? null,
     clientTaskId: action.clientTaskId ?? null,
   });
+
+  // Rastreabilidade (secao 7 do pedido) — nunca grava patientText/prompt
+  // completo aqui (isso ja fica em patient_requests, minimizado); so o
+  // suficiente para responder "de onde saiu essa substituicao" depois: quem,
+  // qual plano/versao, qual item, qual engine, qual resultado, sempre
+  // escalado (nunca aplicado automaticamente nesta versao).
+  if (substitutionAuditMetadata) {
+    await writeAuditLog({
+      action: "patient_food_substitution_calculated",
+      entityType: "patient_request",
+      entityId: requestId,
+      metadata: { clientId: action.clientId, mealPlanId: action.mealPlanId ?? null, mealId: action.mealId ?? null, itemId: action.itemId ?? null, engine: "lib/nutrition/food-substitution.ts", autoResolved: false, escalated: true, ...substitutionAuditMetadata },
+    });
+  }
 
   return { data: { requestId } };
 };

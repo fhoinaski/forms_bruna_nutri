@@ -159,6 +159,36 @@ describe("executeSearchAllowedFoodAlternatives — ancorado no proprio plano (se
     const result = await executeSearchAllowedFoodAlternatives("client-1", { currentFood: "banana" });
     expect(result).toEqual({ found: false, reason: "meal_plan_not_found" });
   });
+
+  it("Killer Feature 4 (seção 9): mesmo alimento em mais de uma refeição -> ambiguous_item, nunca escolhe a primeira ocorrência silenciosamente", async () => {
+    const planWithTwoRices = makePlan({
+      meals: [
+        { id: "meal-almoco", name: "Almoço", suggested_time: "12:00", notes: null, source_recipe_id: null, items: [{ id: "item-1", food: "Arroz, tipo 1, cozido", quantity: "100", unit: "g", notes: null }] },
+        { id: "meal-jantar", name: "Jantar", suggested_time: "19:00", notes: null, source_recipe_id: null, items: [{ id: "item-2", food: "Arroz, tipo 1, cozido", quantity: "80", unit: "g", notes: null }] },
+      ],
+    });
+    vi.doMock("@/lib/repositories/meal-plans", () => ({ getActiveMealPlan: vi.fn().mockResolvedValue(planWithTwoRices) }));
+    const { executeSearchAllowedFoodAlternatives } = await import("../lib/ai/agents/patient/patient-portal-agent");
+    const result = await executeSearchAllowedFoodAlternatives("client-1", { currentFood: "arroz" });
+    expect(result).toEqual({
+      found: false,
+      reason: "ambiguous_item",
+      matches: [
+        { mealId: "meal-almoco", mealName: "Almoço", itemId: "item-1", food: "Arroz, tipo 1, cozido" },
+        { mealId: "meal-jantar", mealName: "Jantar", itemId: "item-2", food: "Arroz, tipo 1, cozido" },
+      ],
+    });
+  });
+
+  it("Killer Feature 4: quando desiredFood é informado e o item é único, devolve substitution com quantidade calculada pela engine", async () => {
+    vi.doMock("@/lib/repositories/meal-plans", () => ({ getActiveMealPlan: vi.fn().mockResolvedValue(makePlan()) }));
+    const { executeSearchAllowedFoodAlternatives } = await import("../lib/ai/agents/patient/patient-portal-agent");
+    const result = await executeSearchAllowedFoodAlternatives("client-1", { currentFood: "pão francês", desiredFood: "batata, inglesa, cozida" });
+    expect(result.found).toBe(true);
+    if (!result.found) throw new Error("esperava found true");
+    expect(result.mealPlanVersion).toBe(2);
+    expect(result.substitution).toBeDefined();
+  });
 });
 
 describe("executeNavigatePatientPortal — allow-list fechada (secao 33)", () => {

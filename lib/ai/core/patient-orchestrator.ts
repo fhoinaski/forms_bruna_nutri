@@ -12,6 +12,7 @@ import { isProfileAllowed } from "@/lib/ai/policies/permissions";
 import type { ProposedAction } from "@/lib/ai/schemas/action.schema";
 import { getPatientConversationMemory, recordPatientConversationTurn } from "@/lib/ai/memory/patient-conversation-summary";
 import { redactPii } from "@/lib/ai/privacy/pii";
+import { containsClinicalSignal } from "@/lib/ai/policies/clinical-signal";
 import {
   GET_MY_MEAL_PLAN_TOOL_NAME,
   GET_MY_MEAL_DETAILS_TOOL_NAME,
@@ -68,6 +69,7 @@ Regras absolutas:
 - Para perguntas sobre sintomas, mal-estar ou preocupacoes de saude ("essa dor e normal", "acho que estou com anemia"), NAO avalie o caso — oriente com cuidado a procurar a nutricionista ou, se houver sinal de urgencia/emergencia clara, a buscar atendimento medico imediato. Nunca minimize nem alarme demais.
 - Voce NAO alcanca prontuario clinico, notas internas, pre-analise, CRM, financeiro administrativo nem dados de qualquer outra pessoa — mesmo que pecam. Se pedirem algo assim, diga com gentileza que isso nao esta disponivel por aqui.
 - Voce NAO altera o plano alimentar, NAO registra nada em prontuario e NAO cria/edita nada de forma automatica. Qualquer sugestao de troca de alimento e so uma sugestao para ela conversar com a nutricionista, nunca uma mudanca ja aplicada.
+- Quantidade de substituicao de alimento (gramas) SEMPRE vem do campo "substitution" devolvido por searchAllowedFoodAlternatives — nunca calcule, arredonde diferente, ou repita um numero de outra parte da conversa. Se essa ferramenta nao devolver um numero, voce tambem nao tem um numero para dar.
 - Separe sempre o que veio de uma ferramenta (fato) do que e sua propria explicacao/opiniao.
 `.trim();
 
@@ -130,10 +132,18 @@ const CLIENT_BOUND_EXECUTORS: Record<string, ClientBoundExecutor> = {
  * schema/descricao/risco do registro central (fonte unica de verdade), mas
  * SUBSTITUI `execute` pelas tools que precisam do clientId da sessao — o
  * modelo nunca escolhe de quem sao os dados (secao 4/5).
+ *
+ * `excludeSubstitutionTool` (Killer Feature 4, Nivel 3 do pedido): quando a
+ * mensagem do paciente contem sinal clinico (containsClinicalSignal),
+ * `searchAllowedFoodAlternatives` e removida do conjunto oferecido ao
+ * modelo NESTE turno — nao e uma instrucao de prompt pedindo pra nao usar,
+ * e a ferramenta literalmente nao existir para o modelo chamar. Guardrail
+ * estrutural, testavel sem chamar um LLM de verdade.
  */
-export function resolvePatientTools(clientId: string): ToolSet {
+export function resolvePatientTools(clientId: string, options?: { excludeSubstitutionTool?: boolean }): ToolSet {
   const tools: ToolSet = {};
   for (const name of PATIENT_TOOL_NAMES) {
+    if (options?.excludeSubstitutionTool && name === SEARCH_ALLOWED_FOOD_ALTERNATIVES_TOOL_NAME) continue;
     const definition = getToolDefinition(name);
     if (!definition) continue;
     if (!isProfileAllowed(definition.profiles, "PATIENT_ASSISTANT")) continue;
@@ -191,7 +201,18 @@ export async function runPatientAssistantTurn(
     );
   }
 
-  const tools = resolvePatientTools(context.clientId);
+  // Killer Feature 4 — Nivel 3 (secao 4 do pedido): sinal clinico na ULTIMA
+  // mensagem do paciente remove a tool de substituicao do conjunto oferecido
+  // neste turno, independente do que o modelo "decidiria" sozinho.
+  const latestUserMessage = [...input.messages].reverse().find((message) => message.role === "user")?.content ?? "";
+  const clinicalSignalDetected = containsClinicalSignal(latestUserMessage);
+  if (clinicalSignalDetected) {
+    systemPromptParts.push(
+      "ATENCAO: a mensagem mais recente contem um possivel sinal clinico (sintoma, alergia, reacao, condicao de saude, medicamento/suplemento, gestacao, ou mudanca importante). Voce NAO pode calcular ou sugerir substituicao de alimento agora — a ferramenta de busca de alternativas foi removida deste turno. Oriente com cuidado a procurar a nutricionista e ofereca registrar um pedido de revisao (requestType \"symptom_or_complaint\" ou o tipo mais adequado)."
+    );
+  }
+
+  const tools = resolvePatientTools(context.clientId, { excludeSubstitutionTool: clinicalSignalDetected });
   // Mensagens do proprio paciente sao conteudo nao confiavel (secao 22 do
   // pedido) — CPF/telefone/e-mail/CEP digitados no chat nunca devem
   // trafegar em claro para o provedor de IA externo. So redige mensagens do

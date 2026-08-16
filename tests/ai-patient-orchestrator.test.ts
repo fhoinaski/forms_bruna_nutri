@@ -83,6 +83,60 @@ describe("resolvePatientTools — allow-list real (nao so cosmetica)", () => {
   });
 });
 
+describe("resolvePatientTools — Killer Feature 4, Nivel 3 (guardrail estrutural, nao so de prompt)", () => {
+  it("excludeSubstitutionTool remove searchAllowedFoodAlternatives do ToolSet, mantendo as demais", async () => {
+    const { resolvePatientTools } = await import("../lib/ai/core/patient-orchestrator");
+    const tools = resolvePatientTools("client-1", { excludeSubstitutionTool: true });
+    const toolNames = Object.keys(tools);
+    expect(toolNames).not.toContain("searchAllowedFoodAlternatives");
+    expect(toolNames).toContain("getMyMealPlan");
+    expect(toolNames).toContain("requestProfessionalReview");
+  });
+
+  it("sem a opcao (comportamento padrao), searchAllowedFoodAlternatives continua disponivel", async () => {
+    const { resolvePatientTools } = await import("../lib/ai/core/patient-orchestrator");
+    expect(Object.keys(resolvePatientTools("client-1"))).toContain("searchAllowedFoodAlternatives");
+  });
+});
+
+describe("runPatientAssistantTurn — sinal clínico remove a tool de substituição do turno (Killer Feature 4, Nível 3)", () => {
+  function mockMemoryAndCapture() {
+    vi.doMock("@/lib/ai/memory/patient-conversation-summary", () => ({
+      getPatientConversationMemory: vi.fn().mockResolvedValue(null),
+      recordPatientConversationTurn: vi.fn().mockResolvedValue(undefined),
+    }));
+    let capturedTools: Record<string, unknown> = {};
+    vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({
+      generate: vi.fn(async (options: { tools: Record<string, unknown> }) => {
+        capturedTools = options.tools;
+        return { text: "ok", toolCalls: [], toolResults: [], steps: [], finishReason: "stop" };
+      }),
+    }));
+    return () => capturedTools;
+  }
+
+  it("mensagem com sinal clínico (sintoma) -> a tool de substituição NUNCA é oferecida ao modelo neste turno", async () => {
+    const getCapturedTools = mockMemoryAndCapture();
+    const { runPatientAssistantTurn } = await import("../lib/ai/core/patient-orchestrator");
+    const context = { clientId: "client-A" } as import("@/lib/ai/core/patient-context").PatientAssistantContext;
+    await runPatientAssistantTurn(context, {
+      messages: [{ role: "user", content: "Estou passando mal depois de comer, posso trocar o arroz por batata?" }],
+    });
+    expect(Object.keys(getCapturedTools())).not.toContain("searchAllowedFoodAlternatives");
+    expect(Object.keys(getCapturedTools())).toContain("requestProfessionalReview");
+  });
+
+  it("mensagem sem sinal clínico -> a tool de substituição continua disponível normalmente", async () => {
+    const getCapturedTools = mockMemoryAndCapture();
+    const { runPatientAssistantTurn } = await import("../lib/ai/core/patient-orchestrator");
+    const context = { clientId: "client-A" } as import("@/lib/ai/core/patient-context").PatientAssistantContext;
+    await runPatientAssistantTurn(context, {
+      messages: [{ role: "user", content: "Posso trocar o arroz por batata?" }],
+    });
+    expect(Object.keys(getCapturedTools())).toContain("searchAllowedFoodAlternatives");
+  });
+});
+
 describe("runPatientAssistantTurn — hardening: mensagens do paciente nunca vao cruas para o LLM (secao 22/0.3)", () => {
   it("redige CPF/telefone/e-mail da mensagem do paciente antes de montar `messages` para generate()", async () => {
     vi.doMock("@/lib/ai/memory/patient-conversation-summary", () => ({

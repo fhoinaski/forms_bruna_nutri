@@ -57,6 +57,8 @@ export type RequestProfessionalReviewOutput =
       itemId: string | null;
       appointmentId: string | null;
       clientTaskId: string | null;
+      /** So para requestType "food_substitution" — ver nota em action.schema.ts. */
+      desiredFood: string | null;
       preview: { title: string; details: string | null };
     };
 
@@ -118,6 +120,7 @@ export async function executeRequestProfessionalReview(
     itemId,
     appointmentId,
     clientTaskId,
+    desiredFood: input.desiredFood ?? null,
     preview: { title: REQUEST_TYPE_LABELS[input.requestType], details: mealDetail },
   };
 }
