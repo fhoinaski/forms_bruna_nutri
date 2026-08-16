@@ -58,6 +58,14 @@ export interface MacroReferenceFood {
   cholesterol_mg?: number | null;
 }
 
+export type MacroFoodReferenceSource = "TACO" | "COMPLEMENTARY" | "CUSTOM" | "MANUFACTURER" | "USDA";
+
+export interface MacroFoodReferenceFallback {
+  source: MacroFoodReferenceSource;
+  sourceId: string;
+  reference?: MacroReferenceFood | null;
+}
+
 const EMPTY: MacroTotals = { kcal: 0, protein: 0, carbs: 0, fat: 0, recognizedItems: 0, totalItems: 0 };
 
 /**
@@ -133,6 +141,25 @@ export function findFoodReferenceByIdentity(
   }) ?? null;
 }
 
+function foodReferenceMatchesIdentity(reference: MacroReferenceFood, identity: MacroFoodReferenceFallback): boolean {
+  if (String(reference.numero ?? "") !== identity.sourceId) return false;
+  if (identity.source === "TACO") return reference.fonte === "taco" || !reference.fonte;
+  if (identity.source === "COMPLEMENTARY") return reference.fonte === "complementar";
+  if (identity.source === "CUSTOM") return reference.fonte === "custom";
+  if (identity.source === "MANUFACTURER") return reference.fonte === "manufacturer";
+  if (identity.source === "USDA") return reference.fonte === "usda";
+  return false;
+}
+
+function resolveFallbackReference(
+  references: MacroReferenceFood[],
+  fallback?: MacroFoodReferenceFallback | null
+): MacroReferenceFood | null {
+  if (!fallback?.sourceId) return null;
+  return references.find((reference) => foodReferenceMatchesIdentity(reference, fallback))
+    ?? (fallback.reference && foodReferenceMatchesIdentity(fallback.reference, fallback) ? fallback.reference : null);
+}
+
 export interface FoodIdentity {
   food: string;
   food_source?: string | null;
@@ -149,8 +176,16 @@ export interface FoodIdentity {
  * para o calculo client-side "ao vivo" do editor (que trabalha com um
  * array plano de referencias ja buscadas, nao com lookups async por id).
  */
-export function resolveFoodReference(item: FoodIdentity, references: MacroReferenceFood[]): MacroReferenceFood | null {
-  return findFoodReferenceByIdentity(references, item.food_source, item.food_ref_id) ?? findBestFoodReference(item.food, references);
+export function resolveFoodReference(
+  item: FoodIdentity,
+  references: MacroReferenceFood[],
+  fallback?: MacroFoodReferenceFallback | null
+): MacroReferenceFood | null {
+  return (
+    findFoodReferenceByIdentity(references, item.food_source, item.food_ref_id) ??
+    findBestFoodReference(item.food, references) ??
+    resolveFallbackReference(references, fallback)
+  );
 }
 
 export interface FoodMacroResolution {
@@ -171,7 +206,8 @@ export interface FoodMacroResolution {
 export function resolveFoodItemMacros(
   item: FoodIdentity & { quantity?: string | number | null; unit?: string | null },
   references: MacroReferenceFood[],
-  householdMeasure?: HouseholdMeasureOption | null
+  householdMeasure?: HouseholdMeasureOption | null,
+  fallback?: MacroFoodReferenceFallback | null
 ): FoodMacroResolution {
   const quantity = resolveQuantity({
     quantity: item.quantity,
@@ -181,7 +217,7 @@ export function resolveFoodItemMacros(
     quantityResolutionSnapshot: item.quantity_resolution_snapshot,
   });
   if (!item.food.trim()) return { macros: EMPTY, reference: null, quantity };
-  const reference = resolveFoodReference(item, references);
+  const reference = resolveFoodReference(item, references, fallback);
   if (!reference) return { macros: { ...EMPTY, totalItems: 1 }, reference: null, quantity };
   if (!quantity.grams) return { macros: { ...EMPTY, recognizedItems: 1, totalItems: 1 }, reference, quantity };
   const factor = quantity.grams / 100;

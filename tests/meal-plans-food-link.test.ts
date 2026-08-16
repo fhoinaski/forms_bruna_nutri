@@ -199,3 +199,128 @@ describe("GET /api/admin/foods/search — busca unificada", () => {
     expect(body.items.some((item: { ref?: { source: string; sourceId: string } }) => item.ref?.source === "CUSTOM" && item.ref.sourceId === "food-1")).toBe(true);
   });
 });
+
+describe("createMealPlanFromTemplates — substituicoes de templates", () => {
+  async function createPlanFromTemplatesWithSubstitutions(substitutions: Array<{
+    template_id: string;
+    base_food: string;
+    option_food: string;
+    quantity?: string | null;
+    unit?: string | null;
+    notes?: string | null;
+  }>, templateIds = ["tpl-dieta", "tpl-substituicao"]) {
+    const batchCalls: Array<Array<{ sql: string; params?: unknown[] }>> = [];
+    const d1Batch = vi.fn(async (statements: Array<{ sql: string; params?: unknown[] }>) => {
+      batchCalls.push(statements);
+
+      if (statements[0]?.sql.includes("FROM diet_template_meals")) {
+        return [
+          {
+            results: templateIds.includes("tpl-dieta")
+              ? [{ id: "meal-template-1", template_id: "tpl-dieta", name: "Almoço", suggested_time: null, notes: null, source_recipe_id: null, sort_order: 0 }]
+              : [],
+            success: true,
+          },
+          {
+            results: templateIds.includes("tpl-dieta")
+              ? [{ id: "item-template-1", meal_id: "meal-template-1", food: "Arroz", quantity: "100", unit: "g", notes: null, sort_order: 0 }]
+              : [],
+            success: true,
+          },
+          { results: substitutions.map((item, index) => ({ id: `sub-${index}`, sort_order: index, created_at: "now", updated_at: "now", ...item })), success: true },
+          { results: [], success: true },
+        ];
+      }
+
+      if (statements[0]?.sql.includes("FROM meal_plan_meals")) {
+        return [
+          { results: [], success: true },
+          { results: [], success: true },
+          { results: [], success: true },
+          { results: [], success: true },
+          { results: [], success: true },
+        ];
+      }
+
+      return statements.map(() => ({ results: [], success: true }));
+    });
+    const d1Query = vi.fn(async (_sql: string, params?: unknown[]) => [{
+      id: String(params?.[0] ?? "plan-1"),
+      client_id: "client-1",
+      title: "Plano",
+      target_group: "GESTANTE",
+      status: "draft",
+      version: 1,
+      notes: null,
+      target_energy_kcal: null,
+      target_protein_g: null,
+      target_carbohydrate_g: null,
+      target_fat_g: null,
+      created_at: "now",
+      updated_at: "now",
+    }]);
+
+    vi.doMock("@/lib/d1/client", () => ({ d1Batch, d1Query, d1Execute: vi.fn() }));
+    vi.doMock("@/lib/repositories/protocol-templates", () => ({
+      getAllTemplates: vi.fn().mockResolvedValue(templateIds.map((id) => ({
+        id,
+        type: id === "tpl-substituicao" ? "SUBSTITUICAO" : "DIETA",
+        target_group: "GESTANTE",
+        title: id,
+        content: "{}",
+        notes: null,
+        is_active: 1,
+        created_at: "now",
+        updated_at: "now",
+      }))),
+    }));
+    vi.doMock("@/lib/security/encrypted-fields", () => ({ encryptJsonValue: (v: unknown) => `encj:${JSON.stringify(v)}` }));
+
+    const { createMealPlanFromTemplates } = await import("../lib/repositories/meal-plans");
+    await createMealPlanFromTemplates({ clientId: "client-1", targetGroup: "GESTANTE" });
+
+    const insert = batchCalls.flat().find((statement) => statement.sql.includes("INSERT INTO meal_plan_substitutions"));
+    const rows = insert ? JSON.parse(insert.params?.[0] as string) as Array<Record<string, unknown>> : [];
+    return { rows, batchCalls };
+  }
+
+  it("deduplica a mesma substituicao vinda do template DIETA e do template SUBSTITUICAO", async () => {
+    const { rows } = await createPlanFromTemplatesWithSubstitutions([
+      { template_id: "tpl-dieta", base_food: "Arroz", option_food: "Batata", quantity: "100", unit: "g" },
+      { template_id: "tpl-substituicao", base_food: "Arroz", option_food: "Batata", quantity: "100", unit: "g" },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ baseFood: "Arroz", optionFood: "Batata", quantity: "100", unit: "g" });
+  });
+
+  it("preserva substituicoes com quantidades diferentes", async () => {
+    const { rows } = await createPlanFromTemplatesWithSubstitutions([
+      { template_id: "tpl-dieta", base_food: "Arroz", option_food: "Batata", quantity: "100", unit: "g" },
+      { template_id: "tpl-substituicao", base_food: "Arroz", option_food: "Batata", quantity: "150", unit: "g" },
+    ]);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.quantity)).toEqual(["100", "150"]);
+  });
+
+  it("preserva substituicoes com alimentos opcionais diferentes", async () => {
+    const { rows } = await createPlanFromTemplatesWithSubstitutions([
+      { template_id: "tpl-dieta", base_food: "Arroz", option_food: "Batata", quantity: null, unit: null },
+      { template_id: "tpl-substituicao", base_food: "Arroz", option_food: "Mandioca", quantity: null, unit: null },
+    ]);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.optionFood)).toEqual(["Batata", "Mandioca"]);
+  });
+
+  it("mantem inalteradas as substituicoes quando os dados vem de uma unica fonte", async () => {
+    const { rows } = await createPlanFromTemplatesWithSubstitutions([
+      { template_id: "tpl-dieta", base_food: "Arroz", option_food: "Batata", quantity: "100", unit: "g" },
+      { template_id: "tpl-dieta", base_food: "Feijao", option_food: "Lentilha", quantity: "1", unit: "concha" },
+    ], ["tpl-dieta"]);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.baseFood)).toEqual(["Arroz", "Feijao"]);
+  });
+});

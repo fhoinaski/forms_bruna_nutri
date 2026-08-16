@@ -60,29 +60,97 @@ function mockCatalogRepositories() {
       ? [{ id: "m-banana", food_source: "TACO", food_ref_id: "179", description: "1 unidade média", gram_equivalent: 86, source: "TBCA", source_version: null, confidence: "high", is_active: 1, created_at: "now" }]
       : []),
   }));
+  const usdaRows: Record<string, {
+    source_id: string;
+    original_name: string;
+    normalized_name: string;
+    food_group: string;
+    energy_kcal: number;
+    protein_g: number;
+    carbohydrate_g: number;
+    fat_g: number;
+    fiber_g: number | null;
+  }> = {
+    rice: {
+      source_id: "USDA_SR_LEGACY:169756",
+      original_name: "Rice, white, long-grain, regular, cooked",
+      normalized_name: "rice white long grain regular cooked",
+      food_group: "Cereal Grains and Pasta",
+      energy_kcal: 130,
+      protein_g: 2.69,
+      carbohydrate_g: 28.17,
+      fat_g: 0.28,
+      fiber_g: 0.4,
+    },
+    salmon: {
+      source_id: "USDA_SR_LEGACY:175167",
+      original_name: "Fish, salmon, Atlantic, farmed, cooked, dry heat",
+      normalized_name: "fish salmon atlantic farmed cooked dry heat",
+      food_group: "Finfish and Shellfish Products",
+      energy_kcal: 206,
+      protein_g: 22.1,
+      carbohydrate_g: 0,
+      fat_g: 12.4,
+      fiber_g: null,
+    },
+    quinoa: {
+      source_id: "USDA_SR_LEGACY:168917",
+      original_name: "Quinoa, cooked",
+      normalized_name: "quinoa cooked",
+      food_group: "Cereal Grains and Pasta",
+      energy_kcal: 120,
+      protein_g: 4.4,
+      carbohydrate_g: 21.3,
+      fat_g: 1.9,
+      fiber_g: 2.8,
+    },
+    blueberry: {
+      source_id: "USDA_SR_LEGACY:171711",
+      original_name: "Blueberry, raw",
+      normalized_name: "blueberry raw",
+      food_group: "Fruits and Fruit Juices",
+      energy_kcal: 57,
+      protein_g: 0.7,
+      carbohydrate_g: 14.5,
+      fat_g: 0.3,
+      fiber_g: 2.4,
+    },
+    yogurt: {
+      source_id: "USDA_SR_LEGACY:170886",
+      original_name: "Yogurt, plain, whole milk",
+      normalized_name: "yogurt plain whole milk",
+      food_group: "Dairy and Egg Products",
+      energy_kcal: 61,
+      protein_g: 3.5,
+      carbohydrate_g: 4.7,
+      fat_g: 3.3,
+      fiber_g: null,
+    },
+  };
   vi.doMock("@/lib/repositories/usda-foods", () => ({
-    searchUsdaFoods: vi.fn(async (query: string) => query.toLowerCase().includes("rice")
-      ? [{
+    searchUsdaFoods: vi.fn(async (query: string) => {
+      const row = Object.entries(usdaRows).find(([key]) => query.toLowerCase().includes(key))?.[1];
+      return row ? [{
           id: "usda-1",
           source: "USDA",
-          source_id: "USDA_SR_LEGACY:169756",
+          source_id: row.source_id,
           upstream_source: "USDA_SR_LEGACY",
-          upstream_source_id: "169756",
-          original_name: "Rice, white, long-grain, regular, cooked",
-          normalized_name: "rice white long grain regular cooked",
-          food_group: "Cereal Grains and Pasta",
+          upstream_source_id: row.source_id.split(":")[1],
+          original_name: row.original_name,
+          normalized_name: row.normalized_name,
+          food_group: row.food_group,
           data_quality: "COMPLETE",
           source_url: null,
           source_version: null,
           import_run_id: null,
           created_at: "now",
-          energy_kcal: 130,
-          protein_g: 2.69,
-          carbohydrate_g: 28.17,
-          fat_g: 0.28,
-          fiber_g: 0.4,
-        }]
-      : []),
+          energy_kcal: row.energy_kcal,
+          protein_g: row.protein_g,
+          carbohydrate_g: row.carbohydrate_g,
+          fat_g: row.fat_g,
+          fiber_g: row.fiber_g,
+        }] : [];
+    }),
     getUsdaFoodBySourceId: vi.fn(async (id: string) => id === "USDA_SR_LEGACY:169756"
       ? {
           id: "usda-1",
@@ -191,6 +259,22 @@ describe("food catalog service", () => {
 
     const details = await getFoodByReference({ source: "USDA", sourceId: "USDA_SR_LEGACY:169756" });
     expect(details?.macroReference.fonte).toBe("usda");
+  });
+
+  it("cobre as queries obrigatorias da Central de Alimentos nas mesmas sources do catalogo unificado", async () => {
+    mockCatalogRepositories();
+    const { searchFoods } = await import("../lib/nutrition/food-catalog");
+
+    for (const query of ["arroz", "banana", "feijão", "ovo"]) {
+      const results = await searchFoods({ query, limit: 8 });
+      expect(results.some((item) => item.ref.source === "TACO")).toBe(true);
+    }
+
+    for (const query of ["rice", "salmon", "quinoa", "blueberry", "yogurt"]) {
+      const results = await searchFoods({ query, limit: 8 });
+      expect(results[0]?.ref.source).toBe("USDA");
+      expect(results[0]?.ref.sourceId).toMatch(/^USDA_/);
+    }
   });
 
   it("busca sem acento encontra nome com acento e preserva apresentacao original", async () => {

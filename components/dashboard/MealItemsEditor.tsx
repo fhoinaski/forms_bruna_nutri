@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Beef, ChevronDown, ChevronUp, Copy, Flame, Plus, Save, Sparkles, Trash2, Utensils, Wheat } from "lucide-react";
-import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
+import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
 import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
 import type { FoodPortion } from "@/lib/repositories/food-portions";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
@@ -54,6 +54,13 @@ function toMealPlanFoodSource(suggestion: FoodSuggestion): "TACO" | "CUSTOM" | "
   if (suggestion.fonte === "usda") return "USDA";
   // COMPLEMENTARY ainda e persistido como TACO por compatibilidade com o schema atual.
   return "TACO";
+}
+
+function macroFallbackFromSuggestion(suggestion?: FoodSuggestion | null): MacroFoodReferenceFallback | null {
+  if (!suggestion?.ref?.sourceId) return null;
+  const { source, sourceId } = suggestion.ref;
+  if (source !== "TACO" && source !== "COMPLEMENTARY" && source !== "CUSTOM" && source !== "MANUFACTURER" && source !== "USDA") return null;
+  return { source, sourceId, reference: suggestion };
 }
 
 type RecipeLibraryItem = {
@@ -352,12 +359,18 @@ export function MealItemsEditor({
     meals.forEach((meal, mealIndex) => {
       meal.items.forEach((item, itemIndex) => {
         if (!item.food.trim()) return;
-        map[`${mealIndex}:${itemIndex}`] = resolveFoodItemMacros(item, knownFoodReferences, selectedMeasureFor(item));
+        const key = `${mealIndex}:${itemIndex}`;
+        map[key] = resolveFoodItemMacros(
+          item,
+          knownFoodReferences,
+          selectedMeasureFor(item),
+          macroFallbackFromSuggestion(foodSuggestions[key]?.[0])
+        );
       });
     });
     return map;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meals, knownFoodReferences, measuresByFood]);
+  }, [meals, knownFoodReferences, measuresByFood, foodSuggestions]);
 
   const mealMacros = useMemo(() => meals.map((meal, mealIndex) => roundedMacros(sumMacros(
     meal.items.map((_, itemIndex) => itemResolutions[`${mealIndex}:${itemIndex}`]?.macros).filter((value): value is MacroTotals => Boolean(value))

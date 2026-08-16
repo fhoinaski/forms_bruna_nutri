@@ -119,6 +119,29 @@ function text(value: unknown): string | null {
   return String(value);
 }
 
+function normalizeSubstitutionKeyPart(value: string | null | undefined): string {
+  return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function substitutionDeduplicationKey(item: Pick<MealPlanSubstitutionPayload, "base_food" | "option_food" | "quantity" | "unit">): string {
+  return [
+    normalizeSubstitutionKeyPart(item.base_food),
+    normalizeSubstitutionKeyPart(item.option_food),
+    normalizeSubstitutionKeyPart(item.quantity),
+    normalizeSubstitutionKeyPart(item.unit),
+  ].join("|");
+}
+
+function dedupeMealPlanSubstitutions(items: MealPlanSubstitutionPayload[]): MealPlanSubstitutionPayload[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = substitutionDeduplicationKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function normalizeMealName(name: string) {
   return name.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -401,13 +424,14 @@ export async function createMealPlanFromTemplates(input: {
     const relational = relationalTemplates.get(template.id);
     return relational?.supplements.length ? relational.supplements : extractSupplements(parseJson(template.content));
   });
-  const substitutions = [
+  const rawSubstitutions = [
     ...dietTemplates.flatMap((template) => relationalTemplates.get(template.id)?.substitutions ?? []),
     ...templates.filter((template) => template.type === "SUBSTITUICAO").flatMap((template) => {
       const relational = relationalTemplates.get(template.id);
       return relational?.substitutions.length ? relational.substitutions : extractSubstitutions(parseJson(template.content));
     }),
   ];
+  const substitutions = dedupeMealPlanSubstitutions(rawSubstitutions);
 
   return createMealPlan({
     clientId: input.clientId,

@@ -172,6 +172,25 @@ function sortDashboardActionItems(items: DashboardActionItem[]): DashboardAction
   });
 }
 
+function dedupeWorkflowRows(rows: WorkflowActionRow[]): WorkflowActionRow[] {
+  const byLogicalStep = new Map<string, WorkflowActionRow>();
+  for (const row of rows) {
+    const key = `${row.appointment_id}:${row.step_type}`;
+    const current = byLogicalStep.get(key);
+    if (!current) {
+      byLogicalStep.set(key, row);
+      continue;
+    }
+
+    const rowDue = new Date(row.due_at).getTime();
+    const currentDue = new Date(current.due_at).getTime();
+    if (rowDue < currentDue || (rowDue === currentDue && row.id.localeCompare(current.id) < 0)) {
+      byLogicalStep.set(key, row);
+    }
+  }
+  return Array.from(byLogicalStep.values());
+}
+
 export function buildDashboardActionItems(rows: DashboardActionRows, now = new Date()): DashboardActionItem[] {
   const items: DashboardActionItem[] = [];
 
@@ -283,7 +302,7 @@ export function buildDashboardActionItems(rows: DashboardActionRows, now = new D
     });
   }
 
-  for (const workflow of rows.workflows) {
+  for (const workflow of dedupeWorkflowRows(rows.workflows)) {
     items.push({
       id: `workflow-due:${workflow.id}`,
       type: "WORKFLOW_DUE",
@@ -380,14 +399,15 @@ export async function getDashboardActionItems(now = new Date()): Promise<Dashboa
       [todayKey]
     ),
     d1Query<WorkflowActionRow>(
-      `SELECT w.id, w.appointment_id, w.step_type, w.due_at, a.title as appointment_title, a.starts_at,
+      `SELECT MIN(w.id) as id, w.appointment_id, w.step_type, MIN(w.due_at) as due_at, a.title as appointment_title, a.starts_at,
               c.id as client_id, c.name as client_name
        FROM appointment_workflow_items w
        INNER JOIN appointments a ON a.id = w.appointment_id
        LEFT JOIN clients c ON c.id = a.client_id
        WHERE w.status = 'pendente'
          AND w.due_at <= ?1
-       ORDER BY w.due_at ASC
+       GROUP BY w.appointment_id, w.step_type
+       ORDER BY MIN(w.due_at) ASC, MIN(w.id) ASC
        LIMIT 10`,
       [nowIso]
     ),

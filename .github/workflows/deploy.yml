@@ -23,11 +23,6 @@ jobs:
       name: staging
       url: ${{ steps.deploy.outputs.preview-url }}
     env:
-      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-      MFA_ENCRYPTION_KEY: ${{ secrets.MFA_ENCRYPTION_KEY }}
-      CLIENT_PORTAL_SECRET: ${{ secrets.CLIENT_PORTAL_SECRET }}
-      BLOG_AGENT_TOKEN: ${{ secrets.BLOG_AGENT_TOKEN }}
-      NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_D1_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
       CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
@@ -59,9 +54,6 @@ jobs:
 
       - name: Verify staging migration status
         run: npm run migrate:d1:status
-
-      - name: Build
-        run: npm run build
 
       - name: Deploy Vercel preview/staging
         id: deploy
@@ -95,11 +87,6 @@ jobs:
       group: production-deploy
       cancel-in-progress: false
     env:
-      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-      MFA_ENCRYPTION_KEY: ${{ secrets.MFA_ENCRYPTION_KEY }}
-      CLIENT_PORTAL_SECRET: ${{ secrets.CLIENT_PORTAL_SECRET }}
-      BLOG_AGENT_TOKEN: ${{ secrets.BLOG_AGENT_TOKEN }}
-      NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_D1_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_API_TOKEN }}
       CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
@@ -146,9 +133,6 @@ jobs:
 
       - name: Verify production migration status
         run: npm run migrate:d1:status
-
-      - name: Build
-        run: npm run build
 
       - name: Deploy Vercel production
         id: deploy

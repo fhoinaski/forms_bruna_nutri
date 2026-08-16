@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateFoodMacros, estimateMacrosFromLine, roundedMacros, sumMacros } from "@/lib/nutrition/macros";
+import { estimateFoodMacros, estimateMacrosFromLine, resolveFoodItemMacros, roundedMacros, sumMacros, type MacroReferenceFood } from "@/lib/nutrition/macros";
 import { coerceTacoNumber, estimateFoodMacrosFromTaco, getTacoFoodByNumber, searchTacoFoods } from "@/lib/nutrition/taco";
 
 describe("live macro estimation", () => {
@@ -68,5 +68,101 @@ describe("live macro estimation", () => {
     expect(macros.protein).toBe(24);
     expect(macros.carbs).toBe(2.4);
     expect(macros.fat).toBe(2.3);
+  });
+
+  it("uses a concrete search fallback when simplified template text does not strict-match TACO", () => {
+    const arroz = getTacoFoodByNumber(3);
+    expect(arroz?.descricao).toBe("Arroz, tipo 1, cozido");
+
+    const result = resolveFoodItemMacros(
+      { food: "Arroz cozido", quantity: "100", unit: "g" },
+      [arroz!],
+      null,
+      { source: "TACO", sourceId: "3", reference: arroz }
+    );
+
+    expect(result.reference?.descricao).toBe("Arroz, tipo 1, cozido");
+    expect(result.macros.kcal).toBeGreaterThan(0);
+    expect(result.macros.recognizedItems).toBe(1);
+  });
+
+  it("keeps strict text matching ahead of the search fallback", () => {
+    const arrozIntegral = searchTacoFoods("Arroz, integral, cozido")[0];
+    const wrongFallback = getTacoFoodByNumber(3);
+
+    const result = resolveFoodItemMacros(
+      { food: "Arroz, integral, cozido", quantity: "100", unit: "g" },
+      [arrozIntegral, wrongFallback!],
+      null,
+      { source: "TACO", sourceId: "3", reference: wrongFallback }
+    );
+
+    expect(result.reference?.descricao).toBe("Arroz, integral, cozido");
+    expect(roundedMacros(result.macros).kcal).toBe(124);
+  });
+
+  it("does not invent a food when the fallback identity does not exist", () => {
+    const arroz = getTacoFoodByNumber(3);
+
+    const result = resolveFoodItemMacros(
+      { food: "Arroz cozido", quantity: "100", unit: "g" },
+      [arroz!],
+      null,
+      { source: "TACO", sourceId: "999999", reference: arroz }
+    );
+
+    expect(result.reference).toBeNull();
+    expect(result.macros).toMatchObject({ kcal: 0, recognizedItems: 0, totalItems: 1 });
+  });
+
+  it("keeps concrete fallback identity working across non-TACO sources", () => {
+    const usdaRice: MacroReferenceFood = {
+      numero: "USDA_SR_LEGACY:169756",
+      descricao: "Rice, white, long-grain, regular, cooked",
+      fonte: "usda",
+      energia_kcal: 130,
+      proteina_g: 2.69,
+      carboidrato_g: 28.17,
+      lipidios_g: 0.28,
+    };
+    const customGranola: MacroReferenceFood = {
+      numero: "custom-1",
+      descricao: "Granola da Bruna",
+      fonte: "custom",
+      energia_kcal: 410,
+      proteina_g: 9,
+      carboidrato_g: 62,
+      lipidios_g: 12,
+      fibra_g: null,
+    };
+    const manufacturerWhey: MacroReferenceFood = {
+      numero: "manufacturer-1",
+      descricao: "Whey Protein Isolado",
+      fonte: "manufacturer",
+      energia_kcal: 380,
+      proteina_g: 80,
+      carboidrato_g: 5,
+      lipidios_g: 3,
+    };
+    const complementaryWhey = searchTacoFoods("whey protein")[0];
+
+    const cases = [
+      { food: "rice cooked", source: "USDA" as const, sourceId: "USDA_SR_LEGACY:169756", reference: usdaRice },
+      { food: "granola", source: "CUSTOM" as const, sourceId: "custom-1", reference: customGranola },
+      { food: "whey isolado", source: "MANUFACTURER" as const, sourceId: "manufacturer-1", reference: manufacturerWhey },
+      { food: "whey", source: "COMPLEMENTARY" as const, sourceId: String(complementaryWhey.numero), reference: complementaryWhey },
+    ];
+
+    for (const item of cases) {
+      const result = resolveFoodItemMacros(
+        { food: item.food, quantity: "100", unit: "g" },
+        [item.reference],
+        null,
+        { source: item.source, sourceId: item.sourceId, reference: item.reference }
+      );
+      expect(result.reference?.numero).toBe(item.reference.numero);
+      expect(result.macros.kcal).toBeGreaterThan(0);
+      expect(result.macros.recognizedItems).toBe(1);
+    }
   });
 });

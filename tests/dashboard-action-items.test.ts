@@ -193,6 +193,115 @@ describe("buildDashboardActionItems", () => {
     expect(items[1]).toMatchObject({ type: "SAFE_SUBSTITUTION_OCCURRED", priority: "INFO", section: "RECENT" });
   });
 
+  it("deduplica workflows por etapa lógica do mesmo appointment, preservando prioridade e link", () => {
+    const items = buildDashboardActionItems(emptyRows({
+      workflows: [
+        {
+          id: "workflow-email",
+          appointment_id: "appt-1",
+          step_type: "confirmacao",
+          due_at: "2026-08-16T10:00:00.000Z",
+          appointment_title: "Consulta inicial",
+          starts_at: "2026-08-17T12:00:00.000Z",
+          client_id: "client-1",
+          client_name: "Ana",
+        },
+        {
+          id: "workflow-whatsapp",
+          appointment_id: "appt-1",
+          step_type: "confirmacao",
+          due_at: "2026-08-16T10:00:00.000Z",
+          appointment_title: "Consulta inicial",
+          starts_at: "2026-08-17T12:00:00.000Z",
+          client_id: "client-1",
+          client_name: "Ana",
+        },
+      ],
+    }), now);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: "workflow-due:workflow-email",
+      type: "WORKFLOW_DUE",
+      priority: "NORMAL",
+      section: "ATTENTION",
+      source: "appointment_workflow_items",
+      sourceId: "workflow-email",
+      href: "/dashboard/agenda",
+      actionLabel: "Abrir agenda",
+      dueAt: "2026-08-16T10:00:00.000Z",
+    });
+  });
+
+  it("não combina etapas diferentes do mesmo appointment", () => {
+    const items = buildDashboardActionItems(emptyRows({
+      workflows: [
+        {
+          id: "workflow-reminder",
+          appointment_id: "appt-1",
+          step_type: "lembrete_24h",
+          due_at: "2026-08-16T10:00:00.000Z",
+          appointment_title: "Consulta inicial",
+          starts_at: "2026-08-17T12:00:00.000Z",
+          client_id: "client-1",
+          client_name: "Ana",
+        },
+        {
+          id: "workflow-prep",
+          appointment_id: "appt-1",
+          step_type: "preparo",
+          due_at: "2026-08-16T10:05:00.000Z",
+          appointment_title: "Consulta inicial",
+          starts_at: "2026-08-17T12:00:00.000Z",
+          client_id: "client-1",
+          client_name: "Ana",
+        },
+      ],
+    }), now);
+
+    expect(items.map((item) => item.id)).toEqual(["workflow-due:workflow-reminder", "workflow-due:workflow-prep"]);
+  });
+
+  it("não combina workflows de appointments distintos e escolhe a pendência lógica mais antiga", () => {
+    const items = buildDashboardActionItems(emptyRows({
+      workflows: [
+        {
+          id: "workflow-later",
+          appointment_id: "appt-1",
+          step_type: "confirmacao",
+          due_at: "2026-08-16T10:15:00.000Z",
+          appointment_title: "Consulta Ana",
+          starts_at: "2026-08-17T12:00:00.000Z",
+          client_id: "client-1",
+          client_name: "Ana",
+        },
+        {
+          id: "workflow-earlier",
+          appointment_id: "appt-1",
+          step_type: "confirmacao",
+          due_at: "2026-08-16T10:00:00.000Z",
+          appointment_title: "Consulta Ana",
+          starts_at: "2026-08-17T12:00:00.000Z",
+          client_id: "client-1",
+          client_name: "Ana",
+        },
+        {
+          id: "workflow-other-appointment",
+          appointment_id: "appt-2",
+          step_type: "confirmacao",
+          due_at: "2026-08-16T10:00:00.000Z",
+          appointment_title: "Consulta Bia",
+          starts_at: "2026-08-17T13:00:00.000Z",
+          client_id: "client-2",
+          client_name: "Bia",
+        },
+      ],
+    }), now);
+
+    expect(items.map((item) => item.id)).toEqual(["workflow-due:workflow-earlier", "workflow-due:workflow-other-appointment"]);
+    expect(items.map((item) => item.subject)).toEqual(["Ana", "Bia"]);
+  });
+
   it("ordena por prioridade antes da data", () => {
     const items = buildDashboardActionItems(emptyRows({
       patientRequests: [
