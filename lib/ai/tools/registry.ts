@@ -3,7 +3,8 @@ import type { z } from "zod";
 import type { ToolRisk } from "@/lib/ai/policies/action-policy";
 import type { AssistantCapabilityProfile } from "@/lib/ai/policies/permissions";
 import { isProfileAllowed } from "@/lib/ai/policies/permissions";
-import type { AgentDomain, ToolEntityType } from "@/lib/ai/tools/capability-types";
+import type { AgentDomain, DataSensitivity, ToolEntityType } from "@/lib/ai/tools/capability-types";
+import { withToolCallObservability } from "@/lib/ai/tools/tool-call-observability";
 
 import {
   FIND_CLIENT_TOOL_NAME,
@@ -157,6 +158,24 @@ import {
   getRecentActivityInputSchema,
 } from "@/lib/ai/agents/dashboard/dashboard-agent";
 import {
+  PROPOSE_RESCHEDULE_APPOINTMENT_TOOL_NAME,
+  PROPOSE_CANCEL_APPOINTMENT_TOOL_NAME,
+  executeProposeRescheduleAppointment,
+  executeProposeCancelAppointment,
+  proposeRescheduleAppointmentInputSchema,
+  proposeCancelAppointmentInputSchema,
+} from "@/lib/ai/agents/appointments/appointment-write-agent";
+import {
+  PROPOSE_RESOLVE_PATIENT_REQUEST_TOOL_NAME,
+  executeProposeResolvePatientRequest,
+  proposeResolvePatientRequestInputSchema,
+} from "@/lib/ai/agents/clients/patient-request-write-agent";
+import {
+  PROPOSE_MARK_PAYMENT_RECEIVED_TOOL_NAME,
+  executeProposeMarkPaymentReceived,
+  proposeMarkPaymentReceivedInputSchema,
+} from "@/lib/ai/agents/finance/finance-write-agent";
+import {
   GET_PAYMENT_DETAILS_TOOL_NAME,
   GET_OVERDUE_PAYMENTS_TOOL_NAME,
   GET_PENDING_PAYMENTS_TOOL_NAME,
@@ -236,6 +255,8 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   domain: AgentDomain;
   /** Tipos de entidade que a tool le/afeta — usado so para descoberta/manifest, nunca autorizacao. */
   entityTypes: readonly ToolEntityType[];
+  /** Sensibilidade do dado (safe/sensitive/clinical) — ortogonal a `risk`, ver capability-types.ts. */
+  dataSensitivity: DataSensitivity;
   execute: (input: TInput) => Promise<TOutput>;
 }
 
@@ -275,18 +296,20 @@ defineTool({
   contextRequirement: "none",
   domain: "patient",
   entityTypes: ["patient"],
+  dataSensitivity: "safe",
   execute: executeFindClient,
 });
 
 defineTool({
   name: NAVIGATE_TOOL_NAME,
-  description: "Navega o sistema ate a tela pedida (ficha de um cliente, lista de clientes, agenda, biblioteca de protocolos/modelos/receitas, tarefas, financeiro ou oportunidades).",
+  description: "Navega o sistema ate a tela pedida (ficha de um cliente, lista de clientes, agenda, biblioteca de protocolos/modelos/receitas, tarefas, financeiro, oportunidades ou solicitacoes de pacientes).",
   inputSchema: navigateInputSchema,
   risk: "low",
   profiles: ADMIN,
   contextRequirement: "none",
   domain: "navigation",
   entityTypes: [],
+  dataSensitivity: "safe",
   execute: async (input) => input,
 });
 
@@ -299,6 +322,7 @@ defineTool({
   contextRequirement: "none",
   domain: "dashboard",
   entityTypes: [],
+  dataSensitivity: "safe",
   execute: executeGetSystemOverview,
 });
 
@@ -311,6 +335,7 @@ defineTool({
   contextRequirement: "none",
   domain: "dashboard",
   entityTypes: ["opportunity"],
+  dataSensitivity: "sensitive",
   execute: executeListOpportunities,
 });
 
@@ -323,6 +348,7 @@ defineTool({
   contextRequirement: "none",
   domain: "patient",
   entityTypes: ["patient"],
+  dataSensitivity: "sensitive",
   execute: executeProposeNewClient,
 });
 
@@ -335,6 +361,7 @@ defineTool({
   contextRequirement: "none",
   domain: "food",
   entityTypes: ["recipe", "food"],
+  dataSensitivity: "safe",
   execute: executeProposeNewRecipe,
 });
 
@@ -347,6 +374,7 @@ defineTool({
   contextRequirement: "none",
   domain: "content",
   entityTypes: ["blog_post"],
+  dataSensitivity: "safe",
   execute: async (input) => input,
 });
 
@@ -359,6 +387,7 @@ defineTool({
   contextRequirement: "none",
   domain: "content",
   entityTypes: ["blog_post"],
+  dataSensitivity: "safe",
   execute: executeSearchEditorialSources,
 });
 
@@ -371,6 +400,7 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["patient", "nutrition_record"],
+  dataSensitivity: "clinical",
   execute: async (input) => input,
 });
 
@@ -383,6 +413,7 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["patient", "protocol"],
+  dataSensitivity: "clinical",
   execute: async (input) => input,
 });
 
@@ -395,6 +426,7 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["patient", "protocol"],
+  dataSensitivity: "clinical",
   execute: async (input) => input,
 });
 
@@ -407,6 +439,7 @@ defineTool({
   contextRequirement: "none",
   domain: "appointment",
   entityTypes: ["patient", "appointment"],
+  dataSensitivity: "sensitive",
   execute: async (input) => input,
 });
 
@@ -419,6 +452,7 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["patient", "task"],
+  dataSensitivity: "sensitive",
   execute: async (input) => input,
 });
 
@@ -431,6 +465,7 @@ defineTool({
   contextRequirement: "submission",
   domain: "clinical",
   entityTypes: ["patient", "pre_analysis"],
+  dataSensitivity: "clinical",
   execute: async (input) => input,
 });
 
@@ -443,6 +478,7 @@ defineTool({
   contextRequirement: "none",
   domain: "dashboard",
   entityTypes: ["appointment", "task"],
+  dataSensitivity: "sensitive",
   execute: executeGetPatientsWithPendenciesForDate,
 });
 
@@ -455,6 +491,7 @@ defineTool({
   contextRequirement: "none",
   domain: "clinical",
   entityTypes: ["patient"],
+  dataSensitivity: "clinical",
   execute: executeGetClientEvolutionSummary,
 });
 
@@ -467,6 +504,7 @@ defineTool({
   contextRequirement: "none",
   domain: "appointment",
   entityTypes: ["appointment"],
+  dataSensitivity: "safe",
   execute: executeGetAvailableSlots,
 });
 
@@ -479,6 +517,7 @@ defineTool({
   contextRequirement: "client",
   domain: "food",
   entityTypes: ["food"],
+  dataSensitivity: "safe",
   execute: executeSearchMealPlanFoods,
 });
 
@@ -491,6 +530,7 @@ defineTool({
   contextRequirement: "none",
   domain: "request",
   entityTypes: ["patient", "request"],
+  dataSensitivity: "sensitive",
   execute: executeGetPatientRequests,
 });
 
@@ -503,6 +543,7 @@ defineTool({
   contextRequirement: "client",
   domain: "meal_plan",
   entityTypes: ["patient", "meal_plan", "food"],
+  dataSensitivity: "clinical",
   execute: executeProposeMealPlanChange,
 });
 
@@ -518,6 +559,7 @@ defineTool({
   contextRequirement: "none",
   domain: "nutrition_analysis",
   entityTypes: ["meal_plan"],
+  dataSensitivity: "sensitive",
   execute: executeGetMealPlanNutrition,
 });
 
@@ -530,6 +572,7 @@ defineTool({
   contextRequirement: "client",
   domain: "food",
   entityTypes: ["food"],
+  dataSensitivity: "safe",
   execute: executeFindFoodEquivalents,
 });
 
@@ -545,6 +588,7 @@ defineTool({
   contextRequirement: "none",
   domain: "food",
   entityTypes: ["food"],
+  dataSensitivity: "safe",
   execute: executeSearchFoods,
 });
 
@@ -557,6 +601,7 @@ defineTool({
   contextRequirement: "none",
   domain: "food",
   entityTypes: ["food"],
+  dataSensitivity: "safe",
   execute: executeGetFoodDetails,
 });
 
@@ -569,6 +614,7 @@ defineTool({
   contextRequirement: "none",
   domain: "food",
   entityTypes: ["food"],
+  dataSensitivity: "safe",
   execute: executeGetFoodPortions,
 });
 
@@ -581,6 +627,7 @@ defineTool({
   contextRequirement: "none",
   domain: "food",
   entityTypes: ["food"],
+  dataSensitivity: "safe",
   execute: executeCalculateFoodNutrients,
 });
 
@@ -596,6 +643,7 @@ defineTool({
   contextRequirement: "none",
   domain: "patient",
   entityTypes: ["patient"],
+  dataSensitivity: "sensitive",
   execute: executeGetPatientSummary,
 });
 
@@ -608,6 +656,7 @@ defineTool({
   contextRequirement: "none",
   domain: "meal_plan",
   entityTypes: ["patient", "meal_plan"],
+  dataSensitivity: "clinical",
   execute: executeGetPatientActivePlan,
 });
 
@@ -620,6 +669,7 @@ defineTool({
   contextRequirement: "none",
   domain: "clinical",
   entityTypes: ["patient"],
+  dataSensitivity: "clinical",
   execute: executeGetPatientClinicalMarkers,
 });
 
@@ -634,6 +684,7 @@ defineTool({
   contextRequirement: "none",
   domain: "appointment",
   entityTypes: ["appointment"],
+  dataSensitivity: "safe",
   execute: executeGetTodayAppointments,
 });
 
@@ -646,6 +697,7 @@ defineTool({
   contextRequirement: "none",
   domain: "appointment",
   entityTypes: ["appointment", "patient"],
+  dataSensitivity: "safe",
   execute: executeGetNextAppointment,
 });
 
@@ -658,6 +710,7 @@ defineTool({
   contextRequirement: "none",
   domain: "appointment",
   entityTypes: ["appointment"],
+  dataSensitivity: "sensitive",
   execute: executeGetAppointmentDetails,
 });
 
@@ -670,6 +723,7 @@ defineTool({
   contextRequirement: "none",
   domain: "appointment",
   entityTypes: ["appointment", "patient"],
+  dataSensitivity: "safe",
   execute: executeGetUpcomingAppointments,
 });
 
@@ -684,6 +738,7 @@ defineTool({
   contextRequirement: "none",
   domain: "dashboard",
   entityTypes: [],
+  dataSensitivity: "sensitive",
   execute: executeGetDashboardActionItems,
 });
 
@@ -696,6 +751,7 @@ defineTool({
   contextRequirement: "none",
   domain: "dashboard",
   entityTypes: [],
+  dataSensitivity: "sensitive",
   execute: executeGetUrgentItems,
 });
 
@@ -708,6 +764,7 @@ defineTool({
   contextRequirement: "none",
   domain: "dashboard",
   entityTypes: [],
+  dataSensitivity: "sensitive",
   execute: executeGetRecentActivity,
 });
 
@@ -722,6 +779,7 @@ defineTool({
   contextRequirement: "none",
   domain: "request",
   entityTypes: ["patient", "request"],
+  dataSensitivity: "sensitive",
   execute: executeGetPatientRequestDetails,
 });
 
@@ -734,6 +792,7 @@ defineTool({
   contextRequirement: "none",
   domain: "request",
   entityTypes: ["request"],
+  dataSensitivity: "sensitive",
   execute: executeGetPendingAiProposals,
 });
 
@@ -748,6 +807,7 @@ defineTool({
   contextRequirement: "none",
   domain: "finance",
   entityTypes: ["payment"],
+  dataSensitivity: "sensitive",
   execute: executeGetPaymentDetails,
 });
 
@@ -760,6 +820,7 @@ defineTool({
   contextRequirement: "none",
   domain: "finance",
   entityTypes: ["payment", "patient"],
+  dataSensitivity: "sensitive",
   execute: executeGetOverduePayments,
 });
 
@@ -772,6 +833,7 @@ defineTool({
   contextRequirement: "none",
   domain: "finance",
   entityTypes: ["payment", "patient"],
+  dataSensitivity: "sensitive",
   execute: executeGetPendingPayments,
 });
 
@@ -784,7 +846,63 @@ defineTool({
   contextRequirement: "none",
   domain: "finance",
   entityTypes: ["payment"],
+  dataSensitivity: "safe",
   execute: executeGetFinancialSummary,
+});
+
+// ── Safe writes operacionais (FASE 3) — sempre propostas (risk "sensitive"),
+// nunca aplicadas sozinhas; revalidadas de novo no confirm (proposal-handlers.ts).
+
+defineTool({
+  name: PROPOSE_RESCHEDULE_APPOINTMENT_TOOL_NAME,
+  description: "Registra uma proposta de reagendar uma consulta existente para uma nova data/hora, para revisao humana antes de aplicar de verdade.",
+  inputSchema: proposeRescheduleAppointmentInputSchema,
+  risk: "sensitive",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "appointment",
+  entityTypes: ["appointment", "patient"],
+  dataSensitivity: "sensitive",
+  execute: executeProposeRescheduleAppointment,
+});
+
+defineTool({
+  name: PROPOSE_CANCEL_APPOINTMENT_TOOL_NAME,
+  description: "Registra uma proposta de cancelar uma consulta existente, para revisao humana antes de aplicar de verdade.",
+  inputSchema: proposeCancelAppointmentInputSchema,
+  risk: "sensitive",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "appointment",
+  entityTypes: ["appointment", "patient"],
+  dataSensitivity: "sensitive",
+  execute: executeProposeCancelAppointment,
+});
+
+defineTool({
+  name: PROPOSE_RESOLVE_PATIENT_REQUEST_TOOL_NAME,
+  description: "Registra uma proposta de marcar uma solicitacao de paciente como revisada/resolvida/descartada, para revisao humana antes de aplicar de verdade.",
+  inputSchema: proposeResolvePatientRequestInputSchema,
+  risk: "sensitive",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "request",
+  entityTypes: ["patient", "request"],
+  dataSensitivity: "sensitive",
+  execute: executeProposeResolvePatientRequest,
+});
+
+defineTool({
+  name: PROPOSE_MARK_PAYMENT_RECEIVED_TOOL_NAME,
+  description: "Registra uma proposta de marcar um pagamento manual existente como recebido, para revisao humana antes de aplicar de verdade. Nunca cria cobranca nem altera valor.",
+  inputSchema: proposeMarkPaymentReceivedInputSchema,
+  risk: "sensitive",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "finance",
+  entityTypes: ["payment", "patient"],
+  dataSensitivity: "sensitive",
+  execute: executeProposeMarkPaymentReceived,
 });
 
 // ── Modo Consulta (FASE 1) — workspace clinico dedicado ──────────────────
@@ -802,6 +920,7 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["patient"],
+  dataSensitivity: "clinical",
   execute: (input) => executeGetConsultationBrief(input),
 });
 
@@ -814,6 +933,7 @@ defineTool({
   contextRequirement: "client",
   domain: "meal_plan",
   entityTypes: ["patient", "meal_plan"],
+  dataSensitivity: "clinical",
   execute: executeGetActiveMealPlanForConsultation,
 });
 
@@ -826,6 +946,7 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["patient", "protocol"],
+  dataSensitivity: "clinical",
   execute: executeGetActiveProtocolForConsultation,
 });
 
@@ -838,6 +959,7 @@ defineTool({
   contextRequirement: "client",
   domain: "request",
   entityTypes: ["patient", "task", "request"],
+  dataSensitivity: "sensitive",
   execute: executeGetPendingPatientItems,
 });
 
@@ -850,6 +972,7 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["patient"],
+  dataSensitivity: "clinical",
   execute: executeCompareAnthropometry,
 });
 
@@ -862,6 +985,7 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["patient", "task"],
+  dataSensitivity: "clinical",
   execute: async (input) => input,
 });
 
@@ -874,6 +998,7 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["patient", "appointment"],
+  dataSensitivity: "clinical",
   execute: async (input) => input,
 });
 
@@ -891,6 +1016,7 @@ defineTool({
   contextRequirement: "client",
   domain: "meal_plan",
   entityTypes: ["meal_plan"],
+  dataSensitivity: "safe",
   execute: unboundPatientToolStub,
 });
 
@@ -903,6 +1029,7 @@ defineTool({
   contextRequirement: "client",
   domain: "meal_plan",
   entityTypes: ["meal_plan"],
+  dataSensitivity: "safe",
   execute: unboundPatientToolStub,
 });
 
@@ -915,6 +1042,7 @@ defineTool({
   contextRequirement: "client",
   domain: "appointment",
   entityTypes: ["appointment"],
+  dataSensitivity: "safe",
   execute: unboundPatientToolStub,
 });
 
@@ -927,6 +1055,7 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["task"],
+  dataSensitivity: "safe",
   execute: unboundPatientToolStub,
 });
 
@@ -939,6 +1068,7 @@ defineTool({
   contextRequirement: "client",
   domain: "food",
   entityTypes: ["food"],
+  dataSensitivity: "sensitive",
   execute: unboundPatientToolStub,
 });
 
@@ -951,6 +1081,7 @@ defineTool({
   contextRequirement: "none",
   domain: "navigation",
   entityTypes: [],
+  dataSensitivity: "safe",
   execute: executeNavigatePatientPortal,
 });
 
@@ -963,6 +1094,7 @@ defineTool({
   contextRequirement: "none",
   domain: "appointment",
   entityTypes: ["appointment"],
+  dataSensitivity: "safe",
   execute: executeGetAvailableSlotsForScheduling,
 });
 
@@ -975,6 +1107,7 @@ defineTool({
   contextRequirement: "client",
   domain: "appointment",
   entityTypes: ["appointment"],
+  dataSensitivity: "sensitive",
   execute: async (input) => input,
 });
 
@@ -987,6 +1120,7 @@ defineTool({
   contextRequirement: "client",
   domain: "request",
   entityTypes: ["request"],
+  dataSensitivity: "sensitive",
   execute: unboundPatientToolStub,
 });
 
@@ -999,6 +1133,7 @@ defineTool({
   contextRequirement: "client",
   domain: "request",
   entityTypes: ["request"],
+  dataSensitivity: "sensitive",
   execute: unboundPatientToolStub,
 });
 
@@ -1029,7 +1164,7 @@ export function buildToolSet(toolNames: string[], profile: AssistantCapabilityPr
     tools[name] = {
       description: def.description,
       inputSchema: def.inputSchema,
-      execute: def.execute,
+      execute: withToolCallObservability(name, def.domain, def.execute),
     };
   }
   return tools;

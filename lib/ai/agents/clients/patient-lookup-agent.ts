@@ -47,7 +47,11 @@ export async function executeGetPatientSummary(input: GetPatientSummaryInput) {
 
   return {
     found: true as const,
-    client: { id: client.id, name: client.name, email: client.email, phone: client.phone, status: client.status },
+    // FASE 2A (minimizacao): email/telefone nunca sao necessarios para as
+    // perguntas que esta tool responde (plano/protocolos/tarefas/consultas)
+    // — quem precisar de contato de verdade abre a ficha do paciente, fora
+    // do assistente.
+    client: { id: client.id, name: client.name, status: client.status },
     activePlan: activePlan ? { mealPlanId: activePlan.id, title: activePlan.title, version: activePlan.version } : null,
     protocolsCount: protocols.length,
     pendingTasksCount,

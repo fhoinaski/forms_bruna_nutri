@@ -2,7 +2,7 @@ import type { AssistantCapabilityProfile } from "@/lib/ai/policies/permissions";
 import type { ToolRisk } from "@/lib/ai/policies/action-policy";
 import { canAutoExecute, requiresConfirmation } from "@/lib/ai/policies/action-policy";
 import { listRegisteredTools } from "@/lib/ai/tools/registry";
-import { AGENT_DOMAINS, type AgentDomain, type ToolEntityType } from "@/lib/ai/tools/capability-types";
+import { AGENT_DOMAINS, type AgentDomain, type DataSensitivity, type ToolEntityType } from "@/lib/ai/tools/capability-types";
 
 /**
  * Fonte de verdade unica e derivada (nunca mantida a mao em paralelo) das
@@ -21,6 +21,7 @@ export interface CapabilityManifestEntry {
   contextRequirement: "none" | "client" | "submission";
   requiresConfirmation: boolean;
   autoExecutes: boolean;
+  dataSensitivity: DataSensitivity;
 }
 
 export interface CapabilityManifest {
@@ -44,6 +45,7 @@ export function buildCapabilityManifest(): CapabilityManifest {
       contextRequirement: tool.contextRequirement,
       requiresConfirmation: requiresConfirmation(tool.risk),
       autoExecutes: canAutoExecute(tool.risk),
+      dataSensitivity: tool.dataSensitivity,
     });
   }
 
@@ -54,4 +56,15 @@ export function buildCapabilityManifest(): CapabilityManifest {
 export function listUncoveredDomains(): AgentDomain[] {
   const covered = new Set(listRegisteredTools().map((t) => t.domain));
   return AGENT_DOMAINS.filter((d) => !covered.has(d));
+}
+
+/**
+ * Responde programaticamente "quais tools leem dado sensivel/clinico?"
+ * (FASE 2A, item 14 do pedido) — sempre derivado do registry, nunca uma
+ * lista mantida a parte.
+ */
+export function listToolsBySensitivity(level: DataSensitivity): string[] {
+  return listRegisteredTools()
+    .filter((tool) => tool.dataSensitivity === level)
+    .map((tool) => tool.name);
 }

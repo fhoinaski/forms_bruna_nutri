@@ -23,6 +23,20 @@ import {
   type ProposeConsultationTasksBatchInput,
   type ProposeConsultationSummaryInput,
 } from "@/lib/ai/agents/clinical/consultation-agent";
+import {
+  PROPOSE_RESCHEDULE_APPOINTMENT_TOOL_NAME,
+  PROPOSE_CANCEL_APPOINTMENT_TOOL_NAME,
+  type ProposeRescheduleAppointmentOutput,
+  type ProposeCancelAppointmentOutput,
+} from "@/lib/ai/agents/appointments/appointment-write-agent";
+import {
+  PROPOSE_RESOLVE_PATIENT_REQUEST_TOOL_NAME,
+  type ProposeResolvePatientRequestOutput,
+} from "@/lib/ai/agents/clients/patient-request-write-agent";
+import {
+  PROPOSE_MARK_PAYMENT_RECEIVED_TOOL_NAME,
+  type ProposeMarkPaymentReceivedOutput,
+} from "@/lib/ai/agents/finance/finance-write-agent";
 
 /**
  * Substitui a cadeia de 9 `if`s quase identicos que existia em
@@ -237,6 +251,58 @@ const BUILDERS: Record<string, ProposalBuilder> = {
       clientId: ctx.clientId,
       consultationSessionId: ctx.consultationSessionId,
       content: typed.content,
+    };
+  },
+
+  // ── FASE 3 (safe writes operacionais) ──────────────────────────────────
+
+  [PROPOSE_RESCHEDULE_APPOINTMENT_TOOL_NAME]: (_input, _ctx, toolOutput) => {
+    const output = toolOutput as ProposeRescheduleAppointmentOutput | undefined;
+    if (!output || "error" in output || !output.clientId) return null;
+    return {
+      kind: "reschedule_appointment",
+      appointmentId: output.appointmentId,
+      clientId: output.clientId,
+      previousStartsAtIso: output.previousStartsAtIso,
+      newStartsAtDisplay: output.newStartsAtDisplay,
+    };
+  },
+
+  [PROPOSE_CANCEL_APPOINTMENT_TOOL_NAME]: (_input, _ctx, toolOutput) => {
+    const output = toolOutput as ProposeCancelAppointmentOutput | undefined;
+    if (!output || "error" in output) return null;
+    return {
+      kind: "cancel_appointment",
+      appointmentId: output.appointmentId,
+      clientId: output.clientId,
+      previousStatus: output.previousStatus,
+      cancellationReason: output.cancellationReason,
+    };
+  },
+
+  [PROPOSE_RESOLVE_PATIENT_REQUEST_TOOL_NAME]: (_input, _ctx, toolOutput) => {
+    const output = toolOutput as ProposeResolvePatientRequestOutput | undefined;
+    if (!output || "error" in output) return null;
+    return {
+      kind: "resolve_patient_request",
+      requestId: output.requestId,
+      clientId: output.clientId,
+      previousStatus: output.previousStatus,
+      newStatus: output.newStatus,
+      adminNotes: output.adminNotes,
+    };
+  },
+
+  [PROPOSE_MARK_PAYMENT_RECEIVED_TOOL_NAME]: (_input, _ctx, toolOutput) => {
+    const output = toolOutput as ProposeMarkPaymentReceivedOutput | undefined;
+    if (!output || "error" in output) return null;
+    return {
+      kind: "mark_payment_received",
+      paymentId: output.paymentId,
+      clientId: output.clientId,
+      previousStatus: output.previousStatus,
+      paidAtDisplay: output.paidAtDisplay,
+      notes: output.notes,
     };
   },
 };

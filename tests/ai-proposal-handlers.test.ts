@@ -343,3 +343,249 @@ describe("executeProposedAction — new_blog_post", () => {
     expect(createBlogPost).toHaveBeenCalledWith(expect.objectContaining({ content_domain: null, references: [] }));
   });
 });
+
+// ── FASE 3 (safe writes operacionais) ────────────────────────────────────
+
+function appointmentRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "apt-1", client_id: "client-1", client_name: "Maria", client_phone: null, client_email: null,
+    title: "Retorno", appointment_type: "retorno", starts_at: "2026-08-13T15:00:00.000Z", ends_at: "2026-08-13T16:00:00.000Z",
+    status: "agendado", location: null, notes: null, portal_visible: 1, client_confirmed_at: null,
+    cancellation_reason: null, created_at: "now", updated_at: "now",
+    ...overrides,
+  };
+}
+
+describe("executeProposedAction — reschedule_appointment", () => {
+  const baseAction: ProposedAction = {
+    kind: "reschedule_appointment", appointmentId: "apt-1", clientId: "client-1",
+    previousStartsAtIso: "2026-08-13T15:00:00.000Z", newStartsAtDisplay: "14/08/2026 16:00",
+    risk: "sensitive", requiresConfirmation: true,
+  };
+
+  it("reagenda com sucesso quando nada mudou desde a proposta", async () => {
+    const updateAppointment = vi.fn();
+    vi.doMock("@/lib/repositories/appointments", () => ({
+      getAppointmentById: vi.fn().mockResolvedValue(appointmentRow()),
+      updateAppointment,
+    }));
+    vi.doMock("@/lib/repositories/availability", () => ({
+      hasAppointmentConflict: vi.fn().mockResolvedValue(false),
+      slotEnd: vi.fn().mockImplementation((iso: string) => new Date(new Date(iso).getTime() + 60 * 60_000).toISOString()),
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    const result = await executeProposedAction(baseAction, ctx);
+    expect(result.data).toMatchObject({ appointmentId: "apt-1", previousStartsAt: "2026-08-13T15:00:00.000Z" });
+    expect(updateAppointment).toHaveBeenCalledWith("apt-1", expect.objectContaining({ starts_at: expect.any(String), ends_at: expect.any(String) }));
+  });
+
+  it("stale: horário mudou desde a proposta (reagendado por outra via) → 409, nunca aplica por cima", async () => {
+    vi.doMock("@/lib/repositories/appointments", () => ({
+      getAppointmentById: vi.fn().mockResolvedValue(appointmentRow({ starts_at: "2026-08-13T18:00:00.000Z" })),
+      updateAppointment: vi.fn(),
+    }));
+    const { executeProposedAction, ProposalExecutionError } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 409 });
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toBeInstanceOf(ProposalExecutionError);
+  });
+
+  it("consulta não encontrada → 404", async () => {
+    vi.doMock("@/lib/repositories/appointments", () => ({ getAppointmentById: vi.fn().mockResolvedValue(null), updateAppointment: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("consulta não pertence ao paciente da proposta → 403 (nunca confia só no clientId do payload)", async () => {
+    vi.doMock("@/lib/repositories/appointments", () => ({
+      getAppointmentById: vi.fn().mockResolvedValue(appointmentRow({ client_id: "outro-cliente" })),
+      updateAppointment: vi.fn(),
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("já cancelada → 409, nunca reagenda uma consulta cancelada", async () => {
+    vi.doMock("@/lib/repositories/appointments", () => ({
+      getAppointmentById: vi.fn().mockResolvedValue(appointmentRow({ status: "cancelado" })),
+      updateAppointment: vi.fn(),
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("novo horário em conflito com outra consulta → 409, nunca cria conflito de agenda", async () => {
+    vi.doMock("@/lib/repositories/appointments", () => ({
+      getAppointmentById: vi.fn().mockResolvedValue(appointmentRow()),
+      updateAppointment: vi.fn(),
+    }));
+    vi.doMock("@/lib/repositories/availability", () => ({
+      hasAppointmentConflict: vi.fn().mockResolvedValue(true),
+      slotEnd: vi.fn().mockImplementation((iso: string) => new Date(new Date(iso).getTime() + 60 * 60_000).toISOString()),
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe("executeProposedAction — cancel_appointment", () => {
+  const baseAction: ProposedAction = {
+    kind: "cancel_appointment", appointmentId: "apt-1", clientId: "client-1",
+    previousStatus: "agendado", cancellationReason: "Paciente pediu para remarcar depois.",
+    risk: "sensitive", requiresConfirmation: true,
+  };
+
+  it("cancela com sucesso quando o status ainda bate com o snapshot da proposta", async () => {
+    const updateAppointment = vi.fn();
+    vi.doMock("@/lib/repositories/appointments", () => ({ getAppointmentById: vi.fn().mockResolvedValue(appointmentRow()), updateAppointment }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    const result = await executeProposedAction(baseAction, ctx);
+    expect(result.data).toEqual({ appointmentId: "apt-1", previousStatus: "agendado", newStatus: "cancelado" });
+    expect(updateAppointment).toHaveBeenCalledWith("apt-1", { status: "cancelado", cancellation_reason: "Paciente pediu para remarcar depois." });
+  });
+
+  it("stale: status mudou desde a proposta → 409", async () => {
+    vi.doMock("@/lib/repositories/appointments", () => ({ getAppointmentById: vi.fn().mockResolvedValue(appointmentRow({ status: "confirmado" })), updateAppointment: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("já cancelada (confirmação duplicada/replay) → 409, nunca cancela duas vezes", async () => {
+    const action: ProposedAction = { ...baseAction, previousStatus: "cancelado" };
+    vi.doMock("@/lib/repositories/appointments", () => ({ getAppointmentById: vi.fn().mockResolvedValue(appointmentRow({ status: "cancelado" })), updateAppointment: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(action, ctx)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("consulta não encontrada → 404", async () => {
+    vi.doMock("@/lib/repositories/appointments", () => ({ getAppointmentById: vi.fn().mockResolvedValue(null), updateAppointment: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("consulta não pertence ao paciente da proposta → 403", async () => {
+    vi.doMock("@/lib/repositories/appointments", () => ({ getAppointmentById: vi.fn().mockResolvedValue(appointmentRow({ client_id: "outro-cliente" })), updateAppointment: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("executeProposedAction — resolve_patient_request", () => {
+  const baseAction: ProposedAction = {
+    kind: "resolve_patient_request", requestId: "request-1", clientId: "client-1",
+    previousStatus: "pending_review", newStatus: "resolved", adminNotes: "Combinado na consulta.",
+    risk: "sensitive", requiresConfirmation: true,
+  };
+
+  function requestRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "request-1", client_id: "client-1", request_type: "food_substitution", patient_text: "Quero trocar arroz por batata.",
+      ai_summary: null, meal_plan_id: null, meal_id: null, item_id: null, appointment_id: null, client_task_id: null,
+      status: "pending_review", admin_notes: null, reviewed_at: null, created_at: "now", updated_at: "now",
+      ...overrides,
+    };
+  }
+
+  it("resolve com sucesso quando o status ainda é pending_review", async () => {
+    const updatePatientRequestStatus = vi.fn().mockResolvedValue(requestRow({ status: "resolved" }));
+    vi.doMock("@/lib/repositories/patient-requests", () => ({
+      getPatientRequestById: vi.fn().mockResolvedValue(requestRow()),
+      updatePatientRequestStatus,
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    const result = await executeProposedAction(baseAction, ctx);
+    expect(result.data).toEqual({ requestId: "request-1", previousStatus: "pending_review", newStatus: "resolved" });
+    expect(updatePatientRequestStatus).toHaveBeenCalledWith("request-1", { status: "resolved", adminNotes: "Combinado na consulta." });
+  });
+
+  it("stale: outra via já revisou a solicitação → 409, nunca sobrescreve", async () => {
+    vi.doMock("@/lib/repositories/patient-requests", () => ({
+      getPatientRequestById: vi.fn().mockResolvedValue(requestRow({ status: "dismissed" })),
+      updatePatientRequestStatus: vi.fn(),
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("solicitação não encontrada → 404", async () => {
+    vi.doMock("@/lib/repositories/patient-requests", () => ({ getPatientRequestById: vi.fn().mockResolvedValue(null), updatePatientRequestStatus: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("solicitação não pertence ao paciente da proposta → 403", async () => {
+    vi.doMock("@/lib/repositories/patient-requests", () => ({
+      getPatientRequestById: vi.fn().mockResolvedValue(requestRow({ client_id: "outro-cliente" })),
+      updatePatientRequestStatus: vi.fn(),
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("executeProposedAction — mark_payment_received", () => {
+  const baseAction: ProposedAction = {
+    kind: "mark_payment_received", paymentId: "pay-1", clientId: "client-1",
+    previousStatus: "vencido", paidAtDisplay: "10/08/2026", notes: "Pago via Pix.",
+    risk: "sensitive", requiresConfirmation: true,
+  };
+
+  function paymentRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "pay-1", client_id: "client-1", client_name: "Maria", client_email: null, description: "Consulta de retorno",
+      amount_cents: 20000, due_date: "2026-08-01", paid_at: null, status: "vencido", payment_method: null,
+      invoice_number: null, payment_link: null, receipt_url: null, installment_number: null, installment_total: null,
+      category: null, notes: null, overdue_notified_at: null, created_at: "now", updated_at: "now",
+      ...overrides,
+    };
+  }
+
+  it("marca como recebido com sucesso, gravando a data informada", async () => {
+    const updatePayment = vi.fn().mockResolvedValue(paymentRow({ status: "pago" }));
+    vi.doMock("@/lib/repositories/payments", () => ({ getPaymentById: vi.fn().mockResolvedValue(paymentRow()), updatePayment }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    const result = await executeProposedAction(baseAction, ctx);
+    expect(result.data).toEqual({ paymentId: "pay-1", previousStatus: "vencido", newStatus: "pago" });
+    expect(updatePayment).toHaveBeenCalledWith("pay-1", expect.objectContaining({ status: "pago", paid_at: "2026-08-10T15:00:00.000Z", notes: "Pago via Pix." }));
+  });
+
+  it("sem paidAtDisplay, usa a data/hora atual", async () => {
+    const updatePayment = vi.fn().mockResolvedValue(paymentRow({ status: "pago" }));
+    vi.doMock("@/lib/repositories/payments", () => ({ getPaymentById: vi.fn().mockResolvedValue(paymentRow()), updatePayment }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    const action: ProposedAction = { ...baseAction, paidAtDisplay: null };
+    await executeProposedAction(action, ctx);
+    expect(updatePayment).toHaveBeenCalledWith("pay-1", expect.objectContaining({ status: "pago" }));
+  });
+
+  it("stale: status mudou desde a proposta → 409", async () => {
+    vi.doMock("@/lib/repositories/payments", () => ({ getPaymentById: vi.fn().mockResolvedValue(paymentRow({ status: "pendente" })), updatePayment: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("já marcado como recebido (replay/duplicado) → 409, nunca marca duas vezes", async () => {
+    const action: ProposedAction = { ...baseAction, previousStatus: "pago" };
+    vi.doMock("@/lib/repositories/payments", () => ({ getPaymentById: vi.fn().mockResolvedValue(paymentRow({ status: "pago" })), updatePayment: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(action, ctx)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("pagamento não encontrado → 404", async () => {
+    vi.doMock("@/lib/repositories/payments", () => ({ getPaymentById: vi.fn().mockResolvedValue(null), updatePayment: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("pagamento não pertence ao paciente da proposta → 403", async () => {
+    vi.doMock("@/lib/repositories/payments", () => ({ getPaymentById: vi.fn().mockResolvedValue(paymentRow({ client_id: "outro-cliente" })), updatePayment: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("data de recebimento inválida → 422", async () => {
+    vi.doMock("@/lib/repositories/payments", () => ({ getPaymentById: vi.fn().mockResolvedValue(paymentRow()), updatePayment: vi.fn() }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    const action: ProposedAction = { ...baseAction, paidAtDisplay: "não é uma data" };
+    await expect(executeProposedAction(action, ctx)).rejects.toMatchObject({ status: 422 });
+  });
+});

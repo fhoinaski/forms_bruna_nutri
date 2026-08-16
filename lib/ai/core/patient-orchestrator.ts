@@ -8,6 +8,7 @@ import type {
 import { persistProposedAction } from "@/lib/ai/core/proposal-store";
 import { buildProposedAction } from "@/lib/ai/tools/proposal-builders";
 import { getToolDefinition, getToolRisk } from "@/lib/ai/tools/registry";
+import { withToolCallObservability } from "@/lib/ai/tools/tool-call-observability";
 import { isProfileAllowed } from "@/lib/ai/policies/permissions";
 import type { ProposedAction } from "@/lib/ai/schemas/action.schema";
 import { getPatientConversationMemory, recordPatientConversationTurn } from "@/lib/ai/memory/patient-conversation-summary";
@@ -148,10 +149,11 @@ export function resolvePatientTools(clientId: string, options?: { excludeSubstit
     if (!definition) continue;
     if (!isProfileAllowed(definition.profiles, "PATIENT_ASSISTANT")) continue;
     const boundExecutor = CLIENT_BOUND_EXECUTORS[name];
+    const rawExecute = boundExecutor ? (input: unknown) => boundExecutor(clientId, input) : definition.execute;
     tools[name] = {
       description: definition.description,
       inputSchema: definition.inputSchema,
-      execute: boundExecutor ? (input: unknown) => boundExecutor(clientId, input) : definition.execute,
+      execute: withToolCallObservability(name, definition.domain, rawExecute),
     };
   }
   return tools;

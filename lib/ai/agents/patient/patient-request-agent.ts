@@ -4,6 +4,7 @@ import { getAppointments } from "@/lib/repositories/appointments";
 import { getClientTasks } from "@/lib/repositories/client-tasks";
 import { listPatientRequests, type PatientRequestStatus } from "@/lib/repositories/patient-requests";
 import { patientRequestTypeSchema, type PatientRequestType } from "@/lib/ai/schemas/action.schema";
+import { truncateForToolOutput } from "@/lib/ai/privacy/sanitize-context";
 
 /**
  * Solicitacao do PACIENTE para a nutricionista revisar (secao 2 do pedido:
@@ -140,13 +141,20 @@ export interface GetMyRequestsOutput {
   requests: PatientRequestSummary[];
 }
 
-/** Nunca inclui admin_notes — isso é interno da nutricionista (secao 26 do pedido: "não expor notas internas"). */
+/**
+ * Nunca inclui admin_notes — isso é interno da nutricionista (secao 26 do
+ * pedido: "não expor notas internas"). FASE 2B: `patientText` aqui é a
+ * PRÓPRIA paciente lendo o que ELA MESMA escreveu — não redige PII (seria
+ * estranho mostrar o próprio contato "removido" para ela), mas ainda
+ * trunca defensivamente (nunca silencioso) contra texto excepcionalmente
+ * grande, mesma proteção de tamanho de qualquer campo livre de tool.
+ */
 export async function executeGetMyRequests(clientId: string): Promise<GetMyRequestsOutput> {
   const rows = await listPatientRequests({ clientId, limit: 20 });
   return {
     requests: rows.map((row) => ({
       requestType: row.request_type,
-      patientText: row.patient_text,
+      patientText: truncateForToolOutput(row.patient_text).text,
       status: row.status,
       createdAt: row.created_at,
     })),

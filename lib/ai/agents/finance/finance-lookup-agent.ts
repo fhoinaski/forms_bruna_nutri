@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getPayments, getPaymentById, getPaymentMetrics, type Payment } from "@/lib/repositories/payments";
 import { getSaoPauloDateKey } from "@/lib/utils/timezone";
+import { truncateForToolOutput } from "@/lib/ai/privacy/sanitize-context";
 
 /**
  * Tools de leitura financeira (FASE 1B) — financeiro do sistema e 100%
@@ -18,7 +19,9 @@ function toSummary(payment: Payment) {
     id: payment.id,
     clientId: payment.client_id,
     clientName: payment.client_name,
-    description: payment.description,
+    // FASE 2A: description e digitada pela nutricionista (nao pela paciente),
+    // mas ainda e texto livre — trunca defensivamente (nunca silencioso).
+    description: truncateForToolOutput(payment.description).text,
     amountCents: payment.amount_cents,
     amountFormatted: formatBRL(payment.amount_cents),
     dueDate: payment.due_date,
@@ -53,7 +56,7 @@ export async function executeGetPaymentDetails(input: GetPaymentDetailsInput) {
       invoiceNumber: payment.invoice_number,
       installmentNumber: payment.installment_number,
       installmentTotal: payment.installment_total,
-      notes: payment.notes,
+      notes: payment.notes ? truncateForToolOutput(payment.notes).text : null,
     },
   };
 }

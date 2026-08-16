@@ -12,7 +12,7 @@ import { sumMacros, roundedMacros, type MacroTotals } from "@/lib/nutrition/macr
 import { calculateWeightDelta } from "@/lib/clinical/anthropometry";
 import type { Client } from "@/lib/repositories/clients";
 import { generateStructuredResult } from "@/lib/ai/gateway/ai-gateway";
-import { sanitizeClinicalContext, stripInternalPatientAlias } from "@/lib/ai/privacy/sanitize-context";
+import { sanitizeClinicalContext, sanitizePatientFreeTextForToolOutput, stripInternalPatientAlias } from "@/lib/ai/privacy/sanitize-context";
 import { AiConfigError, AiProviderError, AiValidationError } from "@/lib/ai/core/ai-errors";
 import { assertCategoryAllowed } from "@/lib/ai/policies/clinical-context-policy";
 
@@ -167,6 +167,41 @@ export async function buildConsultationSystemData(client: Client): Promise<Consu
           completedTaskCount: activeProtocolRow.completed_task_count ?? 0,
         }
       : null,
+  };
+}
+
+/**
+ * FASE 2B (docs/AI-OPERATOR-AUDIT-ROADMAP.md): `buildConsultationSystemData`
+ * acima e compartilhada com a UI real do Modo Consulta
+ * (app/api/admin/consultation-sessions/[id]/brief/route.ts) — NUNCA
+ * alterada aqui, a UI continua recebendo o objeto canonico completo.
+ *
+ * Esta funcao e a view SEPARADA especifica para IA: mesma forma
+ * (ConsultationSystemData), mas os 3 campos de texto livre sem equivalente
+ * estruturado (progressNotes/conductNotes/symptoms — avaliacao da
+ * nutricionista na consulta, sem contraparte em `clinicalMarkers`) passam
+ * por `sanitizePatientFreeTextForToolOutput` (trunca + redige PII) antes de
+ * virar resultado de tool para o LLM principal. Tudo que ja e estruturado
+ * (clinicalMarkers, activePlan, activeProtocol, pending.tasks, numeros de
+ * evolucao) e devolvido tal como esta — structured-first (secao 5 do
+ * pedido), nada removido do que ja e seguro.
+ *
+ * `pending.patientRequests[].summary` ja vem truncado em 140 chars por
+ * `buildConsultationSystemData` (precedente anterior a esta fase) — mantido
+ * como esta, sem duplicar sanitizacao.
+ */
+export function sanitizeConsultationSystemDataForAi(data: ConsultationSystemData): ConsultationSystemData {
+  return {
+    ...data,
+    lastVisit: {
+      ...data.lastVisit,
+      progressNotes: data.lastVisit.progressNotes ? sanitizePatientFreeTextForToolOutput(data.lastVisit.progressNotes).text : null,
+      conductNotes: data.lastVisit.conductNotes ? sanitizePatientFreeTextForToolOutput(data.lastVisit.conductNotes).text : null,
+    },
+    evolution: {
+      ...data.evolution,
+      symptoms: data.evolution.symptoms ? sanitizePatientFreeTextForToolOutput(data.evolution.symptoms).text : null,
+    },
   };
 }
 

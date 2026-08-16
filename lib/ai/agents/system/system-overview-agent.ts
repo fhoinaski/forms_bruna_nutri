@@ -12,6 +12,7 @@ import {
   type OpportunityStage,
   type OpportunityTemperature,
 } from "@/lib/repositories/lead-opportunities";
+import { truncateForToolOutput } from "@/lib/ai/privacy/sanitize-context";
 
 export type { OpportunityStage, OpportunityTemperature };
 
@@ -58,7 +59,9 @@ export async function executeListOpportunities(input: { stage?: OpportunityStage
       patient_name: item.patient_name,
       stage: item.stage,
       temperature: item.temperature,
-      objective: item.objective,
+      // FASE 2A: objective e texto livre (pode conter contexto de saude do
+      // lead) — trunca defensivamente antes de virar resultado de tool.
+      objective: item.objective ? truncateForToolOutput(item.objective).text : item.objective,
       next_action_at: item.next_action_at,
       contact_attempts: item.contact_attempts,
     })),

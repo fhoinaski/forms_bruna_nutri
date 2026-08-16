@@ -2,7 +2,7 @@ import type { ProposedAction, ProposedActionKind } from "@/lib/ai/schemas/action
 import { extractIsoDateTime, parseBrDateTimeToIso, parseBrDateToIsoDate } from "@/lib/ai/schemas/br-datetime";
 import { getClientById, getClients } from "@/lib/repositories/clients";
 import { createClient } from "@/lib/repositories/clients";
-import { createAppointment, getAppointments } from "@/lib/repositories/appointments";
+import { createAppointment, getAppointments, getAppointmentById, updateAppointment } from "@/lib/repositories/appointments";
 import { getAvailableSlots, hasAppointmentConflict, slotEnd, countFutureClientAppointments } from "@/lib/repositories/availability";
 import { createClientTask, getClientTasks } from "@/lib/repositories/client-tasks";
 import { createRecipe, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/repositories/recipes";
@@ -17,7 +17,8 @@ import { blogContentDomainSchema, blogReferenceSchema, type BlogReference } from
 import { getActiveMealPlan, getMealPlanById, updateMealPlan } from "@/lib/repositories/meal-plans";
 import { applyMealPlanChangesWithPreview, MealPlanChangeValidationError } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { normalize } from "@/lib/nutrition/macros";
-import { createPatientRequest, findSimilarPendingPatientRequest } from "@/lib/repositories/patient-requests";
+import { createPatientRequest, findSimilarPendingPatientRequest, updatePatientRequestStatus, getPatientRequestById } from "@/lib/repositories/patient-requests";
+import { getPaymentById, updatePayment } from "@/lib/repositories/payments";
 import { computeFoodSubstitution } from "@/lib/ai/agents/patient/patient-portal-agent";
 import { writeAuditLog } from "@/lib/security/audit";
 import type { MealPlanItemPayload } from "@/lib/repositories/meal-plans";
@@ -621,6 +622,156 @@ const executeConsultationSummary: ProposalHandler<"consultation_summary"> = asyn
   return { data: { consultationSessionId: action.consultationSessionId } };
 };
 
+// ── reschedule_appointment (FASE 3 — safe write) ─────────────────────────
+
+const executeRescheduleAppointment: ProposalHandler<"reschedule_appointment"> = async (action) => {
+  const appointment = await getAppointmentById(action.appointmentId);
+  if (!appointment) throw new ProposalExecutionError("Consulta não encontrada.", 404);
+  if (appointment.client_id !== action.clientId) {
+    throw new ProposalExecutionError("Esta consulta não pertence a este paciente.", 403);
+  }
+  if (appointment.status === "cancelado") {
+    throw new ProposalExecutionError("Essa consulta foi cancelada depois que esta proposta foi criada.", 409);
+  }
+  // Revalidacao obrigatoria (fail closed): se o horario atual nao bate mais
+  // com o que a proposta capturou, algo mudou entre a proposta e a
+  // confirmacao (reagendamento manual, outra proposta) — nunca aplica por
+  // cima silenciosamente.
+  if (appointment.starts_at !== action.previousStartsAtIso) {
+    throw new ProposalExecutionError(
+      "Os dados mudaram desde a confirmação. Peça para revisar a consulta novamente.",
+      409
+    );
+  }
+
+  const newStartsAtIso =
+    parseBrDateTimeToIso(action.newStartsAtDisplay) ?? extractIsoDateTime(action.newStartsAtDisplay);
+  if (!newStartsAtIso) throw new ProposalExecutionError("Nova data e hora da proposta são inválidas.", 422);
+  const newEndsAtIso = slotEnd(newStartsAtIso);
+
+  const conflict = await hasAppointmentConflict(newStartsAtIso, newEndsAtIso, action.appointmentId);
+  if (conflict) {
+    throw new ProposalExecutionError("O novo horário já está ocupado por outro agendamento.", 409);
+  }
+
+  await updateAppointment(action.appointmentId, { starts_at: newStartsAtIso, ends_at: newEndsAtIso });
+
+  return {
+    data: {
+      appointmentId: action.appointmentId,
+      previousStartsAt: appointment.starts_at,
+      newStartsAt: newStartsAtIso,
+    },
+  };
+};
+
+// ── cancel_appointment (FASE 3 — safe write) ─────────────────────────────
+
+const executeCancelAppointment: ProposalHandler<"cancel_appointment"> = async (action) => {
+  const appointment = await getAppointmentById(action.appointmentId);
+  if (!appointment) throw new ProposalExecutionError("Consulta não encontrada.", 404);
+  if (action.clientId && appointment.client_id !== action.clientId) {
+    throw new ProposalExecutionError("Esta consulta não pertence a este paciente.", 403);
+  }
+  if (appointment.status !== action.previousStatus) {
+    throw new ProposalExecutionError(
+      "O status desta consulta mudou desde a confirmação. Peça para revisar novamente.",
+      409
+    );
+  }
+  if (appointment.status === "cancelado") {
+    throw new ProposalExecutionError("Essa consulta já está cancelada.", 409);
+  }
+
+  await updateAppointment(action.appointmentId, {
+    status: "cancelado",
+    cancellation_reason: action.cancellationReason ?? null,
+  });
+
+  return {
+    data: {
+      appointmentId: action.appointmentId,
+      previousStatus: appointment.status,
+      newStatus: "cancelado",
+    },
+  };
+};
+
+// ── resolve_patient_request (FASE 3 — safe write) ────────────────────────
+
+const executeResolvePatientRequest: ProposalHandler<"resolve_patient_request"> = async (action) => {
+  const request = await getPatientRequestById(action.requestId);
+  if (!request) throw new ProposalExecutionError("Solicitação não encontrada.", 404);
+  if (request.client_id !== action.clientId) {
+    throw new ProposalExecutionError("Esta solicitação não pertence a este paciente.", 403);
+  }
+  // Revalidacao obrigatoria: se alguem (outra proposta, ou a nutricionista
+  // direto na tela de solicitacoes) ja mudou o status, nao aplica por cima.
+  if (request.status !== action.previousStatus) {
+    throw new ProposalExecutionError(
+      "O status desta solicitação mudou desde a confirmação. Peça para revisar novamente.",
+      409
+    );
+  }
+
+  const updated = await updatePatientRequestStatus(action.requestId, {
+    status: action.newStatus,
+    adminNotes: action.adminNotes ?? undefined,
+  });
+  if (!updated) throw new ProposalExecutionError("Não foi possível atualizar a solicitação.", 500);
+
+  return {
+    data: {
+      requestId: action.requestId,
+      previousStatus: request.status,
+      newStatus: action.newStatus,
+    },
+  };
+};
+
+// ── mark_payment_received (FASE 3 — safe write) ──────────────────────────
+
+const executeMarkPaymentReceived: ProposalHandler<"mark_payment_received"> = async (action) => {
+  const payment = await getPaymentById(action.paymentId);
+  if (!payment) throw new ProposalExecutionError("Pagamento não encontrado.", 404);
+  if (action.clientId && payment.client_id !== action.clientId) {
+    throw new ProposalExecutionError("Este pagamento não pertence a este paciente.", 403);
+  }
+  if (payment.status !== action.previousStatus) {
+    throw new ProposalExecutionError(
+      "O status deste pagamento mudou desde a confirmação. Peça para revisar novamente.",
+      409
+    );
+  }
+  if (payment.status === "pago") {
+    throw new ProposalExecutionError("Esse pagamento já está marcado como recebido.", 409);
+  }
+
+  let paidAtIso: string;
+  if (action.paidAtDisplay) {
+    const isoDate = parseBrDateToIsoDate(action.paidAtDisplay);
+    if (!isoDate) throw new ProposalExecutionError("Data de recebimento inválida. Use o formato DD/MM/AAAA.", 422);
+    paidAtIso = new Date(`${isoDate}T12:00:00-03:00`).toISOString();
+  } else {
+    paidAtIso = new Date().toISOString();
+  }
+
+  const updated = await updatePayment(action.paymentId, {
+    status: "pago",
+    paid_at: paidAtIso,
+    notes: action.notes ? (payment.notes ? `${payment.notes}\n${action.notes}` : action.notes) : payment.notes,
+  });
+  if (!updated) throw new ProposalExecutionError("Não foi possível atualizar o pagamento.", 500);
+
+  return {
+    data: {
+      paymentId: action.paymentId,
+      previousStatus: payment.status,
+      newStatus: "pago",
+    },
+  };
+};
+
 // ── dispatch tipado (sem switch untyped, sem `any`) ─────────────────────
 
 const PROPOSAL_HANDLERS: { [K in ProposedActionKind]: ProposalHandler<K> } = {
@@ -638,6 +789,10 @@ const PROPOSAL_HANDLERS: { [K in ProposedActionKind]: ProposalHandler<K> } = {
   patient_change_request: executePatientChangeRequest,
   consultation_tasks_batch: executeConsultationTasksBatch,
   consultation_summary: executeConsultationSummary,
+  reschedule_appointment: executeRescheduleAppointment,
+  cancel_appointment: executeCancelAppointment,
+  resolve_patient_request: executeResolvePatientRequest,
+  mark_payment_received: executeMarkPaymentReceived,
 };
 
 export async function executeProposedAction(

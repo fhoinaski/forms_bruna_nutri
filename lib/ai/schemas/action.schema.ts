@@ -300,6 +300,67 @@ export const consultationSummaryActionSchema = z.object({
   ...actionEnvelopeFields,
 });
 
+// ── reschedule_appointment / cancel_appointment (FASE 3 — safe writes) ───
+//
+// `previousStartsAtIso`/`previousStatus` sao o snapshot capturado no
+// momento da PROPOSTA — o handler de confirmacao (proposal-handlers.ts)
+// re-busca o agendamento real e SO aplica se esse snapshot ainda bater com
+// o estado atual (mesma logica de optimistic concurrency de
+// `meal_plan_change.baseVersion`, sem coluna de versao formal em
+// `appointments`). Se mudou, a confirmacao falha como stale (409), nunca
+// aplica por cima silenciosamente.
+
+export const rescheduleAppointmentActionSchema = z.object({
+  kind: z.literal("reschedule_appointment"),
+  appointmentId: z.string().min(1),
+  clientId: z.string().min(1),
+  previousStartsAtIso: z.string().min(1),
+  newStartsAtDisplay: z.string().min(10).max(20),
+  ...actionEnvelopeFields,
+});
+
+export const cancelAppointmentActionSchema = z.object({
+  kind: z.literal("cancel_appointment"),
+  appointmentId: z.string().min(1),
+  clientId: z.string().min(1).nullable(),
+  previousStatus: z.string().min(1),
+  cancellationReason: z.string().max(300).nullable().optional(),
+  ...actionEnvelopeFields,
+});
+
+// ── resolve_patient_request (FASE 3 — safe writes) ────────────────────────
+//
+// Reaproveita os status ja existentes de patient_requests (nunca inventa um
+// status novo) — `previousStatus` e sempre "pending_review" na pratica (so
+// solicitacoes pendentes podem ser propostas para resolucao), mas fica
+// explicito no payload para a mesma checagem de staleness no confirm.
+
+export const resolvePatientRequestActionSchema = z.object({
+  kind: z.literal("resolve_patient_request"),
+  requestId: z.string().min(1),
+  clientId: z.string().min(1),
+  previousStatus: z.string().min(1),
+  newStatus: z.enum(["reviewed", "resolved", "dismissed"]),
+  adminNotes: z.string().max(500).nullable().optional(),
+  ...actionEnvelopeFields,
+});
+
+// ── mark_payment_received (FASE 3 — safe writes) ──────────────────────────
+//
+// Financeiro e 100% registro manual (sem gateway) — esta kind NUNCA cria
+// cobranca, NUNCA altera valor (nao ha campo de valor aqui), NUNCA exclui
+// um pagamento. So marca um pagamento JA EXISTENTE como recebido.
+
+export const markPaymentReceivedActionSchema = z.object({
+  kind: z.literal("mark_payment_received"),
+  paymentId: z.string().min(1),
+  clientId: z.string().min(1).nullable(),
+  previousStatus: z.string().min(1),
+  paidAtDisplay: z.string().max(10).nullable().optional(),
+  notes: z.string().max(300).nullable().optional(),
+  ...actionEnvelopeFields,
+});
+
 export const proposedActionSchema = z.discriminatedUnion("kind", [
   nutritionRecordActionSchema,
   preAnalysisActionSchema,
@@ -315,6 +376,10 @@ export const proposedActionSchema = z.discriminatedUnion("kind", [
   patientChangeRequestActionSchema,
   consultationTasksBatchActionSchema,
   consultationSummaryActionSchema,
+  rescheduleAppointmentActionSchema,
+  cancelAppointmentActionSchema,
+  resolvePatientRequestActionSchema,
+  markPaymentReceivedActionSchema,
 ]);
 
 export type ProposedAction = z.infer<typeof proposedActionSchema>;

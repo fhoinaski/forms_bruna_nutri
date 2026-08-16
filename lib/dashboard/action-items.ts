@@ -157,6 +157,10 @@ function proposalKindLabel(value: string): string {
     new_blog_post: "conteudo",
     patient_appointment_request: "agendamento pedido pela paciente",
     patient_change_request: "pedido de alteracao da paciente",
+    reschedule_appointment: "reagendamento de consulta",
+    cancel_appointment: "cancelamento de consulta",
+    resolve_patient_request: "resolucao de solicitacao",
+    mark_payment_received: "marcacao de pagamento recebido",
   };
   return labels[value] ?? value.replaceAll("_", " ");
 }

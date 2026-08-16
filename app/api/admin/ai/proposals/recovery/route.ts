@@ -22,6 +22,10 @@ const KIND_LABELS: Record<ProposedActionKind, string> = {
   patient_change_request: "Solicitação da paciente",
   consultation_tasks_batch: "Criação de tarefas (Modo Consulta)",
   consultation_summary: "Resumo de consulta",
+  reschedule_appointment: "Reagendamento de consulta",
+  cancel_appointment: "Cancelamento de consulta",
+  resolve_patient_request: "Resolução de solicitação da paciente",
+  mark_payment_received: "Marcação de pagamento como recebido",
 };
 
 /** Detalhe curto e legivel — nunca payload tecnico bruto (secao 3.8). */
@@ -35,6 +39,8 @@ function describeDetail(kind: string, paramsJson: string): string | null {
     if (kind === "new_recipe" && typeof parsed.title === "string") return parsed.title;
     if (kind === "new_protocol" && fields?.title) return fields.title;
     if (kind === "patient_appointment_request" && typeof parsed.startsAtIso === "string") return parsed.startsAtIso;
+    if (kind === "reschedule_appointment" && typeof parsed.newStartsAtDisplay === "string") return parsed.newStartsAtDisplay;
+    if (kind === "mark_payment_received" && typeof parsed.paymentId === "string") return parsed.paymentId;
     return null;
   } catch {
     return null;

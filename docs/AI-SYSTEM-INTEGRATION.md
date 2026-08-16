@@ -27,13 +27,14 @@ mínimo, o seguinte antes de a tool ser considerada "pronta":
 3. **Tools de leitura e escrita** — nomeadas e registradas separadamente (ex.: `get_payment_details` read, `record_payment` write) — nunca uma tool só que decide sozinha o que fazer.
 4. **Permissões/perfil** — `ADMIN_ASSISTANT`, `PATIENT_ASSISTANT`, ou os dois (nunca a mesma tool nos dois profiles se o dado for de escopo diferente — ver a política de nunca vazar `clientId` escolhido pelo modelo no perfil do paciente).
 5. **Entity types** — quais entidades a tool lê/afeta (`lib/ai/tools/capability-types.ts`), para o capability manifest indexar corretamente.
-6. **Descrição da tool para o assistente** — a `description` no registry é o que o LLM lê para decidir usar a tool; escreva pensando nisso, não como comentário de código para humano.
+6. **`dataSensitivity`** (`"safe" | "sensitive" | "clinical"`, `lib/ai/tools/capability-types.ts`, FASE 2A) — classifique honestamente inspecionando o OUTPUT real do `execute`, não o nome da tool: `safe` = não identifica paciente ou não carrega dado de negócio; `sensitive` = identifica paciente + financeiro/agenda com nota livre/texto de solicitação; `clinical` = prontuário/marcadores/plano terapêutico/antropometria. Se a tool devolve QUALQUER campo de texto livre de origem paciente (`patientText`, `notes`, `aiSummary`, `objective`), aplique `sanitizePatientFreeTextForToolOutput`/`truncateForToolOutput` (`lib/ai/privacy/sanitize-context.ts`) nesse campo antes de retornar — nunca devolva o repository object inteiro sem passar por essa camada.
+7. **Descrição da tool para o assistente** — a `description` no registry é o que o LLM lê para decidir usar a tool; escreva pensando nisso, não como comentário de código para humano.
 
 ### Passo a passo mecânico
 
 1. No repositório real (`lib/repositories/*`), garanta que a operação já existe e é testada — a tool nunca deve conter lógica de negócio nova, só orquestrar chamadas a repositórios/engines existentes.
-2. Criar/editar o agente em `lib/ai/agents/<dominio>/`: `inputSchema` (Zod `.strict()`), `execute` (ou builder de `ProposedAction` se for write confirmável), e — se a tool precisa de contexto textual no prompt — um `buildXContext()`.
-3. Registrar em `lib/ai/tools/registry.ts` via `defineTool({ name, description, inputSchema, risk, profiles, contextRequirement, domain, entityTypes, execute })`.
+2. Criar/editar o agente em `lib/ai/agents/<dominio>/`: `inputSchema` (Zod `.strict()`), `execute` (ou builder de `ProposedAction` se for write confirmável) — já devolvendo o payload MINIMIZADO (nunca o repository object inteiro; nunca campos que a pergunta-tipo daquela tool não precisa) e com qualquer texto livre de paciente já sanitizado —, e — se a tool precisa de contexto textual no prompt — um `buildXContext()`.
+3. Registrar em `lib/ai/tools/registry.ts` via `defineTool({ name, description, inputSchema, risk, profiles, contextRequirement, domain, entityTypes, dataSensitivity, execute })`.
 4. Se for write `sensitive`/`clinical`: adicionar um builder em `lib/ai/tools/proposal-builders.ts`, um `kind` novo em `lib/ai/schemas/action.schema.ts`, e um handler de execução em `lib/ai/core/proposal-handlers.ts` que **revalida tudo de novo** no momento da confirmação (ownership, conflito, versão) — nunca confia no que foi calculado na hora da proposta.
 5. Adicionar o nome da tool à lista de tools ativas do orquestrador certo (`activeToolNames` em `ai-orchestrator.ts` ou `PATIENT_TOOL_NAMES` em `patient-orchestrator.ts`), na condição de contexto correta.
 6. Se a tool lida com dado clínico ou texto de origem paciente/formulário, aplicar `sanitizeClinicalContext`/`wrapUntrustedData`/`redactPii` de `lib/ai/privacy/` antes de o texto entrar no prompt.
@@ -46,6 +47,8 @@ mínimo, o seguinte antes de a tool ser considerada "pronta":
 - Não deixar uma tool `clinical` com `execute` que grava direto no banco — o guard `assertNeverAutoAppliesClinical()` existe para lançar em produção se isso acontecer, mas o objetivo é nunca chegar perto disso em code review.
 - Não duplicar a lista de capacidades em um documento separado mantido à mão — se uma capacidade não está no `registry`, ela não existe para o assistente; o capability manifest é gerado do registry, não editado à parte.
 - Não expor ao paciente uma tool cujo `execute` aceite `clientId`/`patientId` vindo do modelo — dados do próprio paciente sempre vêm do `resolvePatientTools()` vinculado à sessão.
+- Não devolver o repository object inteiro como resultado de uma tool "porque é mais rápido" — sempre selecione os campos que a pergunta-tipo daquela tool precisa (minimização, FASE 2A). Se não tem certeza se um campo é necessário, comece sem ele.
+- Não logar `input`/`output` inteiros de uma tool call em `console.log`/`logger` direto — `buildToolSet`/`resolvePatientTools` já envolvem todo `execute` com `withToolCallObservability` (`lib/ai/tools/tool-call-observability.ts`), que loga só metadata segura (tool/domínio/sucesso/duração/ids conhecidos). Não adicione um log paralelo dentro do `execute` da tool com o payload cru.
 
 ## Domínios sem cobertura hoje
 

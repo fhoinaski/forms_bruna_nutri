@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ClientProtocol } from "@/lib/repositories/client-protocols";
 import { CLINICAL_PROPOSAL_DISCLAIMER } from "@/lib/ai/prompts/shared";
 import { redactPii } from "@/lib/ai/privacy/pii";
+import { truncateForToolOutput } from "@/lib/ai/privacy/sanitize-context";
 
 export const PROPOSE_CLIENT_PROTOCOL_NOTES_TOOL_NAME = "proposeClientProtocolNotes";
 
@@ -16,7 +17,9 @@ export function buildClientProtocolsContext(protocols: ClientProtocol[]): string
   if (!protocols.length) return "O cliente ainda nao tem nenhum protocolo atribuido — nao ha o que atualizar por aqui.";
   const list = protocols
     .map((protocol) => {
-      const notes = protocol.professional_notes ? redactPii(protocol.professional_notes).text : null;
+      // FASE 2B: redige PII (ja existia) + trunca defensivamente (novo) —
+      // professional_notes pode chegar a 5000 chars (proposeClientProtocolNotesInputSchema).
+      const notes = protocol.professional_notes ? truncateForToolOutput(redactPii(protocol.professional_notes).text).text : null;
       return `- id "${protocol.id}": ${protocol.protocol_title ?? "Protocolo"} (status: ${protocol.status})${notes ? ` — notas atuais: ${notes}` : ""}`;
     })
     .join("\n");

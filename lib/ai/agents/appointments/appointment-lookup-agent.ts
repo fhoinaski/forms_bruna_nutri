@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getAppointments, getAppointmentById, type Appointment } from "@/lib/repositories/appointments";
 import { getClientById } from "@/lib/repositories/clients";
 import { getSaoPauloDateKey, getSaoPauloDayBoundaries } from "@/lib/utils/timezone";
+import { truncateForToolOutput } from "@/lib/ai/privacy/sanitize-context";
 
 /**
  * Tools de leitura de agenda (FASE 1B do roadmap de operador interno —
@@ -81,7 +82,10 @@ export async function executeGetAppointmentDetails(input: GetAppointmentDetailsI
     found: true as const,
     appointment: {
       ...toSummary(appointment),
-      notes: appointment.notes,
+      // FASE 2A: notes e texto livre (pode ter sido escrito com base no que a
+      // paciente relatou) — trunca no limite padrao antes de virar resultado
+      // de tool, nunca silenciosamente.
+      notes: appointment.notes ? truncateForToolOutput(appointment.notes).text : null,
       portalVisible: Boolean(appointment.portal_visible),
       clientConfirmedAt: appointment.client_confirmed_at,
       cancellationReason: appointment.cancellation_reason,

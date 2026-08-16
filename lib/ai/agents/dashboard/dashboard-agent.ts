@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getDashboardActionItems, type DashboardActionItem } from "@/lib/dashboard/action-items";
+import { truncateForToolOutput } from "@/lib/ai/privacy/sanitize-context";
 
 /**
  * Tools de leitura do feed de pendencias do dashboard (FASE 1B) — wrapper
@@ -9,6 +10,12 @@ import { getDashboardActionItems, type DashboardActionItem } from "@/lib/dashboa
  * ja pronto por tipo/secao.
  */
 
+/**
+ * FASE 2A: `description` e deterministica/curta para a maioria dos tipos de
+ * item, mas para PATIENT_REQUEST_PENDING carrega `ai_summary` (texto de
+ * origem paciente) — trunca sempre, defensivamente, mesmo quando o valor
+ * normalmente ja e curto.
+ */
 function toSummary(item: DashboardActionItem) {
   return {
     id: item.id,
@@ -17,7 +24,7 @@ function toSummary(item: DashboardActionItem) {
     section: item.section,
     title: item.title,
     subject: item.subject,
-    description: item.description,
+    description: truncateForToolOutput(item.description).text,
     href: item.href,
     dueAt: item.dueAt,
   };

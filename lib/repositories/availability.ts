@@ -239,14 +239,22 @@ export async function getAvailableSlots(
   return byDate;
 }
 
-export async function hasAppointmentConflict(startsAt: string, endsAt: string) {
+/**
+ * `excludeAppointmentId` (FASE 3, reagendamento): ao mover UM agendamento
+ * existente para um novo horario, o proprio registro (ainda com o horario
+ * ANTIGO no momento desta checagem, antes do UPDATE) nao pode contar como
+ * conflito contra o horario NOVO — sem isso, qualquer reagendamento para um
+ * horario que se sobrepoe ao antigo falharia contra si mesmo.
+ */
+export async function hasAppointmentConflict(startsAt: string, endsAt: string, excludeAppointmentId?: string) {
   const rows = await d1Query<{ c: number }>(
     `SELECT COUNT(*) as c
      FROM appointments
      WHERE status != 'cancelado'
        AND starts_at < ?1
-       AND COALESCE(ends_at, datetime(starts_at, '+60 minutes')) > ?2`,
-    [endsAt, startsAt]
+       AND COALESCE(ends_at, datetime(starts_at, '+60 minutes')) > ?2
+       ${excludeAppointmentId ? "AND id != ?3" : ""}`,
+    excludeAppointmentId ? [endsAt, startsAt, excludeAppointmentId] : [endsAt, startsAt]
   );
   return (rows[0]?.c ?? 0) > 0;
 }

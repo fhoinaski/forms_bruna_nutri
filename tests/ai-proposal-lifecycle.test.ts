@@ -12,7 +12,7 @@ const BASE_URL = "https://brunanutri.com.br";
 const owner: SessionPayload = { sub: "admin-1", email: "bruna@example.com", name: "Bruna", mustChangePassword: false, sessionVersion: 1 };
 const otherAdmin: SessionPayload = { sub: "admin-2", email: "other@example.com", name: "Outro", mustChangePassword: false, sessionVersion: 1 };
 
-/** Um payload valido (conforme proposedActionSchema) para cada uma das 9 kinds reais do sistema. */
+/** Um payload valido (conforme proposedActionSchema) para cada uma das kinds reais do sistema. */
 const VALID_ACTIONS: Record<ProposedActionKind, ProposedAction> = {
   new_appointment: {
     kind: "new_appointment", clientId: "client-1",
@@ -92,6 +92,26 @@ const VALID_ACTIONS: Record<ProposedActionKind, ProposedAction> = {
     kind: "consultation_summary", clientId: "client-1", consultationSessionId: "session-1",
     content: { summary: "Paciente estável, manteve adesão ao plano." },
     risk: "clinical", requiresConfirmation: true,
+  },
+  reschedule_appointment: {
+    kind: "reschedule_appointment", appointmentId: "apt-1", clientId: "client-1",
+    previousStartsAtIso: "2026-08-13T15:00:00.000Z", newStartsAtDisplay: "14/08/2026 16:00",
+    risk: "sensitive", requiresConfirmation: true,
+  },
+  cancel_appointment: {
+    kind: "cancel_appointment", appointmentId: "apt-1", clientId: "client-1",
+    previousStatus: "agendado", cancellationReason: "Paciente remarcará depois.",
+    risk: "sensitive", requiresConfirmation: true,
+  },
+  resolve_patient_request: {
+    kind: "resolve_patient_request", requestId: "request-1", clientId: "client-1",
+    previousStatus: "pending_review", newStatus: "resolved", adminNotes: "Combinado na consulta.",
+    risk: "sensitive", requiresConfirmation: true,
+  },
+  mark_payment_received: {
+    kind: "mark_payment_received", paymentId: "pay-1", clientId: "client-1",
+    previousStatus: "pendente", paidAtDisplay: "10/08/2026", notes: null,
+    risk: "sensitive", requiresConfirmation: true,
   },
 };
 

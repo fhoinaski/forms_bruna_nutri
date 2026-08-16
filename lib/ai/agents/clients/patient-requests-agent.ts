@@ -2,6 +2,7 @@ import { z } from "zod";
 import { listPatientRequests, getPatientRequestById, type PatientRequestStatus } from "@/lib/repositories/patient-requests";
 import { getClientById } from "@/lib/repositories/clients";
 import { getDashboardActionItems } from "@/lib/dashboard/action-items";
+import { sanitizePatientFreeTextForToolOutput, truncateForToolOutput } from "@/lib/ai/privacy/sanitize-context";
 
 /**
  * Tool ADMIN de LEITURA para o inbox de solicitações do paciente (secao 16
@@ -57,8 +58,12 @@ export async function executeGetPatientRequests(input: GetPatientRequestsInput):
       clientId: row.client_id,
       clientName: names.get(row.client_id) ?? null,
       requestType: row.request_type,
-      patientText: row.patient_text,
-      aiSummary: row.ai_summary,
+      // FASE 2A: patientText e texto livre digitado pela paciente — trunca
+      // (nunca silencioso) e redige PII simples antes de virar resultado de
+      // tool. aiSummary ja e gerado pela IA, mas mantem o mesmo teto de
+      // tamanho por seguranca (defesa em profundidade).
+      patientText: sanitizePatientFreeTextForToolOutput(row.patient_text).text,
+      aiSummary: row.ai_summary ? truncateForToolOutput(row.ai_summary).text : null,
       status: row.status,
       createdAt: row.created_at,
     });
@@ -87,10 +92,12 @@ export async function executeGetPatientRequestDetails(input: GetPatientRequestDe
       clientId: request.client_id,
       clientName: client?.name ?? null,
       requestType: request.request_type,
-      patientText: request.patient_text,
-      aiSummary: request.ai_summary,
+      // FASE 2A: mesma sanitizacao de executeGetPatientRequests — patientText
+      // e da paciente (trunca + redige PII), o resto e truncado por seguranca.
+      patientText: sanitizePatientFreeTextForToolOutput(request.patient_text).text,
+      aiSummary: request.ai_summary ? truncateForToolOutput(request.ai_summary).text : null,
       status: request.status,
-      adminNotes: request.admin_notes,
+      adminNotes: request.admin_notes ? truncateForToolOutput(request.admin_notes).text : null,
       createdAt: request.created_at,
       reviewedAt: request.reviewed_at,
     },
@@ -113,7 +120,7 @@ export async function executeGetPendingAiProposals() {
       id: item.sourceId,
       status: item.type === "AI_PROPOSAL_REVIEW" ? "requires_review_or_executing" : "pending",
       subject: item.subject,
-      description: item.description,
+      description: truncateForToolOutput(item.description).text,
       href: item.href,
       createdAt: item.dueAt,
     })),

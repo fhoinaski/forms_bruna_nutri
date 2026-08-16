@@ -6,8 +6,9 @@ import { getClientTasks, createClientTasksBatch } from "@/lib/repositories/clien
 import { listPatientRequests } from "@/lib/repositories/patient-requests";
 import { getClientEvolutions, type ClientEvolution } from "@/lib/repositories/client-evolutions";
 import { calculateWeightDelta } from "@/lib/clinical/anthropometry";
-import { buildConsultationSystemData, generateConsultationAiBrief } from "@/lib/ai/agents/clinical/consultation-briefing";
+import { buildConsultationSystemData, generateConsultationAiBrief, sanitizeConsultationSystemDataForAi } from "@/lib/ai/agents/clinical/consultation-briefing";
 import { assertCategoryAllowed } from "@/lib/ai/policies/clinical-context-policy";
+import { sanitizePatientFreeTextForToolOutput } from "@/lib/ai/privacy/sanitize-context";
 
 /**
  * Tools novas do Modo Consulta (FASE 1). Seguem o MESMO padrao ja
@@ -37,12 +38,23 @@ export const GET_CONSULTATION_BRIEF_TOOL_NAME = "getConsultationBrief";
 export const getConsultationBriefInputSchema = clientIdInputSchema;
 export type GetConsultationBriefInput = z.infer<typeof getConsultationBriefInputSchema>;
 
+/**
+ * FASE 2B: `systemData` (canonico, com texto livre cru) tambem alimenta a
+ * rota REST que renderiza a UI do Modo Consulta
+ * (app/api/admin/consultation-sessions/[id]/brief/route.ts) — nunca
+ * alterado aqui. O que VAI para o LLM principal (resultado desta tool) e
+ * `sanitizeConsultationSystemDataForAi(systemData)`, uma view separada com
+ * os 3 campos de texto livre sem estrutura equivalente
+ * (progressNotes/conductNotes/symptoms) truncados + PII redigida — nunca o
+ * objeto UI. `aiBrief` ja passava por `sanitizeClinicalContext` internamente
+ * (generateConsultationAiBrief), sem mudanca aqui.
+ */
 export async function executeGetConsultationBrief(input: GetConsultationBriefInput, adminId?: string | null) {
   const client = await getClientById(input.clientId);
   if (!client) return { found: false as const };
   const systemData = await buildConsultationSystemData(client);
   const aiBrief = await generateConsultationAiBrief(client, systemData, adminId);
-  return { found: true as const, systemData, aiBrief };
+  return { found: true as const, systemData: sanitizeConsultationSystemDataForAi(systemData), aiBrief };
 }
 
 // ── get_active_meal_plan ─────────────────────────────────────────────────
@@ -90,7 +102,9 @@ export async function executeGetActiveProtocolForConsultation(input: GetActivePr
     taskCount: active.task_count ?? 0,
     completedTaskCount: active.completed_task_count ?? 0,
     reviewDate: active.review_date,
-    professionalNotes: active.professional_notes,
+    // FASE 2B: notas do protocolo sao texto livre sem equivalente
+    // estruturado — trunca + redige PII antes de virar resultado de tool.
+    professionalNotes: active.professional_notes ? sanitizePatientFreeTextForToolOutput(active.professional_notes).text : null,
   };
 }
 

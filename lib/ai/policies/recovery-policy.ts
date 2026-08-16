@@ -60,6 +60,16 @@ export const RECOVERY_STRATEGY_BY_KIND: Record<ProposedActionKind, RecoveryStrat
   // consultation_summary: UPDATE idempotente (sobrescreve summary_json da
   // mesma sessao) — mesmo raciocinio de client_protocol/nutrition_record.
   consultation_summary: "automatic",
+  // FASE 3 (safe writes): os 4 kinds abaixo sao UPDATE por id guardado por
+  // um snapshot do estado anterior (previousStartsAtIso/previousStatus) —
+  // mesmo raciocinio de meal_plan_change.baseVersion: se a primeira
+  // tentativa teve sucesso, o snapshot da segunda tentativa nao bate mais
+  // com o estado atual e ela falha alto (409), o que PROVA sucesso da
+  // primeira — nunca aplica duas vezes.
+  reschedule_appointment: "automatic",
+  cancel_appointment: "automatic",
+  resolve_patient_request: "automatic",
+  mark_payment_received: "automatic",
 };
 
 export function getRecoveryStrategy(kind: string): RecoveryStrategy {

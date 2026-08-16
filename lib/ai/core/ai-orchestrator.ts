@@ -7,7 +7,7 @@ import { buildToolSet, listRegisteredTools } from "@/lib/ai/tools/registry";
 import { buildProposedAction, PROPOSAL_TOOL_NAMES } from "@/lib/ai/tools/proposal-builders";
 import type { ProposedAction } from "@/lib/ai/schemas/action.schema";
 import { getClientConversationMemory, recordConversationTurn } from "@/lib/ai/memory/conversation-summary";
-import { stripInternalPatientAlias } from "@/lib/ai/privacy/sanitize-context";
+import { stripInternalPatientAlias, PATIENT_FREE_TEXT_TOOL_OUTPUT_NOTICE } from "@/lib/ai/privacy/sanitize-context";
 import { DEFAULT_CHAT_SYSTEM_PROMPT, getAISettings } from "@/lib/repositories/ai-settings";
 import { buildSystemUsageKnowledgeBase } from "@/lib/ai/agents/system/system-knowledge";
 import {
@@ -110,6 +110,19 @@ import {
   GET_FINANCIAL_SUMMARY_TOOL_NAME,
   FINANCE_LOOKUP_ASSISTANT_INSTRUCTIONS,
 } from "@/lib/ai/agents/finance/finance-lookup-agent";
+import {
+  PROPOSE_RESCHEDULE_APPOINTMENT_TOOL_NAME,
+  PROPOSE_CANCEL_APPOINTMENT_TOOL_NAME,
+  APPOINTMENT_WRITE_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/appointments/appointment-write-agent";
+import {
+  PROPOSE_RESOLVE_PATIENT_REQUEST_TOOL_NAME,
+  PATIENT_REQUEST_WRITE_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/clients/patient-request-write-agent";
+import {
+  PROPOSE_MARK_PAYMENT_RECEIVED_TOOL_NAME,
+  FINANCE_WRITE_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/finance/finance-write-agent";
 import {
   GET_CONSULTATION_BRIEF_TOOL_NAME,
   GET_ACTIVE_MEAL_PLAN_TOOL_NAME,
@@ -276,8 +289,12 @@ export async function runAssistantTurn(
     APPOINTMENT_LOOKUP_ASSISTANT_INSTRUCTIONS,
     DASHBOARD_ASSISTANT_INSTRUCTIONS,
     FINANCE_LOOKUP_ASSISTANT_INSTRUCTIONS,
+    APPOINTMENT_WRITE_ASSISTANT_INSTRUCTIONS,
+    PATIENT_REQUEST_WRITE_ASSISTANT_INSTRUCTIONS,
+    FINANCE_WRITE_ASSISTANT_INSTRUCTIONS,
     `Voce pode encadear varias ferramentas de LEITURA (buscar cliente, ver agenda, ver evolucao, ver horarios) livremente no mesmo turno para responder um pedido com varias partes — isso e automatico e nao precisa de confirmacao. Mas ao chamar qualquer ferramenta de PROPOSTA (proposeXxx), pare: nao chame outra ferramenta depois dela nem tente aplicar a mudanca sozinha — o sistema sempre exige confirmacao humana explicita antes de qualquer proposta sensivel ou clinica virar realidade.`,
     `Se uma busca de cliente (${FIND_CLIENT_TOOL_NAME}) retornar mais de um resultado parecido, NAO escolha um arbitrariamente: liste as opcoes encontradas (so nome, nunca telefone/e-mail/outros dados) e peca para a pessoa confirmar qual e antes de continuar.`,
+    PATIENT_FREE_TEXT_TOOL_OUTPUT_NOTICE,
   ];
 
   const activeToolNames: string[] = [
@@ -319,6 +336,13 @@ export async function runAssistantTurn(
     GET_OVERDUE_PAYMENTS_TOOL_NAME,
     GET_PENDING_PAYMENTS_TOOL_NAME,
     GET_FINANCIAL_SUMMARY_TOOL_NAME,
+    // FASE 3 (safe writes operacionais): sempre viram proposta, nunca
+    // aplicadas sozinhas — o loop para automaticamente no primeiro tool
+    // call sensitive/clinical (SENSITIVE_OR_CLINICAL_TOOL_NAMES acima).
+    PROPOSE_RESCHEDULE_APPOINTMENT_TOOL_NAME,
+    PROPOSE_CANCEL_APPOINTMENT_TOOL_NAME,
+    PROPOSE_RESOLVE_PATIENT_REQUEST_TOOL_NAME,
+    PROPOSE_MARK_PAYMENT_RECEIVED_TOOL_NAME,
   ];
 
   if (!client && !submission) {
