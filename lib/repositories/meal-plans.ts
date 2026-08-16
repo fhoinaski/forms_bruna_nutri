@@ -4,6 +4,8 @@ import type { ProtocolTemplateTargetGroup } from "@/lib/protocol-templates/const
 import { buildItemSnapshot } from "@/lib/nutrition/food-snapshot-server";
 import type { MealPlanVersionSource } from "@/lib/repositories/meal-plan-versions";
 import { encryptJsonValue } from "@/lib/security/encrypted-fields";
+import { getFoodPortionById, toHouseholdMeasureOption, type FoodPortion } from "@/lib/repositories/food-portions";
+import { resolveQuantity, type QuantityResolution } from "@/lib/nutrition/quantity-resolution";
 
 export type MealPlanStatus = "draft" | "active" | "archived";
 
@@ -49,7 +51,7 @@ export type MealPlanItemPayload = {
   // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2.
   // Ambos nulos = item legado ou digitado livremente; o calculo cai para o
   // match aproximado por texto ja existente (findBestFoodReference).
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | null;
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | null;
   food_ref_id?: string | null;
   // Vinculo a uma medida caseira especifica (food_portions.id) — FASE 3.
   // Quando presente, tem prioridade maxima na resolucao de quantidade
@@ -59,6 +61,8 @@ export type MealPlanItemPayload = {
   // o plano mude retroativamente se a base (taco.json/custom_foods) mudar.
   food_name_snapshot?: string | null;
   nutrition_snapshot?: string | null;
+  resolved_grams_snapshot?: number | null;
+  quantity_resolution_snapshot?: string | null;
 };
 
 export type MealPlanWeeklySlotPayload = {
@@ -364,6 +368,8 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
         household_measure_id: item.household_measure_id ?? null,
         food_name_snapshot: item.food_name_snapshot ?? null,
         nutrition_snapshot: item.nutrition_snapshot ?? null,
+        resolved_grams_snapshot: item.resolved_grams_snapshot ?? null,
+        quantity_resolution_snapshot: item.quantity_resolution_snapshot ?? null,
         })),
       })),
     weekly_slots: (weeklySlotsByPlan.get(row.id) ?? []).map(({ id, weekday, meal_type, title, notes, source_meal_id }) => ({
@@ -524,8 +530,48 @@ function isMealPlanVersionConflictError(error: unknown): boolean {
   return /UNIQUE constraint failed: meal_plan_versions/i.test(error.message);
 }
 
-/** Congela nome + composicao de cada item vinculado (P1-A, FASE 20). */
+function portionMatchesItem(portion: FoodPortion, item: MealPlanItemPayload): boolean {
+  return portion.food_source === item.food_source && portion.food_ref_id === item.food_ref_id;
+}
+
+function serializeQuantityResolution(resolution: QuantityResolution): string {
+  return JSON.stringify({
+    grams: resolution.grams,
+    method: resolution.method,
+    confidence: resolution.confidence,
+    source: resolution.source ?? null,
+    measureId: resolution.measureId ?? null,
+    warning: resolution.warning ?? null,
+  });
+}
+
+function buildQuantitySnapshots(item: MealPlanItemPayload, portionsById: Map<string, FoodPortion>): Pick<MealPlanItemPayload, "resolved_grams_snapshot" | "quantity_resolution_snapshot"> {
+  if (!item.household_measure_id) {
+    return { resolved_grams_snapshot: null, quantity_resolution_snapshot: null };
+  }
+  const portion = portionsById.get(item.household_measure_id);
+  if (!portion || !portionMatchesItem(portion, item)) {
+    return { resolved_grams_snapshot: null, quantity_resolution_snapshot: null };
+  }
+  const resolution = resolveQuantity({
+    quantity: item.quantity,
+    unit: item.unit,
+    householdMeasure: toHouseholdMeasureOption(portion),
+  });
+  if (resolution.grams === null || resolution.grams <= 0) {
+    return { resolved_grams_snapshot: null, quantity_resolution_snapshot: null };
+  }
+  return {
+    resolved_grams_snapshot: resolution.grams,
+    quantity_resolution_snapshot: serializeQuantityResolution(resolution),
+  };
+}
+
+/** Congela nome + composicao de cada item vinculado (P1-A, FASE 20) e a gramagem da medida caseira selecionada. */
 async function resolveMealsWithSnapshots(meals: MealPlanMealPayload[]): Promise<MealPlanMealPayload[]> {
+  const measureIds = Array.from(new Set(meals.flatMap((meal) => meal.items.map((item) => item.household_measure_id).filter((id): id is string => Boolean(id)))));
+  const portions = await Promise.all(measureIds.map((id) => getFoodPortionById(id)));
+  const portionsById = new Map(portions.filter((portion): portion is FoodPortion => Boolean(portion)).map((portion) => [portion.id, portion]));
   return Promise.all(
     meals.map(async (meal) => ({
       ...meal,
@@ -533,7 +579,8 @@ async function resolveMealsWithSnapshots(meals: MealPlanMealPayload[]): Promise<
         meal.items.map(async (item) => {
           if (!item.food.trim()) return item;
           const snapshot = await buildItemSnapshot(item.food_source, item.food_ref_id);
-          return { ...item, ...snapshot };
+          const quantitySnapshot = buildQuantitySnapshots(item, portionsById);
+          return { ...item, ...snapshot, ...quantitySnapshot };
         })
       ),
     }))
@@ -581,6 +628,8 @@ function buildMealPlanVersionSnapshot(
         household_measure_id: item.household_measure_id ?? null,
         food_name_snapshot: item.food_name_snapshot ?? null,
         nutrition_snapshot: item.nutrition_snapshot ?? null,
+        resolved_grams_snapshot: item.resolved_grams_snapshot ?? null,
+        quantity_resolution_snapshot: item.quantity_resolution_snapshot ?? null,
       })),
     })),
     weekly_slots: input.weekly_slots ?? [],
@@ -766,6 +815,8 @@ function buildMealPlanDetailStatements(
         householdMeasureId: item.household_measure_id ?? null,
         foodNameSnapshot: item.food_name_snapshot ?? null,
         nutritionSnapshot: item.nutrition_snapshot ?? null,
+        resolvedGramsSnapshot: item.resolved_grams_snapshot ?? null,
+        quantityResolutionSnapshot: item.quantity_resolution_snapshot ?? null,
         order: itemIndex,
         now,
       });
@@ -804,8 +855,8 @@ function buildMealPlanDetailStatements(
     params: [JSON.stringify(mealRows)],
   });
   if (itemRows.length) statements.push({
-    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, household_measure_id, food_name_snapshot, nutrition_snapshot, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.foodNameSnapshot'), json_extract(value,'$.nutritionSnapshot'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, household_measure_id, food_name_snapshot, nutrition_snapshot, resolved_grams_snapshot, quantity_resolution_snapshot, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.foodNameSnapshot'), json_extract(value,'$.nutritionSnapshot'), json_extract(value,'$.resolvedGramsSnapshot'), json_extract(value,'$.quantityResolutionSnapshot'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(itemRows)],
   });
   if (weeklyRows.length) statements.push({

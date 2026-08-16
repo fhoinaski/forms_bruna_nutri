@@ -10,6 +10,10 @@ backups/
 *.db
 *.sqlite
 *.sqlite3
+reports/*-dry-run.json
+reports/*.sqlite
+reports/*.sqlite3
+reports/*.db
 .env*
 !.env.example
 

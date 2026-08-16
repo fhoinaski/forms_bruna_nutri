@@ -17,7 +17,7 @@ const itemSchema = z.object({
   unit: z.string().max(40).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
   // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2.
-  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER"]).nullable().optional(),
+  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]).nullable().optional(),
   food_ref_id: z.string().max(120).nullable().optional(),
   // Vinculo a uma medida caseira especifica (food_portions.id) — FASE 3, validado abaixo contra o food_ref_id real.
   household_measure_id: z.string().max(120).nullable().optional(),

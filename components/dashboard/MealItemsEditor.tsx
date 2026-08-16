@@ -8,6 +8,7 @@ import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution
 import type { FoodPortion } from "@/lib/repositories/food-portions";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
+import type { FoodReference } from "@/lib/nutrition/food-catalog";
 
 export type MealItem = {
   food: string;
@@ -19,10 +20,12 @@ export type MealItem = {
   // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2. So
   // preenchido quando o alimento vem de um resultado de busca escolhido;
   // digitacao livre mantem os dois como null (mesmo comportamento de hoje).
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | null;
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | null;
   food_ref_id?: string | null;
   // Vinculo a uma medida caseira especifica (food_portions.id) — FASE 3.
   household_measure_id?: string | null;
+  resolved_grams_snapshot?: number | null;
+  quantity_resolution_snapshot?: string | null;
 };
 
 function toMeasureOption(portion: FoodPortion): HouseholdMeasureOption {
@@ -37,11 +40,19 @@ export type Meal = {
   items: MealItem[];
 };
 
-type FoodSuggestion = MacroReferenceFood & { numero: number | string; grupo: string };
+type FoodSuggestion = MacroReferenceFood & {
+  numero: number | string;
+  grupo: string;
+  ref?: FoodReference;
+  sourceLabel?: string;
+};
 
-function toFoodSourceTag(fonte: MacroReferenceFood["fonte"]): "TACO" | "CUSTOM" | "MANUFACTURER" {
-  if (fonte === "custom") return "CUSTOM";
-  if (fonte === "manufacturer") return "MANUFACTURER";
+function toMealPlanFoodSource(suggestion: FoodSuggestion): "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" {
+  if (suggestion.ref?.source === "CUSTOM" || suggestion.ref?.source === "MANUFACTURER" || suggestion.ref?.source === "USDA") return suggestion.ref.source;
+  if (suggestion.fonte === "custom") return "CUSTOM";
+  if (suggestion.fonte === "manufacturer") return "MANUFACTURER";
+  if (suggestion.fonte === "usda") return "USDA";
+  // COMPLEMENTARY ainda e persistido como TACO por compatibilidade com o schema atual.
   return "TACO";
 }
 
@@ -225,7 +236,7 @@ export function MealItemsEditor({
       new Set(
         meals
           .flatMap((meal) => meal.items)
-          .filter((item) => item.food_ref_id && (item.food_source === "TACO" || item.food_source === "CUSTOM"))
+          .filter((item) => item.food_ref_id && (item.food_source === "TACO" || item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER"))
           .map((item) => `${item.food_source}:${item.food_ref_id}`)
           .filter((pair) => !measuresByFood[pair])
       )
@@ -319,7 +330,7 @@ export function MealItemsEditor({
   }, [foodSuggestions]);
 
   function measureOptionsFor(item: MealItem): FoodPortion[] {
-    if (!item.food_ref_id || (item.food_source !== "TACO" && item.food_source !== "CUSTOM")) return [];
+    if (!item.food_ref_id || (item.food_source !== "TACO" && item.food_source !== "CUSTOM" && item.food_source !== "MANUFACTURER")) return [];
     return measuresByFood[`${item.food_source}:${item.food_ref_id}`] ?? [];
   }
 
@@ -368,10 +379,12 @@ export function MealItemsEditor({
     updateMealItem(mealIndex, itemIndex, {
       food: suggestion.descricao,
       taco_number: suggestion.numero,
-      food_source: toFoodSourceTag(suggestion.fonte),
-      food_ref_id: String(suggestion.numero),
+      food_source: toMealPlanFoodSource(suggestion),
+      food_ref_id: suggestion.ref?.sourceId ?? String(suggestion.numero),
       // Alimento trocado: a medida caseira anterior (se havia) era de outro alimento e nao se aplica mais.
       household_measure_id: null,
+      resolved_grams_snapshot: null,
+      quantity_resolution_snapshot: null,
     });
     setFoodSuggestions((current) => ({ ...current, [`${mealIndex}:${itemIndex}`]: [suggestion] }));
     setActiveFoodField("");
@@ -624,7 +637,7 @@ export function MealItemsEditor({
                       aria-label="Alimento"
                       value={item.food}
                       onChange={(event) => {
-                        updateMealItem(mealIndex, itemIndex, { food: event.target.value, taco_number: null, food_source: null, food_ref_id: null, household_measure_id: null });
+                        updateMealItem(mealIndex, itemIndex, { food: event.target.value, taco_number: null, food_source: null, food_ref_id: null, household_measure_id: null, resolved_grams_snapshot: null, quantity_resolution_snapshot: null });
                         setActiveFoodField(key);
                         setHighlightedIndex(0);
                         setFoodSearch({ key, query: event.target.value });
@@ -670,7 +683,7 @@ export function MealItemsEditor({
                       // "medium" (ex.: referencia de mercado, nao dado oficial
                       // publicado), isso NAO e a mesma coisa que a conversao
                       // generica estimada, entao nunca mostra este aviso aqui.
-                      if (!resolution || resolution.method === "explicit_grams" || resolution.method === "generic_unit_conversion" || resolution.method === "food_household_measure") return null;
+                      if (!resolution || resolution.method === "explicit_grams" || resolution.method === "generic_unit_conversion" || resolution.method === "food_household_measure" || resolution.method === "portion_snapshot") return null;
                       const label = resolution.method === "unresolved" ? "Não foi possível calcular" : "Valor estimado";
                       return (
                         <span
@@ -699,9 +712,7 @@ export function MealItemsEditor({
                             <span className="block text-sm font-medium text-[#3A3028]">{suggestion.descricao}</span>
                             <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">
                               {suggestion.grupo || "Alimento personalizado"} - {Math.round(suggestion.energia_kcal)} kcal/100g
-                              {suggestion.fonte === "complementar" ? " - TBCA/USDA" : ""}
-                              {suggestion.fonte === "custom" ? " - Personalizado" : ""}
-                              {suggestion.fonte === "manufacturer" ? " - Marca" : ""}
+                              {" - "}{suggestion.sourceLabel ?? (suggestion.fonte === "complementar" ? "Complementar" : suggestion.fonte === "custom" ? "Personalizado" : suggestion.fonte === "manufacturer" ? "Fabricante" : "TACO")}
                             </span>
                           </button>
                         ))}
@@ -718,7 +729,7 @@ export function MealItemsEditor({
                       </div>
                     )}
                   </div>
-                  <input aria-label="Quantidade" value={item.quantity ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { quantity: event.target.value })} className="brand-input" placeholder="Qtd." />
+                  <input aria-label="Quantidade" value={item.quantity ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { quantity: event.target.value, resolved_grams_snapshot: null, quantity_resolution_snapshot: null })} className="brand-input" placeholder="Qtd." />
                   {item.food_ref_id ? (
                     <select
                       aria-label="Medida"
@@ -726,8 +737,8 @@ export function MealItemsEditor({
                       onChange={(event) => {
                         const value = event.target.value;
                         updateMealItem(mealIndex, itemIndex, value === "__grams__"
-                          ? { household_measure_id: null, unit: "g" }
-                          : { household_measure_id: value, unit: null });
+                          ? { household_measure_id: null, unit: "g", resolved_grams_snapshot: null, quantity_resolution_snapshot: null }
+                          : { household_measure_id: value, unit: null, resolved_grams_snapshot: null, quantity_resolution_snapshot: null });
                       }}
                       className="brand-input"
                       title="Medida especifica do alimento — quando disponivel, o calculo usa o peso exato cadastrado em vez de uma aproximacao generica."
@@ -738,7 +749,7 @@ export function MealItemsEditor({
                       ))}
                     </select>
                   ) : (
-                    <input aria-label="Unidade" value={item.unit ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { unit: event.target.value })} className="brand-input" placeholder="Un." />
+                    <input aria-label="Unidade" value={item.unit ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { unit: event.target.value, resolved_grams_snapshot: null, quantity_resolution_snapshot: null })} className="brand-input" placeholder="Un." />
                   )}
                   <div className="flex flex-wrap items-center justify-end gap-1">
                     <button type="button" onClick={() => updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, -1) })} disabled={itemIndex === 0} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Mover alimento para cima" title="Mover para cima">

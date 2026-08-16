@@ -4,6 +4,7 @@ import { getCustomFoodById } from "@/lib/repositories/custom-foods";
 import { listFoodClinicalTraits } from "@/lib/repositories/food-clinical-traits";
 import { getRecipeById, type RecipePayload } from "@/lib/repositories/recipes";
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
+import type { FoodReference } from "@/lib/nutrition/food-catalog";
 
 function completenessForTraits(traits: FoodClinicalTrait[]): FoodClinicalProfile["completeness"] {
   if (!traits.length) return "unknown";
@@ -91,6 +92,16 @@ export async function getFoodClinicalProfile(input: {
   }
   if (input.foodSource === "RECIPE") return getRecipeClinicalProfile(input.foodId);
   return getPersistedFoodClinicalProfile(input.foodSource, input.foodId);
+}
+
+export async function getFoodClinicalProfileByReference(ref: FoodReference): Promise<FoodClinicalProfile> {
+  if (ref.source === "TACO" || ref.source === "COMPLEMENTARY") {
+    return getFoodClinicalProfile({ foodSource: "TACO", foodId: ref.sourceId });
+  }
+  if (ref.source === "CUSTOM" || ref.source === "MANUFACTURER") {
+    return getFoodClinicalProfile({ foodSource: ref.source, foodId: ref.sourceId });
+  }
+  return { foodSource: "TACO", foodId: ref.sourceId, traits: [], completeness: "unknown", reasons: ["food_source_not_supported_for_clinical_profile"] };
 }
 
 export function getTraitForCode(profile: FoodClinicalProfile, code: string): FoodClinicalTrait | null {

@@ -1,0 +1,13 @@
+{
+  "environment": "production",
+  "database_name": "forms_bruna_nutri",
+  "database_id": "5a1f3b97-ba6f-48b0-af09-811117d67d68",
+  "purpose": "USDA_ALLOWLIST_V1 controlled production promotion",
+  "approved_imports": {
+    "USDA_ALLOWLIST_V1": {
+      "enabled": true,
+      "allowlist_version": "USDA_ALLOWLIST_V1",
+      "expected_foods": 2895
+    }
+  }
+}

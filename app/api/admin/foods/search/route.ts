@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
-import { searchAllFoods, type FoodSource } from "@/lib/nutrition/food-search";
 import { normalize } from "@/lib/nutrition/macros";
-import { listCustomFoods, toMacroReferenceFood } from "@/lib/repositories/custom-foods";
+import { searchFoods, toLegacyFoodSearchResponseItem, type RuntimeFoodCatalogSource } from "@/lib/nutrition/food-catalog";
 
 export const dynamic = "force-dynamic";
 
-const VALID_SOURCES: FoodSource[] = ["TACO", "CUSTOM", "MANUFACTURER"];
+const VALID_SOURCES: RuntimeFoodCatalogSource[] = ["TACO", "COMPLEMENTARY", "CUSTOM", "MANUFACTURER", "USDA"];
 
 export async function GET(request: NextRequest) {
   const admin = await getAdminFromRequest(request);
@@ -15,21 +14,19 @@ export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const sourceParam = request.nextUrl.searchParams.get("source");
   const source = VALID_SOURCES.find((item) => item === sourceParam);
+  const limitParam = Number(request.nextUrl.searchParams.get("limit") ?? 20);
+  const limit = Number.isFinite(limitParam) ? limitParam : 20;
 
-  // searchAllFoods() ja descarta buscas com menos de 2 caracteres uteis;
-  // evitar a consulta ao D1 nesse caso poupa uma leitura completa da
-  // tabela custom_foods por nada.
+  // Evita consultar D1 para custom/manufacturer quando a busca e curta demais.
   if (normalize(query).length < 2) {
     return NextResponse.json({ items: [] });
   }
 
-  // FASE 2: busca unificada (TACO + TBCA complementar + alimentos
-  // personalizados) — mesmo endpoint que ja alimenta o autocomplete do
-  // editor e a tool searchMealPlanFoods da IA, ambos ganham alimentos
-  // personalizados sem mudanca de contrato (resposta continua sendo uma
-  // lista plana de alimentos no formato ja usado hoje). listCustomFoods(query)
-  // filtra por nome/marca no D1 em vez de trazer a tabela inteira a cada tecla.
-  const customFoods = await listCustomFoods(query).then((foods) => foods.map(toMacroReferenceFood));
-  const results = searchAllFoods(query, { limit: 15, source, customFoods });
-  return NextResponse.json({ items: results.map((result) => result.food) });
+  const startedAt = performance.now();
+  const results = await searchFoods({ query, limit, sources: source ? [source] : undefined });
+  const durationMs = Math.round((performance.now() - startedAt) * 10) / 10;
+  return NextResponse.json({
+    items: results.map(toLegacyFoodSearchResponseItem),
+    meta: { durationMs, limit: Math.max(1, Math.min(50, Math.trunc(limit))) },
+  });
 }

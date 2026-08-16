@@ -21,6 +21,14 @@ function mockAuth(authed = true) {
   vi.doMock("@/lib/auth/session", () => ({ getAdminFromRequest: vi.fn().mockResolvedValue(authed ? admin : null) }));
 }
 
+function mockUsda() {
+  vi.doMock("@/lib/repositories/usda-foods", () => ({
+    searchUsdaFoods: vi.fn().mockResolvedValue([]),
+    getUsdaFoodBySourceId: vi.fn(),
+    toUsdaMacroReference: vi.fn(),
+  }));
+}
+
 describe("GET /api/admin/foods/search", () => {
   it("401 sem sessao de admin", async () => {
     mockAuth(false);
@@ -28,6 +36,7 @@ describe("GET /api/admin/foods/search", () => {
       listCustomFoods: vi.fn(),
       toMacroReferenceFood: vi.fn(),
     }));
+    mockUsda();
     const { GET } = await import("../app/api/admin/foods/search/route");
     const response = await GET(new NextRequest(new URL("/api/admin/foods/search?q=arroz", BASE_URL)));
     expect(response.status).toBe(401);
@@ -40,6 +49,7 @@ describe("GET /api/admin/foods/search", () => {
       listCustomFoods,
       toMacroReferenceFood: vi.fn((food) => food),
     }));
+    mockUsda();
     const { GET } = await import("../app/api/admin/foods/search/route");
     await GET(new NextRequest(new URL("/api/admin/foods/search?q=arroz", BASE_URL)));
     expect(listCustomFoods).toHaveBeenCalledWith("arroz");
@@ -53,6 +63,7 @@ describe("GET /api/admin/foods/search", () => {
       listCustomFoods,
       toMacroReferenceFood: vi.fn((food) => food),
     }));
+    mockUsda();
     const { GET } = await import("../app/api/admin/foods/search/route");
     const response = await GET(new NextRequest(new URL("/api/admin/foods/search?q=a", BASE_URL)));
     const body = await response.json();
@@ -67,6 +78,7 @@ describe("GET /api/admin/foods/search", () => {
       listCustomFoods,
       toMacroReferenceFood: vi.fn((food) => food),
     }));
+    mockUsda();
     const { GET } = await import("../app/api/admin/foods/search/route");
     const response = await GET(new NextRequest(new URL("/api/admin/foods/search", BASE_URL)));
     const body = await response.json();

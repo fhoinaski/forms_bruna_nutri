@@ -16,7 +16,7 @@ export interface MacroReferenceFood {
   numero?: number | string;
   descricao: string;
   grupo?: string;
-  fonte?: "taco" | "complementar" | "custom" | "manufacturer";
+  fonte?: "taco" | "complementar" | "custom" | "manufacturer" | "usda";
   energia_kcal: number;
   proteina_g: number;
   carboidrato_g: number;
@@ -32,6 +32,30 @@ export interface MacroReferenceFood {
   ferro_mg?: number | null;
   potassio_mg?: number | null;
   vitamina_c_mg?: number | null;
+  energy_kj?: number | null;
+  sugars_g?: number | null;
+  saturated_fat_g?: number | null;
+  monounsaturated_fat_g?: number | null;
+  polyunsaturated_fat_g?: number | null;
+  trans_fat_g?: number | null;
+  magnesium_mg?: number | null;
+  phosphorus_mg?: number | null;
+  zinc_mg?: number | null;
+  copper_mg?: number | null;
+  manganese_mg?: number | null;
+  selenium_mcg?: number | null;
+  vitamin_a_mcg?: number | null;
+  vitamin_d_mcg?: number | null;
+  vitamin_e_mg?: number | null;
+  vitamin_k_mcg?: number | null;
+  vitamin_b1_mg?: number | null;
+  vitamin_b2_mg?: number | null;
+  vitamin_b3_mg?: number | null;
+  pantothenic_acid_mg?: number | null;
+  vitamin_b6_mg?: number | null;
+  folate_mcg?: number | null;
+  vitamin_b12_mcg?: number | null;
+  cholesterol_mg?: number | null;
 }
 
 const EMPTY: MacroTotals = { kcal: 0, protein: 0, carbs: 0, fat: 0, recognizedItems: 0, totalItems: 0 };
@@ -101,7 +125,7 @@ export function findFoodReferenceByIdentity(
   foodRefId: string | null | undefined
 ): MacroReferenceFood | null {
   if (!foodSource || !foodRefId) return null;
-  const expectedFonte = foodSource === "TACO" ? null : foodSource === "MANUFACTURER" ? "manufacturer" : "custom";
+  const expectedFonte = foodSource === "TACO" ? null : foodSource === "MANUFACTURER" ? "manufacturer" : foodSource === "USDA" ? "usda" : "custom";
   return references.find((reference) => {
     if (String(reference.numero ?? "") !== foodRefId) return false;
     if (expectedFonte === null) return reference.fonte === "taco" || reference.fonte === "complementar";
@@ -113,6 +137,8 @@ export interface FoodIdentity {
   food: string;
   food_source?: string | null;
   food_ref_id?: string | null;
+  resolved_grams_snapshot?: number | null;
+  quantity_resolution_snapshot?: string | null;
 }
 
 /**
@@ -147,7 +173,13 @@ export function resolveFoodItemMacros(
   references: MacroReferenceFood[],
   householdMeasure?: HouseholdMeasureOption | null
 ): FoodMacroResolution {
-  const quantity = resolveQuantity({ quantity: item.quantity, unit: item.unit, householdMeasure });
+  const quantity = resolveQuantity({
+    quantity: item.quantity,
+    unit: item.unit,
+    householdMeasure,
+    resolvedGramsSnapshot: item.resolved_grams_snapshot,
+    quantityResolutionSnapshot: item.quantity_resolution_snapshot,
+  });
   if (!item.food.trim()) return { macros: EMPTY, reference: null, quantity };
   const reference = resolveFoodReference(item, references);
   if (!reference) return { macros: { ...EMPTY, totalItems: 1 }, reference: null, quantity };

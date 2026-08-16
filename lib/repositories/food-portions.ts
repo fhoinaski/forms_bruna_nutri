@@ -7,7 +7,7 @@ import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution
  * estendida em 0036 com source_version/confidence/is_active. Reutiliza a
  * tabela existente (não cria uma segunda) exatamente como o pedido pede.
  */
-export type FoodPortionSource = "TACO" | "CUSTOM";
+export type FoodPortionSource = "TACO" | "CUSTOM" | "MANUFACTURER";
 export type FoodPortionConfidence = "high" | "medium" | "low";
 
 export interface FoodPortion {
@@ -28,6 +28,14 @@ export interface FoodPortionInput {
   food_ref_id: string;
   description: string;
   gram_equivalent: number;
+  source?: string | null;
+  source_version?: string | null;
+  confidence?: FoodPortionConfidence;
+}
+
+export interface FoodPortionUpdateInput {
+  description?: string;
+  gram_equivalent?: number;
   source?: string | null;
   source_version?: string | null;
   confidence?: FoodPortionConfidence;
@@ -76,13 +84,36 @@ export async function createFoodPortion(input: FoodPortionInput): Promise<FoodPo
       input.food_ref_id,
       input.description.trim(),
       input.gram_equivalent,
-      input.source?.trim() || null,
+      input.source?.trim() || "professional",
       input.source_version?.trim() || null,
       input.confidence ?? "medium",
       now,
     ]
   );
   return (await getFoodPortionById(id))!;
+}
+
+export async function updateFoodPortion(id: string, input: FoodPortionUpdateInput): Promise<FoodPortion | null> {
+  const existing = await getFoodPortionById(id);
+  if (!existing) return null;
+  await d1Execute(
+    `UPDATE food_portions
+        SET description = ?1,
+            gram_equivalent = ?2,
+            source = ?3,
+            source_version = ?4,
+            confidence = ?5
+      WHERE id = ?6`,
+    [
+      input.description?.trim() || existing.description,
+      input.gram_equivalent ?? existing.gram_equivalent,
+      input.source !== undefined ? input.source?.trim() || "professional" : existing.source,
+      input.source_version !== undefined ? input.source_version?.trim() || null : existing.source_version,
+      input.confidence ?? existing.confidence,
+      id,
+    ]
+  );
+  return getFoodPortionById(id);
 }
 
 /** Converte para o formato que lib/nutrition/quantity-resolution.ts (resolveQuantity) consome — nao guarda I/O ali, so recebe o dado ja resolvido. */

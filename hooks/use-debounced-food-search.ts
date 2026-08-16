@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
+import type { FoodReference } from "@/lib/nutrition/food-catalog";
 
-export type FoodSuggestion = MacroReferenceFood & { numero: number | string; grupo: string };
+export type FoodSuggestion = MacroReferenceFood & { numero: number | string; grupo: string; ref?: FoodReference; sourceLabel?: string };
 
 /**
  * Busca de alimentos com debounce + cancelamento via AbortController, para
