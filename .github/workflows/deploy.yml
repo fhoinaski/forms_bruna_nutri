@@ -51,14 +51,6 @@ jobs:
       - name: Guard against large database artifacts
         run: npm run ci:artifact-check
 
-      - name: Require production environment approval configuration
-        run: |
-          if [ "${{ vars.PRODUCTION_DEPLOY_APPROVAL_CONFIGURED }}" != "true" ]; then
-            echo "GitHub Environment production must require approval before deploy."
-            echo "Set environment variable PRODUCTION_DEPLOY_APPROVAL_CONFIGURED=true only after protection rules are configured."
-            exit 1
-          fi
-
       - name: Validate migration files
         run: npm run migrate:d1:check
 
@@ -134,6 +126,14 @@ jobs:
 
       - name: Guard against large database artifacts
         run: npm run ci:artifact-check
+
+      - name: Require production environment approval configuration
+        run: |
+          if [ "${{ vars.PRODUCTION_DEPLOY_APPROVAL_CONFIGURED }}" != "true" ]; then
+            echo "GitHub Environment production must require approval before deploy."
+            echo "Set environment variable PRODUCTION_DEPLOY_APPROVAL_CONFIGURED=true only after protection rules are configured."
+            exit 1
+          fi
 
       - name: Validate migration files
         run: npm run migrate:d1:check
