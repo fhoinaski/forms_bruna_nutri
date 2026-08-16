@@ -3,6 +3,7 @@ import type { z } from "zod";
 import type { ToolRisk } from "@/lib/ai/policies/action-policy";
 import type { AssistantCapabilityProfile } from "@/lib/ai/policies/permissions";
 import { isProfileAllowed } from "@/lib/ai/policies/permissions";
+import type { AgentDomain, ToolEntityType } from "@/lib/ai/tools/capability-types";
 
 import {
   FIND_CLIENT_TOOL_NAME,
@@ -121,9 +122,79 @@ import {
 } from "@/lib/ai/agents/patient/patient-request-agent";
 import {
   GET_PATIENT_REQUESTS_TOOL_NAME,
+  GET_PATIENT_REQUEST_DETAILS_TOOL_NAME,
+  GET_PENDING_AI_PROPOSALS_TOOL_NAME,
   executeGetPatientRequests,
+  executeGetPatientRequestDetails,
+  executeGetPendingAiProposals,
   getPatientRequestsInputSchema,
+  getPatientRequestDetailsInputSchema,
+  getPendingAiProposalsInputSchema,
 } from "@/lib/ai/agents/clients/patient-requests-agent";
+import {
+  GET_TODAY_APPOINTMENTS_TOOL_NAME,
+  GET_NEXT_APPOINTMENT_TOOL_NAME,
+  GET_APPOINTMENT_DETAILS_TOOL_NAME,
+  GET_UPCOMING_APPOINTMENTS_TOOL_NAME,
+  executeGetTodayAppointments,
+  executeGetNextAppointment,
+  executeGetAppointmentDetails,
+  executeGetUpcomingAppointments,
+  getTodayAppointmentsInputSchema,
+  getNextAppointmentInputSchema,
+  getAppointmentDetailsInputSchema,
+  getUpcomingAppointmentsInputSchema,
+} from "@/lib/ai/agents/appointments/appointment-lookup-agent";
+import {
+  GET_DASHBOARD_ACTION_ITEMS_TOOL_NAME,
+  GET_URGENT_ITEMS_TOOL_NAME,
+  GET_RECENT_ACTIVITY_TOOL_NAME,
+  executeGetDashboardActionItems,
+  executeGetUrgentItems,
+  executeGetRecentActivity,
+  getDashboardActionItemsInputSchema,
+  getUrgentItemsInputSchema,
+  getRecentActivityInputSchema,
+} from "@/lib/ai/agents/dashboard/dashboard-agent";
+import {
+  GET_PAYMENT_DETAILS_TOOL_NAME,
+  GET_OVERDUE_PAYMENTS_TOOL_NAME,
+  GET_PENDING_PAYMENTS_TOOL_NAME,
+  GET_FINANCIAL_SUMMARY_TOOL_NAME,
+  executeGetPaymentDetails,
+  executeGetOverduePayments,
+  executeGetPendingPayments,
+  executeGetFinancialSummary,
+  getPaymentDetailsInputSchema,
+  getOverduePaymentsInputSchema,
+  getPendingPaymentsInputSchema,
+  getFinancialSummaryInputSchema,
+} from "@/lib/ai/agents/finance/finance-lookup-agent";
+import {
+  SEARCH_FOODS_TOOL_NAME,
+  GET_FOOD_DETAILS_TOOL_NAME,
+  GET_FOOD_PORTIONS_TOOL_NAME,
+  CALCULATE_FOOD_NUTRIENTS_TOOL_NAME,
+  executeSearchFoods,
+  executeGetFoodDetails,
+  executeGetFoodPortions,
+  executeCalculateFoodNutrients,
+  searchFoodsInputSchema,
+  getFoodDetailsInputSchema,
+  getFoodPortionsInputSchema,
+  calculateFoodNutrientsInputSchema,
+} from "@/lib/ai/agents/food/food-catalog-agent";
+import {
+  GET_PATIENT_SUMMARY_TOOL_NAME,
+  GET_PATIENT_ACTIVE_PLAN_TOOL_NAME,
+  GET_PATIENT_CLINICAL_MARKERS_TOOL_NAME,
+  executeGetPatientSummary,
+  executeGetPatientActivePlan,
+  executeGetPatientClinicalMarkers,
+  getPatientSummaryInputSchema,
+  getPatientActivePlanInputSchema,
+  getPatientClinicalMarkersInputSchema,
+} from "@/lib/ai/agents/clients/patient-lookup-agent";
 import {
   GET_CONSULTATION_BRIEF_TOOL_NAME,
   GET_ACTIVE_MEAL_PLAN_TOOL_NAME,
@@ -161,6 +232,10 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   risk: ToolRisk;
   profiles: readonly AssistantCapabilityProfile[];
   contextRequirement: ToolContextRequirement;
+  /** Assunto do CRM que a tool cobre — usado so para descoberta/manifest, nunca autorizacao. */
+  domain: AgentDomain;
+  /** Tipos de entidade que a tool le/afeta — usado so para descoberta/manifest, nunca autorizacao. */
+  entityTypes: readonly ToolEntityType[];
   execute: (input: TInput) => Promise<TOutput>;
 }
 
@@ -198,6 +273,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "patient",
+  entityTypes: ["patient"],
   execute: executeFindClient,
 });
 
@@ -208,6 +285,8 @@ defineTool({
   risk: "low",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "navigation",
+  entityTypes: [],
   execute: async (input) => input,
 });
 
@@ -218,6 +297,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "dashboard",
+  entityTypes: [],
   execute: executeGetSystemOverview,
 });
 
@@ -228,6 +309,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "dashboard",
+  entityTypes: ["opportunity"],
   execute: executeListOpportunities,
 });
 
@@ -238,6 +321,8 @@ defineTool({
   risk: "sensitive",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "patient",
+  entityTypes: ["patient"],
   execute: executeProposeNewClient,
 });
 
@@ -248,6 +333,8 @@ defineTool({
   risk: "sensitive",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "food",
+  entityTypes: ["recipe", "food"],
   execute: executeProposeNewRecipe,
 });
 
@@ -258,6 +345,8 @@ defineTool({
   risk: "sensitive",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "content",
+  entityTypes: ["blog_post"],
   execute: async (input) => input,
 });
 
@@ -268,6 +357,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "content",
+  entityTypes: ["blog_post"],
   execute: executeSearchEditorialSources,
 });
 
@@ -278,6 +369,8 @@ defineTool({
   risk: "clinical",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient", "nutrition_record"],
   execute: async (input) => input,
 });
 
@@ -288,6 +381,8 @@ defineTool({
   risk: "clinical",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient", "protocol"],
   execute: async (input) => input,
 });
 
@@ -298,6 +393,8 @@ defineTool({
   risk: "clinical",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient", "protocol"],
   execute: async (input) => input,
 });
 
@@ -308,6 +405,8 @@ defineTool({
   risk: "sensitive",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "appointment",
+  entityTypes: ["patient", "appointment"],
   execute: async (input) => input,
 });
 
@@ -318,6 +417,8 @@ defineTool({
   risk: "sensitive",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient", "task"],
   execute: async (input) => input,
 });
 
@@ -328,6 +429,8 @@ defineTool({
   risk: "clinical",
   profiles: ADMIN,
   contextRequirement: "submission",
+  domain: "clinical",
+  entityTypes: ["patient", "pre_analysis"],
   execute: async (input) => input,
 });
 
@@ -338,6 +441,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "dashboard",
+  entityTypes: ["appointment", "task"],
   execute: executeGetPatientsWithPendenciesForDate,
 });
 
@@ -348,6 +453,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "clinical",
+  entityTypes: ["patient"],
   execute: executeGetClientEvolutionSummary,
 });
 
@@ -358,6 +465,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "appointment",
+  entityTypes: ["appointment"],
   execute: executeGetAvailableSlots,
 });
 
@@ -368,6 +477,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "food",
+  entityTypes: ["food"],
   execute: executeSearchMealPlanFoods,
 });
 
@@ -378,6 +489,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "none",
+  domain: "request",
+  entityTypes: ["patient", "request"],
   execute: executeGetPatientRequests,
 });
 
@@ -388,6 +501,8 @@ defineTool({
   risk: "clinical",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "meal_plan",
+  entityTypes: ["patient", "meal_plan", "food"],
   execute: executeProposeMealPlanChange,
 });
 
@@ -397,7 +512,12 @@ defineTool({
   inputSchema: getMealPlanNutritionInputSchema,
   risk: "read",
   profiles: ADMIN,
-  contextRequirement: "client",
+  // FASE 1 (operador interno): recebe mealPlanId como parametro, entao nao
+  // depende mais de cliente pre-selecionado — pode ser encadeada no mesmo
+  // turno depois de getPatientActivePlan resolver o id do plano.
+  contextRequirement: "none",
+  domain: "nutrition_analysis",
+  entityTypes: ["meal_plan"],
   execute: executeGetMealPlanNutrition,
 });
 
@@ -408,7 +528,263 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "food",
+  entityTypes: ["food"],
   execute: executeFindFoodEquivalents,
+});
+
+// ── Catalogo de alimentos (FASE 1, operador interno) — sempre disponivel,
+// nunca depende de cliente/formulario em contexto (docs/AI-OPERATOR-AUDIT-ROADMAP.md).
+
+defineTool({
+  name: SEARCH_FOODS_TOOL_NAME,
+  description: "Busca alimentos no catalogo real (TACO/TBCA + alimentos personalizados cadastrados) pelo nome, com fonte identificavel. Use antes de responder qualquer pergunta sobre um alimento especifico — nunca responda so pelo nome digitado sem buscar primeiro.",
+  inputSchema: searchFoodsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "food",
+  entityTypes: ["food"],
+  execute: executeSearchFoods,
+});
+
+defineTool({
+  name: GET_FOOD_DETAILS_TOOL_NAME,
+  description: "Le a tabela nutricional completa por 100g de um alimento (source/refId vindos de searchFoods) — todos os macros e micronutrientes disponiveis na fonte.",
+  inputSchema: getFoodDetailsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "food",
+  entityTypes: ["food"],
+  execute: executeGetFoodDetails,
+});
+
+defineTool({
+  name: GET_FOOD_PORTIONS_TOOL_NAME,
+  description: "Le as medidas caseiras especificas ja cadastradas para um alimento (ex.: '1 colher de sopa = 15g') — use antes de calcular uma quantidade em medida caseira, para nao cair numa conversao generica menos precisa.",
+  inputSchema: getFoodPortionsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "food",
+  entityTypes: ["food"],
+  execute: executeGetFoodPortions,
+});
+
+defineTool({
+  name: CALCULATE_FOOD_NUTRIENTS_TOOL_NAME,
+  description: "Calcula deterministicamente (nunca a IA de cabeca) os nutrientes de uma quantidade especifica de um alimento (ex.: '100g de arroz', '2 colheres de feijao') — use sempre que a pergunta envolver uma quantidade concreta de um alimento fora do plano de um cliente.",
+  inputSchema: calculateFoodNutrientsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "food",
+  entityTypes: ["food"],
+  execute: executeCalculateFoodNutrients,
+});
+
+// ── Leitura de paciente por id (FASE 1, operador interno) — encadeavel com
+// findClient no mesmo turno, sem depender de cliente pre-selecionado na tela.
+
+defineTool({
+  name: GET_PATIENT_SUMMARY_TOOL_NAME,
+  description: "Le um resumo rapido de um paciente pelo id (plano ativo, quantidade de protocolos, tarefas pendentes, proxima e ultima consulta) — use depois de resolver o id com findClient.",
+  inputSchema: getPatientSummaryInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "patient",
+  entityTypes: ["patient"],
+  execute: executeGetPatientSummary,
+});
+
+defineTool({
+  name: GET_PATIENT_ACTIVE_PLAN_TOOL_NAME,
+  description: "Le o plano alimentar ativo completo de um paciente pelo id (refeicoes, itens, metas) — use depois de resolver o id com findClient. Para totais nutricionais, encadeie com getMealPlanNutrition usando o mealPlanId devolvido.",
+  inputSchema: getPatientActivePlanInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "meal_plan",
+  entityTypes: ["patient", "meal_plan"],
+  execute: executeGetPatientActivePlan,
+});
+
+defineTool({
+  name: GET_PATIENT_CLINICAL_MARKERS_TOOL_NAME,
+  description: "Le as alergias, intolerancias, restricoes alimentares e sinalizacoes clinicas oficialmente cadastradas de um paciente pelo id — use depois de resolver o id com findClient. Nunca infira uma restricao que nao esteja aqui.",
+  inputSchema: getPatientClinicalMarkersInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "clinical",
+  entityTypes: ["patient"],
+  execute: executeGetPatientClinicalMarkers,
+});
+
+// ── Agenda (FASE 1B, operador interno) — sempre disponivel, nunca inventa horario.
+
+defineTool({
+  name: GET_TODAY_APPOINTMENTS_TOOL_NAME,
+  description: "Le as consultas reais de um dia (hoje por padrao, ou uma data especifica em AAAA-MM-DD) — nunca inclui consultas canceladas.",
+  inputSchema: getTodayAppointmentsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "appointment",
+  entityTypes: ["appointment"],
+  execute: executeGetTodayAppointments,
+});
+
+defineTool({
+  name: GET_NEXT_APPOINTMENT_TOOL_NAME,
+  description: "Le a proxima consulta futura — geral (sem clientId) ou de um paciente especifico (com clientId, resolvido antes com findClient se so tiver o nome).",
+  inputSchema: getNextAppointmentInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "appointment",
+  entityTypes: ["appointment", "patient"],
+  execute: executeGetNextAppointment,
+});
+
+defineTool({
+  name: GET_APPOINTMENT_DETAILS_TOOL_NAME,
+  description: "Le o detalhe completo de uma consulta especifica pelo id (local, observacoes, confirmacao do paciente, motivo de cancelamento).",
+  inputSchema: getAppointmentDetailsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "appointment",
+  entityTypes: ["appointment"],
+  execute: executeGetAppointmentDetails,
+});
+
+defineTool({
+  name: GET_UPCOMING_APPOINTMENTS_TOOL_NAME,
+  description: "Le as consultas futuras num intervalo de dias (padrao 7, ate 30) — geral ou filtrado por um paciente especifico.",
+  inputSchema: getUpcomingAppointmentsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "appointment",
+  entityTypes: ["appointment", "patient"],
+  execute: executeGetUpcomingAppointments,
+});
+
+// ── Dashboard (FASE 1B) — mesmo feed deterministico da tela inicial, nunca um score novo.
+
+defineTool({
+  name: GET_DASHBOARD_ACTION_ITEMS_TOOL_NAME,
+  description: "Le o feed real de pendencias do dashboard (consultas proximas/em andamento, solicitacoes de paciente, propostas da IA aguardando revisao, pagamentos vencidos, mensagens de atendimento pendentes), ja priorizado.",
+  inputSchema: getDashboardActionItemsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "dashboard",
+  entityTypes: [],
+  execute: executeGetDashboardActionItems,
+});
+
+defineTool({
+  name: GET_URGENT_ITEMS_TOOL_NAME,
+  description: "Le so os itens de prioridade URGENT/HIGH do feed do dashboard.",
+  inputSchema: getUrgentItemsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "dashboard",
+  entityTypes: [],
+  execute: executeGetUrgentItems,
+});
+
+defineTool({
+  name: GET_RECENT_ACTIVITY_TOOL_NAME,
+  description: "Le a atividade recente do sistema (ex.: substituicoes alimentares seguras respondidas automaticamente pela IA).",
+  inputSchema: getRecentActivityInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "dashboard",
+  entityTypes: [],
+  execute: executeGetRecentActivity,
+});
+
+// ── Solicitacoes (FASE 1B, complemento) ───────────────────────────────────
+
+defineTool({
+  name: GET_PATIENT_REQUEST_DETAILS_TOOL_NAME,
+  description: "Le o detalhe completo de UMA solicitacao de paciente especifica pelo id (texto do pedido, resumo da IA, status, notas da nutricionista).",
+  inputSchema: getPatientRequestDetailsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "request",
+  entityTypes: ["patient", "request"],
+  execute: executeGetPatientRequestDetails,
+});
+
+defineTool({
+  name: GET_PENDING_AI_PROPOSALS_TOOL_NAME,
+  description: "Le as propostas da propria IA que ainda aguardam confirmacao humana (ou estao presas em execucao) — nunca aprova nem executa nada, so lista.",
+  inputSchema: getPendingAiProposalsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "request",
+  entityTypes: ["request"],
+  execute: executeGetPendingAiProposals,
+});
+
+// ── Financeiro (FASE 1B) — 100% leitura, registro manual, sem gateway de pagamento.
+
+defineTool({
+  name: GET_PAYMENT_DETAILS_TOOL_NAME,
+  description: "Le o detalhe completo de UM pagamento especifico pelo id (forma de pagamento, parcela, notas).",
+  inputSchema: getPaymentDetailsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "finance",
+  entityTypes: ["payment"],
+  execute: executeGetPaymentDetails,
+});
+
+defineTool({
+  name: GET_OVERDUE_PAYMENTS_TOOL_NAME,
+  description: "Le os pagamentos vencidos (status vencido, ou pendente com vencimento no passado) — geral ou de um paciente especifico.",
+  inputSchema: getOverduePaymentsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "finance",
+  entityTypes: ["payment", "patient"],
+  execute: executeGetOverduePayments,
+});
+
+defineTool({
+  name: GET_PENDING_PAYMENTS_TOOL_NAME,
+  description: "Le os pagamentos pendentes (ainda nao pagos, vencidos ou nao) — geral ou de um paciente especifico.",
+  inputSchema: getPendingPaymentsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "finance",
+  entityTypes: ["payment", "patient"],
+  execute: executeGetPendingPayments,
+});
+
+defineTool({
+  name: GET_FINANCIAL_SUMMARY_TOOL_NAME,
+  description: "Le o resumo financeiro real (recebido no mes, em aberto, vencido) — nunca calcule esses totais de cabeca, sempre use esta ferramenta.",
+  inputSchema: getFinancialSummaryInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "finance",
+  entityTypes: ["payment"],
+  execute: executeGetFinancialSummary,
 });
 
 // ── Modo Consulta (FASE 1) — workspace clinico dedicado ──────────────────
@@ -424,6 +800,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient"],
   execute: (input) => executeGetConsultationBrief(input),
 });
 
@@ -434,6 +812,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "meal_plan",
+  entityTypes: ["patient", "meal_plan"],
   execute: executeGetActiveMealPlanForConsultation,
 });
 
@@ -444,6 +824,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient", "protocol"],
   execute: executeGetActiveProtocolForConsultation,
 });
 
@@ -454,6 +836,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "request",
+  entityTypes: ["patient", "task", "request"],
   execute: executeGetPendingPatientItems,
 });
 
@@ -464,6 +848,8 @@ defineTool({
   risk: "read",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient"],
   execute: executeCompareAnthropometry,
 });
 
@@ -474,6 +860,8 @@ defineTool({
   risk: "sensitive",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient", "task"],
   execute: async (input) => input,
 });
 
@@ -484,6 +872,8 @@ defineTool({
   risk: "clinical",
   profiles: ADMIN,
   contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient", "appointment"],
   execute: async (input) => input,
 });
 
@@ -499,6 +889,8 @@ defineTool({
   risk: "read",
   profiles: PATIENT,
   contextRequirement: "client",
+  domain: "meal_plan",
+  entityTypes: ["meal_plan"],
   execute: unboundPatientToolStub,
 });
 
@@ -509,6 +901,8 @@ defineTool({
   risk: "read",
   profiles: PATIENT,
   contextRequirement: "client",
+  domain: "meal_plan",
+  entityTypes: ["meal_plan"],
   execute: unboundPatientToolStub,
 });
 
@@ -519,6 +913,8 @@ defineTool({
   risk: "read",
   profiles: PATIENT,
   contextRequirement: "client",
+  domain: "appointment",
+  entityTypes: ["appointment"],
   execute: unboundPatientToolStub,
 });
 
@@ -529,6 +925,8 @@ defineTool({
   risk: "read",
   profiles: PATIENT,
   contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["task"],
   execute: unboundPatientToolStub,
 });
 
@@ -539,6 +937,8 @@ defineTool({
   risk: "read",
   profiles: PATIENT,
   contextRequirement: "client",
+  domain: "food",
+  entityTypes: ["food"],
   execute: unboundPatientToolStub,
 });
 
@@ -549,6 +949,8 @@ defineTool({
   risk: "low",
   profiles: PATIENT,
   contextRequirement: "none",
+  domain: "navigation",
+  entityTypes: [],
   execute: executeNavigatePatientPortal,
 });
 
@@ -559,6 +961,8 @@ defineTool({
   risk: "read",
   profiles: PATIENT,
   contextRequirement: "none",
+  domain: "appointment",
+  entityTypes: ["appointment"],
   execute: executeGetAvailableSlotsForScheduling,
 });
 
@@ -569,6 +973,8 @@ defineTool({
   risk: "sensitive",
   profiles: PATIENT,
   contextRequirement: "client",
+  domain: "appointment",
+  entityTypes: ["appointment"],
   execute: async (input) => input,
 });
 
@@ -579,6 +985,8 @@ defineTool({
   risk: "sensitive",
   profiles: PATIENT,
   contextRequirement: "client",
+  domain: "request",
+  entityTypes: ["request"],
   execute: unboundPatientToolStub,
 });
 
@@ -589,6 +997,8 @@ defineTool({
   risk: "read",
   profiles: PATIENT,
   contextRequirement: "client",
+  domain: "request",
+  entityTypes: ["request"],
   execute: unboundPatientToolStub,
 });
 

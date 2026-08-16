@@ -99,6 +99,18 @@ export async function getPayments(filters: PaymentFilters = {}): Promise<Payment
   );
 }
 
+export async function getPaymentById(id: string): Promise<Payment | null> {
+  const rows = await d1Query<Payment>(
+    `SELECT p.*, c.name as client_name, c.email as client_email
+     FROM payments p
+     LEFT JOIN clients c ON c.id = p.client_id
+     WHERE p.id = ?1
+     LIMIT 1`,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
 export async function getUnnotifiedOverduePayments(limit = 100): Promise<Payment[]> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);

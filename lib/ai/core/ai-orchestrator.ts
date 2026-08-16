@@ -72,9 +72,44 @@ import {
   MEAL_PLAN_CHANGE_ASSISTANT_INSTRUCTIONS,
 } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import {
+  SEARCH_FOODS_TOOL_NAME,
+  GET_FOOD_DETAILS_TOOL_NAME,
+  GET_FOOD_PORTIONS_TOOL_NAME,
+  CALCULATE_FOOD_NUTRIENTS_TOOL_NAME,
+  FOOD_CATALOG_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/food/food-catalog-agent";
+import {
+  GET_PATIENT_SUMMARY_TOOL_NAME,
+  GET_PATIENT_ACTIVE_PLAN_TOOL_NAME,
+  GET_PATIENT_CLINICAL_MARKERS_TOOL_NAME,
+  PATIENT_LOOKUP_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/clients/patient-lookup-agent";
+import {
   GET_PATIENT_REQUESTS_TOOL_NAME,
+  GET_PATIENT_REQUEST_DETAILS_TOOL_NAME,
+  GET_PENDING_AI_PROPOSALS_TOOL_NAME,
   PATIENT_REQUESTS_ADMIN_INSTRUCTIONS,
 } from "@/lib/ai/agents/clients/patient-requests-agent";
+import {
+  GET_TODAY_APPOINTMENTS_TOOL_NAME,
+  GET_NEXT_APPOINTMENT_TOOL_NAME,
+  GET_APPOINTMENT_DETAILS_TOOL_NAME,
+  GET_UPCOMING_APPOINTMENTS_TOOL_NAME,
+  APPOINTMENT_LOOKUP_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/appointments/appointment-lookup-agent";
+import {
+  GET_DASHBOARD_ACTION_ITEMS_TOOL_NAME,
+  GET_URGENT_ITEMS_TOOL_NAME,
+  GET_RECENT_ACTIVITY_TOOL_NAME,
+  DASHBOARD_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/dashboard/dashboard-agent";
+import {
+  GET_PAYMENT_DETAILS_TOOL_NAME,
+  GET_OVERDUE_PAYMENTS_TOOL_NAME,
+  GET_PENDING_PAYMENTS_TOOL_NAME,
+  GET_FINANCIAL_SUMMARY_TOOL_NAME,
+  FINANCE_LOOKUP_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/finance/finance-lookup-agent";
 import {
   GET_CONSULTATION_BRIEF_TOOL_NAME,
   GET_ACTIVE_MEAL_PLAN_TOOL_NAME,
@@ -236,6 +271,11 @@ export async function runAssistantTurn(
     AVAILABILITY_LOOKUP_ASSISTANT_INSTRUCTIONS,
     APPOINTMENT_ASSISTANT_INSTRUCTIONS,
     PATIENT_REQUESTS_ADMIN_INSTRUCTIONS,
+    FOOD_CATALOG_ASSISTANT_INSTRUCTIONS,
+    PATIENT_LOOKUP_ASSISTANT_INSTRUCTIONS,
+    APPOINTMENT_LOOKUP_ASSISTANT_INSTRUCTIONS,
+    DASHBOARD_ASSISTANT_INSTRUCTIONS,
+    FINANCE_LOOKUP_ASSISTANT_INSTRUCTIONS,
     `Voce pode encadear varias ferramentas de LEITURA (buscar cliente, ver agenda, ver evolucao, ver horarios) livremente no mesmo turno para responder um pedido com varias partes — isso e automatico e nao precisa de confirmacao. Mas ao chamar qualquer ferramenta de PROPOSTA (proposeXxx), pare: nao chame outra ferramenta depois dela nem tente aplicar a mudanca sozinha — o sistema sempre exige confirmacao humana explicita antes de qualquer proposta sensivel ou clinica virar realidade.`,
     `Se uma busca de cliente (${FIND_CLIENT_TOOL_NAME}) retornar mais de um resultado parecido, NAO escolha um arbitrariamente: liste as opcoes encontradas (so nome, nunca telefone/e-mail/outros dados) e peca para a pessoa confirmar qual e antes de continuar.`,
   ];
@@ -252,6 +292,33 @@ export async function runAssistantTurn(
     PROPOSE_NEW_CLIENT_TOOL_NAME,
     PROPOSE_NEW_RECIPE_TOOL_NAME,
     GET_PATIENT_REQUESTS_TOOL_NAME,
+    // FASE 1 (operador interno): sempre ativas, nunca dependem de cliente
+    // pre-selecionado na tela — resolvem "quantas calorias tem 100g de
+    // arroz?" e "qual o plano da Maria?" no mesmo turno, encadeando com
+    // findClient quando necessario (docs/AI-OPERATOR-AUDIT-ROADMAP.md).
+    SEARCH_FOODS_TOOL_NAME,
+    GET_FOOD_DETAILS_TOOL_NAME,
+    GET_FOOD_PORTIONS_TOOL_NAME,
+    CALCULATE_FOOD_NUTRIENTS_TOOL_NAME,
+    GET_PATIENT_SUMMARY_TOOL_NAME,
+    GET_PATIENT_ACTIVE_PLAN_TOOL_NAME,
+    GET_PATIENT_CLINICAL_MARKERS_TOOL_NAME,
+    GET_MEAL_PLAN_NUTRITION_TOOL_NAME,
+    // FASE 1B (operador interno): agenda, dashboard, solicitacoes e
+    // financeiro, tudo somente leitura (docs/AI-OPERATOR-AUDIT-ROADMAP.md).
+    GET_TODAY_APPOINTMENTS_TOOL_NAME,
+    GET_NEXT_APPOINTMENT_TOOL_NAME,
+    GET_APPOINTMENT_DETAILS_TOOL_NAME,
+    GET_UPCOMING_APPOINTMENTS_TOOL_NAME,
+    GET_DASHBOARD_ACTION_ITEMS_TOOL_NAME,
+    GET_URGENT_ITEMS_TOOL_NAME,
+    GET_RECENT_ACTIVITY_TOOL_NAME,
+    GET_PATIENT_REQUEST_DETAILS_TOOL_NAME,
+    GET_PENDING_AI_PROPOSALS_TOOL_NAME,
+    GET_PAYMENT_DETAILS_TOOL_NAME,
+    GET_OVERDUE_PAYMENTS_TOOL_NAME,
+    GET_PENDING_PAYMENTS_TOOL_NAME,
+    GET_FINANCIAL_SUMMARY_TOOL_NAME,
   ];
 
   if (!client && !submission) {

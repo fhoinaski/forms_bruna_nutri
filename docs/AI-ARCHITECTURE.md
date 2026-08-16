@@ -32,7 +32,18 @@ com loop próprio. O `ai-orchestrator.ts` é só onde a lógica que antes vivia
 inteira dentro da rota HTTP passou a morar; o encadeamento multi-etapa
 ("ache o cliente → veja a agenda → proponha uma consulta") continua sendo o
 tool-calling nativo do AI SDK dentro de uma única chamada
-(`stopWhen: stepCountIs(4)`), agora com tools vindas de um registro central.
+(`stopWhen`: até 6 steps, timeout 30s), agora com tools vindas de um registro
+central.
+
+Existe um **segundo** orquestrador em paralelo, mesma forma, para o portal do
+paciente: `app/api/portal/ai/chat/route.ts` → `lib/ai/core/patient-context.ts`
+(resolve `clientId` só a partir da sessão JWT, nunca do body) →
+`lib/ai/core/patient-orchestrator.ts` (`runPatientAssistantTurn`, até 5 steps,
+timeout 20s) → `lib/ai/core/patient-response.ts`. Os dois orquestradores
+compartilham gateway, registry e políticas de risco, mas são entry points
+independentes — não há um "orchestrator central" único despachando para os
+dois hoje (ver `docs/AI-OPERATOR-AUDIT-ROADMAP.md`, item 3, para a decisão
+arquitetural sobre isso).
 
 ## Gateway (`lib/ai/gateway/ai-gateway.ts`)
 
@@ -102,13 +113,23 @@ PROPOSTA sensitive/clinical → CONFIRMAÇÃO HUMANA → EXECUÇÃO   (nunca aut
 ### Perfis de capacidade (`lib/ai/policies/permissions.ts`)
 
 Cada tool no registry declara `profiles: AssistantCapabilityProfile[]`.
-Hoje só `ADMIN_ASSISTANT` está conectado (rota `/api/admin/ai/chat`).
-`PATIENT_ASSISTANT` existe como tipo e é aceito por `buildToolSet`, mas
-nenhuma tool está na sua allow-list ainda — é o scaffold para permitir IA no
-portal do paciente no futuro sem redesenhar a arquitetura. Quando isso for
-implementado, o paciente **nunca** deve receber as mesmas tools do admin
-(sem acesso a outros pacientes, sem alterar prontuário sozinho, sem ver
-notas internas).
+Existem dois perfis, cada um com seu próprio orquestrador e rota, e **nunca**
+compartilham tool por acidente (nenhuma tool tem os dois profiles ao mesmo
+tempo):
+
+- `ADMIN_ASSISTANT` — rota `/api/admin/ai/chat`, orquestrador
+  `lib/ai/core/ai-orchestrator.ts` (`runAssistantTurn`). 26 tools hoje.
+- `PATIENT_ASSISTANT` — rota `/api/portal/ai/chat`, orquestrador
+  `lib/ai/core/patient-orchestrator.ts` (`runPatientAssistantTurn`). 10 tools
+  hoje, todas de leitura da própria paciente ou propostas que viram
+  `patient_appointment_request`/`patient_change_request`. Nunca tem acesso a
+  outro paciente, nunca altera prontuário sozinho, nunca vê notas internas.
+
+Tools do paciente que dependem de "de quem são os dados" (plano, consultas,
+tarefas) registram só o schema/risco no registry — o `execute` real é
+substituído por `resolvePatientTools()` dentro do `patient-orchestrator.ts`,
+sempre vinculado ao `clientId` da sessão JWT, nunca a um id escolhido pelo
+modelo.
 
 ## Privacidade (`lib/ai/privacy/`)
 
@@ -125,17 +146,25 @@ notas internas).
     de paciente do tipo *"ignore suas instruções e..."*.
 
 Aplicado em `agents/clinical/protocol-agent.ts`, `agents/clinical/prontuario-agent.ts`,
-`pre-analysis-assistant.ts`, `client-protocol-assistant.ts` e no briefing
-pré-consulta. Testado em `tests/ai-pii-sanitize.test.ts` e
-`tests/ai-prompt-injection.test.ts`.
+`pre-analysis-assistant.ts`, `client-protocol-assistant.ts`, no briefing
+pré-consulta e no Modo Consulta (`agents/clinical/consultation-*.ts`). O
+paciente também passa por sanitização, embora com um padrão mais leve (não é
+o mesmo caminho de código): `patient-orchestrator.ts` aplica `redactPii()` em
+toda mensagem do paciente antes dela compor o array de `messages`, como
+última linha de defesa contra CPF/telefone/e-mail digitado no chat; e
+`agents/nutrition/diet-review-agent.ts` usa `wrapUntrustedData()` (sem
+pseudonimizar nome) ao montar o contexto do plano ativo. Testado em
+`tests/ai-pii-sanitize.test.ts` e `tests/ai-prompt-injection.test.ts`.
 
 ## Registro de tools (`lib/ai/tools/registry.ts`)
 
 Cada tool é definida uma vez com nome, descrição, schema Zod de entrada,
-risco, perfis permitidos, requisito de contexto (`none`/`client`/`submission`)
-e `execute`. `buildToolSet(nomes, perfil)` monta o `ToolSet` do AI SDK,
+risco, perfis permitidos, requisito de contexto (`none`/`client`/`submission`),
+`domain`/`entityTypes` (taxonomia de capability manifest, ver abaixo) e
+`execute`. `buildToolSet(nomes, perfil)` monta o `ToolSet` do AI SDK,
 filtrando por perfil — uma tool fora da allow-list do perfil atual nunca é
-oferecida ao LLM, mesmo que exista no registry.
+oferecida ao LLM, mesmo que exista no registry. 39 tools registradas hoje
+(26 admin + 10 paciente + 3 compartilhadas).
 
 `lib/ai/tools/proposal-builders.ts` substitui a cadeia de 9 `if`s que
 existia dentro da rota de chat: um dispatch table (`toolName → builder`)
@@ -143,14 +172,36 @@ que transforma o resultado de uma tool call num `ProposedAction` tipado
 (`lib/ai/schemas/action.schema.ts`), com `risk`/`requiresConfirmation`
 sempre resolvidos pela política central — nunca pelo builder.
 
+### Capability manifest (`lib/ai/tools/capability-manifest.ts`)
+
+Toda tool declara um `domain` (`lib/ai/tools/capability-types.ts` — os
+mesmos domínios usados para pensar em "subagentes": `patient`, `appointment`,
+`clinical`, `meal_plan`, `food`, `nutrition_analysis`, `finance`, `request`,
+`dashboard`, `content`, `document`, `configuration`, `admin`, `navigation`) e
+`entityTypes` (que tipo de entidade ela lê/afeta). `buildCapabilityManifest()`
+deriva, **sempre a partir do registry** (nunca mantido a mão em paralelo), um
+mapa domínio → tools com risco/confirmação já resolvidos —
+`listUncoveredDomains()` devolve os domínios que ainda não têm nenhuma tool
+(hoje: `finance`, `document`, `configuration`, `admin` — ver
+`docs/AI-OPERATOR-AUDIT-ROADMAP.md` para o plano de preenchê-los). Isso existe
+para que "quais capacidades o assistente tem" nunca vire uma pergunta cuja
+resposta só existe espalhada em código e em documentação desatualizada — é a
+fonte única para descoberta e para gerar documentação, não um mecanismo de
+autorização (autorização continua sendo só `risk`/`profiles`).
+
 ### Adicionando uma tool nova
 
 1. Definir `inputSchema` (Zod, `.strict()`) e `execute` no agente responsável.
-2. Registrar em `tools/registry.ts` com `risk`, `profiles` e `contextRequirement`.
+2. Registrar em `tools/registry.ts` com `risk`, `profiles`, `contextRequirement`,
+   `domain` e `entityTypes`.
 3. Se for uma tool de "proposta", adicionar um builder em `proposal-builders.ts`
    e um `kind` novo em `schemas/action.schema.ts`.
-4. Adicionar o nome da tool à lista `activeToolNames` do orquestrador, na
-   condição de contexto certa (sempre ativa, só com cliente, só com formulário).
+4. Adicionar o nome da tool à lista `activeToolNames`/`PATIENT_TOOL_NAMES` do
+   orquestrador correspondente, na condição de contexto certa (sempre ativa,
+   só com cliente, só com formulário).
+
+Ver `docs/AI-SYSTEM-INTEGRATION.md` para o checklist completo (inclui testes,
+instrução de prompt e onde documentar).
 
 ### Adicionando um agente novo
 
@@ -260,12 +311,18 @@ módulos citados foram migrados na atualização de 2026-08-10.
 
 ## Testes
 
-`tests/ai-policies.test.ts`, `ai-tool-registry.test.ts`, `ai-pii-sanitize.test.ts`,
-`ai-prompt-injection.test.ts`, `ai-protocol-schema.test.ts`,
-`ai-conversation-memory.test.ts`, `ai-workflow-appointment.test.ts`,
-`ai-meal-suggestion-agent.test.ts`, `ai-chat-attachments.test.ts` e
-`ai-migrated-tools.test.ts` — cobrem
-classificação de risco, validação de schema antes de `execute`, redação de
-PII, resistência a prompt injection, rejeição de saída de LLM inválida,
-isolamento de memória por cliente/admin, e o fluxo completo de propor uma
-consulta (e uma alteração de prontuário) até a confirmação obrigatória.
+37 arquivos em `tests/` com prefixo `ai-` (mais `admin-settings-ai.test.ts`),
+cobrindo: classificação de risco (`ai-policies.test.ts`), validação de schema
+antes de `execute` e capability manifest (`ai-tool-registry.test.ts`,
+`ai-capability-manifest.test.ts`), redação de PII
+(`ai-pii-sanitize.test.ts`), resistência a prompt injection
+(`ai-prompt-injection.test.ts`), rejeição de saída de LLM inválida
+(`ai-protocol-schema.test.ts`), isolamento de memória por cliente/admin e por
+paciente (`ai-conversation-memory.test.ts`, `ai-patient-memory.test.ts`),
+ciclo de vida completo de proposta — incluindo race conditions e crash
+recovery — até a confirmação obrigatória (`ai-proposal-lifecycle.test.ts`,
+`ai-proposal-adversarial.test.ts`, `ai-proposal-cross-proposal-races.test.ts`,
+`ai-proposal-crash-recovery.test.ts`, `ai-proposal-handlers.test.ts`), e os
+fluxos multi-step de agendamento/plano alimentar
+(`ai-workflow-appointment.test.ts`, `ai-workflow-multistep.test.ts`,
+`ai-meal-plan-change.test.ts`).
