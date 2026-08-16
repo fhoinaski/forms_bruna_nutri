@@ -51,6 +51,65 @@ describe("lib/repositories/meal-plans.ts — vinculo estruturado e metas", () =>
     expect(itemRowsJson).toContain('"foodRefId":"3"');
   });
 
+  it("persiste snapshot de gramas resolvidos para medida caseira vinculada", async () => {
+    const batchCalls: unknown[][] = [];
+    const d1Batch = vi.fn(async (statements: { sql: string; params?: unknown[] }[]) => {
+      batchCalls.push(statements as unknown[]);
+      return statements.map(() => ({ results: [], success: true }));
+    });
+    const d1Query = vi.fn().mockResolvedValue([{
+      id: "plan-1", client_id: "client-1", title: "Plano", target_group: null, status: "draft", version: 1,
+      notes: null, target_energy_kcal: null, target_protein_g: null, target_carbohydrate_g: null, target_fat_g: null,
+      created_at: "now", updated_at: "now",
+    }]);
+    vi.doMock("@/lib/d1/client", () => ({ d1Batch, d1Query, d1Execute: vi.fn() }));
+    vi.doMock("@/lib/repositories/protocol-templates", () => ({ getAllTemplates: vi.fn() }));
+    vi.doMock("@/lib/security/encrypted-fields", () => ({ encryptJsonValue: (v: unknown) => `encj:${JSON.stringify(v)}` }));
+    vi.doMock("@/lib/repositories/food-portions", async () => {
+      const actual = await vi.importActual<typeof import("../lib/repositories/food-portions")>("../lib/repositories/food-portions");
+      return {
+        ...actual,
+        getFoodPortionById: vi.fn().mockResolvedValue({
+          id: "m-banana-media",
+          food_source: "TACO",
+          food_ref_id: "179",
+          description: "1 unidade média",
+          gram_equivalent: 86,
+          source: "TBCA",
+          source_version: "v1",
+          confidence: "high",
+          is_active: 1,
+          created_at: "now",
+        }),
+      };
+    });
+    const { createMealPlan } = await import("../lib/repositories/meal-plans");
+
+    await createMealPlan({
+      clientId: "client-1",
+      title: "Plano",
+      meals: [{ name: "Café", items: [{ food: "Banana", quantity: "2", unit: null, food_source: "TACO", food_ref_id: "179", household_measure_id: "m-banana-media" }] }],
+      substitutions: [],
+      supplements: [],
+    });
+
+    const itemInsert = batchCalls.flat().find((statement) => {
+      const s = statement as { sql: string };
+      return s.sql.includes("INSERT INTO meal_plan_items");
+    }) as { sql: string; params: unknown[] } | undefined;
+    expect(itemInsert?.sql).toContain("resolved_grams_snapshot");
+    const itemRows = JSON.parse(itemInsert!.params[0] as string) as Array<Record<string, unknown>>;
+    expect(itemRows[0]).toMatchObject({ resolvedGramsSnapshot: 172 });
+    expect(String(itemRows[0].quantityResolutionSnapshot)).toContain('"measureId":"m-banana-media"');
+
+    const versionInsert = batchCalls.flat().find((statement) => {
+      const s = statement as { sql: string };
+      return s.sql.includes("INSERT OR IGNORE INTO meal_plan_versions");
+    }) as { params: unknown[] } | undefined;
+    const snapshot = JSON.parse(String(versionInsert!.params[4]).replace(/^encj:/, "")) as { meals: Array<{ items: Array<Record<string, unknown>> }> };
+    expect(snapshot.meals[0].items[0]).toMatchObject({ resolved_grams_snapshot: 172 });
+  });
+
   it("persiste as metas nutricionais (target_*) ao atualizar um plano", async () => {
     const executedSql: { sql: string; params?: unknown[] }[] = [];
     const d1Batch = vi.fn(async (statements: { sql: string; params?: unknown[] }[]) => {
@@ -126,10 +185,17 @@ describe("GET /api/admin/foods/search — busca unificada", () => {
         numero: row.id, descricao: row.name, fonte: "custom", energia_kcal: row.energy_kcal, proteina_g: row.protein_g, carboidrato_g: row.carbohydrate_g, lipidios_g: row.fat_g,
       }),
     }));
+    vi.doMock("@/lib/repositories/usda-foods", () => ({
+      searchUsdaFoods: vi.fn().mockResolvedValue([]),
+      getUsdaFoodBySourceId: vi.fn(),
+      toUsdaMacroReference: vi.fn(),
+    }));
     const { GET } = await import("../app/api/admin/foods/search/route");
     const response = await GET(new NextRequest(new URL("/api/admin/foods/search?q=whey isolado", BASE_URL)));
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.items.some((item: { numero: string }) => item.numero === "food-1")).toBe(true);
+    expect(body.items[0]).toHaveProperty("ref");
+    expect(body.items.some((item: { ref?: { source: string; sourceId: string } }) => item.ref?.source === "CUSTOM" && item.ref.sourceId === "food-1")).toBe(true);
   });
 });

@@ -163,4 +163,80 @@ test.describe("plano alimentar", () => {
     await page.getByPlaceholder("Un.").last().fill("unidade");
     await expect(page.getByText(/valor estimado/i).last()).toBeVisible();
   });
+
+  test("busca alimento customizado no catalogo unificado, salva e recarrega com referencia estavel", async ({ page, request }) => {
+    const patient = await createTestPatient(request);
+    const customName = `Granola E2E ${Date.now()}`;
+    const custom = await request.post("/api/admin/custom-foods", {
+      data: {
+        name: customName,
+        source: "CUSTOM",
+        portion_base_grams: 100,
+        energy_kcal: 410,
+        protein_g: 9,
+        carbohydrate_g: 62,
+        fat_g: 12,
+        fiber_g: null,
+        sodium_mg: null,
+        calcium_mg: null,
+        iron_mg: null,
+        potassium_mg: null,
+        vitamin_c_mg: null,
+      },
+    });
+    expect(custom.ok()).toBeTruthy();
+
+    await page.goto(`/dashboard/clients/${patient.id}`);
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await page.getByRole("button", { name: /^criar por modelo$/i }).click();
+    await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
+
+    await page.getByRole("button", { name: /^refeicao$/i }).click();
+    const foodInput = page.getByPlaceholder("Digite para buscar na TACO").last();
+    await foodInput.fill(customName);
+    const suggestion = page.locator("button", { hasText: customName }).first();
+    await expect(suggestion).toBeVisible();
+    await expect(suggestion).toContainText(/Personalizado/i);
+    await suggestion.click();
+    await page.getByPlaceholder("Qtd.").last().fill("50");
+    await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
+
+    await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
+    await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
+
+    await page.reload();
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await expect(page.getByPlaceholder("Digite para buscar na TACO").last()).toHaveValue(customName);
+    await expect(page.getByPlaceholder("Qtd.").last()).toHaveValue("50");
+  });
+
+  test("busca alimento USDA piloto, salva e recarrega com referencia estavel", async ({ page, request }) => {
+    const seed = await request.post("/api/admin/e2e/seed-usda-food");
+    expect(seed.ok(), `seed-usda-food falhou (${seed.status()}): ${await seed.text()}`).toBeTruthy();
+    const patient = await createTestPatient(request);
+
+    await page.goto(`/dashboard/clients/${patient.id}`);
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await page.getByRole("button", { name: /^criar por modelo$/i }).click();
+    await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
+
+    await page.getByRole("button", { name: /^refeicao$/i }).click();
+    const foodInput = page.getByPlaceholder("Digite para buscar na TACO").last();
+    await foodInput.fill("rice pilot e2e");
+    const suggestion = page.locator("button", { hasText: /rice pilot e2e cooked/i }).first();
+    await expect(suggestion).toBeVisible();
+    await expect(suggestion).toContainText(/USDA/i);
+    await suggestion.click();
+    await page.getByPlaceholder("Qtd.").last().fill("100");
+    await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
+
+    await expect(page.getByText(/^\d+ kcal$/).first()).toBeVisible();
+    await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
+    await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
+
+    await page.reload();
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await expect(page.getByPlaceholder("Digite para buscar na TACO").last()).toHaveValue("Rice pilot e2e cooked");
+    await expect(page.getByPlaceholder("Qtd.").last()).toHaveValue("100");
+  });
 });

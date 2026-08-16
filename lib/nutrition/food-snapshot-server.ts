@@ -2,6 +2,7 @@ import type { MacroReferenceFood } from "@/lib/nutrition/macros";
 import { getTacoFoodByNumber } from "@/lib/nutrition/taco";
 import { getCustomFoodById, toMacroReferenceFood } from "@/lib/repositories/custom-foods";
 import { buildNutritionSnapshot, type FoodItemSnapshot } from "@/lib/nutrition/food-snapshot";
+import { getUsdaFoodBySourceId, toUsdaMacroReference } from "@/lib/repositories/usda-foods";
 
 /**
  * Resolucao do vinculo de um alimento (write path do snapshot) — SERVER-ONLY.
@@ -19,6 +20,10 @@ export async function resolveFoodReference(
   if (foodSource === "CUSTOM" || foodSource === "MANUFACTURER") {
     const row = await getCustomFoodById(foodRefId);
     return row ? toMacroReferenceFood(row) : null;
+  }
+  if (foodSource === "USDA") {
+    const row = await getUsdaFoodBySourceId(foodRefId);
+    return row ? toUsdaMacroReference(row) : null;
   }
   return null;
 }

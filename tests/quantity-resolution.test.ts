@@ -105,6 +105,16 @@ describe("resolveQuantity — motor central de resolução de quantidade", () =>
     expect(result.method).toBe("food_household_measure");
   });
 
+  it("snapshot histórico de gramagem tem prioridade sobre a medida atual cadastrada", () => {
+    const result = resolveQuantity({
+      quantity: "2",
+      householdMeasure: { ...bananaMedia, gramEquivalent: 100 },
+      resolvedGramsSnapshot: 172,
+      quantityResolutionSnapshot: JSON.stringify({ method: "food_household_measure", confidence: "high", source: "TBCA", measureId: "measure-1" }),
+    });
+    expect(result).toMatchObject({ grams: 172, method: "portion_snapshot", confidence: "high", source: "TBCA", measureId: "measure-1" });
+  });
+
   it("quantityInGrams (wrapper legado) nunca quebra: unresolved vira 0, nunca null nem NaN", () => {
     expect(quantityInGrams("3", "porções")).toBe(0);
     expect(quantityInGrams("100", "g")).toBe(100);

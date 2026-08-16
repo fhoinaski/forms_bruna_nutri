@@ -68,6 +68,22 @@ describe("repository — lib/repositories/food-portions.ts", () => {
     const { deactivateFoodPortion } = await import("../lib/repositories/food-portions");
     expect(await deactivateFoodPortion("does-not-exist")).toBe(false);
   });
+
+  it("updateFoodPortion edita descrição e gramagem sem alterar food_source/food_ref_id", async () => {
+    const row = { id: "m-1", food_source: "MANUFACTURER", food_ref_id: "food-1", description: "1 scoop", gram_equivalent: 30, source: "rótulo", source_version: null, confidence: "medium", is_active: 1, created_at: "now" };
+    const d1Execute = vi.fn(async (_sql: string, params: unknown[] = []) => {
+      row.description = String(params[0]);
+      row.gram_equivalent = Number(params[1]);
+      row.source = String(params[2]);
+      row.confidence = params[4] as string;
+    });
+    const d1Query = vi.fn(async () => [row]);
+    vi.doMock("@/lib/d1/client", () => ({ d1Query, d1Execute }));
+    const { updateFoodPortion } = await import("../lib/repositories/food-portions");
+
+    const updated = await updateFoodPortion("m-1", { description: "1 scoop nivelado", gram_equivalent: 32, source: "Fabricante", confidence: "high" });
+    expect(updated).toMatchObject({ food_source: "MANUFACTURER", food_ref_id: "food-1", description: "1 scoop nivelado", gram_equivalent: 32, source: "Fabricante", confidence: "high" });
+  });
 });
 
 describe("API — POST /api/admin/foods/portions", () => {
@@ -137,5 +153,50 @@ describe("API — POST /api/admin/foods/portions", () => {
     const { POST } = await import("../app/api/admin/foods/portions/route");
     const response = await POST(makeRequest({ food_source: "TACO", food_ref_id: "179", description: "x", gram_equivalent: 10 }));
     expect(response.status).toBe(401);
+  });
+});
+
+describe("API — PATCH /api/admin/foods/portions/[id]", () => {
+  function makePatchRequest(body: unknown) {
+    return new NextRequest(`${BASE_URL}/api/admin/foods/portions/m-1`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("edita uma medida existente", async () => {
+    mockAuth();
+    mockAudit();
+    const existing = { id: "m-1", food_source: "TACO", food_ref_id: "179", description: "1 unidade média", gram_equivalent: 86, source: "TBCA", source_version: null, confidence: "medium", is_active: 1, created_at: "now" };
+    const updated = { ...existing, description: "1 unidade média sem casca", gram_equivalent: 90, confidence: "high" };
+    const updateFoodPortion = vi.fn().mockResolvedValue(updated);
+    vi.doMock("@/lib/repositories/food-portions", () => ({
+      getFoodPortionById: vi.fn().mockResolvedValue(existing),
+      listFoodPortions: vi.fn().mockResolvedValue([existing]),
+      updateFoodPortion,
+      deactivateFoodPortion: vi.fn(),
+    }));
+    const { PATCH } = await import("../app/api/admin/foods/portions/[id]/route");
+
+    const response = await PATCH(makePatchRequest({ description: "1 unidade média sem casca", gram_equivalent: 90, confidence: "high" }), { params: Promise.resolve({ id: "m-1" }) });
+    expect(response.status).toBe(200);
+    expect(updateFoodPortion).toHaveBeenCalledWith("m-1", expect.objectContaining({ description: "1 unidade média sem casca", gram_equivalent: 90, confidence: "high" }));
+  });
+
+  it("rejeita edição que duplicaria a descrição ativa no mesmo alimento", async () => {
+    mockAuth();
+    mockAudit();
+    const existing = { id: "m-1", food_source: "TACO", food_ref_id: "179", description: "1 unidade média", gram_equivalent: 86, source: "TBCA", source_version: null, confidence: "medium", is_active: 1, created_at: "now" };
+    vi.doMock("@/lib/repositories/food-portions", () => ({
+      getFoodPortionById: vi.fn().mockResolvedValue(existing),
+      listFoodPortions: vi.fn().mockResolvedValue([existing, { ...existing, id: "m-2", description: "1 unidade grande" }]),
+      updateFoodPortion: vi.fn(),
+      deactivateFoodPortion: vi.fn(),
+    }));
+    const { PATCH } = await import("../app/api/admin/foods/portions/[id]/route");
+
+    const response = await PATCH(makePatchRequest({ description: "1 UNIDADE GRANDE" }), { params: Promise.resolve({ id: "m-1" }) });
+    expect(response.status).toBe(409);
   });
 });

@@ -1,8 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildNutritionSnapshot, referenceFromSnapshot } from "@/lib/nutrition/food-snapshot";
 import { buildItemSnapshot } from "@/lib/nutrition/food-snapshot-server";
 import { resolveItemReference, type FoodReferenceLookup } from "@/lib/nutrition/nutrients";
 import { getTacoFoodByNumber } from "@/lib/nutrition/taco";
+
+afterEach(() => {
+  vi.resetModules();
+  vi.clearAllMocks();
+});
 
 describe("meal plan item snapshot (P1-A)", () => {
   it("buildNutritionSnapshot + referenceFromSnapshot fazem round-trip dos nutrientes", () => {
@@ -57,5 +62,46 @@ describe("meal plan item snapshot (P1-A)", () => {
     const snap = await buildItemSnapshot(null, null);
     expect(snap.food_name_snapshot).toBeNull();
     expect(snap.nutrition_snapshot).toBeNull();
+  });
+
+  it("snapshot USDA preserva micronutrientes e vence alteracao futura da base", () => {
+    const snapshot = buildNutritionSnapshot({
+      numero: "USDA_SR_LEGACY:169756",
+      descricao: "Rice, white, cooked",
+      fonte: "usda",
+      energia_kcal: 130,
+      proteina_g: 2.69,
+      carboidrato_g: 28.17,
+      lipidios_g: 0.28,
+      calcio_mg: 10,
+      ferro_mg: 1.2,
+      magnesium_mg: 12,
+      phosphorus_mg: 43,
+      selenium_mcg: 7.5,
+      vitamin_a_mcg: null,
+      vitamin_b12_mcg: 0,
+    });
+    const lookup: FoodReferenceLookup = {
+      byTacoNumber: () => null,
+      byCustomId: () => null,
+      byUsdaId: () => ({ descricao: "Rice changed", energia_kcal: 999, proteina_g: 99, carboidrato_g: 99, lipidios_g: 99, calcio_mg: 999 }),
+      fuzzyMatch: () => null,
+    };
+    const resolved = resolveItemReference({
+      food: "Rice",
+      food_source: "USDA",
+      food_ref_id: "USDA_SR_LEGACY:169756",
+      food_name_snapshot: "Rice, white, cooked",
+      nutrition_snapshot: snapshot,
+    }, lookup);
+    expect(resolved).toMatchObject({
+      descricao: "Rice, white, cooked",
+      energia_kcal: 130,
+      calcio_mg: 10,
+      magnesium_mg: 12,
+      selenium_mcg: 7.5,
+      vitamin_b12_mcg: 0,
+    });
+    expect(resolved!.vitamin_a_mcg).toBeNull();
   });
 });

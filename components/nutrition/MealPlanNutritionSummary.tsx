@@ -11,13 +11,15 @@ type SummaryItem = {
   food: string;
   quantity?: string | null;
   unit?: string | null;
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | null;
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | null;
   food_ref_id?: string | null;
   household_measure_id?: string | null;
+  resolved_grams_snapshot?: number | null;
+  quantity_resolution_snapshot?: string | null;
 };
 type SummaryMeal = { id?: string; name: string; items: SummaryItem[] };
 
-const NUTRIENT_LABELS: Record<NutrientKey, string> = {
+const NUTRIENT_LABELS: Partial<Record<NutrientKey, string>> = {
   energyKcal: "Energia",
   proteinG: "Proteína",
   carbohydrateG: "Carboidrato",
@@ -29,7 +31,7 @@ const NUTRIENT_LABELS: Record<NutrientKey, string> = {
   potassiumMg: "Potássio",
   vitaminCMg: "Vitamina C",
 };
-const NUTRIENT_UNITS: Record<NutrientKey, string> = {
+const NUTRIENT_UNITS: Partial<Record<NutrientKey, string>> = {
   energyKcal: "kcal",
   proteinG: "g",
   carbohydrateG: "g",
@@ -104,7 +106,7 @@ export function MealPlanNutritionSummary({ meals, target }: { meals: SummaryMeal
       new Set(
         meals
           .flatMap((meal) => meal.items)
-          .filter((item) => item.food_ref_id && (item.food_source === "TACO" || item.food_source === "CUSTOM"))
+          .filter((item) => item.food_ref_id && (item.food_source === "TACO" || item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER"))
           .map((item) => `${item.food_source}:${item.food_ref_id}`)
       )
     );
@@ -139,6 +141,7 @@ export function MealPlanNutritionSummary({ meals, target }: { meals: SummaryMeal
     () => ({
       byTacoNumber: (numero) => refById[numero] ?? null,
       byCustomId: (id) => refById[id] ?? null,
+      byUsdaId: (id) => refById[id] ?? null,
       fuzzyMatch: (food) => refByText[food.trim().toLowerCase()] ?? null,
       byMeasureId: (id) => measuresById[id] ?? null,
     }),

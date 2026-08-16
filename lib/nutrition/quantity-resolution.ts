@@ -19,6 +19,7 @@ import { normalize } from "@/lib/nutrition/normalize";
 
 export type QuantityResolutionMethod =
   | "explicit_grams"
+  | "portion_snapshot"
   | "food_household_measure"
   | "generic_unit_conversion"
   | "estimated"
@@ -50,6 +51,13 @@ export interface HouseholdMeasureOption {
 export interface ResolveQuantityInput {
   quantity?: string | number | null;
   unit?: string | null;
+  /**
+   * Snapshot historico de gramas resolvidos no momento da prescricao. Quando
+   * presente e valido, tem prioridade sobre a medida atual do cadastro para
+   * evitar que planos antigos mudem se a medida for editada depois.
+   */
+  resolvedGramsSnapshot?: number | null;
+  quantityResolutionSnapshot?: string | null;
   /**
    * Medida caseira ESPECIFICA deste alimento, ja selecionada/vinculada
    * (ex.: item.household_measure_id resolvido pelo chamador). Quando
@@ -91,10 +99,44 @@ function parseAmount(quantity?: string | number | null): number | null {
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
+function parseResolutionSnapshot(value?: string | null): Partial<QuantityResolution> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const method = typeof parsed.method === "string" ? parsed.method : "portion_snapshot";
+    const confidence = parsed.confidence === "high" || parsed.confidence === "medium" || parsed.confidence === "low" || parsed.confidence === "none"
+      ? parsed.confidence
+      : "high";
+    return {
+      method: method === "food_household_measure" || method === "explicit_grams" || method === "generic_unit_conversion" || method === "estimated" || method === "unresolved" || method === "portion_snapshot"
+        ? method
+        : "portion_snapshot",
+      confidence,
+      source: typeof parsed.source === "string" ? parsed.source : undefined,
+      measureId: typeof parsed.measureId === "string" ? parsed.measureId : undefined,
+      warning: typeof parsed.warning === "string" ? parsed.warning : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function resolveQuantity(input: ResolveQuantityInput): QuantityResolution {
   const amount = parseAmount(input.quantity);
   if (amount === null) {
     return { grams: null, method: "unresolved", confidence: "none", warning: "Quantidade ausente ou inválida." };
+  }
+
+  if (typeof input.resolvedGramsSnapshot === "number" && Number.isFinite(input.resolvedGramsSnapshot) && input.resolvedGramsSnapshot > 0) {
+    const snapshot = parseResolutionSnapshot(input.quantityResolutionSnapshot);
+    return {
+      grams: input.resolvedGramsSnapshot,
+      method: "portion_snapshot",
+      confidence: snapshot?.confidence ?? "high",
+      source: snapshot?.source,
+      measureId: snapshot?.measureId,
+      warning: snapshot?.warning,
+    };
   }
 
   // 1. Medida caseira ESPECIFICA deste alimento, ja vinculada — maxima prioridade,

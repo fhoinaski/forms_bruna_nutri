@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { createFoodPortion, listFoodPortions } from "@/lib/repositories/food-portions";
-import { getTacoFoodByNumber } from "@/lib/nutrition/taco";
-import { getCustomFoodById } from "@/lib/repositories/custom-foods";
+import { getFoodByReference } from "@/lib/nutrition/food-catalog";
 import { writeAuditLog } from "@/lib/security/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const sourceSchema = z.enum(["TACO", "CUSTOM"]);
+const sourceSchema = z.enum(["TACO", "CUSTOM", "MANUFACTURER"]);
 
 const CreateSchema = z.object({
   food_source: sourceSchema,
@@ -29,7 +28,7 @@ export async function GET(req: NextRequest) {
   const source = sourceSchema.safeParse(req.nextUrl.searchParams.get("source"));
   const refId = req.nextUrl.searchParams.get("refId")?.trim();
   if (!source.success || !refId) {
-    return NextResponse.json({ message: "Informe source (TACO|CUSTOM) e refId." }, { status: 400 });
+    return NextResponse.json({ message: "Informe source (TACO|CUSTOM|MANUFACTURER) e refId." }, { status: 400 });
   }
 
   const items = await listFoodPortions(source.data, refId);
@@ -47,9 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Valida que o alimento realmente existe antes de aceitar uma medida para ele — nunca cadastra uma medida orfa.
-  const foodExists = parsed.data.food_source === "TACO"
-    ? Boolean(getTacoFoodByNumber(parsed.data.food_ref_id))
-    : Boolean(await getCustomFoodById(parsed.data.food_ref_id));
+  const foodExists = Boolean(await getFoodByReference({ source: parsed.data.food_source, sourceId: parsed.data.food_ref_id }));
   if (!foodExists) {
     return NextResponse.json({ message: "Alimento não encontrado para o food_source/food_ref_id informado." }, { status: 404 });
   }
