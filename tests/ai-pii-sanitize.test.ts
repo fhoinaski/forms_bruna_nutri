@@ -125,13 +125,17 @@ describe("stripInternalPatientAlias — defesa server-side contra vazamento do p
 
   it("aplica em todos os campos de texto do briefing gerado pela IA (consultation-briefing e pre-consultation-briefing)", async () => {
     vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({
-      generateStructured: vi.fn().mockResolvedValue({
-        clinicalSummary: "Paciente 7777 sem histórico prévio.",
-        changesSinceLastVisit: ["Paciente 7777 não compareceu antes."],
-        attentionPoints: ["Sem dados de Paciente 7777."],
-        pendingItems: [],
-        suggestedTopics: [],
-        missingData: [],
+      generateStructuredResult: vi.fn().mockResolvedValue({
+        data: {
+          clinicalSummary: "Paciente 7777 sem histórico prévio.",
+          changesSinceLastVisit: ["Paciente 7777 não compareceu antes."],
+          attentionPoints: ["Sem dados de Paciente 7777."],
+          pendingItems: [],
+          suggestedTopics: [],
+          missingData: [],
+        },
+        provider: "openai",
+        model: "gpt-test",
       }),
     }));
     vi.doMock("@/lib/repositories/client-evolutions", () => ({ getClientEvolutions: vi.fn().mockResolvedValue([]) }));
@@ -140,6 +144,8 @@ describe("stripInternalPatientAlias — defesa server-side contra vazamento do p
     vi.doMock("@/lib/repositories/appointments", () => ({ getAppointments: vi.fn().mockResolvedValue([]) }));
     vi.doMock("@/lib/repositories/client-protocols", () => ({ getClientProtocols: vi.fn().mockResolvedValue([]) }));
     vi.doMock("@/lib/repositories/patient-requests", () => ({ listPatientRequests: vi.fn().mockResolvedValue([]) }));
+    vi.doMock("@/lib/repositories/patient-clinical-markers", () => ({ listPatientClinicalMarkers: vi.fn().mockResolvedValue([]) }));
+    vi.doMock("@/lib/repositories/patient-food-substitution-events", () => ({ listRecentPatientFoodSubstitutionEvents: vi.fn().mockResolvedValue([]) }));
     const { generateConsultationAiBrief, buildConsultationSystemData } = await import("../lib/ai/agents/clinical/consultation-briefing");
     const client = { id: "client-1", name: "Juliane Cardoso" } as import("@/lib/repositories/clients").Client;
     const systemData = await buildConsultationSystemData(client);

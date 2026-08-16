@@ -27,6 +27,24 @@ function makePlan(overrides: Partial<MealPlanPayload> = {}): MealPlanPayload {
   };
 }
 
+function mockSafeSubstitutionPolicyDeps(enabled = false) {
+  vi.doMock("@/lib/repositories/ai-settings", () => ({
+    getAISettings: vi.fn().mockResolvedValue({ patient_safe_substitutions_enabled: enabled ? 1 : 0 }),
+  }));
+  vi.doMock("@/lib/repositories/nutrition-records", () => ({
+    getExistingNutritionRecord: vi.fn().mockResolvedValue(null),
+  }));
+  vi.doMock("@/lib/repositories/patient-clinical-markers", () => ({
+    listPatientClinicalMarkers: vi.fn().mockResolvedValue([]),
+  }));
+  vi.doMock("@/lib/repositories/patient-food-substitution-events", () => ({
+    createPatientFoodSubstitutionEvent: vi.fn().mockResolvedValue("event-1"),
+  }));
+  vi.doMock("@/lib/security/audit", () => ({
+    writeAuditLog: vi.fn().mockResolvedValue(undefined),
+  }));
+}
+
 describe("executeGetMyMealPlan", () => {
   it("retorna o plano ativo do cliente informado", async () => {
     const getActiveMealPlan = vi.fn().mockResolvedValue(makePlan());
@@ -134,6 +152,7 @@ describe("executeGetMyTasks", () => {
 describe("executeSearchAllowedFoodAlternatives — ancorado no proprio plano (secao 10/45)", () => {
   it("alimento existe no plano: devolve alternativas reais da TACO, nunca 'aprovado'", async () => {
     vi.doMock("@/lib/repositories/meal-plans", () => ({ getActiveMealPlan: vi.fn().mockResolvedValue(makePlan()) }));
+    mockSafeSubstitutionPolicyDeps();
     const { executeSearchAllowedFoodAlternatives } = await import("../lib/ai/agents/patient/patient-portal-agent");
     const result = await executeSearchAllowedFoodAlternatives("client-1", { currentFood: "banana", desiredFood: "maçã" });
     expect(result.found).toBe(true);
@@ -182,12 +201,14 @@ describe("executeSearchAllowedFoodAlternatives — ancorado no proprio plano (se
 
   it("Killer Feature 4: quando desiredFood é informado e o item é único, devolve substitution com quantidade calculada pela engine", async () => {
     vi.doMock("@/lib/repositories/meal-plans", () => ({ getActiveMealPlan: vi.fn().mockResolvedValue(makePlan()) }));
+    mockSafeSubstitutionPolicyDeps(true);
     const { executeSearchAllowedFoodAlternatives } = await import("../lib/ai/agents/patient/patient-portal-agent");
     const result = await executeSearchAllowedFoodAlternatives("client-1", { currentFood: "pão francês", desiredFood: "batata, inglesa, cozida" });
     expect(result.found).toBe(true);
     if (!result.found) throw new Error("esperava found true");
     expect(result.mealPlanVersion).toBe(2);
     expect(result.substitution).toBeDefined();
+    expect(result.substitutionPolicy?.decision).toBe("requires_review");
   });
 });
 

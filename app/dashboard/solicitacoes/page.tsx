@@ -77,6 +77,7 @@ export default function PatientRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<PatientRequestStatus | "all">("pending_review");
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
 
@@ -95,6 +96,13 @@ export default function PatientRequestsPage() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
+
+  useEffect(() => {
+    const requestId = new URLSearchParams(window.location.search).get("request");
+    if (!requestId) return;
+    setSelectedRequestId(requestId);
+    setExpandedId(requestId);
+  }, []);
 
   async function updateStatus(id: string, status: PatientRequestStatus) {
     setSavingId(id);
@@ -145,7 +153,15 @@ export default function PatientRequestsPage() {
             const expanded = expandedId === item.id;
             const saving = savingId === item.id;
             return (
-              <div key={item.id} className="rounded-2xl border border-[#EDE1D6] bg-white p-4">
+              <div
+                key={item.id}
+                id={`request-${item.id}`}
+                className={`rounded-2xl border bg-white p-4 ${
+                  selectedRequestId === item.id
+                    ? "border-[#7F9A74] shadow-[0_12px_30px_rgba(96,122,86,0.12)]"
+                    : "border-[#EDE1D6]"
+                }`}
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

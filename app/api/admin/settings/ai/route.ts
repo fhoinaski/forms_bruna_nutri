@@ -17,6 +17,7 @@ const UpdateSchema = z.object({
   protocol_system_prompt: z.string().max(20000).nullable().optional(),
   chat_system_prompt: z.string().max(20000).nullable().optional(),
   patient_intake_mode: z.enum(["smart", "traditional"]).optional(),
+  patient_safe_substitutions_enabled: z.boolean().optional(),
 }).strict();
 
 async function publicSettingsResponse() {
@@ -56,6 +57,7 @@ export async function PUT(req: NextRequest) {
       provider: settings.provider,
       model: settings.model,
       patientIntakeMode: settings.patient_intake_mode,
+      patientSafeSubstitutionsEnabled: settings.patient_safe_substitutions_enabled === 1,
       apiKeyChanged: parsed.data.api_key ? !parsed.data.api_key.includes("...") : false,
     },
   });

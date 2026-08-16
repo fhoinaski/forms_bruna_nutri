@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getActiveMealPlan, type MealPlanItemPayload, type MealPlanMealPayload } from "@/lib/repositories/meal-plans";
+import { getActiveMealPlan, type MealPlanItemPayload, type MealPlanMealPayload, type MealPlanPayload } from "@/lib/repositories/meal-plans";
 import { getAppointments } from "@/lib/repositories/appointments";
 import { getClientTasks } from "@/lib/repositories/client-tasks";
 import { searchTacoFoods, findBestTacoFood, getTacoFoodByNumber } from "@/lib/nutrition/taco";
@@ -8,6 +8,16 @@ import { getCustomFoodById, toMacroReferenceFood } from "@/lib/repositories/cust
 import { getFoodPortionById, toHouseholdMeasureOption } from "@/lib/repositories/food-portions";
 import { resolveFoodSubstitution, type FoodSubstitutionResult } from "@/lib/nutrition/food-substitution";
 import { REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME } from "@/lib/ai/agents/patient/patient-request-agent";
+import { getAISettings } from "@/lib/repositories/ai-settings";
+import { getExistingNutritionRecord } from "@/lib/repositories/nutrition-records";
+import { evaluatePatientFoodSubstitutionPolicy, type SubstitutionPolicyResult } from "@/lib/ai/policies/patient-substitution-policy";
+import { createPatientFoodSubstitutionEvent } from "@/lib/repositories/patient-food-substitution-events";
+import { listPatientClinicalMarkers, type PatientClinicalMarker } from "@/lib/repositories/patient-clinical-markers";
+import { getFoodClinicalProfile } from "@/lib/clinical/food-clinical-profile";
+import { checkFoodAgainstPatientRestrictions, type FoodSafetyResult } from "@/lib/clinical/food-safety";
+import type { FoodClinicalProfile } from "@/lib/clinical/food-clinical-traits";
+import { writeAuditLog } from "@/lib/security/audit";
+import { logger } from "@/lib/observability/logger";
 
 /**
  * Tools de LEITURA do PATIENT_ASSISTANT — cada `executeXxx` recebe
@@ -186,6 +196,7 @@ export type SearchAllowedFoodAlternativesOutput =
        * do pedido — o LLM nunca produz esse numero).
        */
       substitution?: FoodSubstitutionResult;
+      substitutionPolicy?: SubstitutionPolicyResult;
     };
 
 /**
@@ -234,9 +245,21 @@ export async function computeFoodSubstitution(
   item: MealPlanItemPayload,
   desiredFood: string
 ): Promise<FoodSubstitutionResult> {
+  const context = await computeFoodSubstitutionContext(item, desiredFood);
+  return context.substitution;
+}
+
+async function computeFoodSubstitutionContext(
+  item: MealPlanItemPayload,
+  desiredFood: string
+): Promise<{ substitution: FoodSubstitutionResult; sourceFood: MacroReferenceFood | null; targetFood: MacroReferenceFood | null }> {
   const sourceFood = await resolveMacroReferenceForItem(item);
   if (!sourceFood) {
-    return { status: "not_supported", reason: "Não encontrei o alimento atual na base de dados para calcular uma troca segura." };
+    return {
+      sourceFood: null,
+      targetFood: null,
+      substitution: { status: "not_supported", reason: "Não encontrei o alimento atual na base de dados para calcular uma troca segura." },
+    };
   }
 
   let householdMeasure = null;
@@ -248,13 +271,143 @@ export async function computeFoodSubstitution(
   const searchResults = searchTacoFoods(desiredFood, 5);
   const targetCandidates = narrowTargetCandidates(desiredFood, searchResults);
 
-  return resolveFoodSubstitution({
+  const substitution = resolveFoodSubstitution({
     sourceFood,
     sourceQuantity: item.quantity,
     sourceUnit: item.unit,
     sourceHouseholdMeasure: householdMeasure,
     targetCandidates,
   });
+  return { substitution, sourceFood, targetFood: targetCandidates.length === 1 ? targetCandidates[0] : null };
+}
+
+function substitutionStatusForEvent(substitution: FoodSubstitutionResult | undefined): string {
+  return substitution?.status ?? "not_requested";
+}
+
+function profileSourceForFood(food: MacroReferenceFood): "TACO" | "CUSTOM" | "MANUFACTURER" | null {
+  if ((food.fonte === "taco" || food.fonte === "complementar") && food.numero !== undefined && food.numero !== null) return "TACO";
+  if (food.fonte === "custom" && food.numero !== undefined && food.numero !== null) return "CUSTOM";
+  if (food.fonte === "manufacturer" && food.numero !== undefined && food.numero !== null) return "MANUFACTURER";
+  return null;
+}
+
+async function resolveTargetClinicalProfile(targetFood: MacroReferenceFood | null): Promise<FoodClinicalProfile | null> {
+  if (!targetFood) return null;
+  const foodSource = profileSourceForFood(targetFood);
+  if (!foodSource) return null;
+  return getFoodClinicalProfile({ foodSource, foodId: String(targetFood.numero) });
+}
+
+function clinicalMetadata(input: {
+  markers: PatientClinicalMarker[];
+  targetProfile: FoodClinicalProfile | null;
+  foodSafety: FoodSafetyResult | null;
+  policy: SubstitutionPolicyResult;
+}): Record<string, unknown> {
+  return {
+    markerCount: input.markers.length,
+    markersConsidered: input.markers.map((marker) => ({
+      id: marker.id,
+      type: marker.type,
+      code: marker.normalized_code,
+      status: marker.status,
+      severity: marker.severity,
+    })),
+    targetFoodProfile: input.targetProfile ? {
+      foodSource: input.targetProfile.foodSource,
+      foodId: input.targetProfile.foodId,
+      completeness: input.targetProfile.completeness,
+      traitCodes: input.targetProfile.traits.map((trait) => `${trait.code}:${trait.relation}`),
+      reasons: input.targetProfile.reasons,
+    } : null,
+    foodSafety: input.foodSafety,
+    policyDecision: input.policy.decision,
+    autonomyLevel: input.policy.autonomyLevel,
+    reasons: input.policy.reasons,
+  };
+}
+
+async function evaluateAndRecordSubstitutionPolicy(input: {
+  clientId: string;
+  plan: MealPlanPayload;
+  mealId: string;
+  itemId: string;
+  sourceFood: MacroReferenceFood | null;
+  targetFood: MacroReferenceFood | null;
+  substitution: FoodSubstitutionResult;
+}): Promise<SubstitutionPolicyResult> {
+  const [settings, nutritionRecord, markers, targetFoodProfile] = await Promise.all([
+    getAISettings(),
+    getExistingNutritionRecord(input.clientId),
+    listPatientClinicalMarkers(input.clientId),
+    resolveTargetClinicalProfile(input.targetFood),
+  ]);
+  const foodSafety = input.targetFood
+    ? checkFoodAgainstPatientRestrictions({
+        food: input.targetFood,
+        markers,
+        profile: targetFoodProfile ?? undefined,
+      })
+    : null;
+  const policy = evaluatePatientFoodSubstitutionPolicy({
+    featureEnabled: settings.patient_safe_substitutions_enabled === 1,
+    plan: input.plan,
+    planVersion: input.plan.version,
+    mealId: input.mealId,
+    itemId: input.itemId,
+    sourceFood: input.sourceFood,
+    targetFood: input.targetFood,
+    substitution: input.substitution,
+    nutritionRecord,
+    patientClinicalMarkers: markers,
+    targetFoodProfile,
+    foodSafety,
+  });
+
+  const safe = input.substitution.status === "safe" ? input.substitution : null;
+  const eventId = await createPatientFoodSubstitutionEvent({
+    clientId: input.clientId,
+    mealPlanId: input.plan.id,
+    mealPlanVersion: input.plan.version,
+    mealId: input.mealId,
+    itemId: input.itemId,
+    sourceFoodName: safe?.sourceFoodName ?? input.sourceFood?.descricao ?? null,
+    targetFoodName: safe?.targetFoodName ?? input.targetFood?.descricao ?? null,
+    sourceQuantityG: safe?.sourceQuantity ?? null,
+    targetQuantityG: safe?.targetQuantity ?? null,
+    substitutionStatus: substitutionStatusForEvent(input.substitution),
+    policy,
+    clinicalMetadata: clinicalMetadata({ markers, targetProfile: targetFoodProfile, foodSafety, policy }),
+  });
+
+  logger.info("patient_food_substitution_policy_decision", {
+    decision: policy.decision,
+    autonomyLevel: policy.autonomyLevel,
+    metric: policy.decision === "auto_safe" ? "auto_safe_count" : policy.autonomyLevel === "BLOCKED" ? "blocked_count" : "review_count",
+    reasons: policy.reasons,
+  });
+  await writeAuditLog({
+    action: "patient_food_substitution_policy_decision",
+    adminId: input.clientId,
+    entityType: "patient_food_substitution_event",
+    entityId: eventId,
+    metadata: {
+      clientId: input.clientId,
+      mealPlanId: input.plan.id,
+      mealPlanVersion: input.plan.version,
+      mealId: input.mealId,
+      itemId: input.itemId,
+      decision: policy.decision,
+      autonomyLevel: policy.autonomyLevel,
+      substitutionStatus: input.substitution.status,
+      foodSafetyStatus: foodSafety?.status ?? null,
+      targetFoodProfileCompleteness: targetFoodProfile?.completeness ?? null,
+      markerCount: markers.length,
+    },
+  });
+
+  return policy;
 }
 
 /**
@@ -300,7 +453,19 @@ export async function executeSearchAllowedFoodAlternatives(
   const candidates = searchTacoFoods(query, 5);
   const normalizedCurrentFood = normalize(matchedItem.food);
 
-  const substitution = input.desiredFood ? await computeFoodSubstitution(matchedItem, input.desiredFood) : undefined;
+  const substitutionContext = input.desiredFood ? await computeFoodSubstitutionContext(matchedItem, input.desiredFood) : undefined;
+  const substitution = substitutionContext?.substitution;
+  const substitutionPolicy = substitutionContext
+    ? await evaluateAndRecordSubstitutionPolicy({
+        clientId,
+        plan,
+        mealId: matchedMeal.id ?? "",
+        itemId: matchedItem.id ?? "",
+        sourceFood: substitutionContext.sourceFood,
+        targetFood: substitutionContext.targetFood,
+        substitution: substitutionContext.substitution,
+      })
+    : undefined;
 
   return {
     found: true,
@@ -315,6 +480,7 @@ export async function executeSearchAllowedFoodAlternatives(
       .slice(0, 5)
       .map((food) => ({ tacoNumber: typeof food.numero === "number" ? food.numero : Number(food.numero), descricao: food.descricao })),
     substitution,
+    substitutionPolicy,
   };
 }
 
@@ -351,7 +517,8 @@ Ferramentas disponíveis e quando usar:
   - Se devolver "found": false com "ambiguous_item", o alimento aparece em mais de uma refeição — NUNCA escolha uma sozinho. Pergunte qual refeição ela quer dizer, usando os nomes em "matches" (ex.: "você quer dizer o arroz do almoço ou do jantar?").
   - Se o pedido não disser qual alimento ela quer no lugar (ex.: só "posso trocar o arroz?"), NÃO adivinhe — pergunte qual alimento ela gostaria de usar antes de chamar esta ferramenta com desiredFood preenchido.
   - Quando desiredFood for informado, a ferramenta pode devolver um campo "substitution" com um resultado estruturado:
-    - status "safe": a quantidade em targetQuantity veio PRONTA da engine de cálculo — repita esse número exatamente como veio (nunca arredonde diferente, nunca recalcule, nunca invente outro valor), e deixe claro que é uma equivalência dentro do plano atual, ainda sujeita à revisão da nutricionista.
+    - status "safe" + substitutionPolicy.decision "auto_safe": a quantidade em targetQuantity veio PRONTA da engine de cálculo — repita esse número exatamente como veio (nunca arredonde diferente, nunca recalcule, nunca invente outro valor), diga que é uma equivalência calculada dentro do plano atual e que o plano original não foi alterado. NUNCA diga que a nutricionista aprovou.
+    - status "safe" sem substitutionPolicy.decision "auto_safe": a engine calculou uma equivalência, mas a policy exige revisão — apresente como dúvida para revisão da nutricionista, nunca como troca válida imediata.
     - status "ambiguous": existe mais de um alimento parecido com o que ela pediu — apresente as opções em "candidates" e pergunte qual delas, nunca escolha por ela.
     - status "requires_review" ou "not_supported": não é possível calcular essa troca com segurança agora — diga isso com gentileza e ofereça registrar a dúvida para a nutricionista (via ${REQUEST_PROFESSIONAL_REVIEW_TOOL_NAME}).
   - Se encontrar alternativas (com ou sem substitution calculado), apresente como opções para ela CONVERSAR COM A NUTRICIONISTA antes de qualquer mudança real — nunca como uma troca já válida. Se ela topar uma opção, use os campos mealPlanId/mealId/itemId retornados por esta ferramenta para montar a solicitação (nunca invente esses ids).

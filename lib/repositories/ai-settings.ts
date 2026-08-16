@@ -12,6 +12,7 @@ export interface AISettings {
   protocol_system_prompt: string | null;
   chat_system_prompt: string | null;
   patient_intake_mode: PreConsultationMode;
+  patient_safe_substitutions_enabled: number;
   updated_at: string;
 }
 
@@ -24,6 +25,7 @@ export interface PublicAISettings {
   protocol_system_prompt: string | null;
   chat_system_prompt: string | null;
   patient_intake_mode: PreConsultationMode;
+  patient_safe_substitutions_enabled: boolean;
   updated_at: string;
 }
 
@@ -34,6 +36,7 @@ export interface UpdateAISettingsInput {
   protocol_system_prompt?: string | null;
   chat_system_prompt?: string | null;
   patient_intake_mode?: PreConsultationMode;
+  patient_safe_substitutions_enabled?: boolean;
 }
 
 export const DEFAULT_PROTOCOL_SYSTEM_PROMPT = `Você é um assistente de apoio a nutricionistas. Seu papel é gerar rascunhos de conduta nutricional para revisão profissional.
@@ -105,6 +108,7 @@ function normalizeIntakeFields(settings: AISettings): AISettings {
   return {
     ...settings,
     patient_intake_mode: settings.patient_intake_mode ?? "traditional",
+    patient_safe_substitutions_enabled: settings.patient_safe_substitutions_enabled ?? 0,
   };
 }
 
@@ -134,6 +138,7 @@ export async function getAISettings(): Promise<AISettings> {
       protocol_system_prompt: null,
       chat_system_prompt: null,
       patient_intake_mode: "traditional",
+      patient_safe_substitutions_enabled: 0,
       updated_at: new Date().toISOString(),
     };
   }
@@ -151,6 +156,7 @@ export async function getPublicAISettings(): Promise<PublicAISettings> {
     protocol_system_prompt: settings.protocol_system_prompt,
     chat_system_prompt: settings.chat_system_prompt,
     patient_intake_mode: settings.patient_intake_mode,
+    patient_safe_substitutions_enabled: settings.patient_safe_substitutions_enabled === 1,
     updated_at: settings.updated_at,
   };
 }
@@ -180,6 +186,10 @@ export async function updateAISettings(data: UpdateAISettingsInput): Promise<AIS
   if (data.patient_intake_mode !== undefined) {
     updates.push(`patient_intake_mode = ?${idx++}`);
     params.push(data.patient_intake_mode);
+  }
+  if (data.patient_safe_substitutions_enabled !== undefined) {
+    updates.push(`patient_safe_substitutions_enabled = ?${idx++}`);
+    params.push(data.patient_safe_substitutions_enabled ? 1 : 0);
   }
   if (data.api_key !== undefined && !isMaskedApiKey(data.api_key)) {
     updates.push(`api_key = ?${idx++}`);

@@ -23,6 +23,7 @@ type AISettingsForm = {
   protocol_system_prompt: string;
   chat_system_prompt: string;
   patient_intake_mode: PreConsultationMode;
+  patient_safe_substitutions_enabled: boolean;
   has_api_key: boolean;
   updated_at: string;
 };
@@ -54,6 +55,7 @@ const emptyForm: AISettingsForm = {
   protocol_system_prompt: "",
   chat_system_prompt: "",
   patient_intake_mode: "traditional",
+  patient_safe_substitutions_enabled: false,
   has_api_key: false,
   updated_at: "",
 };
@@ -81,6 +83,7 @@ export default function AISettingsPage() {
           protocol_system_prompt: data.protocol_system_prompt ?? "",
           chat_system_prompt: data.chat_system_prompt ?? "",
           patient_intake_mode: data.patient_intake_mode ?? "traditional",
+          patient_safe_substitutions_enabled: Boolean(data.patient_safe_substitutions_enabled),
           has_api_key: Boolean(data.has_api_key),
           updated_at: data.updated_at ?? "",
         });
@@ -110,6 +113,7 @@ export default function AISettingsPage() {
           protocol_system_prompt: form.protocol_system_prompt || null,
           chat_system_prompt: form.chat_system_prompt || null,
           patient_intake_mode: form.patient_intake_mode,
+          patient_safe_substitutions_enabled: form.patient_safe_substitutions_enabled,
         }),
       });
       const data = await response.json();
@@ -121,6 +125,7 @@ export default function AISettingsPage() {
         protocol_system_prompt: data.protocol_system_prompt ?? "",
         chat_system_prompt: data.chat_system_prompt ?? "",
         patient_intake_mode: data.patient_intake_mode ?? "traditional",
+        patient_safe_substitutions_enabled: Boolean(data.patient_safe_substitutions_enabled),
         has_api_key: Boolean(data.has_api_key),
         updated_at: data.updated_at ?? "",
       });
@@ -303,6 +308,23 @@ export default function AISettingsPage() {
                 )}
               </div>
             )}
+          </div>
+
+          <div className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2] p-5">
+            <label className="flex items-start gap-3 text-sm text-[#5F554D]">
+              <input
+                type="checkbox"
+                checked={form.patient_safe_substitutions_enabled}
+                onChange={(event) => setForm({ ...form, patient_safe_substitutions_enabled: event.target.checked })}
+                className="mt-1 accent-[#607A56]"
+              />
+              <span>
+                <span className="font-semibold text-[#3A2B1F]">Substituições automáticas no portal</span>
+                <span className="mt-1 block text-xs leading-5 text-[#75675E]">
+                  Quando desligado, toda troca continua indo para revisão. Quando ligado, apenas equivalências determinísticas extremamente restritas podem ser respondidas sem aprovação prévia.
+                </span>
+              </span>
+            </label>
           </div>
 
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}

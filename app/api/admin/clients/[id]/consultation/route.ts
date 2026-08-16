@@ -3,9 +3,11 @@ import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
 import {
   getActiveConsultationSession,
+  saveConsultationAiBrief,
   startConsultationSession,
   ConsultationSessionAlreadyActiveError,
 } from "@/lib/repositories/consultation-sessions";
+import { getAppointmentBriefState } from "@/lib/clinical/appointment-briefing";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
@@ -42,31 +44,54 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const appointmentId = typeof body?.appointmentId === "string" ? body.appointmentId : null;
 
   let session;
+  let created = true;
   try {
     session = await startConsultationSession({ clientId: id, adminId: admin.sub, appointmentId });
   } catch (error) {
     if (error instanceof ConsultationSessionAlreadyActiveError) {
       const existing = await getActiveConsultationSession(id);
-      if (existing) return NextResponse.json({ session: existing });
+      if (existing) {
+        session = existing;
+        created = false;
+      } else {
+        throw error;
+      }
+    } else {
+      throw error;
     }
-    throw error;
   }
 
-  await addTimelineEvent({
-    client_id: id,
-    type: "consultation_started",
-    title: "Consulta iniciada",
-    description: "Atendimento iniciado no Modo Consulta.",
-    metadata: { consultationSessionId: session.id },
-  });
-  await writeAuditLog({
-    action: "consultation_started",
-    adminId: admin.sub,
-    entityType: "consultation_session",
-    entityId: session.id,
-    ipHash: getRequestFingerprint(req).ipHash,
-    metadata: { clientId: id },
-  });
+  if (appointmentId) {
+    const appointmentBrief = await getAppointmentBriefState(appointmentId);
+    if (appointmentBrief.status === "ready" && appointmentBrief.brief) {
+      await saveConsultationAiBrief(session.id, {
+        systemData: appointmentBrief.brief.systemData,
+        aiBrief: appointmentBrief.brief.aiBrief,
+        proactiveBrief: appointmentBrief.brief,
+        generatedAt: appointmentBrief.generatedAt,
+        source: "appointment_ai_brief",
+        appointmentId,
+      });
+    }
+  }
 
-  return NextResponse.json({ session }, { status: 201 });
+  if (created) {
+    await addTimelineEvent({
+      client_id: id,
+      type: "consultation_started",
+      title: "Consulta iniciada",
+      description: "Atendimento iniciado no Modo Consulta.",
+      metadata: { consultationSessionId: session.id },
+    });
+    await writeAuditLog({
+      action: "consultation_started",
+      adminId: admin.sub,
+      entityType: "consultation_session",
+      entityId: session.id,
+      ipHash: getRequestFingerprint(req).ipHash,
+      metadata: { clientId: id },
+    });
+  }
+
+  return NextResponse.json({ session }, { status: created ? 201 : 200 });
 }

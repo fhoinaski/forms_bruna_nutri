@@ -6,6 +6,8 @@ import type { MacroReferenceFood } from "@/lib/nutrition/macros";
 const banana = getTacoFoodByNumber("179")!; // Banana, nanica, crua — Frutas e derivados, carb 23.8481g/100g
 const macaFuji = getTacoFoodByNumber("222")!; // Maçã, Fuji — Frutas e derivados, carb 15.1533g/100g
 const acucarCristal = getTacoFoodByNumber("492")!; // Açúcar, cristal — Produtos açucarados, carb 99.61g/100g
+const arrozCozido = getTacoFoodByNumber("3")!; // Arroz, tipo 1, cozido
+const azeiteOliva = getTacoFoodByNumber("260")!; // Azeite, de oliva, extra virgem
 
 describe("findEquivalentFoods — determinístico, sem IA", () => {
   it("finds a same-category fruit within tolerance for the target nutrient", () => {
@@ -85,5 +87,21 @@ describe("findEquivalentFoods — determinístico, sem IA", () => {
   it("excludes the base food itself from its own equivalent list", () => {
     const results = findEquivalentFoods({ baseFood: banana, amountGrams: 100, targetNutrient: "carbohydrateG", candidates: [banana, macaFuji], tolerancePercent: 10 });
     expect(results.every((r) => r.food.numero !== 179)).toBe(true);
+  });
+
+  it("documenta limite clinico: equivalencia por kcal pode casar alimentos absurdamente diferentes em macros", () => {
+    const results = findEquivalentFoods({
+      baseFood: arrozCozido,
+      amountGrams: 100,
+      targetNutrient: "energyKcal",
+      candidates: [azeiteOliva],
+      tolerancePercent: 15,
+    });
+    expect(results[0]?.food.numero).toBe(260);
+    expect(results[0]?.gramsNeeded).toBe(15);
+    expect(arrozCozido.carboidrato_g).toBeGreaterThan(20);
+    expect(azeiteOliva.carboidrato_g).toBe(0);
+    expect(arrozCozido.lipidios_g).toBeLessThan(1);
+    expect(azeiteOliva.lipidios_g).toBe(100);
   });
 });

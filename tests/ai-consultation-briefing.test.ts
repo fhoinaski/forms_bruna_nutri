@@ -28,6 +28,8 @@ function mockRepos(overrides: {
   vi.doMock("@/lib/repositories/appointments", () => ({ getAppointments: vi.fn().mockResolvedValue(overrides.appointments ?? []) }));
   vi.doMock("@/lib/repositories/client-protocols", () => ({ getClientProtocols: vi.fn().mockResolvedValue(overrides.protocols ?? []) }));
   vi.doMock("@/lib/repositories/patient-requests", () => ({ listPatientRequests: vi.fn().mockResolvedValue(overrides.patientRequests ?? []) }));
+  vi.doMock("@/lib/repositories/patient-clinical-markers", () => ({ listPatientClinicalMarkers: vi.fn().mockResolvedValue([]) }));
+  vi.doMock("@/lib/repositories/patient-food-substitution-events", () => ({ listRecentPatientFoodSubstitutionEvents: vi.fn().mockResolvedValue([]) }));
 }
 
 describe("buildConsultationSystemData — 100% deterministico", () => {
@@ -75,7 +77,7 @@ describe("generateConsultationAiBrief — falha graciosa (systemData sozinho con
     mockRepos({});
     const { AiConfigError } = await import("@/lib/ai/core/ai-errors");
     vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({
-      generateStructured: vi.fn().mockRejectedValue(new AiConfigError("sem chave")),
+      generateStructuredResult: vi.fn().mockRejectedValue(new AiConfigError("sem chave")),
     }));
     const { buildConsultationSystemData, generateConsultationAiBrief } = await import("@/lib/ai/agents/clinical/consultation-briefing");
     const data = await buildConsultationSystemData(client);
@@ -92,7 +94,7 @@ describe("generateConsultationAiBrief — falha graciosa (systemData sozinho con
       suggestedTopics: ["Revisar adesao"],
       missingData: [],
     };
-    vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({ generateStructured: vi.fn().mockResolvedValue(brief) }));
+    vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({ generateStructuredResult: vi.fn().mockResolvedValue({ data: brief, provider: "openai", model: "gpt-4o", attempts: 1, repaired: false }) }));
     const { buildConsultationSystemData, generateConsultationAiBrief } = await import("@/lib/ai/agents/clinical/consultation-briefing");
     const data = await buildConsultationSystemData(client);
     await expect(generateConsultationAiBrief(client, data)).resolves.toEqual(brief);
@@ -100,7 +102,7 @@ describe("generateConsultationAiBrief — falha graciosa (systemData sozinho con
 
   it("propaga erros inesperados (nao de config/provider/validacao) em vez de mascarar", async () => {
     mockRepos({});
-    vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({ generateStructured: vi.fn().mockRejectedValue(new Error("bug interno inesperado")) }));
+    vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({ generateStructuredResult: vi.fn().mockRejectedValue(new Error("bug interno inesperado")) }));
     const { buildConsultationSystemData, generateConsultationAiBrief } = await import("@/lib/ai/agents/clinical/consultation-briefing");
     const data = await buildConsultationSystemData(client);
     await expect(generateConsultationAiBrief(client, data)).rejects.toThrow("bug interno inesperado");

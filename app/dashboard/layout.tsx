@@ -27,6 +27,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Utensils,
   Users,
   WalletCards,
   X,
@@ -49,6 +50,7 @@ const primaryNavigation = [
   { href: "/dashboard/clients", label: "Pacientes", icon: Users },
   { href: "/dashboard/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/dashboard/templates", label: "Modelos", icon: LibraryBig },
+  { href: "/dashboard/alimentos", label: "Alimentos", icon: Utensils },
   { href: "/dashboard/financeiro", label: "Financeiro", icon: WalletCards },
 ];
 
@@ -68,6 +70,7 @@ const breadcrumbLabels: Record<string, string> = {
   dashboard: "Dashboard",
   clients: "Pacientes",
   agenda: "Agenda",
+  alimentos: "Alimentos",
   templates: "Modelos",
   receitas: "Receitas",
   educacao: "Educação",

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowRight,
@@ -13,7 +14,6 @@ import {
   Download,
   FileSpreadsheet,
   HeartHandshake,
-  HelpCircle,
   LayoutList,
   Newspaper,
   Search,
@@ -21,6 +21,7 @@ import {
   Stethoscope,
   Users,
   WalletCards,
+  Zap,
 } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { BrandBadge } from "@/components/brand/BrandBadge";
@@ -120,6 +121,65 @@ interface DashboardMetrics {
   };
 }
 
+type DashboardActionType =
+  | "APPOINTMENT_SOON"
+  | "APPOINTMENT_NOW"
+  | "PATIENT_REQUEST_PENDING"
+  | "AI_PROPOSAL_PENDING"
+  | "AI_PROPOSAL_REVIEW"
+  | "PAYMENT_OVERDUE"
+  | "WORKFLOW_DUE"
+  | "SAFE_SUBSTITUTION_OCCURRED"
+  | "SUBSTITUTION_REQUIRES_REVIEW";
+type DashboardActionPriority = "URGENT" | "HIGH" | "NORMAL" | "INFO";
+type DashboardActionSection = "NOW" | "ATTENTION" | "BUSINESS" | "RECENT";
+
+interface DashboardActionItem {
+  id: string;
+  type: DashboardActionType;
+  priority: DashboardActionPriority;
+  section: DashboardActionSection;
+  title: string;
+  subject: string | null;
+  description: string;
+  source: string;
+  sourceId: string;
+  href: string;
+  actionLabel: string;
+  dueAt: string | null;
+  occurredAt: string | null;
+  createdAt: string | null;
+  briefing?: {
+    appointmentId: string;
+    status: "none" | "pending" | "generating" | "ready" | "stale" | "failed";
+    generatedAt: string | null;
+    errorCode: string | null;
+  };
+}
+
+interface DashboardActionsResponse {
+  generatedAt: string;
+  items: DashboardActionItem[];
+}
+
+interface ProactiveBriefState {
+  appointmentId: string;
+  clientId: string | null;
+  status: "none" | "pending" | "generating" | "ready" | "stale" | "failed";
+  generatedAt: string | null;
+  errorCode: string | null;
+  brief: null | {
+    summary: { source: "AI_SUMMARY"; text: string } | null;
+    facts: Array<{ source: "FACT"; label: string; value: string }>;
+    changesSinceLastVisit: Array<{ source: "AI_SUMMARY"; description: string }>;
+    attentionPoints: Array<{ source: "AI_SUMMARY"; priority: "high" | "normal"; description: string }>;
+    suggestedQuestions: Array<{ source: "SUGGESTION"; question: string }>;
+    currentPlanSummary: { source: "FACT"; text: string } | null;
+    pendingItems: Array<{ source: "FACT" | "AI_SUMMARY"; description: string }>;
+    dataGaps: Array<{ source: "AI_SUMMARY"; description: string }>;
+  };
+}
+
 const appointmentStatusLabel: Record<string, string> = {
   agendada: "Agendada",
   confirmada: "Confirmada",
@@ -185,47 +245,131 @@ function QuickAction({
   );
 }
 
-function PriorityItem({
-  icon,
-  title,
-  description,
-  href,
-  action,
-  urgent = false,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  href: string;
-  action: string;
-  urgent?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`flex items-center justify-between gap-4 rounded-2xl border p-4 transition ${
-        urgent
-          ? "border-[#F2CDC7] bg-[#FFF5F3] hover:bg-[#FFF0ED]"
-          : "border-[#EDE1D6] bg-[#FBF7F1] hover:bg-[#F5FAF0]"
-      }`}
-    >
-      <span className="flex min-w-0 items-start gap-3">
-        <span
-          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-            urgent ? "bg-[#F3E8E5] text-[#8C5F50]" : "bg-[#EAF0E4] text-[#607A56]"
-          }`}
-        >
-          {icon}
+const ACTION_SECTION_LABELS: Record<DashboardActionSection, string> = {
+  NOW: "Agora",
+  ATTENTION: "Precisa da sua atenção",
+  BUSINESS: "Negócio",
+  RECENT: "Atividade recente",
+};
+
+const ACTION_SECTION_DESCRIPTIONS: Record<DashboardActionSection, string> = {
+  NOW: "Eventos imediatos da agenda.",
+  ATTENTION: "Pendências clínicas ou operacionais que pedem decisão.",
+  BUSINESS: "Cobranças e acompanhamento financeiro.",
+  RECENT: "Eventos informativos já tratados pelo sistema.",
+};
+
+const PRIORITY_LABELS: Record<DashboardActionPriority, string> = {
+  URGENT: "Urgente",
+  HIGH: "Alta",
+  NORMAL: "Normal",
+  INFO: "Info",
+};
+
+function iconForAction(type: DashboardActionType) {
+  if (type === "APPOINTMENT_NOW" || type === "APPOINTMENT_SOON") return <Calendar className="h-4 w-4" />;
+  if (type === "PATIENT_REQUEST_PENDING" || type === "SUBSTITUTION_REQUIRES_REVIEW") return <MessageIcon />;
+  if (type === "AI_PROPOSAL_PENDING" || type === "AI_PROPOSAL_REVIEW") return <Sparkles className="h-4 w-4" />;
+  if (type === "PAYMENT_OVERDUE") return <WalletCards className="h-4 w-4" />;
+  if (type === "WORKFLOW_DUE") return <Clock className="h-4 w-4" />;
+  return <CheckCircle2 className="h-4 w-4" />;
+}
+
+function MessageIcon() {
+  return <ClipboardList className="h-4 w-4" />;
+}
+
+function ActionItemCard({ item, onOpenBrief }: { item: DashboardActionItem; onOpenBrief: (appointmentId: string) => void }) {
+  const priorityTone = item.priority === "URGENT"
+    ? "border-[#F2CDC7] bg-[#FFF5F3] text-[#8C5F50]"
+    : item.priority === "HIGH"
+      ? "border-[#EAD8C2] bg-[#FFF9F0] text-[#8C6E52]"
+      : item.priority === "INFO"
+        ? "border-[#D9E4D3] bg-[#F5FAF0] text-[#607A56]"
+        : "border-[#EDE1D6] bg-[#FBF7F1] text-[#75675E]";
+  const time = item.dueAt ?? item.occurredAt ?? item.createdAt;
+  const openableBriefing = item.briefing && ["ready", "stale"].includes(item.briefing.status);
+  const content = (
+    <>
+      <span className="flex min-w-0 gap-3">
+        <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${priorityTone}`}>
+          {iconForAction(item.type)}
         </span>
         <span className="min-w-0">
-          <span className="block text-sm font-semibold text-[#3A3028]">{title}</span>
-          <span className="mt-1 block text-xs leading-5 text-[#75675E]">{description}</span>
+          <span className="flex flex-wrap items-center gap-2">
+            <strong className="text-sm text-[#3A3028]">{item.title}</strong>
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ${priorityTone}`}>
+              {PRIORITY_LABELS[item.priority]}
+            </span>
+          </span>
+          <span className="mt-1 block text-sm font-medium text-[#5F554D]">{item.subject ?? "Sem paciente vinculado"}</span>
+          <span className="mt-1 block text-xs leading-5 text-[#75675E]">{item.description}</span>
+          <span className="mt-2 block text-[11px] font-semibold uppercase tracking-[0.1em] text-[#A9978A]">
+            {time ? formatDateSafe(time, "dd/MM HH:mm") : item.source}
+          </span>
         </span>
       </span>
-      <span className="shrink-0 rounded-full border border-[#7F9A74]/30 px-3 py-1.5 text-[11px] font-semibold text-[#607A56]">
-        {action}
+      <span className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#7F9A74]/35 px-4 text-xs font-semibold text-[#607A56] transition group-hover:bg-[#EAF0E4] sm:self-center">
+        {item.actionLabel}
+        <ArrowRight className="h-3.5 w-3.5" />
       </span>
+    </>
+  );
+
+  const className = "group grid w-full gap-3 rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-4 text-left transition hover:border-[#7F9A74]/45 hover:bg-[#F8FBF5] sm:grid-cols-[minmax(0,1fr)_auto]";
+  const ariaLabel = `${item.title}${item.subject ? `, ${item.subject}` : ""}. ${item.actionLabel}`;
+
+  if (openableBriefing) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpenBrief(item.briefing!.appointmentId)}
+        className={className}
+        aria-label={ariaLabel}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <Link href={item.href} className={className} aria-label={ariaLabel}>
+      {content}
     </Link>
+  );
+}
+
+function ActionSection({ section, items, onOpenBrief }: { section: DashboardActionSection; items: DashboardActionItem[]; onOpenBrief: (appointmentId: string) => void }) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="font-serif text-xl font-semibold text-[#3A3028]">{ACTION_SECTION_LABELS[section]}</h3>
+        <p className="text-xs leading-5 text-[#75675E]">{ACTION_SECTION_DESCRIPTIONS[section]}</p>
+      </div>
+      {items.length ? (
+        <div className="grid gap-3">
+          {items.map((item) => <ActionItemCard key={item.id} item={item} onOpenBrief={onOpenBrief} />)}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-[#DDE9D5] bg-[#F5FAF0] p-4">
+          <p className="text-sm font-semibold text-[#607A56]">
+            {section === "NOW" ? "Nada imediato agora." : section === "ATTENTION" ? "Nenhuma pendência importante agora." : section === "BUSINESS" ? "Nenhuma cobrança vencida detectada." : "Sem atividade recente relevante."}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function BriefList({ title, items }: { title: string; items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#607A56]">{title}</p>
+      <ul className="mt-2 space-y-1 text-sm text-[#3A3028]">
+        {items.map((item, index) => <li key={index}>• {item}</li>)}
+      </ul>
+    </div>
   );
 }
 
@@ -257,6 +401,7 @@ function StageBar({
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -264,12 +409,40 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1);
   const [searchTrigger, setSearchTrigger] = useState(0);
   const [dashMetrics, setDashMetrics] = useState<DashboardMetrics | null>(null);
+  const [actionsData, setActionsData] = useState<DashboardActionsResponse | null>(null);
+  const [actionsLoading, setActionsLoading] = useState(true);
+  const [briefState, setBriefState] = useState<ProactiveBriefState | null>(null);
+  const [briefLoading, setBriefLoading] = useState(false);
+  const [briefRefreshing, setBriefRefreshing] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/dashboard-metrics")
       .then((r) => r.json())
       .then((d: DashboardMetrics) => setDashMetrics(d))
       .catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadActions() {
+      try {
+        const response = await fetch("/api/admin/dashboard/actions", { cache: "no-store" });
+        if (!response.ok) return;
+        const result = await response.json() as DashboardActionsResponse;
+        if (active) setActionsData(result);
+      } finally {
+        if (active) setActionsLoading(false);
+      }
+    }
+    void loadActions();
+    const interval = window.setInterval(loadActions, 60_000);
+    const onFocus = () => void loadActions();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   useEffect(() => {
@@ -307,47 +480,17 @@ export default function DashboardPage() {
       dashMetrics.oportunidades.total
     : 0;
 
-  const priorityItems = useMemo(() => {
-    if (!dashMetrics) return [];
-    return [
-      {
-        show: dashMetrics.consultasHoje > 0,
-        urgent: false,
-        icon: <Calendar className="h-4 w-4" />,
-        title: `${dashMetrics.consultasHoje} consulta${dashMetrics.consultasHoje !== 1 ? "s" : ""} hoje`,
-        description: "Revise prontuarios, objetivos e pendencias antes do atendimento.",
-        href: "/dashboard/agenda",
-        action: "Agenda",
-      },
-      {
-        show: dashMetrics.tarefasVencidas > 0,
-        urgent: true,
-        icon: <AlertCircle className="h-4 w-4" />,
-        title: `${dashMetrics.tarefasVencidas} tarefa${dashMetrics.tarefasVencidas !== 1 ? "s" : ""} vencida${dashMetrics.tarefasVencidas !== 1 ? "s" : ""}`,
-        description: "Priorize retornos clinicos, ajustes de conduta e combinados com pacientes.",
-        href: "/dashboard/tarefas",
-        action: "Resolver",
-      },
-      {
-        show: dashMetrics.oportunidades.atrasadas > 0,
-        urgent: true,
-        icon: <HeartHandshake className="h-4 w-4" />,
-        title: `${dashMetrics.oportunidades.atrasadas} follow-up${dashMetrics.oportunidades.atrasadas !== 1 ? "s" : ""} atrasado${dashMetrics.oportunidades.atrasadas !== 1 ? "s" : ""}`,
-        description: "Conduza oportunidades sem perder acolhimento e contexto da pre-consulta.",
-        href: "/dashboard/oportunidades",
-        action: "Funil",
-      },
-      {
-        show: dashMetrics.rascunhosPendentes > 0,
-        urgent: false,
-        icon: <Sparkles className="h-4 w-4" />,
-        title: `${dashMetrics.rascunhosPendentes} rascunho${dashMetrics.rascunhosPendentes !== 1 ? "s" : ""} IA pendente${dashMetrics.rascunhosPendentes !== 1 ? "s" : ""}`,
-        description: "Revise antes de transformar em protocolo ou plano para cliente.",
-        href: "/dashboard/protocols",
-        action: "Revisar",
-      },
-    ].filter((item) => item.show);
-  }, [dashMetrics]);
+  const actionGroups = useMemo(() => {
+    const groups: Record<DashboardActionSection, DashboardActionItem[]> = {
+      NOW: [],
+      ATTENTION: [],
+      BUSINESS: [],
+      RECENT: [],
+    };
+    for (const item of actionsData?.items ?? []) groups[item.section].push(item);
+    return groups;
+  }, [actionsData]);
+  const attentionCount = (actionsData?.items ?? []).filter((item) => item.priority !== "INFO").length;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -362,6 +505,44 @@ export default function DashboardPage() {
     });
     return `/api/admin/export/${type}?${params}`;
   };
+
+  async function openBrief(appointmentId: string) {
+    setBriefLoading(true);
+    try {
+      const response = await fetch(`/api/admin/appointments/${appointmentId}/brief`, { cache: "no-store" });
+      if (response.ok) setBriefState(await response.json() as ProactiveBriefState);
+    } finally {
+      setBriefLoading(false);
+    }
+  }
+
+  async function refreshBrief() {
+    if (!briefState) return;
+    setBriefRefreshing(true);
+    try {
+      const response = await fetch(`/api/admin/appointments/${briefState.appointmentId}/brief`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: true }),
+      });
+      if (response.ok) {
+        const data = await response.json() as { state: ProactiveBriefState };
+        setBriefState(data.state);
+      }
+    } finally {
+      setBriefRefreshing(false);
+    }
+  }
+
+  async function startConsultationFromBrief() {
+    if (!briefState?.clientId) return;
+    const response = await fetch(`/api/admin/clients/${briefState.clientId}/consultation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appointmentId: briefState.appointmentId }),
+    });
+    if (response.ok) router.push(`/dashboard/clients/${briefState.clientId}/consultation`);
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-7 animate-fade-up">
@@ -426,7 +607,7 @@ export default function DashboardPage() {
                   Prioridades
                 </p>
                 <p className="mt-2 font-serif text-3xl font-semibold text-[#8C5F50]">
-                  {dashMetrics ? priorityItems.length : "-"}
+                  {actionsLoading ? "-" : attentionCount}
                 </p>
               </div>
             </div>
@@ -502,37 +683,34 @@ export default function DashboardPage() {
           <PanelCard className="p-5">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="brand-kicker mb-2">Prioridades</p>
+                <p className="brand-kicker mb-2">Atenção operacional</p>
                 <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">
                   O que precisa de atencao agora
                 </h2>
+                {actionsData?.generatedAt && (
+                  <p className="mt-1 text-xs text-[#A9978A]">
+                    Atualizado em {formatDateSafe(actionsData.generatedAt, "HH:mm")}
+                  </p>
+                )}
               </div>
               <Link
-                href="/dashboard/ajuda"
+                href="/dashboard/solicitacoes"
                 className="inline-flex w-fit items-center gap-2 rounded-full border border-[#D9C4B2] px-4 py-2 text-xs font-semibold text-[#8C6E52] transition hover:bg-[#FBF7F1]"
               >
-                <HelpCircle className="h-4 w-4" />
-                Ajuda
+                <Zap className="h-4 w-4" />
+                Ver inbox
               </Link>
             </div>
-            {!dashMetrics ? (
+            {actionsLoading ? (
               <p className="rounded-2xl bg-[#FBF7F1] p-5 text-sm text-[#75675E]">
-                Carregando prioridades...
+                Carregando ações...
               </p>
-            ) : priorityItems.length === 0 ? (
-              <div className="rounded-2xl border border-[#DDE9D5] bg-[#F5FAF0] p-5">
-                <p className="text-sm font-semibold text-[#607A56]">
-                  Nenhuma prioridade critica no momento.
-                </p>
-                <p className="mt-1 text-xs leading-5 text-[#75675E]">
-                  Use os atalhos para revisar agenda, clientes e conteudos planejados.
-                </p>
-              </div>
             ) : (
-              <div className="grid gap-3">
-                {priorityItems.map((item) => (
-                  <PriorityItem key={item.title} {...item} />
-                ))}
+              <div className="grid gap-6">
+                <ActionSection section="NOW" items={actionGroups.NOW} onOpenBrief={openBrief} />
+                <ActionSection section="ATTENTION" items={actionGroups.ATTENTION} onOpenBrief={openBrief} />
+                <ActionSection section="BUSINESS" items={actionGroups.BUSINESS} onOpenBrief={openBrief} />
+                <ActionSection section="RECENT" items={actionGroups.RECENT} onOpenBrief={openBrief} />
               </div>
             )}
           </PanelCard>
@@ -972,6 +1150,66 @@ export default function DashboardPage() {
           </div>
         )}
       </PanelCard>
+
+      {(briefState || briefLoading) && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
+          <section className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
+            <div className="flex items-start justify-between gap-4 border-b border-[#EDE1D6] px-5 py-4">
+              <div>
+                <p className="brand-kicker">Briefing de consulta</p>
+                <h2 className="mt-1 font-serif text-2xl font-semibold text-[#3A3028]">
+                  {briefState?.status === "stale" ? "Briefing desatualizado" : briefState?.status === "failed" ? "Briefing indisponível" : "Briefing preparado"}
+                </h2>
+                {briefState?.generatedAt && <p className="mt-1 text-xs text-[#A9978A]">Gerado em {formatDateSafe(briefState.generatedAt, "dd/MM HH:mm")}</p>}
+              </div>
+              <button type="button" onClick={() => setBriefState(null)} className="rounded-full border border-[#EDE1D6] px-3 py-1.5 text-xs font-semibold text-[#75675E] hover:bg-[#FBF7F1]">
+                Fechar
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              {briefLoading ? (
+                <p className="text-sm text-[#75675E]">Carregando briefing...</p>
+              ) : !briefState?.brief ? (
+                <p className="rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-4 text-sm text-[#75675E]">
+                  {briefState?.status === "failed" ? "Não foi possível preparar o briefing. A consulta pode ser aberta normalmente." : "Briefing ainda não disponível."}
+                </p>
+              ) : (
+                <>
+                  {briefState.brief.summary && (
+                    <p className="rounded-xl border border-[#D9E4D3] bg-[#F4F8F1] p-4 text-sm leading-6 text-[#3A3028]">
+                      {briefState.brief.summary.text}
+                    </p>
+                  )}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {briefState.brief.facts.map((fact) => (
+                      <div key={`${fact.label}-${fact.value}`} className="rounded-xl border border-[#EDE1D6] bg-[#FBF7F1] p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9A6F5E]">{fact.label}</p>
+                        <p className="mt-1 text-sm font-semibold text-[#3A3028]">{fact.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {briefState.brief.currentPlanSummary && <p className="text-sm text-[#75675E]">{briefState.brief.currentPlanSummary.text}</p>}
+                  <BriefList title="Mudanças desde a última consulta" items={briefState.brief.changesSinceLastVisit.map((item) => item.description)} />
+                  <BriefList title="Pontos de atenção" items={briefState.brief.attentionPoints.map((item) => item.description)} />
+                  <BriefList title="Perguntas sugeridas" items={briefState.brief.suggestedQuestions.map((item) => item.question)} />
+                  <BriefList title="Pendências" items={briefState.brief.pendingItems.map((item) => item.description)} />
+                  <BriefList title="Dados faltantes" items={briefState.brief.dataGaps.map((item) => item.description)} />
+                </>
+              )}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-[#EDE1D6] px-5 py-3">
+              {briefState?.clientId && (
+                <button type="button" onClick={() => void startConsultationFromBrief()} className="rounded-full bg-[#7F9A74] px-4 py-2 text-xs font-semibold text-white hover:bg-[#607A56]">
+                  Iniciar consulta
+                </button>
+              )}
+              <button type="button" onClick={() => void refreshBrief()} disabled={!briefState || briefRefreshing} className="rounded-full border border-[#7F9A74]/35 px-4 py-2 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4] disabled:opacity-60">
+                {briefRefreshing ? "Atualizando..." : "Atualizar briefing"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

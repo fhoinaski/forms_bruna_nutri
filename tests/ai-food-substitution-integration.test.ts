@@ -14,6 +14,10 @@ import type { ProposedAction } from "@/lib/ai/schemas/action.schema";
  */
 
 afterEach(() => {
+  vi.doUnmock("@/lib/clinical/food-clinical-profile");
+  vi.doUnmock("@/lib/repositories/patient-clinical-markers");
+  vi.doUnmock("@/lib/repositories/nutrition-records");
+  vi.doUnmock("@/lib/repositories/ai-settings");
   vi.resetModules();
   vi.clearAllMocks();
 });
@@ -47,6 +51,21 @@ function mockCommonRepos(plan: MealPlanPayload | null) {
   return { createPatientRequest, writeAuditLog };
 }
 
+function mockSafeSubstitutionPolicyDeps(enabled = false, nutritionRecord: unknown = null) {
+  vi.doMock("@/lib/repositories/ai-settings", () => ({
+    getAISettings: vi.fn().mockResolvedValue({ patient_safe_substitutions_enabled: enabled ? 1 : 0 }),
+  }));
+  vi.doMock("@/lib/repositories/nutrition-records", () => ({
+    getExistingNutritionRecord: vi.fn().mockResolvedValue(nutritionRecord),
+  }));
+  vi.doMock("@/lib/repositories/patient-clinical-markers", () => ({
+    listPatientClinicalMarkers: vi.fn().mockResolvedValue([]),
+  }));
+  vi.doMock("@/lib/repositories/patient-food-substitution-events", () => ({
+    createPatientFoodSubstitutionEvent: vi.fn().mockResolvedValue("event-1"),
+  }));
+}
+
 function foodSubstitutionAction(overrides: Partial<ProposedAction & { kind: "patient_change_request" }> = {}): ProposedAction {
   return {
     kind: "patient_change_request",
@@ -70,16 +89,65 @@ function foodSubstitutionAction(overrides: Partial<ProposedAction & { kind: "pat
 describe("Fluxo completo: mensagem do paciente → tool → cálculo → resposta estruturada", () => {
   it("executeSearchAllowedFoodAlternatives devolve substitution.status='safe' com quantidade calculada pela engine", async () => {
     vi.doMock("@/lib/repositories/meal-plans", () => ({ getActiveMealPlan: vi.fn().mockResolvedValue(makePlanWithArroz()) }));
+    mockSafeSubstitutionPolicyDeps(true);
+    vi.doMock("@/lib/security/audit", () => ({ writeAuditLog: vi.fn().mockResolvedValue(undefined) }));
     const { executeSearchAllowedFoodAlternatives } = await import("../lib/ai/agents/patient/patient-portal-agent");
     const result = await executeSearchAllowedFoodAlternatives("client-1", { currentFood: "arroz", desiredFood: "batata, inglesa, cozida" });
     expect(result.found).toBe(true);
     if (!result.found) throw new Error("esperava found true");
     expect(result.substitution?.status).toBe("safe");
+    expect(result.substitutionPolicy?.decision).toBe("auto_safe");
     if (result.substitution?.status === "safe") {
       expect(result.substitution.sourceFoodName).toMatch(/arroz/i);
       expect(result.substitution.targetFoodName).toMatch(/batata/i);
       expect(result.substitution.targetQuantity).toBeGreaterThan(0);
     }
+  });
+
+  it("engine safe + LLM convincente nao bastam quando food profile e unknown: requires_review", async () => {
+    vi.doMock("@/lib/repositories/meal-plans", () => ({ getActiveMealPlan: vi.fn().mockResolvedValue(makePlanWithArroz()) }));
+    mockSafeSubstitutionPolicyDeps(true);
+    vi.doMock("@/lib/clinical/food-clinical-profile", () => ({
+      getFoodClinicalProfile: vi.fn().mockResolvedValue({ foodSource: "TACO", foodId: "91", traits: [], completeness: "unknown", reasons: ["taco_food_not_curated"] }),
+    }));
+    vi.doMock("@/lib/security/audit", () => ({ writeAuditLog: vi.fn().mockResolvedValue(undefined) }));
+    const { executeSearchAllowedFoodAlternatives } = await import("../lib/ai/agents/patient/patient-portal-agent");
+    const result = await executeSearchAllowedFoodAlternatives("client-1", { currentFood: "arroz", desiredFood: "batata, inglesa, cozida" });
+    expect(result.found).toBe(true);
+    if (!result.found) throw new Error("esperava found true");
+    expect(result.substitution?.status).toBe("safe");
+    expect(result.substitutionPolicy).toMatchObject({ decision: "requires_review" });
+    expect(result.substitutionPolicy?.reasons).toContain("FOOD_PROFILE_UNKNOWN");
+  });
+
+  it("conflito silencioso: ALLERGY MILK no prontuario estruturado bloqueia pedido por leite mesmo sem alergia na mensagem", async () => {
+    vi.doMock("@/lib/repositories/meal-plans", () => ({ getActiveMealPlan: vi.fn().mockResolvedValue(makePlanWithArroz()) }));
+    mockSafeSubstitutionPolicyDeps(true);
+    vi.doUnmock("@/lib/repositories/patient-clinical-markers");
+    vi.doMock("@/lib/repositories/patient-clinical-markers", () => ({
+      listPatientClinicalMarkers: vi.fn().mockResolvedValue([
+        { id: "marker-1", type: "ALLERGY", normalized_code: "MILK", status: "ACTIVE", severity: "severe", label: "Leite" },
+      ]),
+    }));
+    vi.doMock("@/lib/security/audit", () => ({ writeAuditLog: vi.fn().mockResolvedValue(undefined) }));
+    const { executeSearchAllowedFoodAlternatives } = await import("../lib/ai/agents/patient/patient-portal-agent");
+    const result = await executeSearchAllowedFoodAlternatives("client-1", { currentFood: "arroz", desiredFood: "Leite, de vaca, integral" });
+    expect(result.found).toBe(true);
+    if (!result.found) throw new Error("esperava found true");
+    expect(result.substitutionPolicy).toMatchObject({ decision: "requires_review", autonomyLevel: "BLOCKED" });
+    expect(result.substitutionPolicy?.reasons).toContain("ACTIVE_RESTRICTION_CONFLICT");
+  });
+
+  it("texto livre legado com alergia sem marker estruturado continua requires_review", async () => {
+    vi.doMock("@/lib/repositories/meal-plans", () => ({ getActiveMealPlan: vi.fn().mockResolvedValue(makePlanWithArroz()) }));
+    mockSafeSubstitutionPolicyDeps(true, { allergies: "alergia a leite" });
+    vi.doMock("@/lib/security/audit", () => ({ writeAuditLog: vi.fn().mockResolvedValue(undefined) }));
+    const { executeSearchAllowedFoodAlternatives } = await import("../lib/ai/agents/patient/patient-portal-agent");
+    const result = await executeSearchAllowedFoodAlternatives("client-1", { currentFood: "arroz", desiredFood: "batata, inglesa, cozida" });
+    expect(result.found).toBe(true);
+    if (!result.found) throw new Error("esperava found true");
+    expect(result.substitutionPolicy).toMatchObject({ decision: "requires_review", autonomyLevel: "BLOCKED" });
+    expect(result.substitutionPolicy?.reasons).toContain("UNSTRUCTURED_CLINICAL_CONTEXT");
   });
 });
 

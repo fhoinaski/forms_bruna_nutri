@@ -5,6 +5,10 @@
       "schedule": "0 8 * * *"
     },
     {
+      "path": "/api/admin/appointment-briefs/prepare-upcoming",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/admin/payments/notify-overdue",
       "schedule": "0 9 * * *"
     }

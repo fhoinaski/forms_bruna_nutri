@@ -26,6 +26,7 @@ import {
 } from "@/lib/clinical/anthropometry";
 import { PROTOCOL_TEMPLATE_GROUP_LABELS, PROTOCOL_TEMPLATE_TARGET_GROUPS } from "@/lib/protocol-templates/constants";
 import { NUTRITION_TEXT_FIELDS } from "@/lib/clinical/nutrition-record-fields";
+import { CLINICAL_MARKER_CODE_LABELS, FOOD_RESTRICTION_CODES } from "@/lib/clinical/structured-markers";
 import type { ClientSnapshot } from "@/lib/clinical/client-snapshot";
 
 const MealPlanEditor = dynamic(() => import("@/components/dashboard/MealPlanEditor").then((mod) => mod.MealPlanEditor));
@@ -119,6 +120,31 @@ interface NutritionRecord {
   created_at: string; updated_at: string;
 }
 
+type StructuredRestrictionType = "ALLERGY" | "INTOLERANCE" | "DIETARY_RESTRICTION" | "FOOD_AVOIDANCE" | "CLINICAL_FLAG" | "PREGNANCY" | "BARIATRIC";
+type StructuredRestrictionStatus = "ACTIVE" | "SUSPECTED" | "RESOLVED";
+type StructuredRestrictionSeverity = "unknown" | "mild" | "moderate" | "severe";
+
+interface StructuredRestriction {
+  id: string;
+  type: StructuredRestrictionType;
+  normalized_code: string;
+  label: string | null;
+  severity: StructuredRestrictionSeverity;
+  status: StructuredRestrictionStatus;
+  source: string;
+  evidence_text: string | null;
+}
+
+interface StructuredRestrictionSuggestion {
+  type: StructuredRestrictionType;
+  normalizedCode: string;
+  label: string;
+  status: "SUSPECTED";
+  severity: "unknown";
+  evidenceText: string;
+  confidence: "low" | "medium";
+}
+
 interface PatientEducationCardLite {
   id: string;
   slug: string;
@@ -202,6 +228,27 @@ const PROTOCOL_STATUS_COLORS: Record<string, string> = {
 };
 const PROTOCOL_STATUS_LABELS: Record<string, string> = {
   ativo: "Ativo", pausado: "Pausado", concluido: "Concluído", cancelado: "Cancelado",
+};
+
+const STRUCTURED_RESTRICTION_TYPE_LABELS: Record<StructuredRestrictionType, string> = {
+  ALLERGY: "Alergia",
+  INTOLERANCE: "Intolerancia",
+  DIETARY_RESTRICTION: "Restricao alimentar",
+  FOOD_AVOIDANCE: "Alimento evitado",
+  CLINICAL_FLAG: "Flag clinica",
+  PREGNANCY: "Gestacao",
+  BARIATRIC: "Bariatrica",
+};
+const STRUCTURED_RESTRICTION_STATUS_LABELS: Record<StructuredRestrictionStatus, string> = {
+  ACTIVE: "Ativo",
+  SUSPECTED: "Suspeito",
+  RESOLVED: "Resolvido",
+};
+const STRUCTURED_RESTRICTION_SEVERITY_LABELS: Record<StructuredRestrictionSeverity, string> = {
+  unknown: "Nao informada",
+  mild: "Leve",
+  moderate: "Moderada",
+  severe: "Grave",
 };
 
 const TIMELINE_ICONS: Record<string, string> = {
@@ -624,6 +671,246 @@ function weightDelta(current: ClientEvolution, next?: ClientEvolution): number |
   return Math.round((current.weight - next.weight) * 10) / 10;
 }
 
+function StructuredRestrictionsPanel({ clientId }: { clientId: string }) {
+  const [items, setItems] = useState<StructuredRestriction[]>([]);
+  const [suggestions, setSuggestions] = useState<StructuredRestrictionSuggestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    type: "ALLERGY" as StructuredRestrictionType,
+    normalizedCode: "MILK",
+    severity: "unknown" as StructuredRestrictionSeverity,
+    status: "ACTIVE" as Exclude<StructuredRestrictionStatus, "RESOLVED">,
+    evidenceText: "",
+  });
+
+  async function loadItems() {
+    const res = await fetch(`/api/admin/clients/${clientId}/nutrition-record/structured-restrictions`, { cache: "no-store" });
+    if (!res.ok) throw new Error();
+    const data = await res.json() as { items: StructuredRestriction[] };
+    setItems(data.items ?? []);
+  }
+
+  useEffect(() => {
+    setLoading(true);
+    loadItems()
+      .catch(() => setError("Nao foi possivel carregar as restricoes estruturadas."))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
+
+  async function createMarker(input?: Partial<typeof form> & { source?: string; label?: string | null }) {
+    setSaving(true); setError(""); setMessage("");
+    const payload = { ...form, ...input };
+    try {
+      const res = await fetch(`/api/admin/clients/${clientId}/nutrition-record/structured-restrictions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: payload.type,
+          normalizedCode: payload.normalizedCode,
+          label: payload.label ?? CLINICAL_MARKER_CODE_LABELS[payload.normalizedCode as keyof typeof CLINICAL_MARKER_CODE_LABELS] ?? payload.normalizedCode,
+          severity: payload.severity,
+          status: payload.status,
+          source: payload.source ?? "manual",
+          evidenceText: payload.evidenceText || null,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message ?? "Nao foi possivel salvar.");
+      }
+      await loadItems();
+      setForm((prev) => ({ ...prev, evidenceText: "" }));
+      setMessage("Restricao estruturada salva.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Nao foi possivel salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resolveMarker(marker: StructuredRestriction) {
+    setSaving(true); setError(""); setMessage("");
+    try {
+      const res = await fetch(`/api/admin/clients/${clientId}/nutrition-record/structured-restrictions/${marker.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "RESOLVED" }),
+      });
+      if (!res.ok) throw new Error();
+      await loadItems();
+      setMessage("Restricao resolvida.");
+    } catch {
+      setError("Nao foi possivel resolver a restricao.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function loadSuggestions() {
+    setSaving(true); setError(""); setMessage("");
+    try {
+      const res = await fetch(`/api/admin/clients/${clientId}/nutrition-record/structured-restrictions/suggestions`, { cache: "no-store" });
+      if (!res.ok) throw new Error();
+      const data = await res.json() as { items: StructuredRestrictionSuggestion[] };
+      setSuggestions(data.items ?? []);
+      setMessage((data.items ?? []).length ? "Sugestoes carregadas para revisao." : "Nenhuma sugestao encontrada no texto atual.");
+    } catch {
+      setError("Nao foi possivel gerar sugestoes.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function rejectSuggestion(suggestion: StructuredRestrictionSuggestion) {
+    setSaving(true); setError(""); setMessage("");
+    try {
+      await fetch(`/api/admin/clients/${clientId}/nutrition-record/structured-restrictions/suggestions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suggestion }),
+      });
+      setSuggestions((prev) => prev.filter((item) => item !== suggestion));
+      setMessage("Sugestao ignorada.");
+    } catch {
+      setError("Nao foi possivel registrar a rejeicao.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const grouped = items.reduce<Record<string, StructuredRestriction[]>>((acc, item) => {
+    const label = STRUCTURED_RESTRICTION_TYPE_LABELS[item.type] ?? item.type;
+    acc[label] = [...(acc[label] ?? []), item];
+    return acc;
+  }, {});
+
+  return (
+    <section className="rounded-2xl border border-[#D9E4D3] bg-[#F8FBF5] p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="font-serif text-base font-semibold text-[#607A56]">Restricoes estruturadas</h3>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[#75675E]">
+            Dados normalizados para regras e alertas. O texto completo do prontuario permanece preservado nos campos clinicos.
+          </p>
+        </div>
+        <button type="button" onClick={loadSuggestions} disabled={saving} className="brand-btn-secondary w-full text-xs md:w-auto">
+          Sugerir a partir do texto
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-[#A8927D]">Carregando restricoes...</p>
+      ) : items.length === 0 ? (
+        <p className="mt-4 rounded-xl border border-dashed border-[#D9E4D3] bg-white p-4 text-sm text-[#8C6E52]">
+          Nenhuma restricao estruturada cadastrada.
+        </p>
+      ) : (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {Object.entries(grouped).map(([group, groupItems]) => (
+            <div key={group} className="rounded-xl border border-[#D9E4D3] bg-white p-4">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[#607A56]">{group}</p>
+              <ul className="space-y-2">
+                {groupItems.map((item) => (
+                  <li key={item.id} className="flex items-start justify-between gap-3 rounded-lg bg-[#FAF7F2] p-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#3A3028]">{item.label || item.normalized_code}</p>
+                      <p className="mt-1 text-xs text-[#75675E]">
+                        {STRUCTURED_RESTRICTION_STATUS_LABELS[item.status]} · {STRUCTURED_RESTRICTION_SEVERITY_LABELS[item.severity]}
+                      </p>
+                      {item.evidence_text && <p className="mt-1 line-clamp-2 text-xs text-[#8C6E52]">{item.evidence_text}</p>}
+                    </div>
+                    {item.status !== "RESOLVED" && (
+                      <button type="button" onClick={() => resolveMarker(item)} disabled={saving} className="shrink-0 text-xs font-semibold text-[#8C6E52] underline underline-offset-2">
+                        Resolver
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-5 rounded-xl border border-[#D9E4D3] bg-white p-4">
+        <p className="mb-3 text-sm font-semibold text-[#3A3028]">Adicionar marcador</p>
+        <div className="grid gap-3 md:grid-cols-5">
+          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as StructuredRestrictionType })} className="brand-input">
+            {(["ALLERGY", "INTOLERANCE", "DIETARY_RESTRICTION", "FOOD_AVOIDANCE"] as StructuredRestrictionType[]).map((type) => (
+              <option key={type} value={type}>{STRUCTURED_RESTRICTION_TYPE_LABELS[type]}</option>
+            ))}
+          </select>
+          <select value={form.normalizedCode} onChange={(e) => setForm({ ...form, normalizedCode: e.target.value })} className="brand-input">
+            {FOOD_RESTRICTION_CODES.map((code) => (
+              <option key={code} value={code}>{CLINICAL_MARKER_CODE_LABELS[code]}</option>
+            ))}
+          </select>
+          <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Exclude<StructuredRestrictionStatus, "RESOLVED"> })} className="brand-input">
+            <option value="ACTIVE">Ativo</option>
+            <option value="SUSPECTED">Suspeito</option>
+          </select>
+          <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value as StructuredRestrictionSeverity })} className="brand-input">
+            {Object.entries(STRUCTURED_RESTRICTION_SEVERITY_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <button type="button" onClick={() => createMarker()} disabled={saving} className="brand-btn-primary">
+            <Plus className="h-4 w-4" />
+            Adicionar
+          </button>
+        </div>
+        <textarea
+          value={form.evidenceText}
+          onChange={(e) => setForm({ ...form, evidenceText: e.target.value })}
+          className="brand-input mt-3 min-h-20 resize-y"
+          placeholder="Evidencia curta ou observacao profissional. O texto completo continua no prontuario."
+        />
+      </div>
+
+      {suggestions.length > 0 && (
+        <div className="mt-5 rounded-xl border border-[#EAD8C2] bg-[#FFFDFC] p-4">
+          <p className="mb-3 text-sm font-semibold text-[#3A3028]">Sugestoes para confirmar</p>
+          <ul className="space-y-2">
+            {suggestions.map((suggestion, index) => (
+              <li key={`${suggestion.type}-${suggestion.normalizedCode}-${index}`} className="rounded-lg border border-[#EAD8C2] bg-[#FAF7F2] p-3">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[#3A3028]">
+                      {STRUCTURED_RESTRICTION_TYPE_LABELS[suggestion.type]} · {suggestion.label}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-xs text-[#75675E]">{suggestion.evidenceText}</p>
+                    <p className="mt-1 text-[11px] text-[#A8927D]">Status sugerido: suspeito · confiança {suggestion.confidence}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => createMarker({ ...suggestion, source: "ai_suggestion_confirmed" }).then(() => setSuggestions((prev) => prev.filter((item) => item !== suggestion)))}
+                      className="rounded-full bg-[#D4EDDA] px-3 py-1.5 text-xs font-semibold text-[#4A7C59]"
+                    >
+                      Confirmar
+                    </button>
+                    <button type="button" disabled={saving} onClick={() => rejectSuggestion(suggestion)} className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#8C6E52]">
+                      Ignorar
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {message && <p className="mt-3 text-sm text-[#4F6847]">{message}</p>}
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+    </section>
+  );
+}
+
 function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSaved: () => void }) {
   const [record, setRecord] = useState<NutritionRecord | null>(null);
   const [educationCards, setEducationCards] = useState<PatientEducationCardLite[]>([]);
@@ -818,6 +1105,8 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
           />
         </div>
       </div>
+
+      <StructuredRestrictionsPanel clientId={clientId} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {NUTRITION_TEXT_FIELDS.map((field) => (

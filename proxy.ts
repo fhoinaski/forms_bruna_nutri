@@ -47,6 +47,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
 
   const isCronRoute =
     pathname === "/api/admin/appointment-workflows/process-due" ||
+    pathname === "/api/admin/appointment-briefs/prepare-upcoming" ||
     pathname === "/api/admin/payments/notify-overdue";
   if (isAdminApi && isCronRoute && verifyCronSecret(request)) {
     return noStore(NextResponse.next(), true);

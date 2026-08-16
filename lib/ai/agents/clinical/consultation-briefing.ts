@@ -5,11 +5,13 @@ import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
 import { getAppointments, type Appointment } from "@/lib/repositories/appointments";
 import { getClientProtocols } from "@/lib/repositories/client-protocols";
 import { listPatientRequests } from "@/lib/repositories/patient-requests";
+import { listPatientClinicalMarkers } from "@/lib/repositories/patient-clinical-markers";
+import { listRecentPatientFoodSubstitutionEvents } from "@/lib/repositories/patient-food-substitution-events";
 import { estimateFoodMacrosFromTaco } from "@/lib/nutrition/taco";
 import { sumMacros, roundedMacros, type MacroTotals } from "@/lib/nutrition/macros";
 import { calculateWeightDelta } from "@/lib/clinical/anthropometry";
 import type { Client } from "@/lib/repositories/clients";
-import { generateStructured } from "@/lib/ai/gateway/ai-gateway";
+import { generateStructuredResult } from "@/lib/ai/gateway/ai-gateway";
 import { sanitizeClinicalContext, stripInternalPatientAlias } from "@/lib/ai/privacy/sanitize-context";
 import { AiConfigError, AiProviderError, AiValidationError } from "@/lib/ai/core/ai-errors";
 import { assertCategoryAllowed } from "@/lib/ai/policies/clinical-context-policy";
@@ -53,6 +55,8 @@ export interface ConsultationSystemData {
     patientRequests: { requestType: string; summary: string }[];
     upcomingAppointment: { date: string; title: string } | null;
   };
+  clinicalMarkers: { type: string; code: string; status: string; severity: string; label: string | null }[];
+  recentSubstitutions: { targetFoodName: string | null; decision: string; createdAt: string }[];
   activePlan: {
     title: string | null;
     version: number | null;
@@ -80,13 +84,15 @@ function sumMealPlanMacros(plan: NonNullable<Awaited<ReturnType<typeof getActive
 }
 
 export async function buildConsultationSystemData(client: Client): Promise<ConsultationSystemData> {
-  const [evolutions, pendingTasks, activeMealPlan, appointments, protocols, patientRequests] = await Promise.all([
+  const [evolutions, pendingTasks, activeMealPlan, appointments, protocols, patientRequests, clinicalMarkers, substitutions] = await Promise.all([
     getClientEvolutions(client.id),
     getClientTasks(client.id, { status: "pendente" }),
     getActiveMealPlan(client.id),
     getAppointments({ clientId: client.id }),
     getClientProtocols(client.id),
     listPatientRequests({ clientId: client.id, status: "pending_review" }),
+    listPatientClinicalMarkers(client.id),
+    listRecentPatientFoodSubstitutionEvents(client.id, 5),
   ]);
 
   const weighed: ClientEvolution[] = evolutions
@@ -130,6 +136,21 @@ export async function buildConsultationSystemData(client: Client): Promise<Consu
       patientRequests: patientRequests.map((request) => ({ requestType: request.request_type, summary: (request.ai_summary ?? request.patient_text).slice(0, 140) })),
       upcomingAppointment: upcoming ? { date: upcoming.starts_at, title: upcoming.title } : null,
     },
+    clinicalMarkers: clinicalMarkers
+      .filter((marker) => marker.status !== "RESOLVED")
+      .slice(0, 10)
+      .map((marker) => ({
+        type: marker.type,
+        code: marker.normalized_code,
+        status: marker.status,
+        severity: marker.severity,
+        label: marker.label ?? null,
+      })),
+    recentSubstitutions: substitutions.map((event) => ({
+      targetFoodName: event.target_food_name,
+      decision: event.policy_decision,
+      createdAt: event.created_at,
+    })),
     activePlan: {
       title: activeMealPlan?.title ?? null,
       version: activeMealPlan?.version ?? null,
@@ -174,6 +195,12 @@ function formatSystemDataForPrompt(data: ConsultationSystemData): string {
     data.pending.patientRequests.length
       ? `Solicitacoes da paciente aguardando revisao: ${data.pending.patientRequests.map((request) => request.summary).join("; ")}.`
       : "Sem solicitacoes da paciente pendentes.",
+    data.clinicalMarkers.length
+      ? `Marcadores clinicos estruturados ativos/suspeitos: ${data.clinicalMarkers.map((marker) => `${marker.type}:${marker.code}:${marker.status}`).join("; ")}.`
+      : "Sem marcadores clinicos estruturados ativos/suspeitos.",
+    data.recentSubstitutions.length
+      ? `Substituicoes alimentares recentes: ${data.recentSubstitutions.map((event) => `${event.targetFoodName ?? "alimento"}:${event.decision}`).join("; ")}.`
+      : "Sem substituicoes alimentares recentes registradas.",
   ];
   return lines.filter(Boolean).join("\n");
 }
@@ -187,6 +214,11 @@ export const consultationAiBriefSchema = z.object({
   missingData: z.array(z.string().max(300)).max(6),
 });
 export type ConsultationAiBrief = z.infer<typeof consultationAiBriefSchema>;
+export interface ConsultationAiBriefWithMetadata {
+  brief: ConsultationAiBrief | null;
+  provider: string | null;
+  model: string | null;
+}
 
 const CONSULTATION_BRIEF_SYSTEM_PROMPT = `Voce ajuda a nutricionista a se preparar para uma consulta, usando SOMENTE os FATOS DO SISTEMA fornecidos.
 REGRAS ABSOLUTAS:
@@ -210,6 +242,14 @@ export async function generateConsultationAiBrief(
   systemData: ConsultationSystemData,
   adminId?: string | null
 ): Promise<ConsultationAiBrief | null> {
+  return (await generateConsultationAiBriefWithMetadata(client, systemData, adminId)).brief;
+}
+
+export async function generateConsultationAiBriefWithMetadata(
+  client: Client,
+  systemData: ConsultationSystemData,
+  adminId?: string | null
+): Promise<ConsultationAiBriefWithMetadata> {
   assertCategoryAllowed("consultation_brief", "identity");
   assertCategoryAllowed("consultation_brief", "evolution");
   assertCategoryAllowed("consultation_brief", "meal_plan");
@@ -220,7 +260,7 @@ export async function generateConsultationAiBrief(
     const { pseudonym, contextBlock } = sanitizeClinicalContext(client.name, [
       { label: "FATOS_DO_SISTEMA", content: formatSystemDataForPrompt(systemData) },
     ]);
-    const brief = await generateStructured({
+    const result = await generateStructuredResult({
       agent: "consultation-briefing",
       adminId,
       system: CONSULTATION_BRIEF_SYSTEM_PROMPT,
@@ -228,19 +268,24 @@ export async function generateConsultationAiBrief(
       schema: consultationAiBriefSchema,
       maxOutputTokens: 900,
     });
+    const brief = result.data;
     // Defesa server-side adicional (nunca so a instrucao de prompt) contra o
     // pseudonimo interno vazar para a nutricionista — secao 41 da FASE 2.
     return {
-      clinicalSummary: stripInternalPatientAlias(brief.clinicalSummary),
-      changesSinceLastVisit: brief.changesSinceLastVisit.map(stripInternalPatientAlias),
-      attentionPoints: brief.attentionPoints.map(stripInternalPatientAlias),
-      pendingItems: brief.pendingItems.map(stripInternalPatientAlias),
-      suggestedTopics: brief.suggestedTopics.map(stripInternalPatientAlias),
-      missingData: brief.missingData.map(stripInternalPatientAlias),
+      provider: result.provider,
+      model: result.model,
+      brief: {
+        clinicalSummary: stripInternalPatientAlias(brief.clinicalSummary),
+        changesSinceLastVisit: brief.changesSinceLastVisit.map(stripInternalPatientAlias),
+        attentionPoints: brief.attentionPoints.map(stripInternalPatientAlias),
+        pendingItems: brief.pendingItems.map(stripInternalPatientAlias),
+        suggestedTopics: brief.suggestedTopics.map(stripInternalPatientAlias),
+        missingData: brief.missingData.map(stripInternalPatientAlias),
+      },
     };
   } catch (error) {
     if (error instanceof AiConfigError || error instanceof AiProviderError || error instanceof AiValidationError) {
-      return null;
+      return { brief: null, provider: null, model: null };
     }
     throw error;
   }
