@@ -32,7 +32,7 @@ test.describe("plano alimentar", () => {
 
     // Adiciona uma nova refeicao com um alimento reconhecido pela busca TACO.
     await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const foodInput = page.getByPlaceholder("Digite para buscar na TACO").last();
+    const foodInput = page.getByPlaceholder("Buscar alimento").last();
     await foodInput.fill("Arroz");
     const suggestion = page.locator("button", { hasText: /arroz/i }).first();
     await expect(suggestion).toBeVisible();
@@ -49,17 +49,17 @@ test.describe("plano alimentar", () => {
     const kcalText = await kcalMetric.textContent();
     expect(Number(kcalText?.replace(/\D/g, "") ?? "0")).toBeGreaterThan(0);
 
-    // Define meta nutricional e confirma o resumo meta x prescrito (motor determinístico da FASE 2).
+    // Define meta nutricional e confirma o resumo nutricional primario da mesa de trabalho.
     await fieldAfterLabel(page, "Energia (kcal)").fill("2000");
-    await expect(page.getByRole("heading", { name: "Meta x prescrito" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "Energia" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Plano do dia" })).toBeVisible();
+    await expect(page.getByText(/resumo nutricional/i).first()).toBeVisible();
 
     await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
     await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
 
     await page.reload();
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
-    await expect(page.getByPlaceholder("Digite para buscar na TACO").last()).toHaveValue(/arroz/i);
+    await expect(page.getByPlaceholder("Buscar alimento").last()).toHaveValue(/arroz/i);
     await expect(page.getByPlaceholder("Qtd.").last()).toHaveValue("100");
   });
 
@@ -110,7 +110,7 @@ test.describe("plano alimentar", () => {
     // refeicao (a ultima da lista), nunca a pagina inteira.
     await page.getByRole("button", { name: /^refeicao$/i }).click();
     const newMealCard = page.locator("article").last();
-    const foodInput = page.getByPlaceholder("Digite para buscar na TACO").last();
+    const foodInput = page.getByPlaceholder("Buscar alimento").last();
     await foodInput.fill("Banana, nanica");
     const suggestion = page.locator("button", { hasText: /banana, nanica/i }).first();
     await expect(suggestion).toBeVisible();
@@ -157,7 +157,7 @@ test.describe("plano alimentar", () => {
     // generica sem medida cadastrada, e sinalizado como estimativa na UI —
     // nunca silenciosamente tratado como preciso.
     await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const freeTextFoodInput = page.getByPlaceholder("Digite para buscar na TACO").last();
+    const freeTextFoodInput = page.getByPlaceholder("Buscar alimento").last();
     await freeTextFoodInput.fill("Petisco caseiro nao cadastrado");
     await page.getByPlaceholder("Qtd.").last().fill("1");
     await page.getByPlaceholder("Un.").last().fill("unidade");
@@ -192,7 +192,7 @@ test.describe("plano alimentar", () => {
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
     await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const foodInput = page.getByPlaceholder("Digite para buscar na TACO").last();
+    const foodInput = page.getByPlaceholder("Buscar alimento").last();
     await foodInput.fill(customName);
     const suggestion = page.locator("button", { hasText: customName }).first();
     await expect(suggestion).toBeVisible();
@@ -206,7 +206,7 @@ test.describe("plano alimentar", () => {
 
     await page.reload();
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
-    await expect(page.getByPlaceholder("Digite para buscar na TACO").last()).toHaveValue(customName);
+    await expect(page.getByPlaceholder("Buscar alimento").last()).toHaveValue(customName);
     await expect(page.getByPlaceholder("Qtd.").last()).toHaveValue("50");
   });
 
@@ -221,7 +221,7 @@ test.describe("plano alimentar", () => {
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
     await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const foodInput = page.getByPlaceholder("Digite para buscar na TACO").last();
+    const foodInput = page.getByPlaceholder("Buscar alimento").last();
     await foodInput.fill("rice pilot e2e");
     const suggestion = page.locator("button", { hasText: /rice pilot e2e cooked/i }).first();
     await expect(suggestion).toBeVisible();
@@ -236,7 +236,7 @@ test.describe("plano alimentar", () => {
 
     await page.reload();
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
-    await expect(page.getByPlaceholder("Digite para buscar na TACO").last()).toHaveValue("Rice pilot e2e cooked");
+    await expect(page.getByPlaceholder("Buscar alimento").last()).toHaveValue("Rice pilot e2e cooked");
     await expect(page.getByPlaceholder("Qtd.").last()).toHaveValue("100");
   });
 });

@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, CalendarDays, CheckCircle2, Copy, Plus, Save, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Copy, Plus, Save, Trash2 } from "lucide-react";
 import { MealItemsEditor, cleanMealsForSave, type Meal } from "@/components/dashboard/MealItemsEditor";
-import { MealPlanNutritionSummary } from "@/components/nutrition/MealPlanNutritionSummary";
+import { MealPlanNutritionWorkspacePanel } from "@/components/nutrition/MealPlanNutritionSummary";
 import { useDebouncedFoodSearch, type FoodSuggestion } from "@/hooks/use-debounced-food-search";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
@@ -44,10 +44,27 @@ type MealPlan = {
   supplements: Supplement[];
 };
 
+function editablePlanSignature(plan: MealPlan): string {
+  return JSON.stringify({
+    title: plan.title,
+    status: plan.status,
+    notes: plan.notes ?? null,
+    target_energy_kcal: plan.target_energy_kcal ?? null,
+    target_protein_g: plan.target_protein_g ?? null,
+    target_carbohydrate_g: plan.target_carbohydrate_g ?? null,
+    target_fat_g: plan.target_fat_g ?? null,
+    meals: plan.meals,
+    weekly_slots: plan.weekly_slots ?? [],
+    substitutions: plan.substitutions,
+    supplements: plan.supplements,
+  });
+}
+
 export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSaved?: () => void }) {
   const [plans, setPlans] = useState<MealPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [plan, setPlan] = useState<MealPlan | null>(null);
+  const [savedPlanSignature, setSavedPlanSignature] = useState("");
   const [targetGroup, setTargetGroup] = useState<ProtocolTemplateTargetGroup>("ADULTO_SAUDAVEL");
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -69,6 +86,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     const current = data.find((item) => item.id === preferredPlanId) ?? data[0] ?? null;
     setSelectedPlanId(current?.id ?? "");
     setPlan(current);
+    setSavedPlanSignature(current ? editablePlanSignature(current) : "");
   }, [clientId]);
 
   useEffect(() => {
@@ -101,7 +119,9 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
 
   function selectPlan(id: string) {
     setSelectedPlanId(id);
-    setPlan(plans.find((item) => item.id === id) ?? null);
+    const selected = plans.find((item) => item.id === id) ?? null;
+    setPlan(selected);
+    setSavedPlanSignature(selected ? editablePlanSignature(selected) : "");
     setConflict("");
     setError("");
     setMessage("");
@@ -242,6 +262,17 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     }
   }
 
+  const hasUnsavedChanges = Boolean(plan && savedPlanSignature && editablePlanSignature(plan) !== savedPlanSignature);
+  const saveStateLabel = conflict
+    ? "Conflito de versão"
+    : saving
+      ? "Salvando..."
+      : hasUnsavedChanges
+        ? "Alterações não salvas"
+        : message
+          ? "Salvo agora"
+          : "Salvo";
+
   async function reloadAfterConflict() {
     setConflict("");
     await loadPlans(plan?.id);
@@ -361,90 +392,111 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       )}
 
       {plan && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#EDE1D6] bg-[#FAF7F2]/60 px-3 py-2">
-          <span className="text-xs text-[#8C6E52]">{saving ? "Salvando..." : "Plano carregado - edite abaixo"}</span>
-          <button
-            type="button"
-            onClick={() => document.getElementById("meal-plan-actions")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[#D9C4B2] px-3 py-1.5 text-xs font-semibold text-[#8C6E52] transition hover:bg-white"
-          >
-            Ir para salvar/ativar
-            <ArrowDown className="h-3.5 w-3.5" />
-          </button>
+        <div className="sticky top-2 z-30 rounded-xl border border-[#D9C4B2] bg-[#FFFDFC]/95 p-2.5 shadow-[0_12px_34px_rgba(58,48,40,0.12)] backdrop-blur-xl">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[#3A3028]">{plan.title}</p>
+              <p className={`mt-0.5 text-xs font-semibold ${hasUnsavedChanges ? "text-[#9A6B28]" : conflict ? "text-red-700" : "text-[#607A56]"}`}>
+                {plan.status === "active" ? "Ativo" : "Rascunho"} - v{plan.version} · {saveStateLabel}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
+              <button type="button" onClick={() => void save()} disabled={saving || deleting || !hasUnsavedChanges} className="brand-btn-secondary w-full sm:w-auto">
+                <Save className="h-4 w-4" />
+                {saving ? "Salvando..." : "Salvar"}
+              </button>
+              <button type="button" onClick={() => void save("active")} disabled={saving || deleting || plan.status === "active"} className="brand-btn-primary w-full sm:w-auto">
+                <CheckCircle2 className="h-4 w-4" />
+                {plan.status === "active" ? "Ativo" : "Ativar"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {plan && (
-        <section className="space-y-5 rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="brand-label">Titulo do plano</label>
-              <input value={plan.title} onChange={(event) => setPlan({ ...plan, title: event.target.value })} className="brand-input" />
+        <section className="rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-3 sm:p-4">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="min-w-0 space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="brand-label" htmlFor="meal-plan-title">Titulo do plano</label>
+                  <input id="meal-plan-title" value={plan.title} onChange={(event) => setPlan({ ...plan, title: event.target.value })} className="brand-input" />
+                </div>
+                <div>
+                  <label className="brand-label" htmlFor="meal-plan-status">Status</label>
+                  <select id="meal-plan-status" value={plan.status} onChange={(event) => setPlan({ ...plan, status: event.target.value as MealPlanStatus })} className="brand-input">
+                    <option value="draft">Rascunho</option>
+                    <option value="active">Ativo no portal</option>
+                    <option value="archived">Arquivado</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="brand-label" htmlFor="meal-plan-notes">Orientacoes gerais para o cliente</label>
+                  <textarea id="meal-plan-notes" value={plan.notes ?? ""} onChange={(event) => setPlan({ ...plan, notes: event.target.value })} className="brand-input min-h-16 resize-y" />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#EDE1D6] bg-[#FAF7F2]/60 p-3">
+                <p className="brand-label mb-2">Meta nutricional do plano (opcional)</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <NutrientTargetInput id="target-energy-kcal" label="Energia (kcal)" value={plan.target_energy_kcal} onChange={(value) => setPlan({ ...plan, target_energy_kcal: value })} />
+                  <NutrientTargetInput id="target-protein-g" label="Proteína (g)" value={plan.target_protein_g} onChange={(value) => setPlan({ ...plan, target_protein_g: value })} />
+                  <NutrientTargetInput id="target-carbohydrate-g" label="Carboidrato (g)" value={plan.target_carbohydrate_g} onChange={(value) => setPlan({ ...plan, target_carbohydrate_g: value })} />
+                  <NutrientTargetInput id="target-fat-g" label="Gordura (g)" value={plan.target_fat_g} onChange={(value) => setPlan({ ...plan, target_fat_g: value })} />
+                </div>
+              </div>
+
+              <MealItemsEditor
+                meals={plan.meals}
+                onChange={(meals) => setPlan({ ...plan, meals })}
+                targetGroup={plan.target_group ?? targetGroup}
+                aiEnabled={aiEnabled}
+                context="meal"
+                recipeTags={[plan.target_group, "plano personalizado"].filter(Boolean).join(", ")}
+                recipeDescriptionPrefix={`Receita criada a partir do plano "${plan.title}"`}
+                onMessage={setMessage}
+                onError={setError}
+                showMacroFooter={false}
+              />
             </div>
-            <div>
-              <label className="brand-label">Status</label>
-              <select value={plan.status} onChange={(event) => setPlan({ ...plan, status: event.target.value as MealPlanStatus })} className="brand-input">
-                <option value="draft">Rascunho</option>
-                <option value="active">Ativo no portal</option>
-                <option value="archived">Arquivado</option>
-              </select>
-            </div>
-            <div className="md:col-span-2">
-              <label className="brand-label">Orientacoes gerais para o cliente</label>
-              <textarea value={plan.notes ?? ""} onChange={(event) => setPlan({ ...plan, notes: event.target.value })} className="brand-input min-h-24 resize-y" />
-            </div>
+
+            <aside className="order-first xl:order-none xl:sticky xl:top-24 xl:self-start">
+              <MealPlanNutritionWorkspacePanel
+                meals={plan.meals}
+                target={{
+                  energyKcal: plan.target_energy_kcal ?? null,
+                  proteinG: plan.target_protein_g ?? null,
+                  carbohydrateG: plan.target_carbohydrate_g ?? null,
+                  fatG: plan.target_fat_g ?? null,
+                }}
+              />
+            </aside>
           </div>
 
-          <div className="rounded-xl border border-[#EDE1D6] bg-[#FAF7F2]/60 p-4">
-            <p className="brand-label mb-2">Meta nutricional do plano (opcional)</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <NutrientTargetInput label="Energia (kcal)" value={plan.target_energy_kcal} onChange={(value) => setPlan({ ...plan, target_energy_kcal: value })} />
-              <NutrientTargetInput label="Proteína (g)" value={plan.target_protein_g} onChange={(value) => setPlan({ ...plan, target_protein_g: value })} />
-              <NutrientTargetInput label="Carboidrato (g)" value={plan.target_carbohydrate_g} onChange={(value) => setPlan({ ...plan, target_carbohydrate_g: value })} />
-              <NutrientTargetInput label="Gordura (g)" value={plan.target_fat_g} onChange={(value) => setPlan({ ...plan, target_fat_g: value })} />
+          <details className="mt-4 rounded-xl border border-[#EDE1D6] bg-[#FAF7F2]/50 p-3">
+            <summary className="cursor-pointer font-serif text-lg font-semibold text-[#3A3028]">Semana e extras</summary>
+            <div className="mt-4 space-y-5">
+              <WeeklyMealGridEditor
+                slots={plan.weekly_slots ?? []}
+                onChange={(weekly_slots) => setPlan({ ...plan, weekly_slots })}
+              />
+
+              <EditableList
+                title="Suplementos"
+                items={plan.supplements}
+                onChange={(supplements) => setPlan({ ...plan, supplements })}
+                emptyItem={{ name: "", dosage: "", unit: "", instructions: "", notes: "" }}
+                fields={["name", "dosage", "unit", "instructions"]}
+                labels={["Nome", "Dose", "Un.", "Como usar"]}
+              />
+
+              <SubstitutionsEditor
+                items={plan.substitutions}
+                onChange={(substitutions) => setPlan({ ...plan, substitutions })}
+              />
             </div>
-          </div>
-
-          <MealItemsEditor
-            meals={plan.meals}
-            onChange={(meals) => setPlan({ ...plan, meals })}
-            targetGroup={plan.target_group ?? targetGroup}
-            aiEnabled={aiEnabled}
-            context="meal"
-            recipeTags={[plan.target_group, "plano personalizado"].filter(Boolean).join(", ")}
-            recipeDescriptionPrefix={`Receita criada a partir do plano "${plan.title}"`}
-            onMessage={setMessage}
-            onError={setError}
-          />
-
-          <MealPlanNutritionSummary
-            meals={plan.meals}
-            target={{
-              energyKcal: plan.target_energy_kcal ?? null,
-              proteinG: plan.target_protein_g ?? null,
-              carbohydrateG: plan.target_carbohydrate_g ?? null,
-              fatG: plan.target_fat_g ?? null,
-            }}
-          />
-
-          <WeeklyMealGridEditor
-            slots={plan.weekly_slots ?? []}
-            onChange={(weekly_slots) => setPlan({ ...plan, weekly_slots })}
-          />
-
-          <EditableList
-            title="Suplementos"
-            items={plan.supplements}
-            onChange={(supplements) => setPlan({ ...plan, supplements })}
-            emptyItem={{ name: "", dosage: "", unit: "", instructions: "", notes: "" }}
-            fields={["name", "dosage", "unit", "instructions"]}
-            labels={["Nome", "Dose", "Un.", "Como usar"]}
-          />
-
-          <SubstitutionsEditor
-            items={plan.substitutions}
-            onChange={(substitutions) => setPlan({ ...plan, substitutions })}
-          />
+          </details>
 
           <div id="meal-plan-actions" className="flex flex-col gap-3 border-t border-[#EDE1D6] pt-5 sm:flex-row sm:items-center sm:justify-between">
             <button
@@ -550,11 +602,12 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   );
 }
 
-function NutrientTargetInput({ label, value, onChange }: { label: string; value: number | null | undefined; onChange: (value: number | null) => void }) {
+function NutrientTargetInput({ id, label, value, onChange }: { id: string; label: string; value: number | null | undefined; onChange: (value: number | null) => void }) {
   return (
     <div>
-      <label className="brand-label">{label}</label>
+      <label className="brand-label" htmlFor={id}>{label}</label>
       <input
+        id={id}
         type="number"
         min={0}
         inputMode="decimal"

@@ -32,7 +32,7 @@ async function addMealWithArroz(page: Page, name: string) {
   await page.getByRole("button", { name: /^refeicao$/i }).click();
   const meal = page.locator("article").last();
   await meal.getByPlaceholder("Nome da refeicao").fill(name);
-  const foodInput = meal.getByPlaceholder("Digite para buscar na TACO").last();
+  const foodInput = meal.getByPlaceholder("Buscar alimento").last();
   await foodInput.fill("Arroz");
   const suggestion = page.locator("button", { hasText: /arroz/i }).first();
   await expect(suggestion).toBeVisible();
@@ -83,7 +83,7 @@ test.describe("plano alimentar — UX 2.0", () => {
 
     const duplicated = page.locator("article").last();
     await expect(duplicated.getByPlaceholder("Nome da refeicao")).toHaveValue("Lanche da tarde (cópia)");
-    await expect(duplicated.getByPlaceholder("Digite para buscar na TACO").last()).toHaveValue(/arroz/i);
+    await expect(duplicated.getByPlaceholder("Buscar alimento").last()).toHaveValue(/arroz/i);
     await expect(duplicated.getByPlaceholder("Qtd.").last()).toHaveValue("100");
   });
 
@@ -97,7 +97,7 @@ test.describe("plano alimentar — UX 2.0", () => {
     const meal = await addMealWithArroz(page, "Almoco");
     await meal.getByRole("button", { name: /^duplicar alimento$/i }).last().click();
 
-    const foodInputs = meal.getByPlaceholder("Digite para buscar na TACO");
+    const foodInputs = meal.getByPlaceholder("Buscar alimento");
     await expect(foodInputs).toHaveCount(2);
     await expect(foodInputs.last()).toHaveValue(/arroz/i);
     await expect(meal.getByPlaceholder("Qtd.").last()).toHaveValue("100");
@@ -122,7 +122,7 @@ test.describe("plano alimentar — UX 2.0", () => {
     // O plano recem-duplicado (agora selecionado) traz titulo marcado e o conteudo pre-preenchido, sem ter sido salvo ainda.
     await expect(fieldAfterLabel(page, "Titulo do plano")).toHaveValue(/\(cópia\)$/);
     await expect(page.locator("article", { hasText: "Refeicao Original" })).toBeVisible();
-    await expect(page.getByPlaceholder("Digite para buscar na TACO").last()).toHaveValue(/arroz/i);
+    await expect(page.getByPlaceholder("Buscar alimento").last()).toHaveValue(/arroz/i);
 
     // Revisar e salvar o duplicado persiste normalmente, como qualquer plano novo.
     await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
@@ -170,7 +170,7 @@ test.describe("plano alimentar — UX 2.0", () => {
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
     await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const foodInput = page.locator("article").last().getByPlaceholder("Digite para buscar na TACO").last();
+    const foodInput = page.locator("article").last().getByPlaceholder("Buscar alimento").last();
     await foodInput.fill("Arroz");
     await expect(page.locator("button", { hasText: /arroz/i }).first()).toBeVisible();
 

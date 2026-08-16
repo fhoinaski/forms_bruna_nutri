@@ -44,6 +44,7 @@ const NUTRIENT_UNITS: Partial<Record<NutrientKey, string>> = {
   vitaminCMg: "mg",
 };
 const MICRONUTRIENTS: NutrientKey[] = ["fiberG", "sodiumMg", "calciumMg", "ironMg", "potassiumMg", "vitaminCMg"];
+const PRIMARY_NUTRIENTS: NutrientKey[] = ["energyKcal", "proteinG", "carbohydrateG", "fatG", "fiberG"];
 
 /**
  * Meta x prescrito x diferenca (secoes 13-19 do pedido) — a UNICA coisa que
@@ -56,7 +57,7 @@ const MICRONUTRIENTS: NutrientKey[] = ["fiberG", "sodiumMg", "calciumMg", "ironM
  * os alimentos ja pesquisados nesta sessao — por isso a cobertura por
  * nutriente e mostrada, nunca falsa precisao).
  */
-export function MealPlanNutritionSummary({ meals, target }: { meals: SummaryMeal[]; target: NutrientTarget }) {
+function useMealPlanNutritionData({ meals, target }: { meals: SummaryMeal[]; target: NutrientTarget }) {
   const [refByText, setRefByText] = useState<Record<string, MacroReferenceFood>>({});
   const [refById, setRefById] = useState<Record<string, MacroReferenceFood>>({});
   const [measuresById, setMeasuresById] = useState<Record<string, HouseholdMeasureOption>>({});
@@ -156,8 +157,85 @@ export function MealPlanNutritionSummary({ meals, target }: { meals: SummaryMeal
   const prescribed = roundedNutrients(result.total.values);
   const comparisons = useMemo(() => compareTargetVsPrescribed(target, result.total.values), [target, result.total.values]);
 
-  const hasTarget = comparisons.length > 0;
-  const totalItems = result.total.coverage.energyKcal.total;
+  return {
+    result,
+    prescribed,
+    comparisons,
+    hasTarget: comparisons.length > 0,
+    totalItems: result.total.coverage.energyKcal.total,
+  };
+}
+
+export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: SummaryMeal[]; target: NutrientTarget }) {
+  const { result, prescribed, totalItems } = useMealPlanNutritionData({ meals, target });
+
+  if (!totalItems) {
+    return (
+      <div className="rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-4">
+        <p className="brand-kicker mb-1">Resumo nutricional</p>
+        <p className="text-sm text-[#75675E]">Adicione alimentos para acompanhar macros e micronutrientes.</p>
+      </div>
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-3 shadow-[0_10px_32px_rgba(58,48,40,0.05)] lg:p-4" aria-live="polite">
+      <details className="group lg:open" open>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+          <div>
+            <p className="brand-kicker mb-1">Resumo nutricional</p>
+            <h3 className="font-serif text-lg font-semibold text-[#3A3028]">Plano do dia</h3>
+          </div>
+          <span className="rounded-full border border-[#EAD8C2] px-2.5 py-1 text-[11px] font-semibold text-[#8C6E52] lg:hidden">abrir</span>
+        </summary>
+
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+            {PRIMARY_NUTRIENTS.map((key) => {
+              const value = prescribed[key];
+              return (
+                <div key={key} className="rounded-lg border border-[#EDE1D6] bg-[#FAF7F2]/70 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">{NUTRIENT_LABELS[key]}</p>
+                  <p className="text-lg font-semibold text-[#3A3028]">{value === null ? "sem dado" : `${value} ${NUTRIENT_UNITS[key]}`}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {result.quality.total > 0 && (
+            <p className="rounded-lg bg-[#F5FAF0] px-3 py-2 text-xs leading-5 text-[#607A56]">
+              <span className="font-semibold">{result.quality.highConfidence}/{result.quality.total} itens</span> com alta confiança
+              {result.quality.estimated > 0 && <span> · {result.quality.estimated} estimado{result.quality.estimated > 1 ? "s" : ""}</span>}
+              {result.quality.unresolved > 0 && <span> · {result.quality.unresolved} não calculado{result.quality.unresolved > 1 ? "s" : ""}</span>}
+            </p>
+          )}
+
+          <details className="rounded-lg border border-[#EDE1D6] bg-white p-3">
+            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">Micronutrientes</summary>
+            <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-1">
+              {MICRONUTRIENTS.map((key) => {
+                const coverage = result.total.coverage[key];
+                const value = prescribed[key];
+                return (
+                  <div key={key} className="rounded-lg border border-[#F0E2D6] px-2.5 py-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9A6F5E]">{NUTRIENT_LABELS[key]}</p>
+                    <p className="text-sm font-semibold text-[#3A3028]">{value === null ? "sem dado" : `${value} ${NUTRIENT_UNITS[key]}`}</p>
+                    {coverage.known < coverage.total && (
+                      <p className="text-[10px] text-[#9A978A]">cobertura {Math.round((coverage.known / coverage.total) * 100)}%</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        </div>
+      </details>
+    </section>
+  );
+}
+
+export function MealPlanNutritionSummary({ meals, target }: { meals: SummaryMeal[]; target: NutrientTarget }) {
+  const { result, prescribed, comparisons, hasTarget, totalItems } = useMealPlanNutritionData({ meals, target });
 
   if (!totalItems) return null;
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Beef, ChevronDown, ChevronUp, Copy, Flame, Plus, Save, Sparkles, Trash2, Utensils, Wheat } from "lucide-react";
+import { AlertTriangle, Beef, ChevronDown, ChevronUp, Copy, Flame, MoreHorizontal, Plus, RefreshCw, Save, Sparkles, Trash2, Utensils, Wheat } from "lucide-react";
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
 import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
 import type { FoodPortion } from "@/lib/repositories/food-portions";
@@ -189,6 +189,7 @@ export function MealItemsEditor({
   const [aiModalMealIndex, setAiModalMealIndex] = useState<number | null>(null);
   const [portalReady, setPortalReady] = useState(false);
   const [measuresByFood, setMeasuresByFood] = useState<Record<string, FoodPortion[]>>({});
+  const [openMealMenu, setOpenMealMenu] = useState<number | null>(null);
 
   useEffect(() => {
     setPortalReady(true);
@@ -388,6 +389,14 @@ export function MealItemsEditor({
       : meal));
   }
 
+  function focusFoodField(mealIndex: number, itemIndex: number) {
+    const key = `${mealIndex}:${itemIndex}`;
+    setActiveFoodField(key);
+    setHighlightedIndex(0);
+    setFoodSearch({ key, query: meals[mealIndex]?.items[itemIndex]?.food ?? "" });
+    window.requestAnimationFrame(() => document.getElementById(`meal-food-${mealIndex}-${itemIndex}`)?.focus());
+  }
+
   function selectSuggestion(mealIndex: number, itemIndex: number, suggestion: FoodSuggestion) {
     updateMealItem(mealIndex, itemIndex, {
       food: suggestion.descricao,
@@ -574,7 +583,7 @@ export function MealItemsEditor({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Refeicoes</h3>
         <div className="grid gap-2 sm:flex">
@@ -590,16 +599,20 @@ export function MealItemsEditor({
       </div>
 
       {meals.map((meal, mealIndex) => (
-        <article key={mealIndex} className="overflow-hidden rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_8px_28px_rgba(58,48,40,0.04)]">
-          <div className="flex flex-col gap-3 border-b border-[#EDE1D6] bg-[#FBF7F1] p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#EAF0E4] text-[#607A56]"><Utensils className="h-4 w-4" /></div>
+        <article key={mealIndex} className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_8px_24px_rgba(58,48,40,0.035)]">
+          <div className="relative flex flex-col gap-2 border-b border-[#EDE1D6] bg-[#FBF7F1] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#EAF0E4] text-[#607A56]"><Utensils className="h-4 w-4" /></div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-[#3A3028]">{meal.name || `Refeicao ${mealIndex + 1}`}</p>
                 <p className="text-xs text-[#75675E]">{meal.items.filter((item) => item.food.trim()).length} alimento(s) - {mealMacros[mealIndex]?.kcal ?? 0} kcal estimadas</p>
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2 self-end sm:self-auto">
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5 self-end sm:self-auto">
+              <button type="button" onClick={() => updateMeal(mealIndex, { items: [...meal.items, { food: "", quantity: "", unit: "", notes: "" }] })} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]">
+                <Plus className="h-4 w-4" />
+                Alimento
+              </button>
               <div className="flex items-center gap-1 rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-0.5">
                 <button type="button" onClick={() => onChange(reorderArray(meals, mealIndex, -1))} disabled={mealIndex === 0} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label={`Mover ${meal.name || "refeicao"} para cima`} title="Mover refeicao para cima">
                   <ChevronUp className="h-4 w-4" />
@@ -611,37 +624,54 @@ export function MealItemsEditor({
               <button type="button" onClick={() => onChange(duplicateMealAt(meals, mealIndex))} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#607A56] hover:bg-[#EAF0E4]" aria-label={`Duplicar ${meal.name || "refeicao"}`} title="Duplicar refeicao">
                 <Copy className="h-4 w-4" />
               </button>
-              <button type="button" onClick={() => setAiModalMealIndex(mealIndex)} disabled={!aiEnabled || aiLoadingMeal === mealIndex} title={aiEnabled ? "Sugerir itens com IA" : "Configure a IA em Dashboard > Inteligencia artificial"} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#8C5F50] transition hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
-                <Sparkles className="h-4 w-4" />
-                {aiLoadingMeal === mealIndex ? "Sugerindo..." : "Sugerir com IA"}
+              <button type="button" onClick={() => setOpenMealMenu((current) => current === mealIndex ? null : mealIndex)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] hover:bg-[#FBF7F1]" aria-label={`Mais ações para ${meal.name || "refeicao"}`} title="Mais ações">
+                <MoreHorizontal className="h-4 w-4" />
               </button>
-              <button type="button" onClick={() => openSaveMealAsRecipe(mealIndex)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]">
-                <Save className="h-4 w-4" />
-                Salvar como receita
-              </button>
-              <button type="button" onClick={() => onChange(meals.filter((_, index) => index !== mealIndex))} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-red-600 hover:bg-red-50" aria-label={`Remover ${meal.name || "refeicao"}`} title="Remover refeicao">
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {openMealMenu === mealIndex && (
+                <div className="absolute right-3 top-[calc(100%-4px)] z-20 w-56 rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_16px_40px_rgba(58,48,40,0.14)]">
+                  <button type="button" onClick={() => { setOpenMealMenu(null); setAiModalMealIndex(mealIndex); }} disabled={!aiEnabled || aiLoadingMeal === mealIndex} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#8C5F50] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
+                    <Sparkles className="h-4 w-4" />
+                    {aiLoadingMeal === mealIndex ? "Sugerindo..." : "Sugerir com IA"}
+                  </button>
+                  <button type="button" onClick={() => { setOpenMealMenu(null); openSaveMealAsRecipe(mealIndex); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]">
+                    <Save className="h-4 w-4" />
+                    Salvar como receita
+                  </button>
+                  <button type="button" onClick={() => { setOpenMealMenu(null); onChange(meals.filter((_, index) => index !== mealIndex)); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">
+                    <Trash2 className="h-4 w-4" />
+                    Excluir refeição
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-          <div className="p-4">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_130px]">
-              <input value={meal.name} onChange={(event) => updateMeal(mealIndex, { name: event.target.value })} className="brand-input" placeholder="Nome da refeicao" />
-              <input value={meal.suggested_time ?? ""} onChange={(event) => updateMeal(mealIndex, { suggested_time: event.target.value })} className="brand-input" placeholder="Horario" />
+          <div className="p-3">
+            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_118px]">
+              <label className="sr-only" htmlFor={`meal-name-${mealIndex}`}>Nome da refeição</label>
+              <input id={`meal-name-${mealIndex}`} value={meal.name} onChange={(event) => updateMeal(mealIndex, { name: event.target.value })} className="brand-input h-10" placeholder="Nome da refeicao" />
+              <label className="sr-only" htmlFor={`meal-time-${mealIndex}`}>Horário</label>
+              <input id={`meal-time-${mealIndex}`} value={meal.suggested_time ?? ""} onChange={(event) => updateMeal(mealIndex, { suggested_time: event.target.value })} className="brand-input h-10" placeholder="Horario" />
             </div>
-            <textarea value={meal.notes ?? ""} onChange={(event) => updateMeal(mealIndex, { notes: event.target.value })} className="brand-input mt-3 min-h-20 resize-y" placeholder="Observacoes da refeicao" />
-            <div className="mt-3 space-y-2">
+            <label className="sr-only" htmlFor={`meal-notes-${mealIndex}`}>Observações da refeição</label>
+            <textarea id={`meal-notes-${mealIndex}`} value={meal.notes ?? ""} onChange={(event) => updateMeal(mealIndex, { notes: event.target.value })} className="brand-input mt-2 min-h-14 resize-y" placeholder="Observacoes da refeicao" />
+            <div className="mt-2 space-y-1.5">
               {meal.items.map((item, itemIndex) => {
                 const key = `${mealIndex}:${itemIndex}`;
+                const foodInputId = `meal-food-${mealIndex}-${itemIndex}`;
+                const quantityInputId = `meal-quantity-${mealIndex}-${itemIndex}`;
+                const measureInputId = `meal-measure-${mealIndex}-${itemIndex}`;
+                const grams = itemResolutions[key]?.quantity.grams;
                 const suggestions = foodSuggestions[key] ?? [];
                 const dropdownOpen = activeFoodField === key && suggestions.length > 0;
                 const showEmptyState = activeFoodField === key && !dropdownOpen && searchLoadingKey !== key && item.food.trim().length >= 2;
                 const showLoading = activeFoodField === key && searchLoadingKey === key;
                 const listboxId = `food-suggestions-${key}`;
                 return (
-                <div key={itemIndex} className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_110px_90px_auto]">
+                <div key={itemIndex} className="grid min-w-0 gap-1.5 rounded-lg border border-transparent bg-white/70 p-1.5 2xl:grid-cols-[minmax(0,1fr)_210px_auto] 2xl:items-start">
                   <div className="relative min-w-0">
+                    <label className="sr-only" htmlFor={foodInputId}>Alimento</label>
                     <input
+                      id={foodInputId}
                       role="combobox"
                       aria-expanded={dropdownOpen}
                       aria-autocomplete="list"
@@ -681,7 +711,7 @@ export function MealItemsEditor({
                         }
                       }}
                       className="brand-input"
-                      placeholder="Digite para buscar na TACO"
+                      placeholder="Buscar alimento"
                     />
                     {item.ai_suggested && (
                       <span className="mt-1 inline-flex rounded-full bg-[#FFF7F3] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">
@@ -742,39 +772,58 @@ export function MealItemsEditor({
                       </div>
                     )}
                   </div>
-                  <input aria-label="Quantidade" value={item.quantity ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { quantity: event.target.value, resolved_grams_snapshot: null, quantity_resolution_snapshot: null })} className="brand-input" placeholder="Qtd." />
-                  {item.food_ref_id ? (
-                    <select
-                      aria-label="Medida"
-                      value={item.household_measure_id ?? "__grams__"}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        updateMealItem(mealIndex, itemIndex, value === "__grams__"
-                          ? { household_measure_id: null, unit: "g", resolved_grams_snapshot: null, quantity_resolution_snapshot: null }
-                          : { household_measure_id: value, unit: null, resolved_grams_snapshot: null, quantity_resolution_snapshot: null });
-                      }}
-                      className="brand-input"
-                      title="Medida especifica do alimento — quando disponivel, o calculo usa o peso exato cadastrado em vez de uma aproximacao generica."
-                    >
-                      <option value="__grams__">Gramas (g)</option>
-                      {measureOptionsFor(item).map((measure) => (
-                        <option key={measure.id} value={measure.id}>{measure.description}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input aria-label="Unidade" value={item.unit ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { unit: event.target.value, resolved_grams_snapshot: null, quantity_resolution_snapshot: null })} className="brand-input" placeholder="Un." />
-                  )}
+                  <div>
+                    <div className="grid grid-cols-[82px_minmax(0,1fr)] gap-1.5">
+                      <label className="sr-only" htmlFor={quantityInputId}>Quantidade</label>
+                      <input id={quantityInputId} aria-label="Quantidade" value={item.quantity ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { quantity: event.target.value, resolved_grams_snapshot: null, quantity_resolution_snapshot: null })} className="brand-input h-10" placeholder="Qtd." />
+                      {item.food_ref_id ? (
+                        <>
+                          <label className="sr-only" htmlFor={measureInputId}>Medida</label>
+                          <select
+                            id={measureInputId}
+                            aria-label="Medida"
+                            value={item.household_measure_id ?? "__grams__"}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              updateMealItem(mealIndex, itemIndex, value === "__grams__"
+                                ? { household_measure_id: null, unit: "g", resolved_grams_snapshot: null, quantity_resolution_snapshot: null }
+                                : { household_measure_id: value, unit: null, resolved_grams_snapshot: null, quantity_resolution_snapshot: null });
+                            }}
+                            className="brand-input h-10"
+                            title="Medida especifica do alimento — quando disponivel, o calculo usa o peso exato cadastrado em vez de uma aproximacao generica."
+                          >
+                            <option value="__grams__">Gramas (g)</option>
+                            {measureOptionsFor(item).map((measure) => (
+                              <option key={measure.id} value={measure.id}>{measure.description}</option>
+                            ))}
+                          </select>
+                        </>
+                      ) : (
+                        <>
+                          <label className="sr-only" htmlFor={measureInputId}>Unidade</label>
+                          <input id={measureInputId} aria-label="Unidade" value={item.unit ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { unit: event.target.value, resolved_grams_snapshot: null, quantity_resolution_snapshot: null })} className="brand-input h-10" placeholder="Un." />
+                        </>
+                      )}
+                    </div>
+                    {typeof grams === "number" && Number.isFinite(grams) && grams > 0 && (
+                      <p className="mt-1 text-[10px] font-medium text-[#9A8B80]">≈ {Math.round(grams * 10) / 10} g</p>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center justify-end gap-1">
-                    <button type="button" onClick={() => updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, -1) })} disabled={itemIndex === 0} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Mover alimento para cima" title="Mover para cima">
+                    <button type="button" onClick={() => focusFoodField(mealIndex, itemIndex)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]" aria-label="Substituir alimento" title="Substituir alimento">
+                      <RefreshCw className="h-4 w-4" />
+                      <span>Substituir</span>
+                    </button>
+                    <button type="button" onClick={() => updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, -1) })} disabled={itemIndex === 0} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Mover alimento para cima" title="Mover para cima">
                       <ChevronUp className="h-4 w-4" />
                     </button>
-                    <button type="button" onClick={() => updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, 1) })} disabled={itemIndex === meal.items.length - 1} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Mover alimento para baixo" title="Mover para baixo">
+                    <button type="button" onClick={() => updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, 1) })} disabled={itemIndex === meal.items.length - 1} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Mover alimento para baixo" title="Mover para baixo">
                       <ChevronDown className="h-4 w-4" />
                     </button>
-                    <button type="button" onClick={() => updateMeal(mealIndex, { items: duplicateItemAt(meal.items, itemIndex) })} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#607A56] hover:bg-[#EAF0E4]" aria-label="Duplicar alimento" title="Duplicar alimento">
+                    <button type="button" onClick={() => updateMeal(mealIndex, { items: duplicateItemAt(meal.items, itemIndex) })} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#607A56] hover:bg-[#EAF0E4]" aria-label="Duplicar alimento" title="Duplicar alimento">
                       <Copy className="h-4 w-4" />
                     </button>
-                    <button type="button" onClick={() => updateMeal(mealIndex, { items: meal.items.filter((_, index) => index !== itemIndex) })} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-red-600 hover:bg-red-50" aria-label="Remover alimento" title="Remover alimento">
+                    <button type="button" onClick={() => updateMeal(mealIndex, { items: meal.items.filter((_, index) => index !== itemIndex) })} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-red-600 hover:bg-red-50" aria-label="Remover alimento" title="Remover alimento">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
