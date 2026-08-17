@@ -403,7 +403,12 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
       notes,
       source_meal_id,
     })),
-    substitutions: (substitutionsByPlan.get(row.id) ?? []).map(({ id, base_food, option_food, quantity, unit, notes }) => ({ id, base_food, option_food, quantity, unit, notes })),
+    // Dedupe tambem na leitura — defende dado legado (planos gravados antes
+    // do dedupe existir no caminho de escrita) sem precisar de uma migracao
+    // de limpeza; mantem a primeira ocorrencia (sort_order menor).
+    substitutions: dedupeMealPlanSubstitutions(
+      (substitutionsByPlan.get(row.id) ?? []).map(({ id, base_food, option_food, quantity, unit, notes }) => ({ id, base_food, option_food, quantity, unit, notes }))
+    ),
     supplements: (supplementsByPlan.get(row.id) ?? []).map(({ id, name, dosage, unit, instructions, notes }) => ({ id, name, dosage, unit, instructions, notes })),
   }));
 }
@@ -860,7 +865,15 @@ function buildMealPlanDetailStatements(
       order,
       now,
     }));
-  const substitutionRows = substitutions.filter((item) => item.base_food.trim() && item.option_food.trim()).map((item, order) => ({
+  // Dedupe aqui, no unico ponto que grava substituicoes de verdade (usado por
+  // createMealPlan E updateMealPlan) — antes disso o dedupe so existia em
+  // createMealPlanFromTemplates (que combina substituicoes de um template
+  // DIETA com templates SUBSTITUICAO, fonte real da duplicata), deixando
+  // qualquer outro caminho de escrita (editor admin, propostas de IA) livre
+  // pra persistir duplicata se recebesse uma.
+  const substitutionRows = dedupeMealPlanSubstitutions(
+    substitutions.filter((item) => item.base_food.trim() && item.option_food.trim())
+  ).map((item, order) => ({
     id: crypto.randomUUID(), planId, baseFood: item.base_food, optionFood: item.option_food, quantity: item.quantity ?? null, unit: item.unit ?? null, notes: item.notes ?? null, order, now,
   }));
   const supplementRows = supplements.filter((item) => item.name.trim()).map((item, order) => ({
