@@ -35,13 +35,8 @@ describe("capability manifest", () => {
     }
   });
 
-  it("reports document, configuration and admin as still uncovered domains (food/patient/appointment/dashboard/request/finance covered as of FASE 1B)", () => {
+  it("todos os domínios do capability manifest têm pelo menos uma tool (FASE 5 fechou document/configuration/admin, os últimos descobertos)", () => {
     const uncovered = listUncoveredDomains();
-    expect(uncovered).toContain("document");
-    expect(uncovered).toContain("configuration");
-    expect(uncovered).toContain("admin");
-    expect(uncovered).not.toContain("finance");
-    expect(uncovered).not.toContain("dashboard");
-    expect(uncovered).not.toContain("appointment");
+    expect(uncovered).toEqual([]);
   });
 });

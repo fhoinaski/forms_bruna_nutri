@@ -37,6 +37,24 @@ import {
   PROPOSE_MARK_PAYMENT_RECEIVED_TOOL_NAME,
   type ProposeMarkPaymentReceivedOutput,
 } from "@/lib/ai/agents/finance/finance-write-agent";
+import {
+  PROPOSE_UPDATE_SAFE_SUBSTITUTIONS_SETTING_TOOL_NAME,
+  type ProposeUpdateSafeSubstitutionsSettingOutput,
+} from "@/lib/ai/agents/system/configuration-agent";
+import {
+  PROPOSE_CLINICAL_MARKER_UPSERT_TOOL_NAME,
+  PROPOSE_RESOLVE_CLINICAL_MARKER_TOOL_NAME,
+  type ProposeClinicalMarkerUpsertInput,
+  type ProposeResolveClinicalMarkerInput,
+} from "@/lib/ai/agents/clinical/clinical-markers-agent";
+import {
+  PROPOSE_CONSULTATION_NOTE_TOOL_NAME,
+  type ProposeConsultationNoteInput,
+} from "@/lib/ai/agents/clinical/consultation-agent";
+import {
+  PROPOSE_ACTIVATE_MEAL_PLAN_TOOL_NAME,
+  type ProposeActivateMealPlanOutput,
+} from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 
 /**
  * Substitui a cadeia de 9 `if`s quase identicos que existia em
@@ -303,6 +321,65 @@ const BUILDERS: Record<string, ProposalBuilder> = {
       previousStatus: output.previousStatus,
       paidAtDisplay: output.paidAtDisplay,
       notes: output.notes,
+    };
+  },
+
+  // ── FASE 5 (document/configuration/admin) ──────────────────────────────
+
+  [PROPOSE_UPDATE_SAFE_SUBSTITUTIONS_SETTING_TOOL_NAME]: (_input, _ctx, toolOutput) => {
+    const output = toolOutput as ProposeUpdateSafeSubstitutionsSettingOutput | undefined;
+    if (!output || "error" in output) return null;
+    return {
+      kind: "update_safe_substitutions_setting",
+      previousEnabled: output.previousEnabled,
+      newEnabled: output.newEnabled,
+    };
+  },
+
+  // ── FASE 6 (writes clínicos controlados) ────────────────────────────────
+
+  [PROPOSE_CLINICAL_MARKER_UPSERT_TOOL_NAME]: (input, ctx) => {
+    if (!ctx.clientId) return null;
+    const typed = input as ProposeClinicalMarkerUpsertInput;
+    return {
+      kind: "clinical_marker_upsert",
+      clientId: ctx.clientId,
+      markerType: typed.markerType,
+      code: typed.code,
+      severity: typed.severity ?? "unknown",
+      status: typed.status ?? "ACTIVE",
+      evidenceText: typed.evidenceText ?? null,
+    };
+  },
+
+  [PROPOSE_RESOLVE_CLINICAL_MARKER_TOOL_NAME]: (input, ctx) => {
+    if (!ctx.clientId) return null;
+    const typed = input as ProposeResolveClinicalMarkerInput;
+    return { kind: "resolve_clinical_marker", clientId: ctx.clientId, markerType: typed.markerType, code: typed.code };
+  },
+
+  [PROPOSE_CONSULTATION_NOTE_TOOL_NAME]: (input, ctx) => {
+    if (!ctx.clientId || !ctx.consultationSessionId) return null;
+    const typed = input as ProposeConsultationNoteInput;
+    if (!typed.observationText?.trim()) return null;
+    return {
+      kind: "consultation_note",
+      clientId: ctx.clientId,
+      consultationSessionId: ctx.consultationSessionId,
+      observationText: typed.observationText,
+    };
+  },
+
+  [PROPOSE_ACTIVATE_MEAL_PLAN_TOOL_NAME]: (_input, ctx, toolOutput) => {
+    const output = toolOutput as ProposeActivateMealPlanOutput | undefined;
+    if (!output || "error" in output) return null;
+    if (!ctx.clientId || ctx.clientId !== output.clientId) return null;
+    return {
+      kind: "activate_meal_plan",
+      clientId: output.clientId,
+      mealPlanId: output.mealPlanId,
+      baseVersion: output.baseVersion,
+      mealPlanTitle: output.mealPlanTitle,
     };
   },
 };

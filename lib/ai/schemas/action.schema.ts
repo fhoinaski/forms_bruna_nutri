@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  CLINICAL_MARKER_TYPES,
+  CLINICAL_MARKER_SEVERITIES,
+  FOOD_RESTRICTION_CODES,
+  CLINICAL_FLAG_CODES,
+} from "@/lib/clinical/structured-markers";
 
 /**
  * Substitui o `Record<string, unknown>` solto que a rota de chat usava para
@@ -387,6 +393,90 @@ export const markPaymentReceivedActionSchema = z.object({
   ...actionEnvelopeFields,
 });
 
+// ── update_safe_substitutions_setting (FASE 5 — safe config write) ───────
+//
+// Unico write de configuracao desta fase: liga/desliga a feature flag
+// operacional de substituicoes seguras no portal do paciente. Nunca toca
+// provider/model/api_key/system prompts (fora de escopo — mais estrutural/
+// sensivel). `previousEnabled` e o snapshot no momento da proposta, checado
+// de novo no confirm (mesmo padrao de staleness das outras kinds).
+
+export const updateSafeSubstitutionsSettingActionSchema = z.object({
+  kind: z.literal("update_safe_substitutions_setting"),
+  previousEnabled: z.boolean(),
+  newEnabled: z.boolean(),
+  ...actionEnvelopeFields,
+});
+
+// ── clinical_marker_upsert / resolve_clinical_marker (FASE 6 — writes clínicos) ──
+//
+// Vocabulario FECHADO (lib/clinical/structured-markers.ts) — o modelo so
+// pode escolher `markerType`/`code` dentre os valores reais ja usados pela
+// tela de restricoes estruturadas, nunca texto livre. Isso torna a
+// ambiguidade MILK/LACTOSE ou WHEAT/GLUTEN estruturalmente impossivel de
+// "resolver sozinho": o schema obriga uma escolha explicita, e as instrucoes
+// de prompt (clinical-markers-agent.ts) mandam perguntar quando o relato nao
+// deixar claro qual dos dois. `clientId` NUNCA vem do modelo — sempre do
+// contexto ambiente (ProposalBuilderContext.clientId), mesmo padrao de
+// nutrition_record/client_protocol/new_protocol.
+
+const clinicalMarkerTypeSchema = z.enum(CLINICAL_MARKER_TYPES);
+const clinicalMarkerCodeSchema = z.enum([...FOOD_RESTRICTION_CODES, ...CLINICAL_FLAG_CODES]);
+const clinicalMarkerSeveritySchema = z.enum(CLINICAL_MARKER_SEVERITIES);
+
+export const clinicalMarkerUpsertActionSchema = z.object({
+  kind: z.literal("clinical_marker_upsert"),
+  clientId: z.string().min(1),
+  markerType: clinicalMarkerTypeSchema,
+  code: clinicalMarkerCodeSchema,
+  severity: clinicalMarkerSeveritySchema,
+  status: z.enum(["ACTIVE", "SUSPECTED"]),
+  evidenceText: z.string().max(500).nullable().optional(),
+  ...actionEnvelopeFields,
+});
+
+export const resolveClinicalMarkerActionSchema = z.object({
+  kind: z.literal("resolve_clinical_marker"),
+  clientId: z.string().min(1),
+  markerType: clinicalMarkerTypeSchema,
+  code: clinicalMarkerCodeSchema,
+  ...actionEnvelopeFields,
+});
+
+// ── consultation_note (FASE 6 — observação livre da consulta) ────────────
+//
+// Distinto de `consultation_summary` (resumo ESTRUTURADO pos-consulta): isto
+// e uma observacao de TEXTO LIVRE anexada durante a consulta
+// (`consultation_sessions.notes`). O handler sempre ANEXA ao texto atual no
+// momento da confirmacao (nunca sobrescreve) — por isso nao ha necessidade
+// de um snapshot de "previousNotes" para checar staleness: nao ha como essa
+// operacao perder conteudo concorrente, so no maximo intercalar a ordem.
+
+export const consultationNoteActionSchema = z.object({
+  kind: z.literal("consultation_note"),
+  clientId: z.string().min(1),
+  consultationSessionId: z.string().min(1),
+  observationText: z.string().min(1).max(2000),
+  ...actionEnvelopeFields,
+});
+
+// ── activate_meal_plan (FASE 6 — ativação/publicação clínica do plano) ───
+//
+// Distinto de `meal_plan_change` (edicao de conteudo): aqui SO o campo
+// `status` muda (draft -> active), reusando updateMealPlan/optimistic
+// concurrency/versionamento identicos aos content edits — nunca um caminho
+// paralelo. `baseVersion` e revalidado no confirm exatamente como em
+// meal_plan_change.baseVersion.
+
+export const activateMealPlanActionSchema = z.object({
+  kind: z.literal("activate_meal_plan"),
+  clientId: z.string().min(1),
+  mealPlanId: z.string().min(1),
+  baseVersion: z.number().int().positive(),
+  mealPlanTitle: z.string(),
+  ...actionEnvelopeFields,
+});
+
 export const proposedActionSchema = z.discriminatedUnion("kind", [
   nutritionRecordActionSchema,
   preAnalysisActionSchema,
@@ -406,6 +496,11 @@ export const proposedActionSchema = z.discriminatedUnion("kind", [
   cancelAppointmentActionSchema,
   resolvePatientRequestActionSchema,
   markPaymentReceivedActionSchema,
+  updateSafeSubstitutionsSettingActionSchema,
+  clinicalMarkerUpsertActionSchema,
+  resolveClinicalMarkerActionSchema,
+  consultationNoteActionSchema,
+  activateMealPlanActionSchema,
 ]);
 
 export type ProposedAction = z.infer<typeof proposedActionSchema>;

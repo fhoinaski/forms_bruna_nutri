@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getMealPlanById, type MealPlanMealPayload, type MealPlanItemPayload, type MealPlanPayload } from "@/lib/repositories/meal-plans";
+import { getMealPlanById, getClientMealPlans, type MealPlanMealPayload, type MealPlanItemPayload, type MealPlanPayload } from "@/lib/repositories/meal-plans";
 import { searchTacoFoods, getTacoFoodByNumber, findBestTacoFood, TACO_REFERENCES } from "@/lib/nutrition/taco";
 import { resolveFoodItemMacros, roundedMacros, findFoodReferenceByIdentity, findBestFoodReference, type MacroReferenceFood } from "@/lib/nutrition/macros";
 import type { HouseholdMeasureOption, QuantityResolution } from "@/lib/nutrition/quantity-resolution";
@@ -633,6 +633,67 @@ export async function executeFindFoodEquivalents(input: FindFoodEquivalentsInput
     })),
   };
 }
+
+// ── get_client_meal_plans (READ, FASE 6) ─────────────────────────────────
+//
+// Lista TODOS os planos do cliente (draft/active/archived) — diferente de
+// getPatientActivePlan (so o ativo). Necessario para o fluxo de ativacao:
+// o modelo precisa descobrir o id/versao de um plano DRAFT antes de propor
+// ativa-lo, ja que ele nunca aparece como "plano ativo" no contexto.
+
+export const GET_CLIENT_MEAL_PLANS_TOOL_NAME = "getClientMealPlans";
+export const getClientMealPlansInputSchema = z.object({ clientId: z.string().min(1).max(120) }).strict();
+export type GetClientMealPlansInput = z.infer<typeof getClientMealPlansInputSchema>;
+
+export async function executeGetClientMealPlans(input: GetClientMealPlansInput) {
+  const plans = await getClientMealPlans(input.clientId);
+  return {
+    plans: plans.map((plan) => ({
+      mealPlanId: plan.id,
+      title: plan.title,
+      status: plan.status,
+      version: plan.version,
+    })),
+  };
+}
+
+// ── propose_activate_meal_plan (clinical write, FASE 6) ─────────────────
+//
+// Distinto de meal_plan_change (edicao de conteudo): so muda `status`
+// draft -> active, reusando updateMealPlan/optimistic concurrency/
+// versionamento identicos (nenhum caminho paralelo). O plano precisa
+// existir e NAO estar ja ativo — revalidado de novo no confirm.
+
+export const PROPOSE_ACTIVATE_MEAL_PLAN_TOOL_NAME = "proposeActivateMealPlan";
+export const proposeActivateMealPlanInputSchema = z.object({
+  mealPlanId: z.string().min(1),
+  baseVersion: z.number().int().positive(),
+}).strict();
+export type ProposeActivateMealPlanInput = z.infer<typeof proposeActivateMealPlanInputSchema>;
+
+export type ProposeActivateMealPlanOutput =
+  | { error: string }
+  | { clientId: string; mealPlanId: string; baseVersion: number; mealPlanTitle: string };
+
+export async function executeProposeActivateMealPlan(input: ProposeActivateMealPlanInput): Promise<ProposeActivateMealPlanOutput> {
+  const plan = await getMealPlanById(input.mealPlanId);
+  if (!plan) return { error: "Plano alimentar não encontrado. Peça para eu reler os planos do cliente." };
+  if (plan.version !== input.baseVersion) {
+    return { error: "O plano foi alterado desde a última leitura. Peça para eu reler o plano atual antes de propor a ativação." };
+  }
+  if (plan.status === "active") return { error: "Esse plano já está ativo." };
+  return { clientId: plan.client_id, mealPlanId: plan.id, baseVersion: plan.version, mealPlanTitle: plan.title };
+}
+
+export const MEAL_PLAN_ACTIVATION_ASSISTANT_INSTRUCTIONS = `
+Voce tambem pode propor a ATIVACAO de um plano alimentar (torna-lo o plano vigente do cliente, arquivando o que estava ativo antes) — isto e distinto de editar o conteudo do plano, e e uma acao clinica mais sensivel.
+Como fazer isso:
+- Se voce nao sabe o id/versao do plano que a nutricionista quer ativar (ex.: um plano rascunho recem-criado), use ${GET_CLIENT_MEAL_PLANS_TOOL_NAME} primeiro para listar os planos do cliente e identificar o correto pelo titulo/status.
+- So proponha ativacao quando o pedido for explicito ("ativa esse plano", "publica esse plano", "faz esse virar o plano oficial dela") — nunca ative um plano automaticamente so por ele ter acabado de ser criado ou editado.
+- Use ${PROPOSE_ACTIVATE_MEAL_PLAN_TOOL_NAME} informando mealPlanId e baseVersion exatamente como veio da leitura mais recente.
+- Se a ferramenta devolver "error" (plano nao encontrado, versao desatualizada, ja ativo), explique o problema em texto simples e nao insista.
+- Esta e sempre uma PROPOSTA — mostre o titulo do plano e avise que o plano ativo atual (se houver) sera arquivado, antes de pedir confirmacao.
+`.trim();
 
 export const MEAL_PLAN_CHANGE_ASSISTANT_INSTRUCTIONS = `
 Voce tambem pode propor alteracoes estruturadas no plano alimentar ativo do cliente atual — isto e uma proposta clinica real, nunca mais texto solto dentro do prontuario. Cobre: adicionar/renomear/duplicar/remover refeicao, mudar horario de refeicao, reordenar refeicoes, adicionar/substituir/remover/duplicar um alimento, mudar quantidade/medida de um item, reordenar itens de uma refeicao.

@@ -92,6 +92,12 @@ import {
   proposeMealPlanChangeInputSchema,
   getMealPlanNutritionInputSchema,
   findFoodEquivalentsInputSchema,
+  GET_CLIENT_MEAL_PLANS_TOOL_NAME,
+  PROPOSE_ACTIVATE_MEAL_PLAN_TOOL_NAME,
+  executeGetClientMealPlans,
+  executeProposeActivateMealPlan,
+  getClientMealPlansInputSchema,
+  proposeActivateMealPlanInputSchema,
 } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import {
   GET_MY_MEAL_PLAN_TOOL_NAME,
@@ -171,6 +177,30 @@ import {
   proposeResolvePatientRequestInputSchema,
 } from "@/lib/ai/agents/clients/patient-request-write-agent";
 import {
+  GET_DOCUMENT_TEMPLATES_TOOL_NAME,
+  GET_PATIENT_DOCUMENT_LINKS_TOOL_NAME,
+  executeGetDocumentTemplates,
+  executeGetPatientDocumentLinks,
+  getDocumentTemplatesInputSchema,
+  getPatientDocumentLinksInputSchema,
+} from "@/lib/ai/agents/documents/document-agent";
+import {
+  GET_AI_SETTINGS_TOOL_NAME,
+  PROPOSE_UPDATE_SAFE_SUBSTITUTIONS_SETTING_TOOL_NAME,
+  executeGetAiSettings,
+  executeProposeUpdateSafeSubstitutionsSetting,
+  getAiSettingsInputSchema,
+  proposeUpdateSafeSubstitutionsSettingInputSchema,
+} from "@/lib/ai/agents/system/configuration-agent";
+import {
+  GET_SYSTEM_HEALTH_TOOL_NAME,
+  GET_AUDIT_LOG_SUMMARY_TOOL_NAME,
+  executeGetSystemHealth,
+  executeGetAuditLogSummary,
+  getSystemHealthInputSchema,
+  getAuditLogSummaryInputSchema,
+} from "@/lib/ai/agents/system/admin-agent";
+import {
   PROPOSE_MARK_PAYMENT_RECEIVED_TOOL_NAME,
   executeProposeMarkPaymentReceived,
   proposeMarkPaymentReceivedInputSchema,
@@ -234,7 +264,15 @@ import {
   executeGetActiveProtocolForConsultation,
   executeGetPendingPatientItems,
   executeCompareAnthropometry,
+  PROPOSE_CONSULTATION_NOTE_TOOL_NAME,
+  proposeConsultationNoteInputSchema,
 } from "@/lib/ai/agents/clinical/consultation-agent";
+import {
+  PROPOSE_CLINICAL_MARKER_UPSERT_TOOL_NAME,
+  PROPOSE_RESOLVE_CLINICAL_MARKER_TOOL_NAME,
+  proposeClinicalMarkerUpsertInputSchema,
+  proposeResolveClinicalMarkerInputSchema,
+} from "@/lib/ai/agents/clinical/clinical-markers-agent";
 
 /**
  * Requisito de contexto para uma tool poder ser oferecida ao LLM na
@@ -545,6 +583,32 @@ defineTool({
   entityTypes: ["patient", "meal_plan", "food"],
   dataSensitivity: "clinical",
   execute: executeProposeMealPlanChange,
+});
+
+defineTool({
+  name: GET_CLIENT_MEAL_PLANS_TOOL_NAME,
+  description: "Lista TODOS os planos alimentares de um paciente (rascunho/ativo/arquivado) com id/titulo/status/versao — use para descobrir o id de um plano rascunho antes de propor ativa-lo (o plano rascunho nunca aparece como 'plano ativo' no contexto).",
+  inputSchema: getClientMealPlansInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "meal_plan",
+  entityTypes: ["patient", "meal_plan"],
+  dataSensitivity: "sensitive",
+  execute: executeGetClientMealPlans,
+});
+
+defineTool({
+  name: PROPOSE_ACTIVATE_MEAL_PLAN_TOOL_NAME,
+  description: "Registra uma proposta de ATIVAR um plano alimentar (torna-lo o plano vigente do cliente atual, arquivando o que estava ativo antes), para revisao humana antes de aplicar. Acao clinica distinta de editar conteudo — nunca aplicada automaticamente apos criar/editar um plano.",
+  inputSchema: proposeActivateMealPlanInputSchema,
+  risk: "clinical",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  domain: "meal_plan",
+  entityTypes: ["patient", "meal_plan"],
+  dataSensitivity: "clinical",
+  execute: executeProposeActivateMealPlan,
 });
 
 defineTool({
@@ -905,6 +969,92 @@ defineTool({
   execute: executeProposeMarkPaymentReceived,
 });
 
+// ── Documentos (FASE 5) — sem entidade "documento" persistida no sistema;
+// tools cobrem so o que existe de verdade: biblioteca de templates e links
+// reais de impressao (nunca PDF/documento inventado).
+
+defineTool({
+  name: GET_DOCUMENT_TEMPLATES_TOOL_NAME,
+  description: "Le a biblioteca de templates de dieta/suplementacao/substituicao (nao existe um 'template padrao' unico — varios podem estar ativos ao mesmo tempo).",
+  inputSchema: getDocumentTemplatesInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "document",
+  entityTypes: [],
+  dataSensitivity: "safe",
+  execute: executeGetDocumentTemplates,
+});
+
+defineTool({
+  name: GET_PATIENT_DOCUMENT_LINKS_TOOL_NAME,
+  description: "Le os links reais das paginas de impressao de um paciente (ficha do paciente, formulario de pre-consulta se existir) — este sistema nao gera PDF automaticamente, a nutricionista precisa abrir o link e imprimir/salvar pelo navegador.",
+  inputSchema: getPatientDocumentLinksInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "document",
+  entityTypes: ["patient"],
+  dataSensitivity: "sensitive",
+  execute: executeGetPatientDocumentLinks,
+});
+
+// ── Configuracao (FASE 5) — unica configuracao real do sistema e ai_settings.
+
+defineTool({
+  name: GET_AI_SETTINGS_TOOL_NAME,
+  description: "Le a configuracao real de IA do sistema (provedor, modelo, modo de pre-consulta, se as substituicoes seguras estao habilitadas) — a api_key nunca vem em claro, sempre mascarada.",
+  inputSchema: getAiSettingsInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "configuration",
+  entityTypes: [],
+  dataSensitivity: "safe",
+  execute: executeGetAiSettings,
+});
+
+defineTool({
+  name: PROPOSE_UPDATE_SAFE_SUBSTITUTIONS_SETTING_TOOL_NAME,
+  description: "Registra uma proposta de ativar/desativar a feature flag de substituicoes seguras no portal do paciente, para revisao humana antes de aplicar. Nunca altera provider/modelo/api_key/system prompts.",
+  inputSchema: proposeUpdateSafeSubstitutionsSettingInputSchema,
+  risk: "sensitive",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "configuration",
+  entityTypes: [],
+  dataSensitivity: "sensitive",
+  execute: executeProposeUpdateSafeSubstitutionsSetting,
+});
+
+// ── Admin (FASE 5) — somente leitura; sistema de admin unico, sem RBAC.
+
+defineTool({
+  name: GET_SYSTEM_HEALTH_TOOL_NAME,
+  description: "Le o status de saude do sistema (mesma checagem de app/api/health) — nunca afirme que o sistema esta ok sem chamar esta ferramenta.",
+  inputSchema: getSystemHealthInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "admin",
+  entityTypes: [],
+  dataSensitivity: "safe",
+  execute: executeGetSystemHealth,
+});
+
+defineTool({
+  name: GET_AUDIT_LOG_SUMMARY_TOOL_NAME,
+  description: "Le um resumo do audit log administrativo recente (acao, tipo de entidade, resultado, quando) — nunca inclui metadata bruta nem hash de IP.",
+  inputSchema: getAuditLogSummaryInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "admin",
+  entityTypes: [],
+  dataSensitivity: "sensitive",
+  execute: executeGetAuditLogSummary,
+});
+
 // ── Modo Consulta (FASE 1) — workspace clinico dedicado ──────────────────
 // So ativas quando o admin-orchestrator detecta consultationSessionId no
 // contexto (lib/ai/core/ai-orchestrator.ts) — nunca oferecidas fora do
@@ -998,6 +1148,49 @@ defineTool({
   contextRequirement: "client",
   domain: "clinical",
   entityTypes: ["patient", "appointment"],
+  dataSensitivity: "clinical",
+  execute: async (input) => input,
+});
+
+defineTool({
+  name: PROPOSE_CONSULTATION_NOTE_TOOL_NAME,
+  description: "Registra uma proposta de observacao de texto livre para anexar as notas da consulta em andamento (distinto do resumo estruturado de fim de consulta), para revisao humana antes de salvar. Acao clinica — nunca aplicada automaticamente.",
+  inputSchema: proposeConsultationNoteInputSchema,
+  risk: "clinical",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient", "appointment"],
+  dataSensitivity: "clinical",
+  execute: async (input) => input,
+});
+
+// ── Marcadores clinicos estruturados (FASE 6) — alergia/intolerancia/
+// restricao/sinalizacao. Vocabulario fechado (structured-markers.ts), nunca
+// texto livre — ver clinical-markers-agent.ts para o raciocinio completo.
+
+defineTool({
+  name: PROPOSE_CLINICAL_MARKER_UPSERT_TOOL_NAME,
+  description: "Registra uma proposta de criacao de um marcador clinico estruturado (alergia/intolerancia/restricao alimentar/sinalizacao clinica) do cliente atual, com tipo/codigo do vocabulario fechado, para revisao humana antes de salvar. Acao clinica — nunca aplicada automaticamente.",
+  inputSchema: proposeClinicalMarkerUpsertInputSchema,
+  risk: "clinical",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient"],
+  dataSensitivity: "clinical",
+  execute: async (input) => input,
+});
+
+defineTool({
+  name: PROPOSE_RESOLVE_CLINICAL_MARKER_TOOL_NAME,
+  description: "Registra uma proposta de marcar como RESOLVIDO um marcador clinico estruturado ja existente do cliente atual (identificado por tipo+codigo, nunca por id interno), para revisao humana antes de salvar. Acao clinica — nunca aplicada automaticamente.",
+  inputSchema: proposeResolveClinicalMarkerInputSchema,
+  risk: "clinical",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  domain: "clinical",
+  entityTypes: ["patient"],
   dataSensitivity: "clinical",
   execute: async (input) => input,
 });

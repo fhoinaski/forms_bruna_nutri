@@ -449,6 +449,163 @@ Preservado sem alteração — `resolveItemReference` já verificava `nutrition_
 - Item com `food_source: "USDA"` continua sem fonte de dado real (sem repositório USDA no projeto) — cai em fuzzy match, documentado, não é regressão desta fase.
 - Nenhuma mudança em UI/MealPlanEditor/USDA import/food catalog ranking/clinical policy/proposal engine/write clínico, conforme pedido.
 
+## Fase 5 — relatório (document / configuration / admin)
+
+### Módulos reais encontrados
+
+Auditoria (Explore, read-only) confirmou, para cada domínio ainda descoberto por `listUncoveredDomains()`:
+- **document**: não existe entidade "documento" persistida em nenhuma tabela — impressão é 100% client-side (`window.print()` nas rotas `/dashboard/clients/[id]/print` e `/dashboard/submissions/[id]/print`). O único ativo real é a biblioteca de templates de protocolo (`lib/repositories/protocol-templates.ts#getAllTemplates`).
+- **configuration**: a única configuração real do sistema é a linha única de `ai_settings` (`lib/repositories/ai-settings.ts`), já com `getPublicAISettings()`/`updateAISettings()` mascarando `api_key`. Não existe clinic settings/branding/preferências de notificação configuráveis.
+- **admin**: sistema de administrador único (a própria nutricionista logada), sem RBAC/multiusuário — não existe rota nem repository de "listar admins". Existem, sim, `lib/security/audit.ts#listAuditLogs` (real) e a mesma checagem determinística de env vars de `app/api/health/route.ts` (real).
+
+### Tools adicionadas
+
+6 novas, 3 arquivos novos:
+- `lib/ai/agents/documents/document-agent.ts` — `getDocumentTemplates` (read), `getPatientDocumentLinks` (read).
+- `lib/ai/agents/system/configuration-agent.ts` — `getAiSettings` (read), `proposeUpdateSafeSubstitutionsSetting` (write via proposta).
+- `lib/ai/agents/system/admin-agent.ts` — `getSystemHealth` (read), `getAuditLogSummary` (read).
+
+Todas com `contextRequirement: "none"`, perfil `ADMIN_ASSISTANT` apenas (nunca oferecidas ao `PATIENT_ASSISTANT`), sempre ativas no orquestrador admin.
+
+### Domínios cobertos
+
+`document`, `configuration`, `admin` — os 3 últimos descobertos. `listUncoveredDomains()` agora retorna `[]` (testado explicitamente em `tests/ai-capability-manifest.test.ts`), sem nenhuma tool inventada apenas para zerar a lista — cada uma mapeia 1:1 para infraestrutura real já existente.
+
+### Leitura segura
+
+- `getDocumentTemplates`: lista templates reais (id/type/targetGroup/title/isActive), nunca conteúdo completo do template.
+- `getPatientDocumentLinks`: devolve só `path`/`label`/`type` de links de impressão reais; `found: false` se o paciente não existir; nunca vaza dado clínico do paciente.
+- `getAiSettings`: `api_key` sempre mascarada (nunca a chave em claro chega perto do LLM); prompts de sistema nunca devolvidos inteiros, só um preview truncado (`truncateForToolOutput`, 300 chars) e uma flag booleana "configurado".
+- `getSystemHealth`: reusa a mesma lista de env vars obrigatórias de `app/api/health` — nunca uma segunda fonte de verdade; devolve só nomes de chaves faltando, nunca valores.
+- `getAuditLogSummary`: nunca inclui `metadata_json` bruto, `ip_hash` ou `admin_id` — só `action`/`entityType`/`outcome`/`createdAt`.
+
+### Writes seguros implementados
+
+Um único write nesta fase: `proposeUpdateSafeSubstitutionsSetting` → nova proposal kind `update_safe_substitutions_setting`. Fluxo idêntico às demais safe writes (Fase 3): propõe (nunca aplica direto) → confirm route reivindica atomicamente → handler revalida `patient_safe_substitutions_enabled` contra o valor atual (409 se mudou desde a proposta, inclusive replay) → `updateAISettings({ patient_safe_substitutions_enabled })`. Recovery automática (`recovery-policy.ts`: UPDATE de linha de id fixo, guardado por snapshot do valor anterior — mesmo padrão de `mark_payment_received`).
+
+### Dados explicitamente bloqueados
+
+- Nenhuma ferramenta desta fase pode ler ou alterar `provider`, `model`, `api_key`, `chat_system_prompt`/`protocol_system_prompt` completos — mudanças aí continuam exclusivas da tela Configurações > Inteligência artificial.
+- Nenhuma ferramenta expõe `password_hash`, `mfa_secret_encrypted`, `recovery_codes_json`, `ip_hash`, `metadata_json` bruto do audit log, ou qualquer outro segredo/hash/token/credencial.
+- Nenhum write admin destrutivo/alto-risco (deletar usuário, resetar MFA, mudar permissão crítica, apagar dado, rodar migration/import, trocar segredo) foi implementado — documentado como oportunidade futura *apenas onde já existe mecanismo seguro subjacente*; nenhum foi inventado.
+- Nenhum write clínico (diagnóstico, alergia, prontuário, protocolo) nesta fase.
+
+### Capability manifest final
+
+`listUncoveredDomains()` → `[]`. Todos os 14 `AGENT_DOMAINS` (navigation, patient, appointment, clinical, meal_plan, food, nutrition_analysis, finance, request, dashboard, content, document, configuration, admin) têm ao menos uma tool real.
+
+### Sensitivity
+
+`getDocumentTemplates`/`getAiSettings`/`getSystemHealth`: `dataSensitivity: "safe"`. `getPatientDocumentLinks`/`getAuditLogSummary`: `"sensitive"` (referenciam paciente ou atividade administrativa). `proposeUpdateSafeSubstitutionsSetting`: `risk: "sensitive"` (requer confirmação, nunca auto-executa) e `dataSensitivity: "sensitive"`.
+
+### Authorization
+
+Todas as 6 tools: `profiles: ADMIN` apenas (`ADMIN_ASSISTANT`), nunca reachable pelo `PATIENT_ASSISTANT`/portal do paciente. `contextRequirement: "none"` em todas — não dependem de um cliente aberto na conversa.
+
+### Testes
+
+`tests/ai-document-agent.test.ts` (novo, 7 testes: list, template vazio, detail found/not-found, com/sem submission de origem, sensibilidade — nunca vaza dado clínico), `tests/ai-configuration-agent.test.ts` (novo, 7 testes: read settings nunca expõe api_key crua, feature flag refletido, preview truncado, safe write happy-path e "já no valor pedido", `buildProposedAction` monta e recusa proposta), `tests/ai-admin-agent.test.ts` (novo, 8 testes: health ok/faltando/nunca vaza valor de env var, audit summary nunca inclui metadata_json/ip_hash/admin_id, limit/fallback, schemas `.strict()` rejeitam campos extras e limite acima do teto), acréscimo de 4 testes em `tests/ai-proposal-handlers.test.ts` para `update_safe_substitutions_setting` (happy path, stale/409, replay/409, nunca escreve provider/api_key), e a assertion do capability manifest atualizada em `tests/ai-capability-manifest.test.ts` para `listUncoveredDomains()` → `[]`.
+
+### Gates
+
+`npx vitest run tests/ai-`: **576/576**. Suíte completa `npx vitest run`: **1058/1058**. `tsc --noEmit`: limpo. `eslint .`: limpo. `npm run build`: sem erro.
+
+### Gaps restantes
+
+- `document`: não existe geração de documento/PDF server-side — permanece client-side print, documentado honestamente nas instruções da tool, não implementado como write nesta fase (não pedido).
+- `admin`: "listar usuários administrativos" respondida como informação estática nas instruções (sistema single-admin), nunca como tool — não faria sentido criar uma tool para uma tabela de 1 linha sempre igual à sessão atual.
+- Nenhum write admin destrutivo (delete/reset MFA/permissões/migration/secret) implementado — aguardando decisão explícita futura, e mesmo aí, prováveis candidatos a nunca virar automação (alto risco por natureza).
+- Escritas clínicas de alto risco (diagnóstico, alergia, prontuário, protocolo) continuam fora do escopo até autorização explícita.
+
+## Fase 6 — relatório (writes clínicos controlados)
+
+### Writes clínicos auditados
+
+Auditoria (Explore, read-only) mapeou todos os 16 conceitos pedidos contra o código real, classificando cada um A (já possui proposal/review) / B (write profissional direto hoje) / C (não deve ser automatizado) / D (não existe no sistema):
+
+| Conceito | Classificação | Onde vive |
+|---|---|---|
+| Nutrition records (campos de texto) | A | `nutrition_record` (já existente) |
+| Nutrition records (campos numéricos/antropométricos) | B, não implementado | excluídos do allow-list por desenho — fora de escopo |
+| Structured clinical markers (alergia/intolerância/restrição/flag) | B | **implementado nesta fase** |
+| Diagnósticos | D | subconjunto de `nutrition_records.diagnoses`, já coberto por A |
+| Risk flags | D | subconjunto de #1 (texto) + marcadores `CLINICAL_FLAG` |
+| Evolution notes | B, não implementado | sem audit trail/versionamento hoje — hardening é pré-requisito, não feito nesta fase |
+| Consultation notes (texto livre) | B | **implementado nesta fase** |
+| Consultation summary (estruturado) | A | `consultation_summary` (já existente) |
+| Protocolos (criação/notas) | A | `new_protocol`/`client_protocol` (já existentes) |
+| Protocolos (status: pausar/concluir/cancelar) | B, não implementado | sem audit trail — fora de escopo |
+| Meal plan activation | B | **implementado nesta fase** |
+| Meal plan (edição de conteúdo) | A | `meal_plan_change` (já existente) |
+| Substituições (execução profissional) | A (via reuso) | já coberto por `meal_plan_change.replace_item` — não é um write novo |
+| Patient change requests | A | `patient_change_request`/`resolve_patient_request` (já existentes) |
+| Clinical profile (nível paciente) | D | não existe — só existe a nível de alimento (custom food), fora de escopo |
+| Anthropometry | D | biblioteca de cálculo pura, sem write próprio — write real é #1/#6 |
+| Pre-consultation data (interpretação) | A | `pre_analysis` (já existente) |
+| Pre-consultation data (resposta bruta do formulário) | C | edição do formulário original do paciente não deve ser automatizada — fora de escopo |
+
+### Implementados
+
+3 writes clínicos novos, todos `risk: "clinical"`, todos reaproveitando o pipeline propose→confirm→revalidate→execute→audit já existente (zero fluxo paralelo):
+
+- **`clinical_marker_upsert`** / **`resolve_clinical_marker`** (`lib/ai/agents/clinical/clinical-markers-agent.ts`) — criar/resolver marcador clínico estruturado (alergia/intolerância/restrição/sinalização), reaproveitando 100% `lib/repositories/patient-clinical-markers.ts` e o vocabulário fechado de `lib/clinical/structured-markers.ts`.
+- **`consultation_note`** (`lib/ai/agents/clinical/consultation-agent.ts`) — observação de texto livre anexada às notas da consulta em andamento, distinta do resumo estruturado (`consultation_summary`).
+- **`activate_meal_plan`** (`lib/ai/agents/nutrition/meal-plan-change-agent.ts`, + tool de leitura `getClientMealPlans`) — ativa/publica um plano (`draft`→`active`), reaproveitando `updateMealPlan`/optimistic concurrency/versionamento idênticos ao `meal_plan_change`.
+
+### Não implementados e motivo
+
+- **Evolution notes**: auditoria encontrou zero audit trail (`writeAuditLog`) e checagem de ownership ausente na rota de edição/exclusão — o pedido exige "já existe repository/service seguro; há audit" como critério de entrada para o primeiro subconjunto. Hardening (audit log + checagem de `client_id`) é pré-requisito antes de expor isso ao assistente, não feito nesta fase.
+- **Protocol status transitions** (pausar/concluir/cancelar): mesma razão — sem audit trail no repositório hoje.
+- **Diagnósticos como conceito próprio**: não existe write dedicado — já coberto honestamente pelo campo `diagnoses` de `nutrition_record`, com guardrail explícito já presente nas instruções do prontuário ("Não invente dados clínicos, exames ou diagnósticos que não foram mencionados").
+- **Substituições como proposal kind novo**: já coberto pelo `meal_plan_change.replace_item` existente — criar um kind paralelo duplicaria capability sem necessidade.
+- **Writes admin destrutivos, secrets, diagnóstico inventado, exclusão de prontuário/histórico/audit**: todos permanecem explicitamente fora de escopo, conforme a seção 19 do pedido.
+
+### Proposal kinds
+
+`clinical_marker_upsert`, `resolve_clinical_marker`, `consultation_note`, `activate_meal_plan` — todos adicionados ao union discriminado (`lib/ai/schemas/action.schema.ts`), ao dispatch exaustivo (`PROPOSAL_HANDLERS`), à política de recovery (`RECOVERY_STRATEGY_BY_KIND`) e aos labels da rota de recovery — a checagem de exaustividade do TypeScript forçou cobrir os 4 pontos, mesmo padrão de toda fase anterior.
+
+### Confirmation
+
+Todos os 4 kinds: `risk: "clinical"` (nunca "sensitive"), o que via `action-policy.ts#requiresConfirmation` sempre exige confirmação humana explícita — sem exceção, sem depender de instrução de prompt. `assertNeverAutoAppliesClinical` continua sendo a rede de segurança em tempo de execução (bug, não configuração, se algum dia isso for violado).
+
+### Revalidation
+
+- `clinical_marker_upsert`: no confirm, relista os marcadores ATIVOS do paciente e rejeita (409) se já existir um do mesmo tipo+código — nunca cria duplicado.
+- `resolve_clinical_marker`: resolve o marcador pela IDENTIDADE (tipo+código, nunca um id vindo do modelo — o LLM nunca tem acesso a um id interno de marcador); 409 se nenhum ativo for encontrado (já resolvido) ou se houver mais de um (ambíguo — nunca escolhe sozinho).
+- `consultation_note`: revalida que a sessão existe, pertence ao paciente da proposta e ainda está `in_progress`; sempre ANEXA ao texto atual no momento da confirmação (nunca sobrescreve um snapshot antigo) — por isso não há checagem de staleness por snapshot, a operação estruturalmente não perde dado concorrente.
+- `activate_meal_plan`: revalida ownership (`plan.client_id === action.clientId`), `baseVersion` (optimistic concurrency, 409 se mudou) e que o plano não está já ativo; `updateMealPlan` com `expectedVersion` fecha a mesma janela de corrida documentada na Fase 4 (`MealPlanVersionConflictError` → 409).
+
+### Ambiguity handling
+
+MILK/LACTOSE e WHEAT/GLUTEN são códigos **estruturalmente distintos** no vocabulário fechado (`z.enum` sobre `FOOD_RESTRICTION_CODES`/`CLINICAL_FLAG_CODES`) — o schema torna impossível o modelo enviar um texto livre ambíguo tipo "leite"; ele é obrigado a escolher um `code` específico. As instruções de prompt (`CLINICAL_MARKERS_ASSISTANT_INSTRUCTIONS`) mandam explicitamente perguntar quando o relato da nutricionista não deixar claro qual dos dois marcadores ela quer, com o exemplo exato de pergunta a fazer.
+
+### Audit
+
+- `clinical_marker_upsert`/`resolve_clinical_marker`: audit trail já existente e completo (`patient_clinical_marker_events`, com snapshot antes/depois criptografado) — nenhuma chamada adicional necessária, `source: "ai_suggestion_confirmed"` reaproveita o mesmo valor já usado pelo fluxo de sugestões existente (nunca um source novo/paralelo).
+- `consultation_note`: **gap real fechado nesta fase** — `consultation_sessions.notes` não tinha nenhum audit trail antes; o handler agora chama `writeAuditLog({action:"consultation_note_added", entityType:"consultation_session", entityId, metadata:{clientId}})`, reaproveitando a função já existente (nunca uma tabela nova).
+- `activate_meal_plan`: `meal_plan_versions` (via `updateMealPlan` com `source:"ai_proposal"`, `changedByAdminId`) já é o audit trail — mesmo padrão do `meal_plan_change`, nenhuma chamada extra necessária.
+
+### Sensitivity
+
+Todas as 4 novas tools de escrita: `dataSensitivity: "clinical"` e `risk: "clinical"` — nunca rebaixado por serem writes "pequenos" (item 23 do pedido). A nova tool de leitura `getClientMealPlans`: `risk: "read"`, `dataSensitivity: "sensitive"` (lista planos de um paciente específico).
+
+### Authorization
+
+Todas as 5 tools novas (3 escrita + 2 leitura): `profiles: ADMIN` apenas, `contextRequirement: "client"` (só ativas quando há paciente aberto na tela — nunca dependem de `clientId` vindo do modelo para writes clínicos), nunca reachable pelo `PATIENT_ASSISTANT`. Testado explicitamente em cada arquivo de teste novo.
+
+### Testes
+
+`tests/ai-clinical-markers.test.ts` (17 testes: vocabulário fechado/ambiguidade MILK-LACTOSE/WHEAT-GLUTEN, clientId nunca do modelo, add com sucesso, duplicidade→409, resolve com sucesso, replay/já-resolvido→409, ambiguidade real→409, paciente inexistente→404, autorização), `tests/ai-consultation-note.test.ts` (13 testes: draft/builder, append vs. sobrescrita, audit log, sessão não encontrada/de outro paciente/finalizada, prompt injection tratado como dado literal, autorização), `tests/ai-meal-plan-activation.test.ts` (14 testes: tool resolve plano real, stale version, já ativo, IDOR no builder, write com sucesso, race condition via `MealPlanVersionConflictError`, unauthorized, autorização) — 44 testes novos. Suíte de IA completa: **632/632**. Suíte completa do projeto: **1114/1114**.
+
+### Gaps
+
+- Evolution notes e protocol status transitions seguem sem cobertura de IA — hardening de audit/ownership é pré-requisito, não feito nesta fase.
+- Nenhum write admin destrutivo, nenhuma exclusão de prontuário/histórico/audit, nenhum diagnóstico inventado — todos permanecem fora de escopo por desenho, não por limitação técnica.
+
+### Resultado final da integração do Assistente
+
+O assistente agora cobre, de forma autorizada e nunca autônoma, todo o CRM auditado nas Fases 0–6: alimentos, pacientes, planos alimentares (leitura, edição de conteúdo E ativação), nutrição, agenda, dashboard, solicitações, financeiro, documentos, configuração, administração, e um primeiro subconjunto real de writes clínicos (marcadores estruturados, observações de consulta). Em todos os casos: o profissional decide (nenhuma ação clínica ou sensível é aplicada sem confirmação humana explícita, sem exceção e sem depender de instrução de prompt), o sistema autoriza (revalidação de ownership/staleness/duplicidade no momento da confirmação, nunca confiando no que foi calculado na proposta), a tool executa (sempre através do repositório real já usado pela UI, nunca um caminho paralelo), o audit registra (reaproveitando ou fechando gaps na infraestrutura de audit já existente), e o LLM apenas orquestra e explica — nunca grava diretamente no banco.
+
 ## 5. Antes de escolher uma fase
 
 Perguntas em aberto que mudam o escopo de Fase 1/5:

@@ -209,6 +209,22 @@ export const proposeConsultationSummaryInputSchema = z.object({
 }).strict();
 export type ProposeConsultationSummaryInput = z.infer<typeof proposeConsultationSummaryInputSchema>;
 
+// ── propose_consultation_note (clinical, FASE 6) ─────────────────────────
+//
+// Distinto de propose_consultation_summary: aqui e uma OBSERVACAO DE TEXTO
+// LIVRE anexada as notas da consulta em andamento (consultation_sessions.
+// notes), nao o resumo estruturado pos-consulta. O handler sempre ANEXA ao
+// texto atual no momento da confirmacao (nunca sobrescreve), entao nao ha
+// campo de snapshot aqui — mesma logica de "so append nunca perde dado
+// concorrente" documentada em action.schema.ts.
+
+export const PROPOSE_CONSULTATION_NOTE_TOOL_NAME = "proposeConsultationNote";
+
+export const proposeConsultationNoteInputSchema = z.object({
+  observationText: z.string().min(1).max(2000),
+}).strict();
+export type ProposeConsultationNoteInput = z.infer<typeof proposeConsultationNoteInputSchema>;
+
 // ── instrucoes de prompt (modo consulta) ─────────────────────────────────
 
 export const CONSULTATION_ASSISTANT_INSTRUCTIONS = `
@@ -223,6 +239,7 @@ Ferramentas de leitura disponiveis (sempre passe o clientId do paciente atual, e
 Notas rápidas da consulta e prontuário:
 - Quando a nutricionista escrever notas livres da consulta e pedir para "organizar as notas"/"estruturar isso", use a ferramenta de proposta de prontuário (a mesma já disponível para o prontuário) mapeando o conteúdo para os campos apropriados — sintomas/queixas para "Sinais gastrointestinais" ou "Sinais de atenção", alimentação/rotina para "Rotina alimentar", adesão/avaliação para "Avaliação nutricional", conduta/orientações para "Plano de cuidado e conduta", metas para "Metas antropométricas e clínicas". Preencha só os campos com informação clara na nota — nunca invente.
 - Isso é sempre uma PROPOSTA — a nutricionista revisa e confirma cada campo antes de qualquer coisa ser salva no prontuário.
+- Para "adicione esta observação à consulta" (uma anotação curta, sem estruturar em campos do prontuário), use ${PROPOSE_CONSULTATION_NOTE_TOOL_NAME} com o texto da observação. Isso é diferente do resumo estruturado de fim de consulta (abaixo) — é só um registro de texto livre anexado às notas da sessão. Também é sempre uma proposta.
 
 Plano alimentar: use a ferramenta de proposta de alteração de plano já disponível (a mesma da revisão de dieta) para qualquer troca/ajuste concreto pedido durante a consulta — sempre mostra antes/depois e exige confirmação.
 

@@ -70,6 +70,24 @@ export const RECOVERY_STRATEGY_BY_KIND: Record<ProposedActionKind, RecoveryStrat
   cancel_appointment: "automatic",
   resolve_patient_request: "automatic",
   mark_payment_received: "automatic",
+  // FASE 5: UPDATE de linha unica (id fixo 'default') guardado por um
+  // snapshot do valor anterior — mesmo raciocinio das kinds acima.
+  update_safe_substitutions_setting: "automatic",
+  // FASE 6 (writes clínicos controlados): clinical_marker_upsert e um INSERT
+  // sem garantia de unicidade em nivel de banco (a checagem de duplicidade e
+  // so em nivel de aplicacao, sem indice UNIQUE) — mesmo raciocinio dos
+  // INSERTs puros acima, fica "manual". resolve_clinical_marker e um UPDATE
+  // guardado pela propria existencia de um marcador ainda nao resolvido
+  // (apos o sucesso, ele some da lista de candidatos ativos) — mesma
+  // garantia de reschedule_appointment/mark_payment_received, "automatic".
+  // consultation_note SEMPRE anexa (nunca sobrescreve), entao rodar de novo
+  // duplicaria o texto — sem identidade amarrada ao pedido, "manual".
+  // activate_meal_plan e um UPDATE guardado por baseVersion (optimistic
+  // concurrency), mesmo raciocinio de meal_plan_change, "automatic".
+  clinical_marker_upsert: "manual",
+  resolve_clinical_marker: "automatic",
+  consultation_note: "manual",
+  activate_meal_plan: "automatic",
 };
 
 export function getRecoveryStrategy(kind: string): RecoveryStrategy {

@@ -70,7 +70,15 @@ import {
   GET_MEAL_PLAN_NUTRITION_TOOL_NAME,
   FIND_FOOD_EQUIVALENTS_TOOL_NAME,
   MEAL_PLAN_CHANGE_ASSISTANT_INSTRUCTIONS,
+  GET_CLIENT_MEAL_PLANS_TOOL_NAME,
+  PROPOSE_ACTIVATE_MEAL_PLAN_TOOL_NAME,
+  MEAL_PLAN_ACTIVATION_ASSISTANT_INSTRUCTIONS,
 } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
+import {
+  PROPOSE_CLINICAL_MARKER_UPSERT_TOOL_NAME,
+  PROPOSE_RESOLVE_CLINICAL_MARKER_TOOL_NAME,
+  CLINICAL_MARKERS_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/clinical/clinical-markers-agent";
 import {
   SEARCH_FOODS_TOOL_NAME,
   GET_FOOD_DETAILS_TOOL_NAME,
@@ -124,6 +132,21 @@ import {
   FINANCE_WRITE_ASSISTANT_INSTRUCTIONS,
 } from "@/lib/ai/agents/finance/finance-write-agent";
 import {
+  GET_DOCUMENT_TEMPLATES_TOOL_NAME,
+  GET_PATIENT_DOCUMENT_LINKS_TOOL_NAME,
+  DOCUMENT_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/documents/document-agent";
+import {
+  GET_AI_SETTINGS_TOOL_NAME,
+  PROPOSE_UPDATE_SAFE_SUBSTITUTIONS_SETTING_TOOL_NAME,
+  CONFIGURATION_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/system/configuration-agent";
+import {
+  GET_SYSTEM_HEALTH_TOOL_NAME,
+  GET_AUDIT_LOG_SUMMARY_TOOL_NAME,
+  ADMIN_ASSISTANT_INSTRUCTIONS,
+} from "@/lib/ai/agents/system/admin-agent";
+import {
   GET_CONSULTATION_BRIEF_TOOL_NAME,
   GET_ACTIVE_MEAL_PLAN_TOOL_NAME,
   GET_ACTIVE_PROTOCOL_TOOL_NAME,
@@ -131,6 +154,7 @@ import {
   COMPARE_ANTHROPOMETRY_TOOL_NAME,
   PROPOSE_CONSULTATION_TASKS_BATCH_TOOL_NAME,
   PROPOSE_CONSULTATION_SUMMARY_TOOL_NAME,
+  PROPOSE_CONSULTATION_NOTE_TOOL_NAME,
   CONSULTATION_ASSISTANT_INSTRUCTIONS,
 } from "@/lib/ai/agents/clinical/consultation-agent";
 import { getConsultationSessionById } from "@/lib/repositories/consultation-sessions";
@@ -292,6 +316,9 @@ export async function runAssistantTurn(
     APPOINTMENT_WRITE_ASSISTANT_INSTRUCTIONS,
     PATIENT_REQUEST_WRITE_ASSISTANT_INSTRUCTIONS,
     FINANCE_WRITE_ASSISTANT_INSTRUCTIONS,
+    DOCUMENT_ASSISTANT_INSTRUCTIONS,
+    CONFIGURATION_ASSISTANT_INSTRUCTIONS,
+    ADMIN_ASSISTANT_INSTRUCTIONS,
     `Voce pode encadear varias ferramentas de LEITURA (buscar cliente, ver agenda, ver evolucao, ver horarios) livremente no mesmo turno para responder um pedido com varias partes — isso e automatico e nao precisa de confirmacao. Mas ao chamar qualquer ferramenta de PROPOSTA (proposeXxx), pare: nao chame outra ferramenta depois dela nem tente aplicar a mudanca sozinha — o sistema sempre exige confirmacao humana explicita antes de qualquer proposta sensivel ou clinica virar realidade.`,
     `Se uma busca de cliente (${FIND_CLIENT_TOOL_NAME}) retornar mais de um resultado parecido, NAO escolha um arbitrariamente: liste as opcoes encontradas (so nome, nunca telefone/e-mail/outros dados) e peca para a pessoa confirmar qual e antes de continuar.`,
     PATIENT_FREE_TEXT_TOOL_OUTPUT_NOTICE,
@@ -343,6 +370,14 @@ export async function runAssistantTurn(
     PROPOSE_CANCEL_APPOINTMENT_TOOL_NAME,
     PROPOSE_RESOLVE_PATIENT_REQUEST_TOOL_NAME,
     PROPOSE_MARK_PAYMENT_RECEIVED_TOOL_NAME,
+    // FASE 5 (document/configuration/admin) — todas sempre ativas, so leitura
+    // exceto a proposta de configuracao (sempre exige confirmacao).
+    GET_DOCUMENT_TEMPLATES_TOOL_NAME,
+    GET_PATIENT_DOCUMENT_LINKS_TOOL_NAME,
+    GET_AI_SETTINGS_TOOL_NAME,
+    PROPOSE_UPDATE_SAFE_SUBSTITUTIONS_SETTING_TOOL_NAME,
+    GET_SYSTEM_HEALTH_TOOL_NAME,
+    GET_AUDIT_LOG_SUMMARY_TOOL_NAME,
   ];
 
   if (!client && !submission) {
@@ -382,6 +417,18 @@ export async function runAssistantTurn(
       );
     }
 
+    // FASE 6 (writes clínicos controlados): ativação de plano — sempre
+    // ativa quando ha cliente aberto (nao depende de ja existir um plano
+    // ATIVO, ja que o alvo tipico e justamente um plano ainda em rascunho).
+    systemPromptParts.push(MEAL_PLAN_ACTIVATION_ASSISTANT_INSTRUCTIONS);
+    activeToolNames.push(GET_CLIENT_MEAL_PLANS_TOOL_NAME, PROPOSE_ACTIVATE_MEAL_PLAN_TOOL_NAME);
+
+    // FASE 6 (writes clínicos controlados): marcadores clínicos estruturados
+    // (alergia/intolerância/restrição/sinalização) — sempre ativos quando ha
+    // cliente aberto, mesmo padrão de prontuário/protocolo.
+    systemPromptParts.push(CLINICAL_MARKERS_ASSISTANT_INSTRUCTIONS);
+    activeToolNames.push(PROPOSE_CLINICAL_MARKER_UPSERT_TOOL_NAME, PROPOSE_RESOLVE_CLINICAL_MARKER_TOOL_NAME);
+
     systemPromptParts.push(PROTOCOL_CREATION_ASSISTANT_INSTRUCTIONS);
     activeToolNames.push(PROPOSE_NEW_PROTOCOL_TOOL_NAME);
 
@@ -412,7 +459,8 @@ export async function runAssistantTurn(
           GET_PENDING_PATIENT_ITEMS_TOOL_NAME,
           COMPARE_ANTHROPOMETRY_TOOL_NAME,
           PROPOSE_CONSULTATION_TASKS_BATCH_TOOL_NAME,
-          PROPOSE_CONSULTATION_SUMMARY_TOOL_NAME
+          PROPOSE_CONSULTATION_SUMMARY_TOOL_NAME,
+          PROPOSE_CONSULTATION_NOTE_TOOL_NAME
         );
       }
     }

@@ -589,3 +589,67 @@ describe("executeProposedAction — mark_payment_received", () => {
     await expect(executeProposedAction(action, ctx)).rejects.toMatchObject({ status: 422 });
   });
 });
+
+describe("executeProposedAction — update_safe_substitutions_setting (FASE 5)", () => {
+  const baseAction: ProposedAction = {
+    kind: "update_safe_substitutions_setting",
+    previousEnabled: false,
+    newEnabled: true,
+    risk: "sensitive",
+    requiresConfirmation: true,
+  };
+
+  function settingsRow(overrides: Record<string, unknown> = {}) {
+    return {
+      provider: "openai", model: "gpt-4o", api_key: "sk-...abcd", has_api_key: true,
+      patient_intake_mode: "smart", patient_safe_substitutions_enabled: false,
+      chat_system_prompt: null, protocol_system_prompt: null, updated_at: "now",
+      ...overrides,
+    };
+  }
+
+  it("aplica a mudança quando o valor atual bate com o previousEnabled da proposta", async () => {
+    const updateAISettings = vi.fn().mockResolvedValue(undefined);
+    vi.doMock("@/lib/repositories/ai-settings", () => ({
+      getPublicAISettings: vi.fn().mockResolvedValue(settingsRow({ patient_safe_substitutions_enabled: false })),
+      updateAISettings,
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    const result = await executeProposedAction(baseAction, ctx);
+    expect(result.data).toEqual({ previousEnabled: false, newEnabled: true });
+    expect(updateAISettings).toHaveBeenCalledWith({ patient_safe_substitutions_enabled: true });
+  });
+
+  it("stale: configuração mudou desde a proposta → 409, nunca aplica por cima", async () => {
+    vi.doMock("@/lib/repositories/ai-settings", () => ({
+      getPublicAISettings: vi.fn().mockResolvedValue(settingsRow({ patient_safe_substitutions_enabled: true })),
+      updateAISettings: vi.fn(),
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("replay de proposta já confirmada (previousEnabled não bate mais) → 409, nunca reaplica", async () => {
+    const updateAISettings = vi.fn();
+    vi.doMock("@/lib/repositories/ai-settings", () => ({
+      getPublicAISettings: vi.fn().mockResolvedValue(settingsRow({ patient_safe_substitutions_enabled: true })),
+      updateAISettings,
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await expect(executeProposedAction(baseAction, ctx)).rejects.toMatchObject({ status: 409 });
+    expect(updateAISettings).not.toHaveBeenCalled();
+  });
+
+  it("nunca escreve provider/model/api_key — só o campo patient_safe_substitutions_enabled", async () => {
+    const updateAISettings = vi.fn().mockResolvedValue(undefined);
+    vi.doMock("@/lib/repositories/ai-settings", () => ({
+      getPublicAISettings: vi.fn().mockResolvedValue(settingsRow({ patient_safe_substitutions_enabled: false })),
+      updateAISettings,
+    }));
+    const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
+    await executeProposedAction(baseAction, ctx);
+    expect(updateAISettings).toHaveBeenCalledWith({ patient_safe_substitutions_enabled: true });
+    expect(updateAISettings.mock.calls[0][0]).not.toHaveProperty("api_key");
+    expect(updateAISettings.mock.calls[0][0]).not.toHaveProperty("provider");
+  });
+});

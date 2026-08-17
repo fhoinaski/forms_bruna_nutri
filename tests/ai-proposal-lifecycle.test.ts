@@ -113,6 +113,28 @@ const VALID_ACTIONS: Record<ProposedActionKind, ProposedAction> = {
     previousStatus: "pendente", paidAtDisplay: "10/08/2026", notes: null,
     risk: "sensitive", requiresConfirmation: true,
   },
+  update_safe_substitutions_setting: {
+    kind: "update_safe_substitutions_setting", previousEnabled: false, newEnabled: true,
+    risk: "sensitive", requiresConfirmation: true,
+  },
+  clinical_marker_upsert: {
+    kind: "clinical_marker_upsert", clientId: "client-1", markerType: "ALLERGY", code: "PEANUT",
+    severity: "severe", status: "ACTIVE", evidenceText: null,
+    risk: "clinical", requiresConfirmation: true,
+  },
+  resolve_clinical_marker: {
+    kind: "resolve_clinical_marker", clientId: "client-1", markerType: "ALLERGY", code: "PEANUT",
+    risk: "clinical", requiresConfirmation: true,
+  },
+  consultation_note: {
+    kind: "consultation_note", clientId: "client-1", consultationSessionId: "session-1",
+    observationText: "Paciente relatou melhora do sono.",
+    risk: "clinical", requiresConfirmation: true,
+  },
+  activate_meal_plan: {
+    kind: "activate_meal_plan", clientId: "client-1", mealPlanId: "plan-1", baseVersion: 2, mealPlanTitle: "Plano de verão",
+    risk: "clinical", requiresConfirmation: true,
+  },
 };
 
 const ALL_KINDS = Object.keys(VALID_ACTIONS) as ProposedActionKind[];

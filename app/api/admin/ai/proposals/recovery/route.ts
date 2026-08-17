@@ -26,6 +26,11 @@ const KIND_LABELS: Record<ProposedActionKind, string> = {
   cancel_appointment: "Cancelamento de consulta",
   resolve_patient_request: "Resolução de solicitação da paciente",
   mark_payment_received: "Marcação de pagamento como recebido",
+  update_safe_substitutions_setting: "Alteração de configuração de substituições seguras",
+  clinical_marker_upsert: "Registro de marcador clínico",
+  resolve_clinical_marker: "Resolução de marcador clínico",
+  consultation_note: "Observação de consulta",
+  activate_meal_plan: "Ativação de plano alimentar",
 };
 
 /** Detalhe curto e legivel — nunca payload tecnico bruto (secao 3.8). */

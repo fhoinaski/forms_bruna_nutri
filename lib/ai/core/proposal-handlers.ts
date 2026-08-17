@@ -24,13 +24,16 @@ import {
 import { normalize } from "@/lib/nutrition/macros";
 import { createPatientRequest, findSimilarPendingPatientRequest, updatePatientRequestStatus, getPatientRequestById } from "@/lib/repositories/patient-requests";
 import { getPaymentById, updatePayment } from "@/lib/repositories/payments";
+import { getPublicAISettings, updateAISettings } from "@/lib/repositories/ai-settings";
 import { computeFoodSubstitution } from "@/lib/ai/agents/patient/patient-portal-agent";
 import { writeAuditLog } from "@/lib/security/audit";
 import type { MealPlanItemPayload } from "@/lib/repositories/meal-plans";
 import { ClientDuplicateError } from "@/lib/clinical/client-identity";
 import { createProtocolAndApplyToClient } from "@/lib/repositories/client-protocols";
 import { createClientTasksBatch } from "@/lib/repositories/client-tasks";
-import { getConsultationSessionById, saveConsultationSummary } from "@/lib/repositories/consultation-sessions";
+import { getConsultationSessionById, saveConsultationSummary, updateConsultationNotes } from "@/lib/repositories/consultation-sessions";
+import { listPatientClinicalMarkers, createPatientClinicalMarker, updatePatientClinicalMarker } from "@/lib/repositories/patient-clinical-markers";
+import { CLINICAL_MARKER_CODE_LABELS, type ClinicalMarkerCode } from "@/lib/clinical/structured-markers";
 
 /**
  * Execucao real de cada proposal kind, chamada SOMENTE depois que o
@@ -788,6 +791,165 @@ const executeMarkPaymentReceived: ProposalHandler<"mark_payment_received"> = asy
   };
 };
 
+// ── update_safe_substitutions_setting (FASE 5 — safe config write) ──────
+
+const executeUpdateSafeSubstitutionsSetting: ProposalHandler<"update_safe_substitutions_setting"> = async (action) => {
+  const settings = await getPublicAISettings();
+  // Revalidacao obrigatoria: se alguem mudou a configuracao (pela tela
+  // manual ou outra proposta) entre a proposta e a confirmacao, nunca
+  // aplica por cima silenciosamente.
+  if (settings.patient_safe_substitutions_enabled !== action.previousEnabled) {
+    throw new ProposalExecutionError(
+      "A configuração mudou desde a confirmação. Peça para revisar novamente.",
+      409
+    );
+  }
+
+  await updateAISettings({ patient_safe_substitutions_enabled: action.newEnabled });
+
+  return { data: { previousEnabled: action.previousEnabled, newEnabled: action.newEnabled } };
+};
+
+// ── clinical_marker_upsert (FASE 6 — write clínico controlado) ──────────
+
+const executeClinicalMarkerUpsert: ProposalHandler<"clinical_marker_upsert"> = async (action, ctx) => {
+  const client = await getClientById(action.clientId);
+  if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
+
+  // Revalidacao obrigatoria de duplicidade no momento da confirmacao (nao
+  // no momento da proposta): nunca criar um segundo marcador ATIVO com o
+  // mesmo tipo+codigo para o mesmo paciente.
+  const existing = await listPatientClinicalMarkers(action.clientId, { includeResolved: false });
+  const duplicate = existing.find((marker) => marker.type === action.markerType && marker.normalized_code === action.code);
+  if (duplicate) {
+    throw new ProposalExecutionError(
+      `Já existe um marcador ${CLINICAL_MARKER_CODE_LABELS[action.code as ClinicalMarkerCode]} ativo para este paciente.`,
+      409
+    );
+  }
+
+  const marker = await createPatientClinicalMarker({
+    clientId: action.clientId,
+    type: action.markerType,
+    normalizedCode: action.code,
+    label: CLINICAL_MARKER_CODE_LABELS[action.code as ClinicalMarkerCode],
+    severity: action.severity,
+    status: action.status,
+    // Mesmo valor ja usado pelo fluxo de "sugestoes" existente
+    // (patient-clinical-markers.ts) para dado que a IA propos e um humano
+    // confirmou — nunca um source novo/paralelo.
+    source: "ai_suggestion_confirmed",
+    evidenceText: action.evidenceText ?? null,
+    adminId: ctx.adminId,
+  });
+
+  return { data: { markerId: marker.id, type: marker.type, code: marker.normalized_code, status: marker.status } };
+};
+
+// ── resolve_clinical_marker (FASE 6 — write clínico controlado) ─────────
+
+const executeResolveClinicalMarker: ProposalHandler<"resolve_clinical_marker"> = async (action, ctx) => {
+  const client = await getClientById(action.clientId);
+  if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
+
+  // Resolve o marcador pela IDENTIDADE (tipo+codigo), nunca por um id
+  // interno vindo do modelo — o LLM nunca teve acesso a um id de marcador.
+  const candidates = (await listPatientClinicalMarkers(action.clientId, { includeResolved: false }))
+    .filter((marker) => marker.type === action.markerType && marker.normalized_code === action.code);
+
+  const label = CLINICAL_MARKER_CODE_LABELS[action.code as ClinicalMarkerCode];
+  if (!candidates.length) {
+    throw new ProposalExecutionError(`Nenhum marcador ${label} ativo encontrado para este paciente — pode já ter sido resolvido.`, 409);
+  }
+  if (candidates.length > 1) {
+    throw new ProposalExecutionError(`Mais de um marcador ${label} encontrado para este paciente — resolva pela ficha do paciente.`, 409);
+  }
+
+  const updated = await updatePatientClinicalMarker(action.clientId, candidates[0].id, {
+    status: "RESOLVED",
+    adminId: ctx.adminId,
+  });
+  if (!updated) throw new ProposalExecutionError("Não foi possível resolver o marcador.", 500);
+
+  return { data: { markerId: updated.id, type: updated.type, code: updated.normalized_code, status: updated.status } };
+};
+
+// ── consultation_note (FASE 6 — write clínico controlado) ───────────────
+
+const executeConsultationNote: ProposalHandler<"consultation_note"> = async (action) => {
+  const client = await getClientById(action.clientId);
+  if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
+
+  const session = await getConsultationSessionById(action.consultationSessionId);
+  if (!session) throw new ProposalExecutionError("Sessão de consulta não encontrada.", 404);
+  if (session.client_id !== action.clientId) {
+    throw new ProposalExecutionError("Esta sessão de consulta não pertence a este paciente.", 403);
+  }
+  if (session.status !== "in_progress") {
+    throw new ProposalExecutionError("Esta consulta já foi finalizada ou cancelada — não é possível adicionar observação.", 409);
+  }
+
+  // Sempre ANEXA ao texto atual no momento da confirmacao (nunca sobrescreve
+  // com um snapshot antigo) — por isso nao ha checagem de staleness aqui,
+  // ver comentario em action.schema.ts.
+  const newNotes = session.notes ? `${session.notes}\n\n${action.observationText}` : action.observationText;
+  await updateConsultationNotes(session.id, newNotes);
+
+  // consultation_sessions.notes nao tem audit trail proprio (ao contrario de
+  // patient_clinical_markers/meal_plan_versions) — fecha esse gap real
+  // reusando writeAuditLog ja existente, nunca uma tabela nova.
+  await writeAuditLog({
+    action: "consultation_note_added",
+    entityType: "consultation_session",
+    entityId: session.id,
+    metadata: { clientId: action.clientId },
+  });
+
+  return { data: { consultationSessionId: session.id } };
+};
+
+// ── activate_meal_plan (FASE 6 — write clínico controlado) ──────────────
+
+const executeActivateMealPlan: ProposalHandler<"activate_meal_plan"> = async (action, ctx) => {
+  const client = await getClientById(action.clientId);
+  if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
+
+  const plan = await getMealPlanById(action.mealPlanId);
+  if (!plan) throw new ProposalExecutionError("Plano alimentar não encontrado.", 404);
+  if (plan.client_id !== action.clientId) {
+    throw new ProposalExecutionError("Este plano alimentar não pertence a este paciente.", 403);
+  }
+  if (plan.version !== action.baseVersion) {
+    throw new ProposalExecutionError("O plano foi alterado depois que esta proposta foi criada. Revise novamente antes de aplicar.", 409);
+  }
+  if (plan.status === "active") throw new ProposalExecutionError("Esse plano já está ativo.", 409);
+
+  let updated;
+  try {
+    updated = await updateMealPlan(plan.id, action.clientId, {
+      title: plan.title,
+      status: "active",
+      notes: plan.notes,
+      target_energy_kcal: plan.target_energy_kcal,
+      target_protein_g: plan.target_protein_g,
+      target_carbohydrate_g: plan.target_carbohydrate_g,
+      target_fat_g: plan.target_fat_g,
+      meals: plan.meals,
+      weekly_slots: plan.weekly_slots,
+      substitutions: plan.substitutions,
+      supplements: plan.supplements,
+    }, { expectedVersion: action.baseVersion, changedByAdminId: ctx.adminId, source: "ai_proposal" });
+  } catch (error) {
+    if (error instanceof MealPlanVersionConflictError) {
+      throw new ProposalExecutionError("O plano foi alterado depois que esta proposta foi criada. Revise novamente antes de aplicar.", 409);
+    }
+    throw error;
+  }
+  if (!updated) throw new ProposalExecutionError("Não foi possível ativar o plano alimentar.", 500);
+
+  return { data: { mealPlanId: updated.id, previousStatus: plan.status, newStatus: "active", newVersion: updated.version } };
+};
+
 // ── dispatch tipado (sem switch untyped, sem `any`) ─────────────────────
 
 const PROPOSAL_HANDLERS: { [K in ProposedActionKind]: ProposalHandler<K> } = {
@@ -809,6 +971,11 @@ const PROPOSAL_HANDLERS: { [K in ProposedActionKind]: ProposalHandler<K> } = {
   cancel_appointment: executeCancelAppointment,
   resolve_patient_request: executeResolvePatientRequest,
   mark_payment_received: executeMarkPaymentReceived,
+  update_safe_substitutions_setting: executeUpdateSafeSubstitutionsSetting,
+  clinical_marker_upsert: executeClinicalMarkerUpsert,
+  resolve_clinical_marker: executeResolveClinicalMarker,
+  consultation_note: executeConsultationNote,
+  activate_meal_plan: executeActivateMealPlan,
 };
 
 export async function executeProposedAction(
