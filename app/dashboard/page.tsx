@@ -417,16 +417,29 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetch("/api/admin/dashboard-metrics")
-      .then((r) => r.json())
-      .then((d: DashboardMetrics) => setDashMetrics(d))
+      .then((r) => {
+        if (r.status === 401) {
+          router.replace("/login");
+          return null;
+        }
+        if (!r.ok) throw new Error("Erro ao buscar metricas do dashboard");
+        return r.json() as Promise<DashboardMetrics>;
+      })
+      .then((d) => {
+        if (d) setDashMetrics(d);
+      })
       .catch(() => null);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     let active = true;
     async function loadActions() {
       try {
         const response = await fetch("/api/admin/dashboard/actions", { cache: "no-store" });
+        if (response.status === 401) {
+          router.replace("/login");
+          return;
+        }
         if (!response.ok) return;
         const result = await response.json() as DashboardActionsResponse;
         if (active) setActionsData(result);
@@ -443,7 +456,7 @@ export default function DashboardPage() {
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const controller = new AbortController();

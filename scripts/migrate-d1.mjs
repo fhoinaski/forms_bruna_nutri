@@ -110,14 +110,31 @@ const applied = new Map(
 );
 validateMigrationFiles();
 
+function reportChecksumDrift(file) {
+  console.error(`\nA migracao "${file}" ja foi aplicada, mas o checksum salvo em schema_migrations`);
+  console.error("nao bate com o arquivo local atual (o conteudo do arquivo mudou depois de aplicado,");
+  console.error("ou foi aplicado a partir de uma versao diferente da que esta commitada hoje).");
+  console.error("Isso NAO significa necessariamente que o schema real esta errado — confirme comparando");
+  console.error("`sqlite_master`/`pragma_table_info` no D1 com o DDL do arquivo antes de decidir o que fazer.");
+}
+
 if (process.argv.includes("--status")) {
   const pending = files.filter((file) => !applied.has(file));
+  const drifted = [];
   for (const file of files) {
     if (!applied.has(file)) continue;
     const checksum = createHash("sha256").update(readMigration(file)).digest("hex");
-    if (applied.get(file) !== checksum) throw new Error(`A migracao ja aplicada foi alterada: ${file}`);
+    if (applied.get(file) !== checksum) drifted.push(file);
   }
-  if (pending.length) throw new Error(`Banco desatualizado. Migrations pendentes: ${pending.join(", ")}`);
+  if (drifted.length) {
+    for (const file of drifted) reportChecksumDrift(file);
+    console.error(`\n${drifted.length} migracao(oes) com checksum divergente.`);
+    process.exit(1);
+  }
+  if (pending.length) {
+    console.error(`Banco desatualizado. Migrations pendentes: ${pending.join(", ")}`);
+    process.exit(1);
+  }
   console.log(`Banco atualizado: ${files.length} migration(oes) aplicadas e verificadas.`);
   process.exit(0);
 }
@@ -127,7 +144,10 @@ for (const file of files) {
   const sql = readMigration(file);
   const checksum = createHash("sha256").update(sql).digest("hex");
   if (applied.has(file)) {
-    if (applied.get(file) !== checksum) throw new Error(`A migração já aplicada foi alterada: ${file}`);
+    if (applied.get(file) !== checksum) {
+      reportChecksumDrift(file);
+      process.exit(1);
+    }
     continue;
   }
 
