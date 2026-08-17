@@ -185,6 +185,10 @@ type ChatProposal =
     });
 
 type ChatMessage = {
+  /** Identidade estavel da mensagem — nunca o indice do array (que muda
+   * conforme a conversa cresce e nao serve pra identificar uma mensagem
+   * especifica depois que ela foi inserida). */
+  id: string;
   role: "user" | "assistant" | "system";
   content: string;
   proposal?: ChatProposal;
@@ -192,6 +196,12 @@ type ChatMessage = {
   options?: AssistantOption[];
   attachmentName?: string;
 };
+
+let messageIdCounter = 0;
+function createMessageId(): string {
+  messageIdCounter += 1;
+  return `msg_${Date.now().toString(36)}_${messageIdCounter}`;
+}
 
 type PendingAttachment = { name: string; mediaType: AllowedAttachmentMediaType; base64: string };
 
@@ -401,6 +411,33 @@ export function AiChatWidget() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previousClientIdRef = useRef<string | undefined>(context.clientId);
+  // Guarda sincrona contra envio concorrente — `sending` (estado React) so
+  // atualiza no proximo render, entao duas chamadas de sendMessage/quick
+  // action disparadas no mesmo tick (duplo clique, Enter + clique, etc.)
+  // podiam ambas ler `sending === false` e seguir em frente, cada uma
+  // montando sua propria copia da conversa e sobrescrevendo a resposta da
+  // outra ao salvar. Um ref e atualizado na hora, sem essa janela de corrida.
+  const sendingRef = useRef(false);
+  // Identidade do request em andamento — incrementado a cada envio e a cada
+  // "nova conversa". Uma resposta que chega depois de ja nao ser mais o
+  // request atual (por ter sido invalidado por uma nova conversa) e
+  // descartada em vez de gravada por cima do que existe agora.
+  const activeRequestIdRef = useRef(0);
+  const activeAbortControllerRef = useRef<AbortController | null>(null);
+  // Espelho sincrono do estado `messages` — usado pra montar o payload do
+  // proximo envio. Ler o ref e imediato; ler a variavel `messages` do
+  // closure do componente tambem seria (o guard de `sendingRef` ja impede
+  // dois envios concorrentes), mas colocar o valor efetivo num `useState`
+  // updater so pra "capturar" ele numa variavel local e um jeito NAO
+  // garantido de fazer isso — o updater roda quando o React decide
+  // processar a fila de estado, nao necessariamente antes da proxima linha
+  // do codigo (foi exatamente esse bug que apareceu na verificacao manual:
+  // o fetch as vezes saia com `messages: []` porque o updater ainda nao
+  // tinha rodado).
+  const messagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const quickActions = getQuickActionsForContext(context);
 
@@ -419,7 +456,7 @@ export function AiChatWidget() {
       .then((response) => (response.ok ? response.json() : null))
       .then((data: { hoje?: DailyBriefing } | null) => {
         if (!data?.hoje) return;
-        setMessages([{ role: "assistant", content: buildDailyBriefingMarkdown(data.hoje) }]);
+        setMessages([{ id: createMessageId(), role: "assistant", content: buildDailyBriefingMarkdown(data.hoje) }]);
         setOpen(true);
       })
       .catch(() => {});
@@ -443,12 +480,23 @@ export function AiChatWidget() {
     const current = context.clientId;
     if (previous !== current) {
       setMessages((existing) =>
-        existing.length > 0 ? [...existing, { role: "system", content: contextSwitchMessage(Boolean(previous), context) }] : existing
+        existing.length > 0
+          ? [...existing, { id: createMessageId(), role: "system", content: contextSwitchMessage(Boolean(previous), context) }]
+          : existing
       );
       previousClientIdRef.current = current;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.clientId, context.currentPage]);
+
+  // Aborta um request de chat/quick-action em voo se o widget desmontar —
+  // evita setState num componente ja desmontado e uma chamada em segundo
+  // plano sem nenhuma UI pra receber o resultado.
+  useEffect(() => {
+    return () => {
+      activeAbortControllerRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -492,6 +540,15 @@ export function AiChatWidget() {
   }
 
   function startNewConversation() {
+    // Invalida qualquer request em andamento (incrementa o id atual e aborta
+    // o fetch) ANTES de limpar o historico — se uma resposta antiga chegar
+    // depois disso, o check de `activeRequestIdRef` no sendMessage/quick
+    // action vai descartar ela em vez de escrever na conversa nova.
+    activeRequestIdRef.current += 1;
+    activeAbortControllerRef.current?.abort();
+    activeAbortControllerRef.current = null;
+    sendingRef.current = false;
+    setSending(false);
     // So limpa o historico local da conversa — o contexto da tela atual
     // (context, vindo do AssistantPageContextProvider) continua o mesmo, e o
     // resumo persistido por (admin, cliente) tambem nao e afetado (secao 27:
@@ -503,20 +560,33 @@ export function AiChatWidget() {
 
   async function sendMessage(text: string, contextOverride?: Partial<Pick<AssistantPageContext, "clientId">>) {
     const content = text.trim();
-    if (!content || sending) return;
+    // Guarda sincrona (ref) — nao a "sending" do estado React, que so
+    // reflete a ultima renderizacao e pode deixar um segundo envio passar
+    // antes do primeiro re-render acontecer.
+    if (!content || sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true);
     setError("");
     const attachment = pendingAttachment;
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content, attachmentName: attachment?.name }];
-    setMessages(nextMessages);
+    const userMessage: ChatMessage = { id: createMessageId(), role: "user", content, attachmentName: attachment?.name };
+    const requestId = ++activeRequestIdRef.current;
+    const abortController = new AbortController();
+    activeAbortControllerRef.current = abortController;
+    // messagesRef.current e sincrono e sempre atual (o guard de sendingRef
+    // ja impede outro envio de estar em voo ao mesmo tempo) — nunca a
+    // variavel `messages` capturada no closure da funcao.
+    const historyForRequest = [...messagesRef.current, userMessage];
+    messagesRef.current = historyForRequest;
+    setMessages(historyForRequest);
     setInput("");
     setPendingAttachment(null);
-    setSending(true);
     try {
       const response = await fetch("/api/admin/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
-          messages: nextMessages
+          messages: historyForRequest
             // Mensagens de sistema (divisor de troca de contexto) e
             // mensagens "so facts" (ex.: resultado de quick action
             // deterministica, sem texto do modelo) nunca vao para o
@@ -538,30 +608,45 @@ export function AiChatWidget() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "Não foi possível responder agora.");
+      // Se uma "nova conversa" (ou outro envio) ja invalidou este request
+      // enquanto ele estava em voo, a resposta chegou tarde demais — nunca
+      // escrever essa resposta numa conversa que ja e outra.
+      if (activeRequestIdRef.current !== requestId) return;
       const proposal = data.proposedUpdate ? buildProposal(data.proposedUpdate) : null;
       const assistantMessage: ChatMessage = {
+        id: createMessageId(),
         role: "assistant",
         content: data.reply,
         proposal: proposal ?? undefined,
         facts: data.facts,
         options: data.options,
       };
-      setMessages([...nextMessages, assistantMessage]);
+      messagesRef.current = [...messagesRef.current, assistantMessage];
+      setMessages(messagesRef.current);
       const navigateAction = data.navigateAction as { path: string; clientName?: string } | undefined;
       if (navigateAction?.path) router.push(navigateAction.path);
     } catch (cause) {
+      if (activeRequestIdRef.current !== requestId) return;
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
       setError(cause instanceof Error ? cause.message : "Não foi possível responder agora.");
     } finally {
-      setSending(false);
+      if (activeRequestIdRef.current === requestId) {
+        sendingRef.current = false;
+        setSending(false);
+      }
     }
   }
 
   async function runDeterministicQuickAction(action: Extract<QuickAction, { kind: "deterministic" }>) {
-    if (sending) return;
+    if (sendingRef.current) return;
     if (action.action !== "day_overview" && !context.clientId) return;
-    setError("");
-    setMessages((current) => [...current, { role: "user", content: action.label }]);
+    sendingRef.current = true;
     setSending(true);
+    setError("");
+    const requestId = ++activeRequestIdRef.current;
+    const abortController = new AbortController();
+    activeAbortControllerRef.current = abortController;
+    setMessages((previous) => [...previous, { id: createMessageId(), role: "user", content: action.label }]);
     try {
       const body =
         action.action === "day_overview"
@@ -570,15 +655,22 @@ export function AiChatWidget() {
       const response = await fetch("/api/admin/ai/quick-facts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify(body),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "Não foi possível buscar os dados agora.");
-      setMessages((current) => [...current, { role: "assistant", content: "", facts: data.facts }]);
+      if (activeRequestIdRef.current !== requestId) return;
+      setMessages((previous) => [...previous, { id: createMessageId(), role: "assistant", content: "", facts: data.facts }]);
     } catch (cause) {
+      if (activeRequestIdRef.current !== requestId) return;
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
       setError(cause instanceof Error ? cause.message : "Não foi possível buscar os dados agora.");
     } finally {
-      setSending(false);
+      if (activeRequestIdRef.current === requestId) {
+        sendingRef.current = false;
+        setSending(false);
+      }
     }
   }
 
@@ -594,15 +686,15 @@ export function AiChatWidget() {
     void sendMessage(option.label, { clientId: option.id });
   }
 
-  function updateProposal(messageIndex: number, updater: (proposal: ChatProposal) => ChatProposal) {
-    setMessages((current) => current.map((message, index) => {
-      if (index !== messageIndex || !message.proposal) return message;
+  function updateProposal(messageId: string, updater: (proposal: ChatProposal) => ChatProposal) {
+    setMessages((current) => current.map((message) => {
+      if (message.id !== messageId || !message.proposal) return message;
       return { ...message, proposal: updater(message.proposal) };
     }));
   }
 
-  function discardProposal(messageIndex: number, proposal: ChatProposal) {
-    updateProposal(messageIndex, (current) => ({ ...current, status: "discarded" }));
+  function discardProposal(messageId: string, proposal: ChatProposal) {
+    updateProposal(messageId, (current) => ({ ...current, status: "discarded" }));
     // Melhor esforço: marca a proposta como cancelada no servidor tambem,
     // para que ela nao possa mais ser confirmada (ex.: por uma aba antiga
     // ainda aberta com o mesmo link). A UI ja reflete "descartada" mesmo se
@@ -640,9 +732,9 @@ export function AiChatWidget() {
     }
   }
 
-  async function applyProposal(messageIndex: number, proposal: ChatProposal) {
+  async function applyProposal(messageId: string, proposal: ChatProposal) {
     if (!proposal.proposalId) {
-      updateProposal(messageIndex, (current) => ({
+      updateProposal(messageId, (current) => ({
         ...current,
         status: "error",
         error: "Esta proposta não pôde ser confirmada pelo servidor. Peça novamente ao assistente.",
@@ -650,7 +742,7 @@ export function AiChatWidget() {
       return;
     }
 
-    updateProposal(messageIndex, (current) => ({ ...current, status: "applying", error: undefined }));
+    updateProposal(messageId, (current) => ({ ...current, status: "applying", error: undefined }));
 
     try {
       // O corpo vai vazio de proposito: a confirmacao usa exclusivamente os
@@ -666,15 +758,15 @@ export function AiChatWidget() {
         // com uma acao clara ("peça novamente") em vez de cair no erro
         // generico.
         if (response.status === 410) {
-          updateProposal(messageIndex, (current) => ({ ...current, status: "expired" }));
+          updateProposal(messageId, (current) => ({ ...current, status: "expired" }));
           return;
         }
         throw new Error(data.message ?? "Não foi possível concluir a ação.");
       }
-      updateProposal(messageIndex, (current) => ({ ...current, status: "applied" }));
+      updateProposal(messageId, (current) => ({ ...current, status: "applied" }));
       navigateAfterConfirm(proposal, data);
     } catch (cause) {
-      updateProposal(messageIndex, (current) => ({
+      updateProposal(messageId, (current) => ({
         ...current,
         status: "error",
         error: cause instanceof Error ? cause.message : "Não foi possível salvar.",
@@ -777,10 +869,10 @@ export function AiChatWidget() {
                 </div>
               </div>
             )}
-            {messages.map((message, index) => {
+            {messages.map((message) => {
               if (message.role === "system") {
                 return (
-                  <div key={index} className="flex justify-center">
+                  <div key={message.id} className="flex justify-center">
                     <span className="rounded-full bg-[#EDE1D6]/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">
                       {message.content}
                     </span>
@@ -788,7 +880,7 @@ export function AiChatWidget() {
                 );
               }
               return (
-                <div key={index} className="space-y-2">
+                <div key={message.id} className="space-y-2">
                   {message.content && (
                     <div
                       className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 ${
@@ -842,8 +934,8 @@ export function AiChatWidget() {
                         const proposalClient = proposalClientId(message.proposal);
                         return Boolean(proposalClient) && context.clientId !== undefined && context.clientId !== proposalClient;
                       })()}
-                      onDiscard={() => discardProposal(index, message.proposal!)}
-                      onApply={() => void applyProposal(index, message.proposal!)}
+                      onDiscard={() => discardProposal(message.id, message.proposal!)}
+                      onApply={() => void applyProposal(message.id, message.proposal!)}
                       onFindNewSlots={() => void sendMessage("Busque novos horários disponíveis para essa consulta.")}
                     />
                   )}

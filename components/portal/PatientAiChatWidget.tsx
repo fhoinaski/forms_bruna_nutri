@@ -54,11 +54,19 @@ function buildPatientProposal(update: Record<string, unknown> | undefined): Pati
 }
 
 type ChatMessage = {
+  /** Identidade estavel da mensagem — nunca o indice do array. */
+  id: string;
   role: "user" | "assistant";
   content: string;
   facts?: PatientAssistantFactsPayload;
   proposal?: PatientProposal;
 };
+
+let messageIdCounter = 0;
+function createMessageId(): string {
+  messageIdCounter += 1;
+  return `msg_${Date.now().toString(36)}_${messageIdCounter}`;
+}
 
 const MAX_HISTORY_MESSAGES_SENT = 16;
 
@@ -85,6 +93,24 @@ export function PatientAiChatWidget() {
   const [error, setError] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Guarda sincrona contra envio concorrente — ver explicacao equivalente em
+  // components/dashboard/AiChatWidget.tsx (mesmo bug, mesmo fix).
+  const sendingRef = useRef(false);
+  const activeRequestIdRef = useRef(0);
+  const activeAbortControllerRef = useRef<AbortController | null>(null);
+  // Espelho sincrono de `messages` — ver explicacao em AiChatWidget.tsx
+  // (usar um updater de setState so pra "capturar" o valor numa variavel
+  // local nao e garantido rodar antes da proxima linha de codigo).
+  const messagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    return () => {
+      activeAbortControllerRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -112,36 +138,58 @@ export function PatientAiChatWidget() {
   }
 
   function startNewConversation() {
+    activeRequestIdRef.current += 1;
+    activeAbortControllerRef.current?.abort();
+    activeAbortControllerRef.current = null;
+    sendingRef.current = false;
+    setSending(false);
     setMessages([]);
     setError("");
   }
 
   async function sendMessage(text: string) {
     const content = text.trim();
-    if (!content || sending) return;
-    setError("");
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content }];
-    setMessages(nextMessages);
-    setInput("");
+    if (!content || sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
+    setError("");
+    const userMessage: ChatMessage = { id: createMessageId(), role: "user", content };
+    const requestId = ++activeRequestIdRef.current;
+    const abortController = new AbortController();
+    activeAbortControllerRef.current = abortController;
+    const historyForRequest = [...messagesRef.current, userMessage];
+    messagesRef.current = historyForRequest;
+    setMessages(historyForRequest);
+    setInput("");
     try {
       const response = await fetch("/api/portal/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
-          messages: nextMessages.slice(-MAX_HISTORY_MESSAGES_SENT).map(({ role, content: messageContent }) => ({ role, content: messageContent })),
+          messages: historyForRequest.slice(-MAX_HISTORY_MESSAGES_SENT).map(({ role, content: messageContent }) => ({ role, content: messageContent })),
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "Não consegui responder agora.");
+      if (activeRequestIdRef.current !== requestId) return;
       const proposal = buildPatientProposal(data.proposedUpdate as Record<string, unknown> | undefined);
-      setMessages([...nextMessages, { role: "assistant", content: data.reply, facts: data.facts, proposal: proposal ?? undefined }]);
+      messagesRef.current = [
+        ...messagesRef.current,
+        { id: createMessageId(), role: "assistant", content: data.reply, facts: data.facts, proposal: proposal ?? undefined },
+      ];
+      setMessages(messagesRef.current);
       const navigateAction = data.navigateAction as { section?: PatientPortalSection } | undefined;
       if (navigateAction?.section) scrollToSection(navigateAction.section);
     } catch (cause) {
+      if (activeRequestIdRef.current !== requestId) return;
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
       setError(cause instanceof Error ? cause.message : "Não consegui responder agora. Tente novamente.");
     } finally {
-      setSending(false);
+      if (activeRequestIdRef.current === requestId) {
+        sendingRef.current = false;
+        setSending(false);
+      }
     }
   }
 
@@ -150,59 +198,70 @@ export function PatientAiChatWidget() {
       void sendMessage(action.message);
       return;
     }
-    if (sending) return;
-    setError("");
-    setMessages((current) => [...current, { role: "user", content: action.label }]);
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
+    setError("");
+    const requestId = ++activeRequestIdRef.current;
+    const abortController = new AbortController();
+    activeAbortControllerRef.current = abortController;
+    setMessages((current) => [...current, { id: createMessageId(), role: "user", content: action.label }]);
     try {
       const response = await fetch("/api/portal/ai/quick-facts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({ action: action.action }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "Não consegui buscar essa informação agora.");
-      setMessages((current) => [...current, { role: "assistant", content: "", facts: data.facts }]);
+      if (activeRequestIdRef.current !== requestId) return;
+      setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: "", facts: data.facts }]);
     } catch (cause) {
+      if (activeRequestIdRef.current !== requestId) return;
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
       setError(cause instanceof Error ? cause.message : "Não consegui buscar essa informação agora.");
     } finally {
-      setSending(false);
+      if (activeRequestIdRef.current === requestId) {
+        sendingRef.current = false;
+        setSending(false);
+      }
     }
   }
 
-  function updateProposal(messageIndex: number, updater: (proposal: PatientProposal) => PatientProposal) {
-    setMessages((current) => current.map((message, index) => {
-      if (index !== messageIndex || !message.proposal) return message;
+  function updateProposal(messageId: string, updater: (proposal: PatientProposal) => PatientProposal) {
+    setMessages((current) => current.map((message) => {
+      if (message.id !== messageId || !message.proposal) return message;
       return { ...message, proposal: updater(message.proposal) };
     }));
   }
 
-  function discardProposal(messageIndex: number, proposal: PatientProposal) {
-    updateProposal(messageIndex, (current) => ({ ...current, status: "discarded" }));
+  function discardProposal(messageId: string, proposal: PatientProposal) {
+    updateProposal(messageId, (current) => ({ ...current, status: "discarded" }));
     if (proposal.proposalId) {
       void fetch(`/api/portal/ai/proposals/${proposal.proposalId}/cancel`, { method: "POST" }).catch(() => {});
     }
   }
 
-  async function confirmProposal(messageIndex: number, proposal: PatientProposal) {
+  async function confirmProposal(messageId: string, proposal: PatientProposal) {
     if (!proposal.proposalId) {
-      updateProposal(messageIndex, (current) => ({ ...current, status: "error", error: "Não foi possível confirmar. Peça novamente ao assistente." }));
+      updateProposal(messageId, (current) => ({ ...current, status: "error", error: "Não foi possível confirmar. Peça novamente ao assistente." }));
       return;
     }
-    updateProposal(messageIndex, (current) => ({ ...current, status: "applying", error: undefined }));
+    updateProposal(messageId, (current) => ({ ...current, status: "applying", error: undefined }));
     try {
       const response = await fetch(`/api/portal/ai/proposals/${proposal.proposalId}/confirm`, { method: "POST" });
       const data = await response.json();
       if (!response.ok) {
         if (response.status === 410) {
-          updateProposal(messageIndex, (current) => ({ ...current, status: "expired" }));
+          updateProposal(messageId, (current) => ({ ...current, status: "expired" }));
           return;
         }
         throw new Error(data.message ?? (proposal.kind === "patient_change_request" ? "Não foi possível enviar a solicitação." : "Não foi possível marcar a consulta."));
       }
-      updateProposal(messageIndex, (current) => ({ ...current, status: "applied" }));
+      updateProposal(messageId, (current) => ({ ...current, status: "applied" }));
     } catch (cause) {
-      updateProposal(messageIndex, (current) => ({
+      updateProposal(messageId, (current) => ({
         ...current,
         status: "error",
         error: cause instanceof Error ? cause.message : (proposal.kind === "patient_change_request" ? "Não foi possível enviar a solicitação." : "Não foi possível marcar a consulta."),
@@ -276,12 +335,12 @@ export function PatientAiChatWidget() {
                 </p>
               </div>
             )}
-            {messages.map((message, index) => {
+            {messages.map((message) => {
               const facts = message.facts;
               const currentFoodForReview =
                 facts?.type === "food_alternatives" && facts.data.found ? facts.data.currentFood : undefined;
               return (
-              <div key={index} className="space-y-2">
+              <div key={message.id} className="space-y-2">
                 {message.content && (
                   <div
                     className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-6 ${
@@ -314,8 +373,8 @@ export function PatientAiChatWidget() {
                 {message.proposal && (
                   <PatientProposalCard
                     proposal={message.proposal}
-                    onDiscard={() => discardProposal(index, message.proposal!)}
-                    onConfirm={() => void confirmProposal(index, message.proposal!)}
+                    onDiscard={() => discardProposal(message.id, message.proposal!)}
+                    onConfirm={() => void confirmProposal(message.id, message.proposal!)}
                   />
                 )}
               </div>
