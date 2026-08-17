@@ -51,7 +51,7 @@ describe("applyMealPlanChangesWithPreview", () => {
     const plan = basePlan();
     const result = applyMealPlanChangesWithPreview(
       plan.meals,
-      [{ operation: "replace_item", mealId: "meal-1", itemId: "item-1", food: { foodName: "Maçã, Fuji, com casca, crua", tacoNumber: 222 }, quantity: 130, unit: "g" }],
+      [{ operation: "replace_item", mealId: "meal-1", itemId: "item-1", food: { foodName: "Maçã, Fuji, com casca, crua", source: "TACO", refId: "222" }, quantity: 130, unit: "g" }],
       plan.title
     );
     const meal = result.meals.find((m) => m.id === "meal-1")!;
@@ -102,7 +102,7 @@ describe("applyMealPlanChangesWithPreview", () => {
     const plan = basePlan();
     const added = applyMealPlanChangesWithPreview(
       plan.meals,
-      [{ operation: "add_item", mealId: "meal-2", food: { foodName: "Maçã, Fuji, com casca, crua", tacoNumber: 222 }, quantity: 150, unit: "g" }],
+      [{ operation: "add_item", mealId: "meal-2", food: { foodName: "Maçã, Fuji, com casca, crua", source: "TACO", refId: "222" }, quantity: 150, unit: "g" }],
       plan.title
     );
     expect(added.meals.find((m) => m.id === "meal-2")!.items).toHaveLength(2);
@@ -167,7 +167,7 @@ describe("mealPlanChangeOperationSchema — validação de quantidade/unidade", 
     const { mealPlanChangeOperationSchema } = await import("../lib/ai/schemas/action.schema");
     const parsed = mealPlanChangeOperationSchema.parse({
       operation: "add_item", mealId: "meal-1",
-      food: { foodName: "Maçã", tacoNumber: 222 },
+      food: { foodName: "Maçã", source: "TACO", refId: "222" },
       quantity: 100, unit: "g",
       macros: { kcal: 999999 }, // campo inventado — nao existe no schema
     } as unknown);
@@ -197,7 +197,7 @@ describe("executeProposeMealPlanChange (tool)", () => {
     const { executeProposeMealPlanChange } = await import("../lib/ai/agents/nutrition/meal-plan-change-agent");
     const output = await executeProposeMealPlanChange({
       mealPlanId: "plan-1", baseVersion: 3,
-      changes: [{ operation: "add_item", mealId: "meal-1", food: { foodName: "Alimento inventado", tacoNumber: 987654321 }, quantity: 100, unit: "g" }],
+      changes: [{ operation: "add_item", mealId: "meal-1", food: { foodName: "Alimento inventado", source: "TACO", refId: "987654321" }, quantity: 100, unit: "g" }],
     });
     expect(output).toEqual({ error: expect.stringContaining("TACO") });
   });
@@ -241,7 +241,7 @@ const admin: SessionPayload = { sub: "admin-1", email: "bruna@example.com", name
 function validChanges(): ProposedAction {
   return {
     kind: "meal_plan_change", clientId: "client-1", mealPlanId: "plan-1", baseVersion: 3,
-    changes: [{ operation: "replace_item", mealId: "meal-1", itemId: "item-1", food: { foodName: "Maçã, Fuji, com casca, crua", tacoNumber: 222 }, quantity: 130, unit: "g" }],
+    changes: [{ operation: "replace_item", mealId: "meal-1", itemId: "item-1", food: { foodName: "Maçã, Fuji, com casca, crua", source: "TACO", refId: "222" }, quantity: 130, unit: "g" }],
     preview: {
       mealPlanTitle: "Plano padrão",
       changeSummaries: [{ operation: "replace_item", mealName: "Lanche da tarde", before: "Banana, da terra, crua — 100g", after: "Maçã, Fuji, com casca, crua — 130g" }],
@@ -298,7 +298,7 @@ describe("executeProposedAction — meal_plan_change (handler de confirmação)"
     const { executeProposedAction } = await import("../lib/ai/core/proposal-handlers");
     const action = validChanges();
     (action as { changes: unknown[] }).changes = [
-      { operation: "add_item", mealId: "meal-1", food: { foodName: "Fantasia", tacoNumber: 987654321 }, quantity: 100, unit: "g" },
+      { operation: "add_item", mealId: "meal-1", food: { foodName: "Fantasia", source: "TACO", refId: "987654321" }, quantity: 100, unit: "g" },
     ];
     await expect(executeProposedAction(action, { adminId: admin.sub })).rejects.toMatchObject({ status: 422 });
     expect(updateMealPlan).not.toHaveBeenCalled();
@@ -335,7 +335,7 @@ describe("executeProposedAction — meal_plan_change (handler de confirmação)"
     expect(payloadArg.substitutions).toBe(plan.substitutions);
     expect(payloadArg.supplements).toBe(plan.supplements);
     expect(payloadArg.meals.find((m: MealPlanMealPayload) => m.id === "meal-1").items[0].food).toBe("Maçã, Fuji, com casca, crua");
-    expect(result).toEqual({ data: { mealPlanId: "plan-1", newVersion: 4 } });
+    expect(result).toEqual({ data: { mealPlanId: "plan-1", previousVersion: 3, newVersion: 4 } });
   });
 });
 
@@ -413,7 +413,7 @@ describe("crash pós-versionamento: nova versão criada, finalize nunca roda, re
     const first = await POST(makeRequest("/api/admin/ai/proposals/proposal-1/confirm"), { params: Promise.resolve({ id: "proposal-1" }) });
     const firstBody = await first.json();
     expect(first.status).toBe(200);
-    expect(firstBody).toEqual({ status: "completed", kind: "meal_plan_change", mealPlanId: "plan-1", newVersion: 4 });
+    expect(firstBody).toEqual({ status: "completed", kind: "meal_plan_change", mealPlanId: "plan-1", previousVersion: 3, newVersion: 4 });
     expect(updateMealPlan).toHaveBeenCalledTimes(1);
     // Bookkeeping "morreu" — proposta fica presa em executing, diagnosticavel manualmente.
     expect(db.statusOf("proposal-1")).toBe("executing");
@@ -428,7 +428,7 @@ describe("crash pós-versionamento: nova versão criada, finalize nunca roda, re
     const retry = await POST(makeRequest("/api/admin/ai/proposals/proposal-1/confirm"), { params: Promise.resolve({ id: "proposal-1" }) });
     const retryBody = await retry.json();
     expect(retry.status).toBe(200);
-    expect(retryBody).toEqual({ status: "completed", kind: "meal_plan_change", mealPlanId: "plan-1", newVersion: 4 });
+    expect(retryBody).toEqual({ status: "completed", kind: "meal_plan_change", mealPlanId: "plan-1", previousVersion: 3, newVersion: 4 });
     expect(updateMealPlan).toHaveBeenCalledTimes(1); // continua 1 — nao criou versao 5
     void originalClaim;
   });

@@ -536,7 +536,7 @@ defineTool({
 
 defineTool({
   name: PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME,
-  description: "Monta uma proposta estruturada de alteracao do plano alimentar ativo do cliente atual (adicionar/remover/renomear refeicao, adicionar/remover/substituir item, mudar quantidade/medida/horario), com preview de impacto nos macros calculado deterministicamente, para revisao humana antes de aplicar.",
+  description: "Monta uma proposta estruturada de alteracao do plano alimentar ativo do cliente atual (adicionar/remover/renomear/duplicar/reordenar refeicao, adicionar/remover/substituir/duplicar/reordenar item, mudar quantidade/medida/horario), com preview de impacto nos macros calculado deterministicamente, para revisao humana antes de aplicar. Todo alimento precisa vir de searchFoods (source/refId reais) — nunca so o nome.",
   inputSchema: proposeMealPlanChangeInputSchema,
   risk: "clinical",
   profiles: ADMIN,

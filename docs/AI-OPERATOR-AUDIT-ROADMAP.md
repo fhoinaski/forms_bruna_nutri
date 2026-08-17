@@ -343,6 +343,112 @@ Não exigiu mudança de mecanismo — as 4 tools recebem o id do recurso como pa
 
 `tsc --noEmit` limpo, `eslint .` limpo, `npm run build` sem erro, suíte completa: **1005/1005**. Testes de IA: **525/525** (55 novos).
 
+## Fase 4 — relatório (meal plan writes seguros)
+
+### Operações suportadas
+
+11 operações dentro da MESMA `mealPlanChangeOperationSchema` (discriminated union) já existente — nenhuma proposal kind nova:
+
+| Operação | Status |
+|---|---|
+| `add_meal` / `rename_meal` / `change_meal_time` | já existiam (Fase 1/2) |
+| `duplicate_meal` | **novo** — copia refeição+itens para logo depois dela |
+| `reorder_meals` | **novo** — permutação completa dos ids reais |
+| `add_item` / `replace_item` | já existiam, **reforçados**: agora exigem `source`+`refId` reais (TACO/CUSTOM/MANUFACTURER) em vez de só `tacoNumber`, e aceitam `householdMeasureId` opcional |
+| `remove_item` | já existia |
+| `change_quantity` / `change_measure` | já existiam (unidade genérica; `change_measure` não ganhou `householdMeasureId` nesta fase — decisão de escopo, ver Gaps) |
+| `duplicate_item` | **novo** |
+| `reorder_items` | **novo** — permutação completa dos ids reais de uma refeição |
+
+### Proposal kinds
+
+**Nenhum kind novo** — reaproveitado 100% o `meal_plan_change` já existente (`risk: "clinical"`, sempre exige confirmação), conforme item 8 do pedido ("preferir reutilizar... não multiplicar kinds"). `applyMealPlanChangesWithPreview` continua sendo a ÚNICA lógica de mutação, usada tanto pela tool (preview) quanto pelo handler de confirmação — preview nunca diverge do que será aplicado.
+
+### Versioning
+
+Fechada uma janela de corrida real e pré-existente: `executeMealPlanChange` (handler) não passava `options.expectedVersion` a `updateMealPlan`, então a checagem interna dele comparava a versão recém-lida CONTRA ELA MESMA (sempre verdadeira) — só a checagem manual anterior (contra uma leitura potencialmente mais antiga) protegia, deixando uma janela real entre os dois pontos. Agora `updateMealPlan` recebe `{ expectedVersion: action.baseVersion, changedByAdminId: ctx.adminId, source: "ai_proposal" }` — a checagem interna dele passa a comparar contra a versão ORIGINAL da proposta, fechando a janela. Efeito colateral corrigido: alterações via IA antes eram gravadas em `meal_plan_versions` com `source: "manual"` (nunca era passado); agora corretamente `"ai_proposal"`.
+
+### Food resolution
+
+`add_item`/`replace_item` agora exigem `{foodName, source: "TACO"|"CUSTOM"|"MANUFACTURER", refId}` — nunca só o nome (item 3 do pedido). `resolveMealPlanChangeReferences` (novo, `meal-plan-change-agent.ts`) pré-busca (fora do motor puro/síncrono) todo `CUSTOM`/`MANUFACTURER` referenciado via `getCustomFoodById` + `toMacroReferenceFood`, monta `references = [...TACO_REFERENCES, ...customs]`, e `findFoodReferenceByIdentity` (já existente em `lib/nutrition/macros.ts`, reaproveitado — não duplicado) resolve por identidade estruturada. Revalidado de novo (nunca confia na tool) em `executeMealPlanChange`.
+
+### Portions
+
+`add_item`/`replace_item` aceitam `householdMeasureId` opcional. Quando informado, `resolveMeasureForChange` (dentro do motor de aplicação) verifica que a `food_portions` row pertence EXATAMENTE ao `source`/`refId` do alimento sendo referenciado — se não pertencer, ou não existir, rejeita com erro claro (nunca inventa peso, item 5 do pedido). Sem `householdMeasureId`, cai na conversão genérica já existente (marcada como estimativa no preview, comportamento inalterado). `change_measure` deliberadamente NÃO ganhou `householdMeasureId` nesta fase (ver Gaps).
+
+### Snapshots
+
+Nenhuma lógica de snapshot nova — `item.food_source`/`item.food_ref_id`/`item.household_measure_id` (as MESMAS colunas do editor manual) são preenchidas corretamente pelas operações novas/reforçadas, e `updateMealPlan` (já existente, intocado) computa `food_name_snapshot`/`nutrition_snapshot`/`resolved_grams_snapshot`/`quantity_resolution_snapshot` automaticamente, exatamente como já fazia para qualquer edição manual — sem caminho paralelo.
+
+### Race/stale
+
+`reorder_meals`/`reorder_items` exigem uma permutação EXATA dos ids reais atuais (nunca um índice solto, item 13 do pedido) — rejeitados se algum id não existir mais, se sobrar/faltar algum, ou se alguma refeição/item da lista ainda não tem id (foi adicionado/duplicado na MESMA proposta, antes de persistir). `reschedule`-style race (versão mudou entre proposta e confirmação) testado explicitamente simulando `updateMealPlan` detectando a divergência sozinho.
+
+### Audit
+
+Sem mudança na rota de confirmação (genérica, intocada) — `data` retornado pelo handler agora inclui `previousVersion` além de `newVersion` (before/after, item 18 do pedido), que aparece automaticamente no audit log genérico já existente. `changedByAdminId`/`source:"ai_proposal"` agora corretos na tabela `meal_plan_versions`.
+
+### Multi-turn
+
+Não exigiu mudança de mecanismo — `mealPlanId`/`baseVersion`/ids de refeição/item continuam vindo do contexto já injetado no prompt quando há cliente aberto (mecanismo existente desde antes desta fase), e `source`/`refId` de alimento são resolvidos via `searchFoods` (Fase 1) no mesmo turno ou em turnos anteriores.
+
+### Testes
+
+`tests/ai-meal-plan-change.test.ts` (26 testes, todos os 6 fixtures `tacoNumber` migrados para `source`+`refId`, nenhuma regressão) + `tests/ai-meal-plan-write-fase4.test.ts` (novo, 16 testes): resolução CUSTOM/MANUFACTURER (happy + refId inválido), medidas caseiras (happy + medida de outro alimento + medida inexistente), `duplicate_meal`/`reorder_meals` (happy + permutação inválida + refeição sem id na mesma proposta), `duplicate_item`/`reorder_items` (mesmos casos), race condition de versão (409 mesmo com checagem manual "passando"), audit (`expectedVersion`/`source` corretos), e teste nutricional (`getMealPlanNutrition` reflete o estado real pós-mudança, nunca recalculado pela IA).
+
+### Gaps
+
+- `change_measure` não ganhou `householdMeasureId` nesta fase (decisão consciente de escopo — usar `replace_item` com `householdMeasureId` para trocar para uma medida específica).
+- `calculatePlanNutrients`/`totalVsTarget` continuam TACO-only (`TACO_ONLY_LOOKUP`) — um plano com item CUSTOM/MANUFACTURER fica de fora da cobertura de `getMealPlanNutrition`/`totalVsTarget` (mesmo comportamento de antes desta fase, documentado, não piorado).
+- Nenhum write clínico fora do escopo já existente (diagnóstico, marcador de alergia, prontuário, ativar/excluir plano, excluir paciente) — conforme pedido explícito.
+- Mesma limitação de ambiente das fases anteriores: sem `*_API_KEY` configurada, sem E2E conversacional real.
+
+### Gates
+
+`tsc --noEmit` limpo, `eslint .` limpo, `npm run build` sem erro, suíte completa: **1021/1021**. Testes de IA: **541/541** (16 novos).
+
+## Fase 4B — relatório (consistência nutricional multi-source)
+
+### Causa do TACO-only
+
+Confirmada por auditoria: o MOTOR (`lib/nutrition/nutrients.ts#resolveItemReference`/`calculatePlanNutrients`) **já suportava** TACO/CUSTOM/MANUFACTURER via a interface `FoodReferenceLookup` (`byTacoNumber`/`byCustomId`/`byUsdaId?`/`fuzzyMatch`/`byMeasureId?`) desde antes desta fase — o gap nunca foi na engine. O gap era um `TACO_ONLY_LOOKUP` hardcoded dentro de `lib/ai/agents/nutrition/meal-plan-change-agent.ts` (`byCustomId: () => null`), usado tanto por `executeGetMealPlanNutrition` (leitura) quanto por `applyMealPlanChangesWithPreview`'s cálculo de `totalVsTarget` (escrita) — ou seja, **dois pontos** com o mesmo lookup incompleto, não um. `calculateItemNutrients`/`getFoodNutrientsFromReference` (também auditados) já preservavam `null` vs `0` corretamente e já priorizavam snapshot histórico antes de qualquer resolução por catálogo — nenhum dos dois precisou de mudança.
+
+### Arquitetura corrigida
+
+Nenhum cálculo paralelo criado — mesma engine, lookup corrigido:
+- `resolveMealPlanChangeReferences(plan, changes?)` (já existia da Fase 4, para o path de escrita) agora também escaneia os **itens já existentes** do plano por `food_source`/`food_ref_id` CUSTOM/MANUFACTURER (antes só olhava `changes`, deixando itens não tocados pela mudança atual sem referência estruturada disponível) — corrige um gap latente introduzido na própria Fase 4. `changes` virou opcional, permitindo reuso direto no path de leitura.
+- `buildFoodReferenceLookup(references, measuresById)` (novo) — adapta o `references`/`measuresById` já resolvidos para o `FoodReferenceLookup` que `calculatePlanNutrients` espera, delegando a `getTacoFoodByNumber`/`findBestFoodReference` (já existentes, nunca duplicados).
+- `executeGetMealPlanNutrition` e o cálculo de `totalVsTarget` dentro de `applyMealPlanChangesWithPreview` passaram a usar `resolveMealPlanChangeReferences` + `buildFoodReferenceLookup` em vez do `TACO_ONLY_LOOKUP` removido.
+
+Fluxo final, idêntico em leitura e escrita: `meal_plan_item → food_source+food_ref_id → resolveMealPlanChangeReferences (I/O, fora do motor puro) → FoodReferenceLookup → calculatePlanNutrients/resolveItemReference (motor puro, inalterado) → agregado`.
+
+### Sources suportadas
+
+TACO (inclui TBCA/complementar, já mesclado em `TACO_REFERENCES`), CUSTOM, MANUFACTURER — as 3 que o schema (`mealPlanFoodReferenceSchema`, Fase 4) realmente permite hoje. Auditado e confirmado: **não existe** repositório/fonte de dado USDA no projeto — `byUsdaId` fica deliberadamente ausente do lookup (a interface já trata como opcional); um item com `food_source: "USDA"` cai no `fuzzyMatch` por texto, mesmo comportamento de antes desta correção, nunca um dado inventado (item 5 do pedido: "não invente suporte se o schema ainda não permitir").
+
+### Legacy fallback
+
+Preservado sem alteração — item sem `food_source`/`food_ref_id` (plano antigo) sempre caiu (e continua caindo) no `fuzzyMatch` por texto dentro de `resolveItemReference`, que não foi tocado.
+
+### Snapshot behavior
+
+Preservado sem alteração — `resolveItemReference` já verificava `nutrition_snapshot` ANTES de tocar `food_source`/`food_ref_id`/catálogo (`referenceFromSnapshot`, `lib/nutrition/food-snapshot.ts`, intocado). Testado explicitamente: um item com snapshot histórico e `food_ref_id` apontando para um alimento personalizado **já removido** do catálogo (`getCustomFoodById` retornando `null`) ainda calcula pelo valor do snapshot, nunca 0/erro.
+
+### Testes
+
+`tests/ai-meal-plan-nutrition-multisource.test.ts` (novo, 8 testes): agregação com TACO+CUSTOM+MANUFACTURER+item legado no mesmo total (regressão explícita do bug antigo — um CUSTOM sozinho não somava mais que 0); snapshot histórico sobrevive a alimento removido do catálogo; medida caseira conhecida vs. ausente (nunca quebra o plano inteiro); NULL vs. zero real preservados na agregação (testado direto via `calculatePlanNutrients`, verificando `coverage` por nutriente); fluxo completo do assistente ("adicione 100g de banana" → `applyMealPlanChangesWithPreview` → `getMealPlanNutrition` no plano resultante já reflete o total). `tests/ai-meal-plan-change.test.ts` (26 testes da Fase 4) sem regressão.
+
+**Achado de teste registrado em memória**: a mesma armadilha de `vi.doMock` vs. `import()` já documentada na Fase 3 se repetiu de forma mais sutil aqui — importar (mesmo dinamicamente) uma função ANTES de registrar `vi.doMock` do repositório que ela usa transitivamente cacheia a instância real, e um `vi.doMock` registrado DEPOIS, no MESMO teste, não desfaz esse cache. Corrigido reordenando: `vi.doMock` sempre primeiro, um único `import()` depois.
+
+### Gates
+
+`tsc --noEmit` limpo, `eslint .` limpo, `npm run build` sem erro, suíte completa: **1031/1031**. Testes de IA: **549/549** (8 novos).
+
+### Gaps restantes
+
+- Item com `food_source: "USDA"` continua sem fonte de dado real (sem repositório USDA no projeto) — cai em fuzzy match, documentado, não é regressão desta fase.
+- Nenhuma mudança em UI/MealPlanEditor/USDA import/food catalog ranking/clinical policy/proposal engine/write clínico, conforme pedido.
+
 ## 5. Antes de escolher uma fase
 
 Perguntas em aberto que mudam o escopo de Fase 1/5:

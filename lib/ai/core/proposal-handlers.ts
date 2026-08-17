@@ -14,8 +14,13 @@ import { getSubmissionById } from "@/lib/repositories/submissions";
 import { upsertPreAnalysis } from "@/lib/repositories/pre-analyses";
 import { createBlogPost } from "@/lib/repositories/blog-posts";
 import { blogContentDomainSchema, blogReferenceSchema, type BlogReference } from "@/lib/ai/research/editorial-sources";
-import { getActiveMealPlan, getMealPlanById, updateMealPlan } from "@/lib/repositories/meal-plans";
-import { applyMealPlanChangesWithPreview, MealPlanChangeValidationError } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
+import { getActiveMealPlan, getMealPlanById, updateMealPlan, MealPlanVersionConflictError } from "@/lib/repositories/meal-plans";
+import {
+  applyMealPlanChangesWithPreview,
+  MealPlanChangeValidationError,
+  resolveMealPlanChangeReferences,
+  validateMealPlanFoodReferences,
+} from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { normalize } from "@/lib/nutrition/macros";
 import { createPatientRequest, findSimilarPendingPatientRequest, updatePatientRequestStatus, getPatientRequestById } from "@/lib/repositories/patient-requests";
 import { getPaymentById, updatePayment } from "@/lib/repositories/payments";
@@ -346,7 +351,7 @@ const executeNewBlogPost: ProposalHandler<"new_blog_post"> = async (action) => {
 
 // ── meal_plan_change (alteracao estruturada do plano alimentar) ────────
 
-const executeMealPlanChange: ProposalHandler<"meal_plan_change"> = async (action) => {
+const executeMealPlanChange: ProposalHandler<"meal_plan_change"> = async (action, ctx) => {
   const client = await getClientById(action.clientId);
   if (!client) throw new ProposalExecutionError("Paciente não encontrado.", 404);
 
@@ -369,20 +374,16 @@ const executeMealPlanChange: ProposalHandler<"meal_plan_change"> = async (action
     );
   }
 
-  // Revalida TACO no momento da execucao — nunca confia no que foi
+  // Revalida os alimentos referenciados (TACO/CUSTOM/MANUFACTURER) e resolve
+  // medidas caseiras no momento da execucao — nunca confia no que foi
   // calculado quando a proposta foi gerada (mesmo padrao de executeNewRecipe).
-  for (const change of action.changes) {
-    if ("food" in change && change.food.tacoNumber !== null && !getTacoFoodByNumber(change.food.tacoNumber)) {
-      throw new ProposalExecutionError(
-        `O alimento "${change.food.foodName}" não corresponde a um alimento válido na base TACO.`,
-        422
-      );
-    }
-  }
+  const { references, measuresById } = await resolveMealPlanChangeReferences(plan, action.changes);
+  const referenceError = validateMealPlanFoodReferences(action.changes, references);
+  if (referenceError) throw new ProposalExecutionError(referenceError, 422);
 
   let newMeals;
   try {
-    newMeals = applyMealPlanChangesWithPreview(plan.meals, action.changes, plan.title).meals;
+    newMeals = applyMealPlanChangesWithPreview(plan.meals, action.changes, plan.title, undefined, references, measuresById).meals;
   } catch (error) {
     const message = error instanceof MealPlanChangeValidationError ? error.message : "Não foi possível aplicar esta alteração.";
     throw new ProposalExecutionError(message, 422);
@@ -394,22 +395,37 @@ const executeMealPlanChange: ProposalHandler<"meal_plan_change"> = async (action
   // As metas (target_*) precisam ser passadas explicitamente aqui — sem
   // isso, updateMealPlan as trataria como "nao definidas" e apagaria uma
   // meta que a nutricionista ja tinha configurado manualmente.
-  const updated = await updateMealPlan(plan.id, action.clientId, {
-    title: plan.title,
-    status: plan.status,
-    notes: plan.notes,
-    target_energy_kcal: plan.target_energy_kcal,
-    target_protein_g: plan.target_protein_g,
-    target_carbohydrate_g: plan.target_carbohydrate_g,
-    target_fat_g: plan.target_fat_g,
-    meals: newMeals,
-    weekly_slots: plan.weekly_slots,
-    substitutions: plan.substitutions,
-    supplements: plan.supplements,
-  });
+  //
+  // `expectedVersion: action.baseVersion` (FASE 4, item 6/20 do pedido de
+  // race condition) fecha uma janela real: sem isso, a re-leitura interna de
+  // updateMealPlan comparava a versao com ELA MESMA (sempre verdadeiro),
+  // deixando so a checagem manual acima (contra uma leitura mais antiga)
+  // como protecao — passando o baseVersion ORIGINAL aqui, a checagem interna
+  // de updateMealPlan volta a ser contra o valor certo, mesmo sob corrida.
+  let updated;
+  try {
+    updated = await updateMealPlan(plan.id, action.clientId, {
+      title: plan.title,
+      status: plan.status,
+      notes: plan.notes,
+      target_energy_kcal: plan.target_energy_kcal,
+      target_protein_g: plan.target_protein_g,
+      target_carbohydrate_g: plan.target_carbohydrate_g,
+      target_fat_g: plan.target_fat_g,
+      meals: newMeals,
+      weekly_slots: plan.weekly_slots,
+      substitutions: plan.substitutions,
+      supplements: plan.supplements,
+    }, { expectedVersion: action.baseVersion, changedByAdminId: ctx.adminId, source: "ai_proposal" });
+  } catch (error) {
+    if (error instanceof MealPlanVersionConflictError) {
+      throw new ProposalExecutionError("O plano foi alterado depois que esta proposta foi criada. Revise novamente antes de aplicar.", 409);
+    }
+    throw error;
+  }
   if (!updated) throw new ProposalExecutionError("Não foi possível salvar a alteração no plano alimentar.", 500);
 
-  return { data: { mealPlanId: updated.id, newVersion: updated.version } };
+  return { data: { mealPlanId: updated.id, previousVersion: plan.version, newVersion: updated.version } };
 };
 
 // ── patient_appointment_request (autoagendamento pedido pelo proprio paciente) ──

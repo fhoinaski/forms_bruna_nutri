@@ -93,9 +93,11 @@ export const newTaskActionSchema = z.object({
 //
 // Alteracao estruturada do plano alimentar (nao mais texto solto dentro do
 // prontuario). `meal_plan_items.food` no banco e texto livre (sem FK para a
-// TACO — ver lib/repositories/meal-plans.ts), entao `tacoNumber` aqui e
-// revalidado em tempo de execucao (nunca persistido como FK) — o mesmo
-// padrao ja usado em `newRecipeActionSchema.ingredients[].taco_number`.
+// TACO — ver lib/repositories/meal-plans.ts), mas `food_source`/`food_ref_id`
+// (colunas reais da tabela, ja usadas pelo editor manual) SAO persistidas a
+// partir de `source`/`refId` abaixo — revalidadas em tempo de execucao
+// (nunca confia no que a tool resolveu antes), nunca so o texto do nome
+// (FASE 4, item 3 do pedido: "nunca persistir apenas nome").
 
 /** Vocabulario fechado de unidade — alinhado ao que quantityInGrams() (lib/nutrition/macros.ts) reconhece. Nunca aceita string livre. */
 export const mealPlanMeasureUnitSchema = z.enum(["g", "kg", "ml", "l", "colher", "xicara", "unidade", "fatia"]);
@@ -104,12 +106,19 @@ export type MealPlanMeasureUnit = z.infer<typeof mealPlanMeasureUnitSchema>;
 /** 5000 e um teto defensivo (nao e limite clinico) so para rejeitar valores absurdos tipo 999999999. */
 const mealPlanQuantitySchema = z.number().finite().positive().max(5000);
 
+/** Mesmas 3 fontes do catalogo unificado (lib/nutrition/food-search.ts) — sempre resolvido via searchFoods antes de propor. */
+export const mealPlanFoodSourceSchema = z.enum(["TACO", "CUSTOM", "MANUFACTURER"]);
+
 export const mealPlanFoodReferenceSchema = z.object({
   foodName: z.string().min(1).max(200),
-  /** numero TACO resolvido pela tool via busca real — null so quando genuinamente nao ha correspondencia (ex.: suplemento de marca). */
-  tacoNumber: z.number().int().nullable(),
+  /** Fonte + id resolvidos por searchFoods/getFoodDetails (FASE 4) — nunca inventados, sempre revalidados no confirm. */
+  source: mealPlanFoodSourceSchema,
+  refId: z.string().min(1).max(120),
 });
 export type MealPlanFoodReference = z.infer<typeof mealPlanFoodReferenceSchema>;
+
+/** Id de uma medida caseira especifica (food_portions.id, resolvida via getFoodPortions) — FASE 4, item 5 do pedido: "se nao houver portion real, nao inventar". */
+const householdMeasureIdSchema = z.string().min(1).max(120).nullable().optional();
 
 export const mealPlanChangeOperationSchema = z.discriminatedUnion("operation", [
   z.object({
@@ -121,6 +130,17 @@ export const mealPlanChangeOperationSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("remove_meal"), mealId: z.string().min(1) }),
   z.object({ operation: z.literal("rename_meal"), mealId: z.string().min(1), name: z.string().min(1).max(120) }),
   z.object({ operation: z.literal("change_meal_time"), mealId: z.string().min(1), suggestedTime: z.string().max(20).nullable() }),
+  /** Copia a refeicao (com todos os itens) para logo depois dela no plano — a copia so ganha id real ao persistir, entao nao pode ser alvo de reorder_meals/reorder_items na MESMA proposta. */
+  z.object({
+    operation: z.literal("duplicate_meal"),
+    mealId: z.string().min(1),
+    newName: z.string().min(1).max(120).nullable().optional(),
+  }),
+  /** Lista COMPLETA (permutacao) dos ids reais das refeicoes do plano, na ordem final desejada — nunca um indice solto. */
+  z.object({
+    operation: z.literal("reorder_meals"),
+    mealIds: z.array(z.string().min(1)).min(1).max(50),
+  }),
   z.object({
     operation: z.literal("add_item"),
     mealId: z.string().min(1),
@@ -128,6 +148,7 @@ export const mealPlanChangeOperationSchema = z.discriminatedUnion("operation", [
     quantity: mealPlanQuantitySchema,
     unit: mealPlanMeasureUnitSchema,
     notes: z.string().max(300).nullable().optional(),
+    householdMeasureId: householdMeasureIdSchema,
   }),
   z.object({ operation: z.literal("remove_item"), mealId: z.string().min(1), itemId: z.string().min(1) }),
   z.object({
@@ -138,9 +159,14 @@ export const mealPlanChangeOperationSchema = z.discriminatedUnion("operation", [
     quantity: mealPlanQuantitySchema,
     unit: mealPlanMeasureUnitSchema,
     notes: z.string().max(300).nullable().optional(),
+    householdMeasureId: householdMeasureIdSchema,
   }),
   z.object({ operation: z.literal("change_quantity"), mealId: z.string().min(1), itemId: z.string().min(1), quantity: mealPlanQuantitySchema }),
   z.object({ operation: z.literal("change_measure"), mealId: z.string().min(1), itemId: z.string().min(1), unit: mealPlanMeasureUnitSchema }),
+  /** Copia o item para logo depois dele na mesma refeicao — a copia so ganha id real ao persistir, entao nao pode ser alvo de reorder_items na MESMA proposta. */
+  z.object({ operation: z.literal("duplicate_item"), mealId: z.string().min(1), itemId: z.string().min(1) }),
+  /** Lista COMPLETA (permutacao) dos ids reais dos itens desta refeicao, na ordem final desejada — nunca um indice solto. */
+  z.object({ operation: z.literal("reorder_items"), mealId: z.string().min(1), itemIds: z.array(z.string().min(1)).min(1).max(100) }),
 ]);
 export type MealPlanChangeOperation = z.infer<typeof mealPlanChangeOperationSchema>;
 

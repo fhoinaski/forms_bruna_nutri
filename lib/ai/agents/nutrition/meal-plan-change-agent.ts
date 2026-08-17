@@ -1,11 +1,13 @@
 import { z } from "zod";
-import { getMealPlanById, type MealPlanMealPayload, type MealPlanItemPayload } from "@/lib/repositories/meal-plans";
+import { getMealPlanById, type MealPlanMealPayload, type MealPlanItemPayload, type MealPlanPayload } from "@/lib/repositories/meal-plans";
 import { searchTacoFoods, getTacoFoodByNumber, findBestTacoFood, TACO_REFERENCES } from "@/lib/nutrition/taco";
-import { resolveFoodItemMacros, roundedMacros, type MacroReferenceFood } from "@/lib/nutrition/macros";
-import type { QuantityResolution } from "@/lib/nutrition/quantity-resolution";
+import { resolveFoodItemMacros, roundedMacros, findFoodReferenceByIdentity, findBestFoodReference, type MacroReferenceFood } from "@/lib/nutrition/macros";
+import type { HouseholdMeasureOption, QuantityResolution } from "@/lib/nutrition/quantity-resolution";
 import { calculatePlanNutrients, roundedNutrients, type FoodReferenceLookup } from "@/lib/nutrition/nutrients";
 import { compareTargetVsPrescribed, type NutrientTarget } from "@/lib/nutrition/targets";
 import { findEquivalentFoods as findEquivalentFoodsEngine } from "@/lib/nutrition/equivalence";
+import { getCustomFoodById, toMacroReferenceFood } from "@/lib/repositories/custom-foods";
+import { getFoodPortionById, toHouseholdMeasureOption, type FoodPortion } from "@/lib/repositories/food-portions";
 import {
   mealPlanChangeOperationSchema,
   type MealPlanChangeOperation,
@@ -23,6 +25,13 @@ import { assertCategoryAllowed } from "@/lib/ai/policies/clinical-context-policy
  * (lib/ai/core/proposal-handlers.ts, que aplica de verdade via
  * updateMealPlan). Isso garante que o preview mostrado nunca diverge do que
  * realmente sera aplicado.
+ *
+ * FASE 4 (safe writes de plano alimentar): `food_source`/`food_ref_id`/
+ * `household_measure_id` — as MESMAS colunas que o editor manual usa — sao
+ * persistidos a partir de `source`/`refId`/`householdMeasureId`, nunca so o
+ * nome digitado. `references`/`measuresById` abaixo sao pre-resolvidos de
+ * forma assincrona ANTES de chamar o motor de aplicacao (que continua
+ * puro/sincrono, mesmo desenho de antes desta fase).
  */
 
 export const SEARCH_MEAL_PLAN_FOODS_TOOL_NAME = "searchMealPlanFoods";
@@ -78,30 +87,138 @@ function describeItem(food: string, quantity?: string | null, unit?: string | nu
   return quantity ? `${food} — ${quantity}${unit ?? ""}` : food;
 }
 
+// ── Pre-resolucao assincrona de referencias (fora do motor puro/sincrono) ──
+
 /**
- * Usa a descricao REAL do registro (nao o texto digitado) como "food" para
- * garantir match exato dentro do motor central — nunca reimplementa o
- * calculo de kcal/proteina/carboidrato/gordura que ja existe ali
- * (lib/nutrition/macros.ts#resolveFoodItemMacros). A IA so trabalha com
- * unidades genericas hoje (MealPlanMeasureUnit fechado), entao nunca chega
- * a acionar o metodo "food_household_measure" — isso fica marcado
- * honestamente como estimativa no preview (quality.hasEstimatedValues
- * abaixo), em vez de fingir precisao que a tool nao tem hoje.
+ * Coleta todo refId CUSTOM/MANUFACTURER e todo householdMeasureId
+ * mencionados nas mudancas propostas (mais os household_measure_id dos
+ * itens JA existentes no plano, para o calculo do estado "antes" ficar tao
+ * preciso quanto o que a UI ja mostra) e busca tudo de uma vez — nunca N+1,
+ * nunca dentro do loop sincrono de aplicacao.
  */
-function macrosFromTacoReference(reference: MacroReferenceFood, quantity: number, unit: MealPlanMeasureUnit) {
-  return resolveFoodItemMacros({ food: reference.descricao, quantity, unit }, [reference]);
-}
+export async function resolveMealPlanChangeReferences(
+  plan: Pick<MealPlanPayload, "meals">,
+  changes: MealPlanChangeOperation[] = []
+): Promise<{ references: MacroReferenceFood[]; measuresById: Map<string, FoodPortion> }> {
+  const customRefIds = new Set<string>();
+  const measureIds = new Set<string>();
 
-function resolveFoodMacros(food: MealPlanFoodReference, quantity: number, unit: MealPlanMeasureUnit) {
-  if (food.tacoNumber !== null) {
-    const reference = getTacoFoodByNumber(food.tacoNumber);
-    if (reference) return macrosFromTacoReference(reference, quantity, unit);
+  for (const change of changes) {
+    if ("food" in change && (change.food.source === "CUSTOM" || change.food.source === "MANUFACTURER")) {
+      customRefIds.add(change.food.refId);
+    }
+    if ("householdMeasureId" in change && change.householdMeasureId) {
+      measureIds.add(change.householdMeasureId);
+    }
   }
-  return resolveFoodItemMacros({ food: food.foodName, quantity, unit }, TACO_REFERENCES);
+  // FASE 4B: tambem os itens JA EXISTENTES no plano (nao so os tocados por
+  // `changes`) — sem isso, um item CUSTOM/MANUFACTURER que a mudanca atual
+  // nao toca ficava sem referencia estruturada disponivel (caindo pra fuzzy
+  // match por texto em vez do vinculo exato), tanto no preview de "antes"
+  // quanto no calculo de totalVsTarget.
+  for (const meal of plan.meals) {
+    for (const item of meal.items) {
+      if ((item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER") && item.food_ref_id) {
+        customRefIds.add(item.food_ref_id);
+      }
+      if (item.household_measure_id) measureIds.add(item.household_measure_id);
+    }
+  }
+
+  const [customFoods, portions] = await Promise.all([
+    Promise.all(Array.from(customRefIds).map((id) => getCustomFoodById(id))),
+    Promise.all(Array.from(measureIds).map((id) => getFoodPortionById(id))),
+  ]);
+
+  const references: MacroReferenceFood[] = [
+    ...TACO_REFERENCES,
+    ...customFoods.filter((food): food is NonNullable<typeof food> => Boolean(food)).map(toMacroReferenceFood),
+  ];
+  const measuresById = new Map<string, FoodPortion>();
+  for (const portion of portions) {
+    if (portion) measuresById.set(portion.id, portion);
+  }
+  return { references, measuresById };
 }
 
-function existingItemMacros(item: MealPlanItemPayload) {
-  return resolveFoodItemMacros({ food: item.food, quantity: item.quantity, unit: item.unit, food_source: item.food_source, food_ref_id: item.food_ref_id }, TACO_REFERENCES);
+/**
+ * FASE 4B: adapta `references`/`measuresById` (ja resolvidos, sem I/O
+ * adicional) para o formato `FoodReferenceLookup` que o motor central de
+ * nutrientes (lib/nutrition/nutrients.ts#calculatePlanNutrients) espera —
+ * a MESMA engine usada pelo resto do sistema, nunca um calculo paralelo
+ * para a IA. `byUsdaId` fica deliberadamente ausente: nao existe hoje
+ * nenhum repositorio/fonte de dado USDA no projeto (auditado nesta fase) —
+ * um item com food_source "USDA" cai no fallback fuzzyMatch, mesmo
+ * comportamento de antes desta correcao, nunca um dado inventado.
+ */
+export function buildFoodReferenceLookup(
+  references: MacroReferenceFood[],
+  measuresById: Map<string, FoodPortion>
+): FoodReferenceLookup {
+  return {
+    byTacoNumber: (numero) => getTacoFoodByNumber(numero),
+    byCustomId: (id) => references.find((reference) => (reference.fonte === "custom" || reference.fonte === "manufacturer") && String(reference.numero ?? "") === id) ?? null,
+    fuzzyMatch: (food) => findBestFoodReference(food, references),
+    byMeasureId: (id) => {
+      const portion = measuresById.get(id);
+      return portion ? toHouseholdMeasureOption(portion) : null;
+    },
+  };
+}
+
+/**
+ * Valida que todo `food` referenciado nas mudancas corresponde a um
+ * registro real no catalogo (TACO/CUSTOM/MANUFACTURER) — nunca so o nome
+ * digitado (FASE 4, item 3 do pedido). Chamada tanto na criacao da proposta
+ * quanto de novo na confirmacao (nunca confia no que foi resolvido antes).
+ */
+export function validateMealPlanFoodReferences(changes: MealPlanChangeOperation[], references: MacroReferenceFood[]): string | null {
+  for (const change of changes) {
+    if ("food" in change) {
+      const found = findFoodReferenceByIdentity(references, change.food.source, change.food.refId);
+      if (!found) {
+        return `O alimento "${change.food.foodName}" não corresponde a um registro válido (${change.food.source}/${change.food.refId}). Busque de novo com searchFoods.`;
+      }
+    }
+  }
+  return null;
+}
+
+/** Resolve os macros de um FoodReference estruturado (TACO/CUSTOM/MANUFACTURER) — nunca reimplementa o calculo, so aciona o motor central com a referencia certa. */
+function resolveFoodMacros(
+  food: MealPlanFoodReference,
+  quantity: number,
+  unit: MealPlanMeasureUnit,
+  references: MacroReferenceFood[],
+  householdMeasure?: HouseholdMeasureOption | null
+) {
+  const reference = findFoodReferenceByIdentity(references, food.source, food.refId);
+  if (reference) {
+    return resolveFoodItemMacros({ food: reference.descricao, quantity, unit }, [reference], householdMeasure ?? null);
+  }
+  return resolveFoodItemMacros({ food: food.foodName, quantity, unit }, references, householdMeasure ?? null);
+}
+
+function householdMeasureFor(item: Pick<MealPlanItemPayload, "household_measure_id">, measuresById: Map<string, FoodPortion>): HouseholdMeasureOption | null {
+  if (!item.household_measure_id) return null;
+  const portion = measuresById.get(item.household_measure_id);
+  return portion ? toHouseholdMeasureOption(portion) : null;
+}
+
+function existingItemMacros(item: MealPlanItemPayload, references: MacroReferenceFood[], measuresById: Map<string, FoodPortion>) {
+  return resolveFoodItemMacros(
+    {
+      food: item.food,
+      quantity: item.quantity,
+      unit: item.unit,
+      food_source: item.food_source,
+      food_ref_id: item.food_ref_id,
+      resolved_grams_snapshot: item.resolved_grams_snapshot,
+      quantity_resolution_snapshot: item.quantity_resolution_snapshot,
+    },
+    references,
+    householdMeasureFor(item, measuresById)
+  );
 }
 
 interface MacroDelta { kcal: number; protein: number; carbs: number; fat: number }
@@ -126,26 +243,23 @@ export interface MealPlanChangeApplyResult {
  * refeicoes (nunca muta o array recebido) e, ao mesmo tempo, monta o preview
  * (resumo antes/depois por operacao + impacto total de macros). Lanca
  * MealPlanChangeValidationError se algum mealId/itemId referenciado nao
- * existir no snapshot recebido — isso so deveria acontecer se o modelo
- * inventou um id ou se o plano mudou entre a leitura e a proposta/confirmacao
- * (por isso o baseVersion e checado ANTES de chamar isto, tanto na criacao
- * da proposta quanto na confirmacao).
+ * existir no snapshot recebido, se uma medida caseira nao pertencer ao
+ * alimento, ou se um reorder nao for uma permutacao exata dos ids atuais —
+ * isso so deveria acontecer se o modelo inventou algo ou se o plano mudou
+ * entre a leitura e a proposta/confirmacao (por isso o baseVersion e checado
+ * ANTES de chamar isto, tanto na criacao da proposta quanto na confirmacao).
+ *
+ * `references`/`measuresById` sao pre-resolvidos por
+ * `resolveMealPlanChangeReferences` (assincrono) ANTES desta chamada — este
+ * motor continua puro/sincrono, mesmo desenho de antes da FASE 4.
  */
-// Lookup so-TACO (sem acesso a alimentos personalizados) — este modulo e
-// puro/sincrono hoje; itens vinculados a alimentos personalizados
-// simplesmente ficam de fora do totalVsTarget (cobertura reflete isso, nunca
-// inventa o valor).
-const TACO_ONLY_LOOKUP: FoodReferenceLookup = {
-  byTacoNumber: (numero) => getTacoFoodByNumber(numero),
-  byCustomId: () => null,
-  fuzzyMatch: (food) => findBestTacoFood(food),
-};
-
 export function applyMealPlanChangesWithPreview(
   meals: MealPlanMealPayload[],
   changes: MealPlanChangeOperation[],
   mealPlanTitle: string,
-  target?: NutrientTarget
+  target?: NutrientTarget,
+  references: MacroReferenceFood[] = TACO_REFERENCES,
+  measuresById: Map<string, FoodPortion> = new Map()
 ): MealPlanChangeApplyResult {
   const working: MealPlanMealPayload[] = meals.map((meal) => ({ ...meal, items: meal.items.map((item) => ({ ...item })) }));
   const summaries: MealPlanChangePreview["changeSummaries"] = [];
@@ -161,6 +275,16 @@ export function applyMealPlanChangesWithPreview(
     if (afterResolution) resolutions.push(afterResolution);
   }
 
+  /** Resolve e valida a medida caseira de um `food` referenciado numa mudanca — lanca se a medida nao pertencer a esse alimento exato. */
+  function resolveMeasureForChange(food: MealPlanFoodReference, householdMeasureId: string | null | undefined): FoodPortion | null {
+    if (!householdMeasureId) return null;
+    const portion = measuresById.get(householdMeasureId);
+    if (!portion || portion.food_source !== food.source || portion.food_ref_id !== food.refId) {
+      throw new MealPlanChangeValidationError(`A medida caseira informada não pertence ao alimento "${food.foodName}".`);
+    }
+    return portion;
+  }
+
   for (const change of changes) {
     switch (change.operation) {
       case "add_meal": {
@@ -172,7 +296,7 @@ export function applyMealPlanChangesWithPreview(
         const meal = findMeal(working, change.mealId);
         const before = meal.items.map((item) => describeItem(item.food, item.quantity, item.unit)).join("; ") || "(sem itens)";
         for (const item of meal.items) {
-          applyDelta(existingItemMacros(item).macros, ZERO_DELTA);
+          applyDelta(existingItemMacros(item, references, measuresById).macros, ZERO_DELTA);
         }
         summaries.push({ operation: change.operation, mealName: meal.name, before, after: null });
         working.splice(working.indexOf(meal), 1);
@@ -195,20 +319,72 @@ export function applyMealPlanChangesWithPreview(
         meal.suggested_time = change.suggestedTime ?? null;
         break;
       }
+      case "duplicate_meal": {
+        const meal = findMeal(working, change.mealId);
+        const index = working.indexOf(meal);
+        const copy: MealPlanMealPayload = {
+          name: change.newName?.trim() || `${meal.name} (cópia)`,
+          suggested_time: meal.suggested_time ?? null,
+          notes: meal.notes ?? null,
+          items: meal.items.map((item) => ({ ...item, id: undefined })),
+        };
+        working.splice(index + 1, 0, copy);
+        for (const item of copy.items) {
+          applyDelta(ZERO_DELTA, existingItemMacros(item, references, measuresById).macros);
+        }
+        summaries.push({
+          operation: change.operation,
+          mealName: copy.name,
+          before: null,
+          after: `(cópia de "${meal.name}", ${copy.items.length} item${copy.items.length === 1 ? "" : "ns"})`,
+        });
+        break;
+      }
+      case "reorder_meals": {
+        if (working.some((meal) => !meal.id)) {
+          throw new MealPlanChangeValidationError(
+            "Não é possível reordenar refeições na mesma proposta em que uma refeição nova foi adicionada/duplicada — confirme essa mudança primeiro, depois proponha a reordenação."
+          );
+        }
+        const currentIds = working.map((meal) => meal.id as string);
+        const currentSet = new Set(currentIds);
+        const requestedSet = new Set(change.mealIds);
+        if (currentSet.size !== requestedSet.size || currentIds.some((id) => !requestedSet.has(id))) {
+          throw new MealPlanChangeValidationError(
+            "A nova ordem de refeições precisa incluir exatamente as refeições atuais do plano, sem adicionar ou remover nenhuma."
+          );
+        }
+        const byId = new Map(working.map((meal) => [meal.id as string, meal] as const));
+        const before = currentIds.map((id) => byId.get(id)?.name).join(" → ");
+        working.length = 0;
+        working.push(...change.mealIds.map((id) => byId.get(id)!));
+        summaries.push({ operation: change.operation, mealName: mealPlanTitle, before, after: change.mealIds.map((id) => byId.get(id)?.name).join(" → ") });
+        break;
+      }
       case "add_item": {
         const meal = findMeal(working, change.mealId);
-        const after = describeItem(change.food.foodName, String(change.quantity), change.unit);
-        const result = resolveFoodMacros(change.food, change.quantity, change.unit);
+        const portion = resolveMeasureForChange(change.food, change.householdMeasureId);
+        const householdMeasure = portion ? toHouseholdMeasureOption(portion) : null;
+        const after = describeItem(change.food.foodName, String(change.quantity), portion ? portion.description : change.unit);
+        const result = resolveFoodMacros(change.food, change.quantity, change.unit, references, householdMeasure);
         applyDelta(ZERO_DELTA, result.macros, result.quantity);
         summaries.push({ operation: change.operation, mealName: meal.name, before: null, after });
-        meal.items.push({ food: change.food.foodName, quantity: String(change.quantity), unit: change.unit, notes: change.notes ?? null });
+        meal.items.push({
+          food: change.food.foodName,
+          quantity: String(change.quantity),
+          unit: change.unit,
+          notes: change.notes ?? null,
+          food_source: change.food.source,
+          food_ref_id: change.food.refId,
+          household_measure_id: portion ? portion.id : null,
+        });
         break;
       }
       case "remove_item": {
         const meal = findMeal(working, change.mealId);
         const index = findItemIndex(meal, change.itemId);
         const item = meal.items[index];
-        applyDelta(existingItemMacros(item).macros, ZERO_DELTA);
+        applyDelta(existingItemMacros(item, references, measuresById).macros, ZERO_DELTA);
         summaries.push({ operation: change.operation, mealName: meal.name, before: describeItem(item.food, item.quantity, item.unit), after: null });
         meal.items.splice(index, 1);
         break;
@@ -217,19 +393,24 @@ export function applyMealPlanChangesWithPreview(
         const meal = findMeal(working, change.mealId);
         const index = findItemIndex(meal, change.itemId);
         const oldItem = meal.items[index];
-        const result = resolveFoodMacros(change.food, change.quantity, change.unit);
-        applyDelta(existingItemMacros(oldItem).macros, result.macros, result.quantity);
+        const portion = resolveMeasureForChange(change.food, change.householdMeasureId);
+        const householdMeasure = portion ? toHouseholdMeasureOption(portion) : null;
+        const result = resolveFoodMacros(change.food, change.quantity, change.unit, references, householdMeasure);
+        applyDelta(existingItemMacros(oldItem, references, measuresById).macros, result.macros, result.quantity);
         summaries.push({
           operation: change.operation,
           mealName: meal.name,
           before: describeItem(oldItem.food, oldItem.quantity, oldItem.unit),
-          after: describeItem(change.food.foodName, String(change.quantity), change.unit),
+          after: describeItem(change.food.foodName, String(change.quantity), portion ? portion.description : change.unit),
         });
         meal.items[index] = {
           food: change.food.foodName,
           quantity: String(change.quantity),
           unit: change.unit,
           notes: change.notes ?? oldItem.notes ?? null,
+          food_source: change.food.source,
+          food_ref_id: change.food.refId,
+          household_measure_id: portion ? portion.id : null,
         };
         break;
       }
@@ -237,8 +418,13 @@ export function applyMealPlanChangesWithPreview(
         const meal = findMeal(working, change.mealId);
         const index = findItemIndex(meal, change.itemId);
         const item = meal.items[index];
-        const result = resolveFoodItemMacros({ food: item.food, quantity: change.quantity, unit: item.unit, food_source: item.food_source, food_ref_id: item.food_ref_id }, TACO_REFERENCES);
-        applyDelta(existingItemMacros(item).macros, result.macros, result.quantity);
+        const householdMeasure = householdMeasureFor(item, measuresById);
+        const result = resolveFoodItemMacros(
+          { food: item.food, quantity: change.quantity, unit: item.unit, food_source: item.food_source, food_ref_id: item.food_ref_id },
+          references,
+          householdMeasure
+        );
+        applyDelta(existingItemMacros(item, references, measuresById).macros, result.macros, result.quantity);
         summaries.push({
           operation: change.operation,
           mealName: meal.name,
@@ -252,8 +438,11 @@ export function applyMealPlanChangesWithPreview(
         const meal = findMeal(working, change.mealId);
         const index = findItemIndex(meal, change.itemId);
         const item = meal.items[index];
-        const result = resolveFoodItemMacros({ food: item.food, quantity: item.quantity, unit: change.unit, food_source: item.food_source, food_ref_id: item.food_ref_id }, TACO_REFERENCES);
-        applyDelta(existingItemMacros(item).macros, result.macros, result.quantity);
+        const result = resolveFoodItemMacros(
+          { food: item.food, quantity: item.quantity, unit: change.unit, food_source: item.food_source, food_ref_id: item.food_ref_id },
+          references
+        );
+        applyDelta(existingItemMacros(item, references, measuresById).macros, result.macros, result.quantity);
         summaries.push({
           operation: change.operation,
           mealName: meal.name,
@@ -262,10 +451,42 @@ export function applyMealPlanChangesWithPreview(
         });
         // change_measure so troca a unidade generica (colher/xicara/etc) —
         // nunca vincula automaticamente a um household_measure_id real, que
-        // exige uma medida especifica CADASTRADA para este alimento; a IA
-        // hoje so conhece o vocabulario generico (MealPlanMeasureUnit).
+        // exige uma medida especifica CADASTRADA para este alimento; para
+        // vincular uma medida especifica, use add_item/replace_item com
+        // householdMeasureId (FASE 4).
         item.unit = change.unit;
         item.household_measure_id = null;
+        break;
+      }
+      case "duplicate_item": {
+        const meal = findMeal(working, change.mealId);
+        const index = findItemIndex(meal, change.itemId);
+        const original = meal.items[index];
+        const copy: MealPlanItemPayload = { ...original, id: undefined };
+        meal.items.splice(index + 1, 0, copy);
+        applyDelta(ZERO_DELTA, existingItemMacros(copy, references, measuresById).macros);
+        summaries.push({ operation: change.operation, mealName: meal.name, before: null, after: describeItem(copy.food, copy.quantity, copy.unit) });
+        break;
+      }
+      case "reorder_items": {
+        const meal = findMeal(working, change.mealId);
+        if (meal.items.some((item) => !item.id)) {
+          throw new MealPlanChangeValidationError(
+            `Não é possível reordenar itens da refeição "${meal.name}" na mesma proposta em que um item novo foi adicionado/duplicado — confirme essa mudança primeiro, depois proponha a reordenação.`
+          );
+        }
+        const currentIds = meal.items.map((item) => item.id as string);
+        const currentSet = new Set(currentIds);
+        const requestedSet = new Set(change.itemIds);
+        if (currentSet.size !== requestedSet.size || currentIds.some((id) => !requestedSet.has(id))) {
+          throw new MealPlanChangeValidationError(
+            `A nova ordem de itens da refeição "${meal.name}" precisa incluir exatamente os itens atuais dela, sem adicionar ou remover nenhum.`
+          );
+        }
+        const byId = new Map(meal.items.map((item) => [item.id as string, item] as const));
+        const before = currentIds.map((id) => byId.get(id)?.food).join(" → ");
+        meal.items = change.itemIds.map((id) => byId.get(id)!);
+        summaries.push({ operation: change.operation, mealName: meal.name, before, after: change.itemIds.map((id) => byId.get(id)?.food).join(" → ") });
         break;
       }
     }
@@ -278,7 +499,7 @@ export function applyMealPlanChangesWithPreview(
   // definida — nunca IA, so o motor determinístico (nutrients.ts/targets.ts).
   let totalVsTarget: MealPlanChangePreview["totalVsTarget"];
   if (target && Object.values(target).some((value) => value !== null && value !== undefined)) {
-    const { total } = calculatePlanNutrients({ meals: working }, TACO_ONLY_LOOKUP);
+    const { total } = calculatePlanNutrients({ meals: working }, buildFoodReferenceLookup(references, measuresById));
     totalVsTarget = compareTargetVsPrescribed(target, total.values).map((row) => ({
       nutrient: row.nutrient as "energyKcal" | "proteinG" | "carbohydrateG" | "fatG",
       target: row.target,
@@ -311,11 +532,9 @@ export async function executeProposeMealPlanChange(input: ProposeMealPlanChangeI
     return { error: "O plano foi alterado desde a última leitura. Peça para eu reler o plano atual antes de propor mudanças." };
   }
 
-  for (const change of input.changes) {
-    if ("food" in change && change.food.tacoNumber !== null && !getTacoFoodByNumber(change.food.tacoNumber)) {
-      return { error: `O alimento "${change.food.foodName}" não corresponde a um registro válido na base TACO.` };
-    }
-  }
+  const { references, measuresById } = await resolveMealPlanChangeReferences(plan, input.changes);
+  const referenceError = validateMealPlanFoodReferences(input.changes, references);
+  if (referenceError) return { error: referenceError };
 
   try {
     const target: NutrientTarget = {
@@ -324,7 +543,7 @@ export async function executeProposeMealPlanChange(input: ProposeMealPlanChangeI
       carbohydrateG: plan.target_carbohydrate_g ?? null,
       fatG: plan.target_fat_g ?? null,
     };
-    const { preview } = applyMealPlanChangesWithPreview(plan.meals, input.changes, plan.title, target);
+    const { preview } = applyMealPlanChangesWithPreview(plan.meals, input.changes, plan.title, target, references, measuresById);
     return { clientId: plan.client_id, mealPlanId: plan.id, baseVersion: plan.version, changes: input.changes, preview };
   } catch (error) {
     return { error: error instanceof MealPlanChangeValidationError ? error.message : "Não foi possível montar essa alteração a partir do plano atual." };
@@ -341,13 +560,19 @@ export type GetMealPlanNutritionInput = z.infer<typeof getMealPlanNutritionInput
  * Motor determinístico (nutrients.ts/targets.ts) exposto como tool de
  * leitura — nunca a IA calculando nutriente de cabeça (seçao 2/32/39 do
  * pedido). Devolve so os numeros ja calculados, pequenos e prontos.
+ *
+ * FASE 4B: usa a MESMA engine e o MESMO catalogo multi-fonte (TACO/CUSTOM/
+ * MANUFACTURER) que `applyMealPlanChangesWithPreview` — um alimento
+ * CUSTOM/MANUFACTURER adicionado via meal_plan_change agora entra no total
+ * calculado aqui, nunca fica de fora silenciosamente.
  */
 export async function executeGetMealPlanNutrition(input: GetMealPlanNutritionInput) {
   assertCategoryAllowed("meal_plan_review", "meal_plan");
   const plan = await getMealPlanById(input.mealPlanId);
   if (!plan) return { found: false as const };
 
-  const { total, perMeal } = calculatePlanNutrients(plan, TACO_ONLY_LOOKUP);
+  const { references, measuresById } = await resolveMealPlanChangeReferences(plan);
+  const { total, perMeal } = calculatePlanNutrients(plan, buildFoodReferenceLookup(references, measuresById));
   const target: NutrientTarget = {
     energyKcal: plan.target_energy_kcal ?? null,
     proteinG: plan.target_protein_g ?? null,
@@ -410,15 +635,19 @@ export async function executeFindFoodEquivalents(input: FindFoodEquivalentsInput
 }
 
 export const MEAL_PLAN_CHANGE_ASSISTANT_INSTRUCTIONS = `
-Voce tambem pode propor alteracoes estruturadas no plano alimentar ativo do cliente atual (trocar/adicionar/remover um alimento, mudar quantidade/medida/horario de uma refeicao, adicionar ou remover uma refeicao inteira) — isto e uma proposta clinica real, nunca mais texto solto dentro do prontuario.
+Voce tambem pode propor alteracoes estruturadas no plano alimentar ativo do cliente atual — isto e uma proposta clinica real, nunca mais texto solto dentro do prontuario. Cobre: adicionar/renomear/duplicar/remover refeicao, mudar horario de refeicao, reordenar refeicoes, adicionar/substituir/remover/duplicar um alimento, mudar quantidade/medida de um item, reordenar itens de uma refeicao.
 Como fazer isso:
 - O plano ativo (com o id de cada refeicao/item e a versao atual) ja esta no contexto acima. Use esses ids EXATAMENTE como aparecem — nunca invente um id.
-- Se precisar do numero TACO de um alimento que nao sabe de cor, use ${SEARCH_MEAL_PLAN_FOODS_TOOL_NAME} primeiro e escolha entre os resultados reais — nunca informe um numero TACO que nao veio de uma busca.
+- Para adicionar ou substituir um alimento (operacoes add_item/replace_item), SEMPRE resolva o alimento com ${"searchFoods"} primeiro e use o source/refId reais de um resultado — nunca informe um alimento que nao veio de uma busca, e nunca deixe de resolver so porque o nome parece obvio.
+- Se a busca por alimento voltar ambigua (varios resultados bem diferentes entre si, ex.: "frango" podendo ser peito/coxa/com ou sem pele), pergunte qual antes de propor — nunca escolha sozinha.
+- Para uma quantidade em medida caseira (ex.: "1 banana média", "2 colheres de arroz"), use ${"getFoodPortions"} para ver se ha uma medida especifica CADASTRADA para aquele alimento e informe o householdMeasureId dela. Se nao houver medida cadastrada, NUNCA invente um peso — pergunte a quantidade em gramas, ou use a unidade generica mais proxima deixando claro que e uma estimativa.
+- Para duplicar uma refeicao ou item, use duplicate_meal/duplicate_item — a copia entra logo depois do original.
+- Para reordenar refeicoes ou itens de uma refeicao, use reorder_meals/reorder_items informando a lista COMPLETA de ids na ordem final desejada (todos os ids atuais, sem adicionar nem remover nenhum) — nunca um indice solto tipo "mova a posicao 2 pra 4". Nao reordene na MESMA proposta em que voce acabou de adicionar/duplicar algo (o item novo ainda nao tem id) — primeiro confirme a adicao, depois proponha a reordenacao.
 - Para "analise o plano" ou perguntas sobre kcal/proteina/carboidrato/gordura/meta do dia, use ${GET_MEAL_PLAN_NUTRITION_TOOL_NAME} — ele ja calcula tudo (total por refeicao, total do dia, comparacao com a meta). NUNCA some ou estime esses numeros voce mesma; sempre use a ferramenta.
-- Para sugerir uma troca por nutriente ("uma fruta com menos carboidrato", "algo com mais proteina no lugar disso"), use ${FIND_FOOD_EQUIVALENTS_TOOL_NAME} primeiro para ver alternativas reais e so entao proponha a troca com ${PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME} usando um dos resultados retornados — nunca invente uma alternativa de cabeca.
-- So chame ${PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME} quando o pedido for uma alteracao concreta e clara ("troca a banana por maca", "tira esse suplemento", "aumenta o arroz para 150g", "aplique a segunda opcao que sugeri", "aproxime o plano de 1900 kcal sem mexer no cafe da manha" — isso pode virar varias operacoes na mesma chamada). Informe mealPlanId e baseVersion exatamente como estao no contexto.
+- Para sugerir uma troca por nutriente ("uma fruta com menos carboidrato", "algo com mais proteina no lugar disso"), use ${FIND_FOOD_EQUIVALENTS_TOOL_NAME} primeiro para ver alternativas reais, resolva o alimento escolhido com ${"searchFoods"} e so entao proponha a troca com ${PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME} — nunca invente uma alternativa de cabeca.
+- So chame ${PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME} quando o pedido for uma alteracao concreta e clara ("adiciona 100g de banana no cafe da manha", "troca a banana por maca", "tira esse suplemento", "aumenta o arroz para 150g", "duplica o cafe da manha" — isso pode virar varias operacoes na mesma chamada). Informe mealPlanId e baseVersion exatamente como estao no contexto.
 - Se o pedido for so analise ("o que acha desse plano", "da pra melhorar algo aqui"), NAO chame a ferramenta de alteracao — responda em texto, separando DADOS DO SISTEMA (vindos de ${GET_MEAL_PLAN_NUTRITION_TOOL_NAME}) de SUGESTAO, e so proponha de verdade se a pessoa concordar com uma mudanca especifica.
 - Se o pedido for pedir opcoes ("me da alternativas para esse lanche"), responda em texto com as opcoes — so chame a ferramenta de alteracao quando a pessoa escolher uma delas.
-- Se houver ambiguidade sobre qual item ou refeicao a pessoa quer mudar, pergunte qual antes de propor — nunca escolha sozinha.
-- Se a ferramenta devolver "error" ou "found: false" (ex.: plano mudou desde a ultima leitura, alimento invalido, alimento nao encontrado na TACO), explique o problema em texto simples e nao insista automaticamente.
+- Se houver ambiguidade sobre qual item ou refeicao a pessoa quer mudar (ex.: duas refeicoes com item parecido), pergunte qual antes de propor — nunca escolha sozinha.
+- Se a ferramenta devolver "error" (ex.: plano mudou desde a ultima leitura, alimento invalido, medida caseira nao pertence ao alimento), explique o problema em texto simples e nao insista automaticamente.
 `.trim();
