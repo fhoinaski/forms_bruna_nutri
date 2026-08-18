@@ -463,6 +463,12 @@ export function AiChatWidget() {
   }, []);
 
   useEffect(() => {
+    const handleOpenRequest = () => setOpen(true);
+    window.addEventListener("bruna-nutri:open-ai-chat", handleOpenRequest);
+    return () => window.removeEventListener("bruna-nutri:open-ai-chat", handleOpenRequest);
+  }, []);
+
+  useEffect(() => {
     setClientName("");
     if (!context.clientId) return;
     fetch(`/api/admin/clients/${context.clientId}`, { cache: "no-store" })
@@ -788,7 +794,7 @@ export function AiChatWidget() {
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-label="Assistente do sistema"
-        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#7F9A74] text-white shadow-[0_12px_32px_rgba(127,154,116,0.4)] transition hover:bg-[#607A56] print:hidden"
+        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#7F9A74] text-white shadow-[0_12px_32px_rgba(127,154,116,0.4)] transition hover:bg-[#607A56] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3A3028] print:hidden"
       >
         {open ? <X className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
       </button>

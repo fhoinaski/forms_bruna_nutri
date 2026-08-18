@@ -306,6 +306,28 @@ async function getRelationalDietTemplates(templateIds: string[]): Promise<Map<st
   return grouped;
 }
 
+export interface MealPlanMetrics {
+  total: number;
+  active: number;
+  draft: number;
+  archived: number;
+}
+
+export async function getMealPlanMetrics(): Promise<MealPlanMetrics> {
+  const rows = await d1Query<{ status: MealPlanStatus; c: number }>(
+    "SELECT status, COUNT(*) as c FROM meal_plans GROUP BY status",
+    []
+  );
+  const metrics: MealPlanMetrics = { total: 0, active: 0, draft: 0, archived: 0 };
+  for (const row of rows) {
+    metrics.total += row.c;
+    if (row.status === "active") metrics.active = row.c;
+    else if (row.status === "draft") metrics.draft = row.c;
+    else if (row.status === "archived") metrics.archived = row.c;
+  }
+  return metrics;
+}
+
 export async function getClientMealPlans(clientId: string): Promise<MealPlanPayload[]> {
   const rows = await d1Query<MealPlanRow>(
     "SELECT * FROM meal_plans WHERE client_id = ?1 ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END, updated_at DESC",

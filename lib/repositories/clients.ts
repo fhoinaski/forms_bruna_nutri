@@ -271,3 +271,39 @@ export async function getClientsCreatedBetween(start: string, end: string): Prom
     [start, end]
   );
 }
+
+export interface MonthlyCount {
+  month: string;
+  count: number;
+}
+
+function lastNMonthKeys(months: number): string[] {
+  const keys: string[] = [];
+  const cursor = new Date();
+  cursor.setDate(1);
+  cursor.setHours(0, 0, 0, 0);
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(cursor);
+    d.setMonth(d.getMonth() - i);
+    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return keys;
+}
+
+export async function getMonthlyNewClientCounts(months = 6): Promise<MonthlyCount[]> {
+  const monthKeys = lastNMonthKeys(months);
+  const since = new Date();
+  since.setDate(1);
+  since.setHours(0, 0, 0, 0);
+  since.setMonth(since.getMonth() - (months - 1));
+
+  const rows = await d1Query<{ month: string; c: number }>(
+    `SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as c
+     FROM clients
+     WHERE created_at >= ?1
+     GROUP BY month`,
+    [since.toISOString()]
+  );
+  const byMonth = new Map(rows.map((r) => [r.month, r.c]));
+  return monthKeys.map((month) => ({ month, count: byMonth.get(month) ?? 0 }));
+}

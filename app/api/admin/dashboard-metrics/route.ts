@@ -1,22 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
-import { getClientMetrics, getClientsCreatedBetween } from "@/lib/repositories/clients";
+import { getClientMetrics, getClientsCreatedBetween, getMonthlyNewClientCounts } from "@/lib/repositories/clients";
 import { getProtocolMetrics } from "@/lib/repositories/protocols";
 import {
   getOverdueTasksCount,
   getUpcomingClientTasks,
   getTasksDueOn,
+  getAllTasksDueOn,
 } from "@/lib/repositories/client-tasks";
 import { getActiveProtocolsCount } from "@/lib/repositories/client-protocols";
 import {
   getAppointments,
   getTodayAppointmentsCount,
   getUpcomingAppointments,
+  getMonthlyAppointmentCounts,
 } from "@/lib/repositories/appointments";
 import { getPaymentMetrics } from "@/lib/repositories/payments";
 import { getBlogMetrics } from "@/lib/repositories/blog-posts";
 import { getLeadOpportunityMetrics } from "@/lib/repositories/lead-opportunities";
 import { getSubmissionsCreatedBetween } from "@/lib/repositories/submissions";
+import { getMealPlanMetrics } from "@/lib/repositories/meal-plans";
 import { getSaoPauloDayBoundaries } from "@/lib/utils/timezone";
 import { d1Query } from "@/lib/d1/client";
 
@@ -45,6 +48,10 @@ export async function GET(req: NextRequest) {
     newClientsToday,
     newSubmissionsToday,
     tasksDueToday,
+    mealPlanMetrics,
+    appointmentsByMonth,
+    newClientsByMonth,
+    allTasksToday,
   ] =
     await Promise.all([
       getClientMetrics(),
@@ -65,7 +72,15 @@ export async function GET(req: NextRequest) {
       getClientsCreatedBetween(start, end),
       getSubmissionsCreatedBetween(start, end),
       getTasksDueOn(dateKey),
+      getMealPlanMetrics(),
+      getMonthlyAppointmentCounts(6),
+      getMonthlyNewClientCounts(6),
+      getAllTasksDueOn(dateKey),
     ]);
+
+  const appointmentsConfirmedToday = appointmentsToday.filter((a) => a.status === "confirmado").length;
+  const appointmentsPendingToday = appointmentsToday.filter((a) => a.status === "agendado").length;
+  const tasksTodayCompleted = allTasksToday.filter((t) => t.status === "concluida").length;
 
   return NextResponse.json({
     clientesAtivos: clientMetrics.ativos,
@@ -79,12 +94,21 @@ export async function GET(req: NextRequest) {
     proximasTarefas: upcomingTasks,
     blog: blogMetrics,
     oportunidades: opportunityMetrics,
+    planosAlimentares: mealPlanMetrics,
+    graficos: {
+      atendimentosPorMes: appointmentsByMonth,
+      novosPacientesPorMes: newClientsByMonth,
+    },
     hoje: {
       dateKey,
       agendamentos: appointmentsToday,
+      agendamentosConfirmados: appointmentsConfirmedToday,
+      agendamentosPendentes: appointmentsPendingToday,
       novosClientes: newClientsToday,
       novasSubmissoes: newSubmissionsToday,
       tarefas: tasksDueToday,
+      tarefasHojeTodas: allTasksToday,
+      tarefasHojeConcluidas: tasksTodayCompleted,
     },
   });
 }

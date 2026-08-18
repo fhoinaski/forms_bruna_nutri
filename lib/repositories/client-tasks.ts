@@ -250,6 +250,17 @@ export async function getTasksDueOn(dateKey: string): Promise<ClientTaskWithClie
   );
 }
 
+export async function getAllTasksDueOn(dateKey: string): Promise<ClientTaskWithClient[]> {
+  return d1Query<ClientTaskWithClient>(
+    `SELECT t.*, c.name as client_name, c.phone as client_phone
+     FROM client_tasks t
+     LEFT JOIN clients c ON c.id = t.client_id
+     WHERE t.due_date = ?1 AND t.status != 'cancelada'
+     ORDER BY CASE WHEN t.status = 'pendente' THEN 0 ELSE 1 END, c.name ASC`,
+    [dateKey]
+  );
+}
+
 export async function updateClientTaskStatus(
   id: string,
   status: string

@@ -214,6 +214,25 @@ function Sidebar({ collapsed, mobile = false, onClose, badges = {} }: {
         </div>
       </nav>
 
+      {!collapsed && (
+        <div className="px-3 pb-2">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("bruna-nutri:open-ai-chat"))}
+            className="w-full rounded-2xl border border-[#DDE9D5] bg-gradient-to-br from-[#F5FAF0] to-[#FBF7F1] p-4 text-left transition hover:border-[#7F9A74]/50 hover:from-[#EFF7E9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7F9A74]"
+            aria-label="Abrir Assistente de IA"
+          >
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-[#3A3028]">
+              <Bot className="h-4 w-4 text-[#607A56]" aria-hidden="true" />
+              Assistente de IA
+            </p>
+            <p className="mt-1 text-xs leading-5 text-[#75675E]">
+              Seu copiloto inteligente para decisões clínicas.
+            </p>
+          </button>
+        </div>
+      )}
+
       <div className="border-t border-[#EDE1D6] p-3">
         <button onClick={logout} title={collapsed ? "Sair" : undefined} className={`flex h-11 w-full items-center rounded-lg text-sm text-[#75675E] hover:bg-[#FBF7F1] hover:text-[#3A3028] ${collapsed ? "justify-center" : "gap-3 px-3"}`}>
           <LogOut className="h-[18px] w-[18px]" />
@@ -347,8 +366,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <AssistantPageContextProvider>
-    <div className={`${jost.variable} ${cormorant.variable} dashboard-shell min-h-screen bg-[#FBF7F1] font-sans text-[#3A3028]`}>
-      <aside className={`fixed inset-y-0 left-0 z-30 hidden border-r border-[#EDE1D6] transition-[width] duration-200 lg:block ${collapsed ? "w-20" : "w-64"}`}>
+    <div className={`${jost.variable} ${cormorant.variable} dashboard-shell min-h-screen bg-[#FAFAF8] font-sans text-[#3A3028]`}>
+      <aside className={`fixed inset-y-0 left-0 z-30 hidden border-r border-[#EDE1D6] transition-[width] duration-200 lg:block ${collapsed ? "w-20" : "w-60"}`}>
         <Sidebar collapsed={collapsed} badges={notificationSummary?.badges} />
         <button onClick={() => setCollapsed((value) => !value)} className="absolute -right-3 top-24 flex h-7 w-7 items-center justify-center rounded-full border border-[#EDE1D6] bg-[#FFFDFC] text-[#75675E] shadow-sm" aria-label={collapsed ? "Expandir menu" : "Recolher menu"}>
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -360,7 +379,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Sidebar collapsed={false} mobile badges={notificationSummary?.badges} onClose={() => setMobileOpen(false)} />
       </aside>
 
-      <div className={`flex min-h-screen flex-col transition-[padding] duration-200 ${collapsed ? "lg:pl-20" : "lg:pl-64"}`}>
+      <div className={`flex min-h-screen flex-col transition-[padding] duration-200 ${collapsed ? "lg:pl-20" : "lg:pl-60"}`}>
         <header className="sticky top-0 z-20 border-b border-[#EDE1D6] bg-[#FFFDFC]/95 backdrop-blur-xl">
           <div className="flex h-16 min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 lg:px-6">
             <button type="button" onClick={() => setMobileOpen(true)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1] lg:hidden" aria-label="Abrir menu"><Menu className="h-5 w-5" /></button>
@@ -424,7 +443,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
         </header>
-        <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-5 lg:p-6">{children}</main>
       </div>
       <AiChatWidget />
     </div>
