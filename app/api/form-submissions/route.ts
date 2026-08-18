@@ -6,6 +6,7 @@ import {
   SubmissionValidationError,
 } from "@/lib/clinical/submit-pre-consultation";
 import { logger } from "@/lib/observability/logger";
+import { recordServerSideConversion } from "@/lib/analytics/server-track";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +38,10 @@ export async function POST(req: NextRequest) {
       ipHash: fingerprint.ipHash,
       userAgentHash: fingerprint.userAgentHash,
       source: "traditional",
+    });
+
+    await recordServerSideConversion(req, "PRECONSULTATION_COMPLETED", "/formulario", {
+      submission_source: "traditional",
     });
 
     return NextResponse.json({ success: true, id }, { status: 201 });

@@ -13,6 +13,7 @@ import { getRequestFingerprint } from "@/lib/security/request";
 import { getIntakeSession } from "@/lib/repositories/patient-intake-sessions";
 import { computeMissingRequired } from "@/lib/ai/agents/patient/intake/intake-rules";
 import { logger } from "@/lib/observability/logger";
+import { recordServerSideConversion } from "@/lib/analytics/server-track";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,6 +61,10 @@ export async function POST(req: NextRequest) {
       entityId: sessionId,
       ipHash: getRequestFingerprint(req).ipHash,
       metadata: { submissionId },
+    });
+
+    await recordServerSideConversion(req, "PRECONSULTATION_COMPLETED", "/formulario", {
+      submission_source: "ai_guided",
     });
 
     return NextResponse.json({ success: true, submissionId });

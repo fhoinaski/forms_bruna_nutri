@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { siteConfig } from "@/lib/seo/site";
+import { TrackedWhatsappLink } from "@/components/analytics/TrackedWhatsappLink";
 
 export function PublicFooter() {
   return (
@@ -36,15 +37,14 @@ export function PublicFooter() {
               <a href={siteConfig.phoneHref} className="font-semibold text-[#607A56] transition hover:text-[#8C5F50]">
                 {siteConfig.phoneDisplay}
               </a>
-              <a
+              <TrackedWhatsappLink
                 href={siteConfig.whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                location="footer"
                 className="font-semibold text-[#607A56] transition hover:text-[#8C5F50]"
                 aria-label="Falar com Bruna Flores pelo WhatsApp"
               >
                 WhatsApp
-              </a>
+              </TrackedWhatsappLink>
             </div>
             <p className="mt-4 max-w-xl text-xs leading-6 text-[#8A7B70]">
               Conteúdos do site e do blog têm finalidade educativa e não substituem

@@ -49,11 +49,23 @@ function sanitizeParam(value) {
   return value;
 }
 
+// Cloudflare D1 real preenche meta.changes/last_row_id em INSERT/UPDATE/DELETE
+// (usado por codigo que depende de "quantas linhas essa escrita afetou de
+// fato", ex.: dedupe via INSERT OR IGNORE). node:sqlite's `.all()` nao expoe
+// isso (so retorna linhas, util para SELECT); `.run()` retorna
+// { changes, lastInsertRowid } mas nao linhas. Escolhe o metodo certo pelo
+// tipo de statement para reproduzir o contrato real do D1 com fidelidade.
 function runStatement(db, sql, params = []) {
   const stmt = db.prepare(sql);
   const boundParams = params.map(sanitizeParam);
-  const results = stmt.all(...boundParams);
-  return { results, success: true, meta: {} };
+  const trimmed = sql.trim().toUpperCase();
+  const isReadStatement = trimmed.startsWith("SELECT") || trimmed.startsWith("WITH") || trimmed.startsWith("PRAGMA");
+  if (isReadStatement) {
+    const results = stmt.all(...boundParams);
+    return { results, success: true, meta: {} };
+  }
+  const info = stmt.run(...boundParams);
+  return { results: [], success: true, meta: { changes: info.changes, last_row_id: info.lastInsertRowid } };
 }
 
 /**

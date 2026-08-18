@@ -5,6 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Menu, X } from "lucide-react";
 import { siteConfig } from "@/lib/seo/site";
+import { trackEvent } from "@/lib/analytics/client-tracker";
+
+function trackWhatsappClick(location: string) {
+  trackEvent("WHATSAPP_CLICK", { metadata: { location } });
+}
 
 const NAV_LINKS = [
   { href: "/", label: "Início" },
@@ -82,6 +87,7 @@ export function PublicHeader() {
               href={siteConfig.whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackWhatsappClick("header_desktop")}
               className="hidden rounded-full border border-[#7F9A74]/35 px-4 py-2 text-xs font-semibold text-[#607A56] transition-colors hover:bg-[#EAF0E4] xl:inline-flex"
               aria-label="Falar com Bruna Flores pelo WhatsApp"
             >
@@ -137,6 +143,7 @@ export function PublicHeader() {
             href={siteConfig.whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => trackWhatsappClick("header_mobile")}
             className="mb-3 inline-flex w-full items-center justify-center rounded-full border border-[#7F9A74]/35 px-5 py-3 text-sm font-semibold text-[#607A56]"
             aria-label="Falar com Bruna Flores pelo WhatsApp"
           >

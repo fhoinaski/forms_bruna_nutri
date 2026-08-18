@@ -9,6 +9,7 @@ import { PublicFooter } from "@/components/public/PublicFooter";
 import { getBlogPostBySlug } from "@/lib/repositories/blog-posts";
 import { safeJsonLd } from "@/lib/seo/json-ld";
 import { PROFESSIONAL_PROFILE, siteConfig } from "@/lib/seo/site";
+import { TrackBlogView } from "@/components/analytics/TrackBlogView";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -122,6 +123,7 @@ export default async function BlogPostPage({
 
   return (
     <main className="min-h-screen bg-[#FFFDFC] text-[#3A3028]">
+      <TrackBlogView slug={post.slug} />
       <PublicHeader />
       <article>
         <header className="relative overflow-hidden bg-[#FBF7F1] pt-32">

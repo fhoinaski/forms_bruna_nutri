@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Jost } from "next/font/google";
 import { PROFESSIONAL_PROFILE, SITE_URL, TOPIC_KEYWORDS, siteConfig } from "@/lib/seo/site";
+import { SiteAnalyticsTracker } from "@/components/analytics/SiteAnalyticsTracker";
 import "./globals.css";
 
 const jost = Jost({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -86,6 +87,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" className={`${jost.variable} ${cormorant.variable}`}>
       <body className="font-sans antialiased" suppressHydrationWarning>
+        <SiteAnalyticsTracker />
         {children}
       </body>
     </html>

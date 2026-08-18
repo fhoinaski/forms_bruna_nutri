@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { getSaoPauloDateKey } from "@/lib/utils/timezone";
 import { PatientAiChatWidget } from "@/components/portal/PatientAiChatWidget";
+import { trackEvent } from "@/lib/analytics/client-tracker";
 
 type Appointment = {
   id: string;
@@ -161,6 +162,7 @@ export default function ClientPortalPage() {
 
   useEffect(() => {
     void loadPortal();
+    trackEvent("PORTAL_LOGIN_OPENED");
   }, []);
 
   useEffect(() => {

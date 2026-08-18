@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown } from "lucide-react";
+import { trackEvent } from "@/lib/analytics/client-tracker";
 
 type InteractionKind =
   | "message"
@@ -117,6 +118,7 @@ export function PreConsultationDynamic({ onFallback }: { onFallback: (answers: R
         setFinished(true);
         return;
       }
+      trackEvent("PRECONSULTATION_STARTED", { metadata: { entry_point: "formulario_ia" } });
       if (data.interaction) {
         setResuming(data.answers && Object.keys(data.answers).length > 0);
       }

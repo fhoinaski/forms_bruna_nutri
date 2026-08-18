@@ -22,6 +22,7 @@ import { ServiceCard } from "@/components/public/ServiceCard";
 import { StepCard } from "@/components/public/StepCard";
 import { safeJsonLd } from "@/lib/seo/json-ld";
 import { siteConfig } from "@/lib/seo/site";
+import { TrackedWhatsappLink } from "@/components/analytics/TrackedWhatsappLink";
 
 export const metadata: Metadata = {
   title: {
@@ -584,15 +585,14 @@ export default function HomePage() {
           </Link>
           <p className="mt-5 text-sm text-[#607066]">
             Prefere falar primeiro?{" "}
-            <a
+            <TrackedWhatsappLink
               href={siteConfig.whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              location="home_hero"
               className="font-semibold text-[#607A56] underline-offset-4 hover:underline"
               aria-label="Falar com Bruna Flores pelo WhatsApp"
             >
               Chame a Bruna no WhatsApp
-            </a>
+            </TrackedWhatsappLink>
             .
           </p>
         </div>

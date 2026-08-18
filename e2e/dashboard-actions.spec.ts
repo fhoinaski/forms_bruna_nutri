@@ -28,6 +28,10 @@ test.describe("dashboard orientado à atenção", () => {
 
     await suppressDailyBriefingPopup(page);
     await page.goto("/dashboard");
+    // O feed detalhado de atencao vive dentro de um <details> recolhido por
+    // padrao (redesign de densidade do dashboard) — expande antes de
+    // procurar qualquer item dentro dele.
+    await page.getByText("Mais indicadores e módulos do consultório").click();
 
     const action = page.getByRole("button", { name: /Consulta em .*Ana Briefing E2E.*Abrir briefing/i }).first();
     await expect(action).toBeVisible();
@@ -42,8 +46,12 @@ test.describe("dashboard orientado à atenção", () => {
     await mockDashboardActions(page, []);
 
     await page.goto("/dashboard");
+    // O feed detalhado de atencao vive dentro de um <details> recolhido por
+    // padrao (redesign de densidade do dashboard) — expande antes de
+    // procurar qualquer item dentro dele.
+    await page.getByText("Mais indicadores e módulos do consultório").click();
 
-    await expect(page.getByRole("heading", { name: "O que precisa de atencao agora" })).toBeVisible();
+    await expect(page.getByText("Atenção operacional (completo)")).toBeVisible();
     await expect(page.getByText("Nada imediato agora.")).toBeVisible();
     await expect(page.getByText("Nenhuma pendência importante agora.")).toBeVisible();
     await expect(page.getByText("Nenhuma cobrança vencida detectada.")).toBeVisible();
@@ -71,6 +79,10 @@ test.describe("dashboard orientado à atenção", () => {
     ]);
 
     await page.goto("/dashboard");
+    // O feed detalhado de atencao vive dentro de um <details> recolhido por
+    // padrao (redesign de densidade do dashboard) — expande antes de
+    // procurar qualquer item dentro dele.
+    await page.getByText("Mais indicadores e módulos do consultório").click();
 
     const action = page.getByRole("link", { name: /Consulta em 18 min, Ana Lima\. Abrir paciente/i });
     await expect(action).toBeVisible();
@@ -99,6 +111,10 @@ test.describe("dashboard orientado à atenção", () => {
     ]);
 
     await page.goto("/dashboard");
+    // O feed detalhado de atencao vive dentro de um <details> recolhido por
+    // padrao (redesign de densidade do dashboard) — expande antes de
+    // procurar qualquer item dentro dele.
+    await page.getByText("Mais indicadores e módulos do consultório").click();
 
     await expect(page.getByText("Precisa da sua atenção")).toBeVisible();
     const action = page.getByRole("link", { name: /Solicitação: sintoma ou queixa, Bia Costa\. Ver solicitação/i });
@@ -161,10 +177,14 @@ test.describe("dashboard orientado à atenção", () => {
     ]);
 
     await page.goto("/dashboard");
+    // O feed detalhado de atencao vive dentro de um <details> recolhido por
+    // padrao (redesign de densidade do dashboard) — expande antes de
+    // procurar qualquer item dentro dele.
+    await page.getByText("Mais indicadores e módulos do consultório").click();
 
-    await expect(page.getByText("Ação da IA precisa verificação")).toBeVisible();
-    await expect(page.getByText("Pagamento vencido")).toBeVisible();
-    await expect(page.getByText("Substituição segura respondida")).toBeVisible();
+    await expect(page.getByText("Ação da IA precisa verificação").first()).toBeVisible();
+    await expect(page.getByText("Pagamento vencido").first()).toBeVisible();
+    await expect(page.getByText("Substituição segura respondida").first()).toBeVisible();
   });
 
   test("layout mobile não cria overflow horizontal no feed de atenção", async ({ page }) => {
@@ -190,8 +210,12 @@ test.describe("dashboard orientado à atenção", () => {
     ]);
 
     await page.goto("/dashboard");
+    // O feed detalhado de atencao vive dentro de um <details> recolhido por
+    // padrao (redesign de densidade do dashboard) — expande antes de
+    // procurar qualquer item dentro dele.
+    await page.getByText("Mais indicadores e módulos do consultório").click();
 
-    await expect(page.getByText("Mensagem de atendimento pendente")).toBeVisible();
+    await expect(page.getByText("Mensagem de atendimento pendente").first()).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(overflow).toBe(false);
   });
@@ -245,6 +269,10 @@ test.describe("dashboard orientado à atenção", () => {
     });
 
     await page.goto("/dashboard");
+    // O feed detalhado de atencao vive dentro de um <details> recolhido por
+    // padrao (redesign de densidade do dashboard) — expande antes de
+    // procurar qualquer item dentro dele.
+    await page.getByText("Mais indicadores e módulos do consultório").click();
     await page.getByRole("button", { name: /Consulta em 18 min, Ana Lima\. Atualizar briefing/i }).click();
     await expect(page.getByRole("heading", { name: "Briefing desatualizado" })).toBeVisible();
     await page.getByRole("button", { name: "Atualizar briefing", exact: true }).click();
@@ -274,6 +302,10 @@ test.describe("dashboard orientado à atenção", () => {
     ]);
 
     await page.goto("/dashboard");
+    // O feed detalhado de atencao vive dentro de um <details> recolhido por
+    // padrao (redesign de densidade do dashboard) — expande antes de
+    // procurar qualquer item dentro dele.
+    await page.getByText("Mais indicadores e módulos do consultório").click();
     const action = page.getByRole("link", { name: /Consulta em 18 min, Ana Lima\. Abrir paciente/i });
     await expect(action).toBeVisible();
     await expect(action).toContainText("Não foi possível preparar briefing");

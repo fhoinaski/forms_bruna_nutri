@@ -17,6 +17,7 @@ export const AGENT_DOMAINS = [
   "finance",
   "request",
   "dashboard",
+  "analytics",
   "content",
   "document",
   "configuration",

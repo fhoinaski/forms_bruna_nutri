@@ -164,6 +164,23 @@ import {
   getRecentActivityInputSchema,
 } from "@/lib/ai/agents/dashboard/dashboard-agent";
 import {
+  GET_SITE_ANALYTICS_OVERVIEW_TOOL_NAME,
+  GET_TOP_TRAFFIC_SOURCES_TOOL_NAME,
+  GET_TOP_PAGES_TOOL_NAME,
+  GET_CONVERSION_FUNNEL_TOOL_NAME,
+  GET_CAMPAIGN_PERFORMANCE_TOOL_NAME,
+  executeGetSiteAnalyticsOverview,
+  executeGetTopTrafficSources,
+  executeGetTopPages,
+  executeGetConversionFunnel,
+  executeGetCampaignPerformance,
+  getSiteAnalyticsOverviewInputSchema,
+  getTopTrafficSourcesInputSchema,
+  getTopPagesInputSchema,
+  getConversionFunnelInputSchema,
+  getCampaignPerformanceInputSchema,
+} from "@/lib/ai/agents/analytics/analytics-agent";
+import {
   PROPOSE_RESCHEDULE_APPOINTMENT_TOOL_NAME,
   PROPOSE_CANCEL_APPOINTMENT_TOOL_NAME,
   executeProposeRescheduleAppointment,
@@ -830,6 +847,73 @@ defineTool({
   entityTypes: [],
   dataSensitivity: "sensitive",
   execute: executeGetRecentActivity,
+});
+
+// ── Analytics do site (admin only) — mesmas queries deterministicas da tela /dashboard/analytics.
+
+defineTool({
+  name: GET_SITE_ANALYTICS_OVERVIEW_TOOL_NAME,
+  description: "Le a visao geral de analytics do site publico (sessoes, pageviews, conversoes, taxa de conversao) para um periodo.",
+  inputSchema: getSiteAnalyticsOverviewInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "analytics",
+  entityTypes: [],
+  dataSensitivity: "safe",
+  execute: executeGetSiteAnalyticsOverview,
+});
+
+defineTool({
+  name: GET_TOP_TRAFFIC_SOURCES_TOOL_NAME,
+  description: "Le a origem do trafego do site (Google, Instagram, WhatsApp, direto, pago, etc.) com sessoes e conversoes por origem, num periodo.",
+  inputSchema: getTopTrafficSourcesInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "analytics",
+  entityTypes: [],
+  dataSensitivity: "safe",
+  execute: executeGetTopTrafficSources,
+});
+
+defineTool({
+  name: GET_TOP_PAGES_TOOL_NAME,
+  description: "Le as paginas mais visitadas do site (views, sessoes, entradas, saidas), num periodo.",
+  inputSchema: getTopPagesInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "analytics",
+  entityTypes: [],
+  dataSensitivity: "safe",
+  execute: executeGetTopPages,
+});
+
+defineTool({
+  name: GET_CONVERSION_FUNNEL_TOOL_NAME,
+  description: "Le o funil de pre-consulta (visitantes -> visitaram servicos -> abriram -> iniciaram -> concluiram), num periodo.",
+  inputSchema: getConversionFunnelInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "analytics",
+  entityTypes: [],
+  dataSensitivity: "safe",
+  execute: executeGetConversionFunnel,
+});
+
+defineTool({
+  name: GET_CAMPAIGN_PERFORMANCE_TOOL_NAME,
+  description: "Le o desempenho de campanhas UTM (sessoes e conversoes por campanha/source/medium), num periodo.",
+  inputSchema: getCampaignPerformanceInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "none",
+  domain: "analytics",
+  entityTypes: [],
+  dataSensitivity: "safe",
+  execute: executeGetCampaignPerformance,
 });
 
 // ── Solicitacoes (FASE 1B, complemento) ───────────────────────────────────

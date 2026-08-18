@@ -3,8 +3,9 @@
 import { FieldErrors, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormResponseSchema, FormResponseInput } from "@/validators/form";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import React from "react";
+import { trackEvent } from "@/lib/analytics/client-tracker";
 import Image from "next/image";
 import { ArrowLeft, CheckCircle2, Clock3, HeartHandshake, ShieldCheck } from "lucide-react";
 import Link from "next/link";
@@ -208,6 +209,18 @@ export default function FormularioPage() {
     const activeRequiredValues = isPediatric ? requiredValues : requiredValues.slice(0, BASE_REQUIRED_FIELDS.length);
     setProgress(Math.min(100, Math.round((activeRequiredValues.filter(hasFilledValue).length / activeRequiredValues.length) * 100)));
   }, [isPediatric, requiredValues]);
+
+  useEffect(() => {
+    trackEvent("PRECONSULTATION_OPENED", { metadata: { entry_point: "formulario" } });
+  }, []);
+
+  const startedTrackedRef = useRef(false);
+  useEffect(() => {
+    if (progress > 0 && !startedTrackedRef.current) {
+      startedTrackedRef.current = true;
+      trackEvent("PRECONSULTATION_STARTED", { metadata: { entry_point: "formulario" } });
+    }
+  }, [progress]);
 
   useEffect(() => {
     try {

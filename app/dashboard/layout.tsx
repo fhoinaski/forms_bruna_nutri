@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  BarChart3,
   Bell,
   Bot,
   CalendarDays,
@@ -59,6 +60,7 @@ const secondaryNavigation = [
   { href: "/dashboard/solicitacoes", label: "Solicitações", icon: MessageSquareText, badgeKey: "solicitacoes" },
   { href: "/dashboard/ai-recovery", label: "Verificações da IA", icon: AlertTriangle, badgeKey: "aiRecovery" },
   { href: "/dashboard/tarefas", label: "Tarefas", icon: ClipboardList, badgeKey: "tarefas" },
+  { href: "/dashboard/analytics", label: "Analytics do site", icon: BarChart3 },
   { href: "/dashboard/protocols", label: "Protocolos", icon: ShieldCheck },
   { href: "/dashboard/privacidade", label: "Privacidade", icon: ShieldCheck, badgeKey: "privacidade" },
   { href: "/dashboard/blog", label: "Conteúdo", icon: Newspaper },
@@ -80,6 +82,7 @@ const breadcrumbLabels: Record<string, string> = {
   solicitacoes: "Solicitações",
   "ai-recovery": "Verificações da IA",
   tarefas: "Tarefas",
+  analytics: "Analytics do site",
   privacidade: "Privacidade",
   blog: "Conteúdo",
   settings: "Configurações",
