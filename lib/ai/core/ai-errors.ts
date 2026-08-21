@@ -45,12 +45,80 @@ export class AiProviderError extends Error {
   }
 }
 
+/**
+ * Motivo granular do `structured_invalid`, para diagnóstico interno (nunca
+ * exposto ao usuário final, que continua vendo uma mensagem simples). Mais
+ * fino que `AiFailureCategory` — várias dessas razões mapeiam para a mesma
+ * categoria "structured_invalid"/"structured_truncated".
+ */
+export type StructuredFailureReason =
+  | "EMPTY_RESPONSE"
+  | "TRUNCATED_RESPONSE"
+  | "INVALID_JSON"
+  | "SCHEMA_MISMATCH"
+  | "EXTRA_FIELDS"
+  | "MISSING_REQUIRED_FIELDS"
+  | "INVALID_ENUM"
+  | "INVALID_NUMBER_TYPE"
+  | "UNKNOWN";
+
+/** Razões cujo próximo retry deve levar feedback de validação específico (zod issues), não só "responda em JSON puro". */
+export const VALIDATION_FEEDBACK_REASONS: ReadonlySet<StructuredFailureReason> = new Set([
+  "SCHEMA_MISMATCH",
+  "EXTRA_FIELDS",
+  "MISSING_REQUIRED_FIELDS",
+  "INVALID_ENUM",
+  "INVALID_NUMBER_TYPE",
+]);
+
+interface ZodIssueLike {
+  path: PropertyKey[];
+  code: string;
+  expected?: string;
+  message?: string;
+}
+
+/**
+ * Classifica a causa granular de uma falha de structured output, a partir
+ * de sinais puramente mecânicos (nunca inspeciona conteúdo clínico — só
+ * texto bruto do MODELO e issues do zod). Função pura, testável sem mockar
+ * rede.
+ */
+export function classifyStructuredFailureReason(input: {
+  rawText: string;
+  parseSucceeded: boolean;
+  zodIssues?: ZodIssueLike[];
+  truncated: boolean;
+}): StructuredFailureReason {
+  if (!input.rawText || !input.rawText.trim()) return "EMPTY_RESPONSE";
+  if (input.truncated) return "TRUNCATED_RESPONSE";
+  if (!input.parseSucceeded) return "INVALID_JSON";
+  const issues = input.zodIssues ?? [];
+  if (!issues.length) return "UNKNOWN";
+  if (issues.some((i) => i.code === "unrecognized_keys")) return "EXTRA_FIELDS";
+  if (issues.some((i) => i.code === "invalid_type" && /received undefined/i.test(i.message ?? ""))) return "MISSING_REQUIRED_FIELDS";
+  if (issues.some((i) => i.code === "invalid_value" || i.code === "invalid_enum_value")) return "INVALID_ENUM";
+  if (issues.some((i) => i.code === "invalid_type" && i.expected === "number")) return "INVALID_NUMBER_TYPE";
+  if (issues.some((i) => i.code === "invalid_type")) return "SCHEMA_MISMATCH";
+  return "SCHEMA_MISMATCH";
+}
+
+/** Prompt de recuperação compacto e ESPECÍFICO, listando só path+code (nunca reenvia contexto clínico). Cap em 8 issues pra não inflar o prompt de novo. */
+export function buildValidationFeedbackPrompt(issues: ZodIssueLike[]): string {
+  const lines = issues.slice(0, 8).map((issue) => `- ${issue.path.join(".") || "(raiz)"}: ${issue.code}`);
+  return `Sua resposta anterior foi JSON válido mas não bateu com o schema exigido. Corrija SOMENTE o formato dos campos abaixo — não mude o conteúdo nutricional nem adicione texto:\n${lines.join("\n")}\n\nResponda de novo com o JSON completo e corrigido, sem markdown, sem explicações.`;
+}
+
 export class AiValidationError extends Error {
   constructor(
     message: string,
     public readonly issues?: unknown,
     public readonly failureCategory: AiFailureCategory = "structured_invalid",
-    public readonly truncated = false
+    public readonly truncated = false,
+    /** Motivo granular (diagnóstico interno). */
+    public readonly reason: StructuredFailureReason = "UNKNOWN",
+    /** Último payload que passou no JSON.parse mas falhou no zod (se houver) — permite recuperação parcial (seção 12/13) sem nova chamada de rede. */
+    public readonly rawData?: unknown
   ) {
     super(message);
     this.name = "AiValidationError";

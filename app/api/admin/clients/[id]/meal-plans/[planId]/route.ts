@@ -21,6 +21,11 @@ const itemSchema = z.object({
   food_ref_id: z.string().max(120).nullable().optional(),
   // Vinculo a uma medida caseira especifica (food_portions.id) — FASE 3, validado abaixo contra o food_ref_id real.
   household_measure_id: z.string().max(120).nullable().optional(),
+  // Locks persistidos — quantity_locked: Optimizer V2 sobre plano salvo
+  // nunca muda a quantidade deste item; substitutions_locked: geração
+  // automática/global de substituições nunca sugere para este item.
+  quantity_locked: z.boolean().optional(),
+  substitutions_locked: z.boolean().optional(),
 }).strict();
 
 const mealSchema = z.object({
@@ -45,6 +50,21 @@ const substitutionSchema = z.object({
   quantity: z.string().max(80).nullable().optional(),
   unit: z.string().max(40).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
+  // Substituições nutricionais equivalentes por item (evolução desta mesma
+  // linha — ver MealPlanSubstitutionPayload em lib/repositories/meal-plans.ts).
+  // Sem estes campos aqui, o editor perdia identidade/qualidade/aprovação de
+  // toda substituição adicionada manualmente pelo painel por item ao salvar.
+  base_food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]).nullable().optional(),
+  base_food_ref_id: z.string().max(120).nullable().optional(),
+  option_food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]).nullable().optional(),
+  option_food_ref_id: z.string().max(120).nullable().optional(),
+  option_household_measure_id: z.string().max(120).nullable().optional(),
+  option_nutrition_snapshot: z.string().max(2000).nullable().optional(),
+  equivalence_mode: z.enum(["energy", "nutritional"]).nullable().optional(),
+  equivalence_score: z.number().nullable().optional(),
+  equivalence_quality: z.enum(["EXCELLENT", "GOOD", "REVIEW", "UNSUITABLE"]).nullable().optional(),
+  approved_by_professional: z.boolean().optional(),
+  ai_suggested: z.boolean().optional(),
 }).strict();
 
 const supplementSchema = z.object({

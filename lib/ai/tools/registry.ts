@@ -100,6 +100,11 @@ import {
   proposeActivateMealPlanInputSchema,
 } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import {
+  GENERATE_MEAL_PLAN_DRAFT_TOOL_NAME,
+  executeGenerateMealPlanDraft,
+  generateMealPlanDraftToolInputSchema,
+} from "@/lib/ai/agents/nutrition/meal-plan-draft-agent";
+import {
   GET_MY_MEAL_PLAN_TOOL_NAME,
   GET_MY_MEAL_DETAILS_TOOL_NAME,
   GET_MY_APPOINTMENTS_TOOL_NAME,
@@ -655,6 +660,19 @@ defineTool({
   entityTypes: ["food"],
   dataSensitivity: "safe",
   execute: executeFindFoodEquivalents,
+});
+
+defineTool({
+  name: GENERATE_MEAL_PLAN_DRAFT_TOOL_NAME,
+  description: "Gera um PRE-PLANO alimentar guiado (estrutura de refeicoes + alimentos resolvidos no catalogo real + checagem de seguranca clinica contra alergias/restricoes) para revisao humana — NUNCA persiste nem ativa nada sozinha. Peca objetivo/meta/refeicoes solicitadas quando o usuario nao informar; nunca invente meta energetica. Todo alimento retornado ja vem com fonte real (source/refId) quando encontrado no catalogo; itens sem correspondencia ou em conflito clinico vêm sinalizados, nunca escondidos. Depois de gerar, explique o resultado — aplicar ao plano de verdade exige a nutricionista clicar em 'Aplicar ao editor' na tela do plano, nunca a partir do chat.",
+  inputSchema: generateMealPlanDraftToolInputSchema,
+  risk: "read",
+  profiles: ADMIN,
+  contextRequirement: "client",
+  domain: "meal_plan",
+  entityTypes: ["patient", "meal_plan", "food"],
+  dataSensitivity: "clinical",
+  execute: executeGenerateMealPlanDraft,
 });
 
 // ── Catalogo de alimentos (FASE 1, operador interno) — sempre disponivel,

@@ -192,7 +192,11 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
       physical_activity: carePlan.physical_activity,
       sleep_routine: carePlan.sleep_routine,
     } : null,
-    mealPlan,
+    // O paciente só pode ver substituições já aprovadas pela nutricionista —
+    // sugestões pendentes (IA ou manuais ainda não revisadas) nunca saem do
+    // servidor pro portal (seção 17/20 do pedido: paciente não aprova nem
+    // altera equivalência clínica, e nada sem revisão profissional chega até ele).
+    mealPlan: mealPlan ? { ...mealPlan, substitutions: mealPlan.substitutions.filter((item) => item.approved_by_professional !== false) } : null,
     payments,
   };
 }

@@ -60,9 +60,19 @@ function runStatement(db, sql, params = []) {
   const boundParams = params.map(sanitizeParam);
   const trimmed = sql.trim().toUpperCase();
   const isReadStatement = trimmed.startsWith("SELECT") || trimmed.startsWith("WITH") || trimmed.startsWith("PRAGMA");
-  if (isReadStatement) {
+  // Um INSERT/UPDATE/DELETE ... RETURNING ainda produz um result set (o real
+  // D1 devolve as linhas em `results`, mesmo sendo uma escrita) — stmt.run()
+  // do node:sqlite descarta silenciosamente o RETURNING, entao qualquer
+  // caller que dependa das linhas devolvidas (ex.: claimAiActionProposal,
+  // um UPDATE...RETURNING atomico) sempre recebia um array vazio aqui,
+  // mesmo quando a escrita tinha acontecido de verdade — fazendo o codigo
+  // pensar que o claim falhou quando na verdade so o retorno das linhas
+  // falhou. changes = results.length e uma aproximacao correta pra
+  // RETURNING (uma linha devolvida = uma linha afetada).
+  const hasReturning = /\bRETURNING\b/.test(trimmed);
+  if (isReadStatement || hasReturning) {
     const results = stmt.all(...boundParams);
-    return { results, success: true, meta: {} };
+    return { results, success: true, meta: { changes: results.length } };
   }
   const info = stmt.run(...boundParams);
   return { results: [], success: true, meta: { changes: info.changes, last_row_id: info.lastInsertRowid } };

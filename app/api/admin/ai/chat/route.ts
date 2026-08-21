@@ -80,13 +80,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
   }
 
+  // Nao bloqueia por falta de api_key aqui: o command router de
+  // substituicoes (lib/ai/nutrition/substitution-command-router.ts, dentro
+  // de runAssistantTurn) resolve add/remove/approve_substitution sem NUNCA
+  // chamar o modelo, entao nao pode exigir provider configurado. Qualquer
+  // mensagem que realmente precise do LLM ainda recebe o mesmo 409 (agora
+  // lancado por lib/ai/gateway/ai-gateway.ts#resolveSettingsAndModel via
+  // AiConfigError, capturado no catch abaixo) — nunca silenciosamente ok.
   const settings = await getAISettings();
-  if (!settings.api_key) {
-    return NextResponse.json(
-      { message: "Configure uma chave de IA em Configurações > Inteligência artificial para usar o assistente." },
-      { status: 409 }
-    );
-  }
 
   let attachment: ReturnType<typeof validateChatAttachment> | undefined;
   try {

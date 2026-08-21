@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { getMealPlanById, getClientMealPlans, type MealPlanMealPayload, type MealPlanItemPayload, type MealPlanPayload } from "@/lib/repositories/meal-plans";
+import { getMealPlanById, getClientMealPlans, type MealPlanMealPayload, type MealPlanItemPayload, type MealPlanPayload, type MealPlanSubstitutionPayload } from "@/lib/repositories/meal-plans";
+import { findFoodSubstitutes } from "@/lib/nutrition/substitution-engine";
+import { toDisplayFoodName } from "@/lib/nutrition/food-resolver";
 import { searchTacoFoods, getTacoFoodByNumber, findBestTacoFood, TACO_REFERENCES } from "@/lib/nutrition/taco";
 import { resolveFoodItemMacros, roundedMacros, findFoodReferenceByIdentity, findBestFoodReference, type MacroReferenceFood } from "@/lib/nutrition/macros";
 import type { HouseholdMeasureOption, QuantityResolution } from "@/lib/nutrition/quantity-resolution";
@@ -107,6 +109,9 @@ export async function resolveMealPlanChangeReferences(
     if ("food" in change && (change.food.source === "CUSTOM" || change.food.source === "MANUFACTURER")) {
       customRefIds.add(change.food.refId);
     }
+    if ("optionFood" in change && (change.optionFood.source === "CUSTOM" || change.optionFood.source === "MANUFACTURER")) {
+      customRefIds.add(change.optionFood.refId);
+    }
     if ("householdMeasureId" in change && change.householdMeasureId) {
       measureIds.add(change.householdMeasureId);
     }
@@ -180,6 +185,12 @@ export function validateMealPlanFoodReferences(changes: MealPlanChangeOperation[
         return `O alimento "${change.food.foodName}" não corresponde a um registro válido (${change.food.source}/${change.food.refId}). Busque de novo com searchFoods.`;
       }
     }
+    if ("optionFood" in change) {
+      const found = findFoodReferenceByIdentity(references, change.optionFood.source, change.optionFood.refId);
+      if (!found) {
+        return `O alimento "${change.optionFood.foodName}" não corresponde a um registro válido (${change.optionFood.source}/${change.optionFood.refId}). Busque de novo com searchFoods.`;
+      }
+    }
   }
   return null;
 }
@@ -235,6 +246,7 @@ function addDelta(total: MacroDelta, before: MacroDelta, after: MacroDelta): Mac
 
 export interface MealPlanChangeApplyResult {
   meals: MealPlanMealPayload[];
+  substitutions: MealPlanSubstitutionPayload[];
   preview: MealPlanChangePreview;
 }
 
@@ -259,9 +271,11 @@ export function applyMealPlanChangesWithPreview(
   mealPlanTitle: string,
   target?: NutrientTarget,
   references: MacroReferenceFood[] = TACO_REFERENCES,
-  measuresById: Map<string, FoodPortion> = new Map()
+  measuresById: Map<string, FoodPortion> = new Map(),
+  substitutions: MealPlanSubstitutionPayload[] = []
 ): MealPlanChangeApplyResult {
   const working: MealPlanMealPayload[] = meals.map((meal) => ({ ...meal, items: meal.items.map((item) => ({ ...item })) }));
+  let workingSubstitutions: MealPlanSubstitutionPayload[] = substitutions.map((item) => ({ ...item }));
   const summaries: MealPlanChangePreview["changeSummaries"] = [];
   let totalImpact: MacroDelta = ZERO_DELTA;
   // FASE 3 (precisao nutricional): registra a resolucao de quantidade de
@@ -489,6 +503,99 @@ export function applyMealPlanChangesWithPreview(
         summaries.push({ operation: change.operation, mealName: meal.name, before, after: change.itemIds.map((id) => byId.get(id)?.food).join(" → ") });
         break;
       }
+      case "add_substitution": {
+        // A quantidade NUNCA vem do modelo — só a identidade do candidato
+        // (já resolvida via searchMealPlanFoods, mesma garantia de add_item
+        // acima). Tudo abaixo é calculado aqui, deterministicamente, pela
+        // MESMA substitution engine usada pelo editor manual — nunca uma
+        // segunda lógica de cálculo para o caminho de IA.
+        const meal = findMeal(working, change.mealId);
+        const index = findItemIndex(meal, change.itemId);
+        const item = meal.items[index];
+        if (!item.food_source || !item.food_ref_id) {
+          throw new MealPlanChangeValidationError(`"${item.food}" não tem um alimento vinculado ao catálogo — não é possível calcular uma substituição equivalente para ele.`);
+        }
+        const baseFood = findFoodReferenceByIdentity(references, item.food_source, item.food_ref_id);
+        const candidateFood = findFoodReferenceByIdentity(references, change.optionFood.source, change.optionFood.refId);
+        if (!baseFood || !candidateFood) {
+          throw new MealPlanChangeValidationError("Não foi possível revalidar um dos alimentos desta substituição contra o catálogo atual.");
+        }
+        const baseGrams = existingItemMacros(item, references, measuresById).quantity.grams ?? 0;
+        if (baseGrams <= 0) {
+          throw new MealPlanChangeValidationError(`Não foi possível determinar a quantidade atual de "${item.food}" para calcular uma substituição equivalente.`);
+        }
+        const [result] = findFoodSubstitutes({ baseFood, baseGrams, candidates: [candidateFood], mode: change.mode ?? "nutritional" });
+        if (!result) {
+          throw new MealPlanChangeValidationError(`"${change.optionFood.foodName}" não é uma equivalência plausível para "${item.food}" dentro das tolerâncias técnicas.`);
+        }
+        const already = workingSubstitutions.some((sub) =>
+          sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id &&
+          sub.option_food_source === change.optionFood.source && sub.option_food_ref_id === change.optionFood.refId
+        );
+        if (already) {
+          throw new MealPlanChangeValidationError(`"${change.optionFood.foodName}" já está entre as substituições de "${item.food}".`);
+        }
+        workingSubstitutions = [...workingSubstitutions, {
+          base_food: item.food,
+          option_food: toDisplayFoodName(result.food.descricao),
+          quantity: String(result.quantityGrams),
+          unit: "g",
+          base_food_source: item.food_source,
+          base_food_ref_id: item.food_ref_id,
+          option_food_source: change.optionFood.source,
+          option_food_ref_id: change.optionFood.refId,
+          option_nutrition_snapshot: JSON.stringify(result.nutrition),
+          equivalence_mode: result.mode,
+          equivalence_score: result.score,
+          equivalence_quality: result.quality,
+          // Sugestão vinda do Assistente entra como pendente — a nutricionista
+          // ainda precisa aprovar (approve_substitution) antes dela valer pra
+          // impressão/portal, mesmo já tendo passado por confirmação de proposta.
+          approved_by_professional: false,
+          ai_suggested: true,
+        }];
+        summaries.push({
+          operation: change.operation,
+          mealName: meal.name,
+          before: null,
+          after: `${item.food} → ${toDisplayFoodName(result.food.descricao)} (${result.quantityGrams} g, pendente de aprovação)`,
+        });
+        break;
+      }
+      case "remove_substitution": {
+        const meal = findMeal(working, change.mealId);
+        const index = findItemIndex(meal, change.itemId);
+        const item = meal.items[index];
+        const before = workingSubstitutions.length;
+        workingSubstitutions = workingSubstitutions.filter((sub) =>
+          !(sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id &&
+            sub.option_food_source === change.optionFoodSource && sub.option_food_ref_id === change.optionFoodRefId)
+        );
+        if (workingSubstitutions.length === before) {
+          throw new MealPlanChangeValidationError(`Não encontrei essa substituição de "${item.food}" para remover.`);
+        }
+        summaries.push({ operation: change.operation, mealName: meal.name, before: item.food, after: null });
+        break;
+      }
+      case "approve_substitution": {
+        const meal = findMeal(working, change.mealId);
+        const index = findItemIndex(meal, change.itemId);
+        const item = meal.items[index];
+        let found = false;
+        workingSubstitutions = workingSubstitutions.map((sub) => {
+          if (sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id &&
+              sub.option_food_source === change.optionFoodSource && sub.option_food_ref_id === change.optionFoodRefId) {
+            found = true;
+            return { ...sub, approved_by_professional: true };
+          }
+          return sub;
+        });
+        if (!found) {
+          throw new MealPlanChangeValidationError(`Não encontrei essa substituição de "${item.food}" para aprovar.`);
+        }
+        summaries.push({ operation: change.operation, mealName: meal.name, before: "pendente", after: "aprovada" });
+        break;
+      }
     }
   }
 
@@ -511,6 +618,7 @@ export function applyMealPlanChangesWithPreview(
 
   return {
     meals: working,
+    substitutions: workingSubstitutions,
     preview: {
       mealPlanTitle,
       changeSummaries: summaries,
@@ -543,7 +651,7 @@ export async function executeProposeMealPlanChange(input: ProposeMealPlanChangeI
       carbohydrateG: plan.target_carbohydrate_g ?? null,
       fatG: plan.target_fat_g ?? null,
     };
-    const { preview } = applyMealPlanChangesWithPreview(plan.meals, input.changes, plan.title, target, references, measuresById);
+    const { preview } = applyMealPlanChangesWithPreview(plan.meals, input.changes, plan.title, target, references, measuresById, plan.substitutions);
     return { clientId: plan.client_id, mealPlanId: plan.id, baseVersion: plan.version, changes: input.changes, preview };
   } catch (error) {
     return { error: error instanceof MealPlanChangeValidationError ? error.message : "Não foi possível montar essa alteração a partir do plano atual." };
@@ -706,9 +814,11 @@ Como fazer isso:
 - Para reordenar refeicoes ou itens de uma refeicao, use reorder_meals/reorder_items informando a lista COMPLETA de ids na ordem final desejada (todos os ids atuais, sem adicionar nem remover nenhum) — nunca um indice solto tipo "mova a posicao 2 pra 4". Nao reordene na MESMA proposta em que voce acabou de adicionar/duplicar algo (o item novo ainda nao tem id) — primeiro confirme a adicao, depois proponha a reordenacao.
 - Para "analise o plano" ou perguntas sobre kcal/proteina/carboidrato/gordura/meta do dia, use ${GET_MEAL_PLAN_NUTRITION_TOOL_NAME} — ele ja calcula tudo (total por refeicao, total do dia, comparacao com a meta). NUNCA some ou estime esses numeros voce mesma; sempre use a ferramenta.
 - Para sugerir uma troca por nutriente ("uma fruta com menos carboidrato", "algo com mais proteina no lugar disso"), use ${FIND_FOOD_EQUIVALENTS_TOOL_NAME} primeiro para ver alternativas reais, resolva o alimento escolhido com ${"searchFoods"} e so entao proponha a troca com ${PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME} — nunca invente uma alternativa de cabeca.
+- SUBSTITUIÇÕES (diferente de trocar o item prescrito): quando a pessoa pedir "alternativas para X" sem querer substituir o item de verdade (ex.: "me dê opções pra substituir o arroz do almoço", "posso trocar esse frango por peixe?"), isso NÃO é uma alteração — é uma consulta. Use ${FIND_FOOD_EQUIVALENTS_TOOL_NAME} pra achar candidatos reais e responda em texto (ex.: "Encontrei estas opções calculadas pelo sistema: Batata inglesa cozida — 180 g, Mandioca cozida — 85 g. Quer adicionar alguma como opção de substituição?"). Só quando a pessoa CONFIRMAR qual quer adicionar (ex.: "adiciona batata e mandioca"), resolva cada candidato com ${"searchFoods"} e proponha operation:"add_substitution" (mealId, itemId do alimento PRESCRITO, optionFood resolvido) — a quantidade NUNCA vem de você, o sistema calcula e revalida sozinho depois de confirmado; a substituição entra como PENDENTE (approved_by_professional=false) até a nutricionista aprovar explicitamente com operation:"approve_substitution", e "remove_substitution" tira uma existente (aprovada ou pendente). Substituições são ALTERNATIVAS — nunca somadas ao total de kcal/macros do plano, nunca fale como se fossem consumidas junto com o item original.
 - So chame ${PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME} quando o pedido for uma alteracao concreta e clara ("adiciona 100g de banana no cafe da manha", "troca a banana por maca", "tira esse suplemento", "aumenta o arroz para 150g", "duplica o cafe da manha" — isso pode virar varias operacoes na mesma chamada). Informe mealPlanId e baseVersion exatamente como estao no contexto.
 - Se o pedido for so analise ("o que acha desse plano", "da pra melhorar algo aqui"), NAO chame a ferramenta de alteracao — responda em texto, separando DADOS DO SISTEMA (vindos de ${GET_MEAL_PLAN_NUTRITION_TOOL_NAME}) de SUGESTAO, e so proponha de verdade se a pessoa concordar com uma mudanca especifica.
 - Se o pedido for pedir opcoes ("me da alternativas para esse lanche"), responda em texto com as opcoes — so chame a ferramenta de alteracao quando a pessoa escolher uma delas.
 - Se houver ambiguidade sobre qual item ou refeicao a pessoa quer mudar (ex.: duas refeicoes com item parecido), pergunte qual antes de propor — nunca escolha sozinha.
 - Se a ferramenta devolver "error" (ex.: plano mudou desde a ultima leitura, alimento invalido, medida caseira nao pertence ao alimento), explique o problema em texto simples e nao insista automaticamente.
+- NUNCA diga em texto que vai chamar uma ferramenta ("vou montar a proposta", "vou adicionar isso") sem chamar-la de verdade na MESMA resposta — ou você chama a ferramenta agora, ou você faz a pergunta que falta antes de poder chamar; nunca um texto prometendo uma ação futura sem a tool call correspondente.
 `.trim();

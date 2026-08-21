@@ -47,7 +47,11 @@ export const CONTEXT_POLICIES: Record<ConsultationPurpose, readonly ClinicalData
   consultation_brief: ["identity", "anthropometry", "evolution", "meal_plan", "protocol", "tasks"],
   weight_evolution: ["identity", "anthropometry", "evolution"],
   notes_organization: ["identity", "notes_free_text"],
-  meal_plan_review: ["identity", "meal_plan"],
+  // "anthropometry" adicionado deliberadamente (nao um efeito colateral) para
+  // o gerador de pre-plano com IA: peso/altura/IMC sao necessarios pra
+  // propor uma estrutura de refeicoes clinicamente razoavel, mesma
+  // categoria ja concedida a consultation_brief pelo mesmo motivo.
+  meal_plan_review: ["identity", "anthropometry", "meal_plan"],
   protocol_review: ["identity", "protocol"],
   exams_summary: ["identity", "exams_text"],
 };

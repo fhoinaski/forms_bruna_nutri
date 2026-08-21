@@ -8,6 +8,7 @@ import { buildProposedAction, PROPOSAL_TOOL_NAMES } from "@/lib/ai/tools/proposa
 import type { ProposedAction } from "@/lib/ai/schemas/action.schema";
 import { getClientConversationMemory, recordConversationTurn } from "@/lib/ai/memory/conversation-summary";
 import { stripInternalPatientAlias, PATIENT_FREE_TEXT_TOOL_OUTPUT_NOTICE } from "@/lib/ai/privacy/sanitize-context";
+import { tryHandleSubstitutionCommand } from "@/lib/ai/nutrition/substitution-command-router";
 import { DEFAULT_CHAT_SYSTEM_PROMPT, getAISettings } from "@/lib/repositories/ai-settings";
 import { buildSystemUsageKnowledgeBase } from "@/lib/ai/agents/system/system-knowledge";
 import {
@@ -194,12 +195,19 @@ import { getSaoPauloDateKey } from "@/lib/utils/timezone";
  *     nunca mais uma escrita real automatica nem outra tool call.
  */
 
-/** Numero maximo de "etapas" (chamadas ao modelo, cada uma podendo incluir tool calls) num unico turno. */
-export const MAX_TOOL_STEPS = 6;
+/**
+ * Numero maximo de "etapas" (chamadas ao modelo, cada uma podendo incluir
+ * tool calls) num unico turno. Era 6 — baixo demais pra um fluxo real de
+ * substituicao nutricional (resolver o alimento via searchFoods + montar a
+ * proposta via proposeMealPlanChange já usa 2, mas o modelo real levava mais
+ * etapas de raciocinio/consulta antes de chegar lá e o loop cortava sem
+ * nunca propor nada — verificado com o provedor real configurado.
+ */
+export const MAX_TOOL_STEPS = 10;
 /** Nenhuma tool pode ser chamada mais que isso no mesmo turno — evita a IA insistir num loop com a mesma busca. */
 export const MAX_SAME_TOOL_CALLS = 3;
 /** Tempo maximo (ms) para o turno inteiro, todas as etapas incluidas. */
-export const TURN_TIMEOUT_MS = 30_000;
+export const TURN_TIMEOUT_MS = 45_000;
 
 const SENSITIVE_OR_CLINICAL_TOOL_NAMES = listRegisteredTools()
   .filter((tool) => tool.risk === "sensitive" || tool.risk === "clinical")
@@ -298,6 +306,18 @@ export async function runAssistantTurn(
   input: AssistantTurnInput
 ): Promise<AssistantResponseEnvelope> {
   const { client, submission, adminUser } = context;
+
+  // Command router determinístico de substituições (V3 do fechamento de
+  // gaps, blocker A): pedidos claros de add/remove/approve_substitution
+  // nunca dependem do modelo decidir chamar a tool certa — são classificados
+  // e resolvidos aqui, ANTES de qualquer chamada ao LLM. Consulta (READ) e
+  // qualquer mensagem fora desse domínio (retorna null) seguem pro fluxo
+  // normal abaixo, sem nenhuma mudança de comportamento.
+  if (client) {
+    const routed = await tryHandleSubstitutionCommand(input.messages, { clientId: client.id, adminId: adminUser.sub });
+    if (routed) return routed;
+  }
+
   const settings = await getAISettings();
   const saoPauloDateKey = getSaoPauloDateKey(new Date());
   const [year, month, day] = saoPauloDateKey.split("-");

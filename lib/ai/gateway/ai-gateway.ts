@@ -4,8 +4,20 @@ import { createConfiguredModel } from "@/lib/ai/model-factory";
 import { addAiTiming } from "@/lib/observability/trace";
 import { getAISettings, type AISettings } from "@/lib/repositories/ai-settings";
 import { writeAuditLog } from "@/lib/security/audit";
-import { AiConfigError, AiProviderError, AiValidationError, RETRYABLE_FAILURE_CATEGORIES, STRUCTURED_FAILURE_CATEGORIES, classifyAiError } from "@/lib/ai/core/ai-errors";
+import {
+  AiConfigError,
+  AiProviderError,
+  AiValidationError,
+  RETRYABLE_FAILURE_CATEGORIES,
+  STRUCTURED_FAILURE_CATEGORIES,
+  VALIDATION_FEEDBACK_REASONS,
+  classifyAiError,
+  classifyStructuredFailureReason,
+  buildValidationFeedbackPrompt,
+  type StructuredFailureReason,
+} from "@/lib/ai/core/ai-errors";
 import { isTruncatedJsonText, tryParseJsonFromText } from "@/lib/ai/schemas/json-extract";
+import { isE2EGatewayTestModeEnabled, takeE2EStructuredFixture } from "@/lib/ai/gateway/e2e-fixtures";
 
 /**
  * Unica porta para chamar o provedor de IA configurado. Nenhum agente deve
@@ -19,6 +31,15 @@ export interface AiGatewayCallContext {
   /** Nome do agente/modulo chamador, para logging (ex.: "protocol-agent", "system-chat"). */
   agent: string;
   adminId?: string | null;
+  /**
+   * Chave de escopo pra fixture determinística de E2E (lib/ai/gateway/e2e-fixtures.ts)
+   * — normalmente o clientId do teste. Sem efeito nenhum fora de
+   * E2E_TEST_MODE=1 (nunca influencia produção). Agentes que não passam
+   * isso simplesmente nunca usam fixture, mesmo em E2E — continuam
+   * chamando o provider real (ou falhando com AiConfigError sem chave,
+   * como sempre).
+   */
+  e2eFixtureKey?: string;
 }
 
 interface UsageInfo {
@@ -146,17 +167,49 @@ const STRUCTURED_RECOVERY_PROMPT =
  * Funciona com qualquer schema Zod e qualquer provider do model-factory.
  * Nunca devolve dado não validado.
  */
+/** Teto absoluto pro bump de tokens em retry de TRUNCATED_RESPONSE — nunca cresce sem limite (seção 8/41: "não aumentar tokens indefinidamente"). */
+const MAX_TRUNCATION_RETRY_TOKENS = 8000;
+
+/** console.debug redigido (nunca audit log persistente) só em desenvolvimento — a saída do MODELO é estrutura JSON sem dado clínico (o schema não carrega prontuário), mas mesmo assim fica fora de produção e truncado. */
+function debugLogRawOutput(agent: string, attempt: number, text: string): void {
+  if (process.env.NODE_ENV === "production") return;
+  const snippet = text.length > 300 ? `${text.slice(0, 300)}…(${text.length} chars)` : text;
+  console.debug(`[ai-gateway:structured] agent=${agent} attempt=${attempt} raw(redacted)=${JSON.stringify(snippet)}`);
+}
+
 export async function generateStructuredResult<T>(options: GenerateStructuredOptions<T>): Promise<StructuredGenerationResult<T>> {
+  // Fronteira do provider determinístico de E2E (FASE 11 do fechamento de
+  // gaps V3) — só entra em jogo com E2E_TEST_MODE=1 E uma fixture
+  // explicitamente registrada pro (agent, e2eFixtureKey) desta chamada.
+  // Valida contra o MESMO schema Zod real do agente (FASE 12: "nada de
+  // alterar código de produção pra aceitar fixture simplificada") — nunca
+  // pula a validação, só pula a chamada de rede ao provider real.
+  if (isE2EGatewayTestModeEnabled() && options.e2eFixtureKey) {
+    const fixture = takeE2EStructuredFixture(options.agent, options.e2eFixtureKey);
+    if (fixture !== undefined) {
+      const parsed = options.schema.safeParse(fixture);
+      if (parsed.success) {
+        return { data: parsed.data, provider: "e2e-deterministic", model: "e2e-deterministic", attempts: 1, repaired: false };
+      }
+      throw new AiValidationError("Fixture de E2E não bate com o schema real do agente.", parsed.error.issues);
+    }
+  }
+
   const { settings, model } = await resolveSettingsAndModel();
   const startedAt = Date.now();
   const maxAttempts = options.maxAttempts ?? MAX_STRUCTURED_ATTEMPTS;
-  const maxOutputTokens = options.maxOutputTokens ?? 1024;
+  const baseMaxOutputTokens = options.maxOutputTokens ?? 1024;
   const abortSignal = AbortSignal.timeout(options.timeoutMs ?? DEFAULT_STRUCTURED_TIMEOUT_MS);
 
   let repaired = false;
   let truncated = false;
   let lastIssues: unknown;
   let lastFailureCategory: ReturnType<typeof classifyAiError> = "structured_invalid";
+  let lastReason: StructuredFailureReason = "UNKNOWN";
+  let lastRawData: unknown;
+  /** Próximo attempt usa isto como complemento do system prompt — genérico por padrão, mas vira feedback de validação específico (seção 6) quando a falha anterior foi JSON válido com schema errado. */
+  let nextSystemAddendum = STRUCTURED_RECOVERY_PROMPT;
+  let currentMaxOutputTokens = baseMaxOutputTokens;
 
   const wrapProviderError = (cause: unknown): AiProviderError => {
     const message = cause instanceof Error && cause.name === "TimeoutError"
@@ -166,13 +219,17 @@ export async function generateStructuredResult<T>(options: GenerateStructuredOpt
   };
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const system = attempt === 1 ? options.system : `${options.system}\n\n${STRUCTURED_RECOVERY_PROMPT}`;
+    const system = attempt === 1 ? options.system : `${options.system}\n\n${nextSystemAddendum}`;
 
     // Texto + JSON + normalização + Zod.
     try {
-      const result = await generateText({ model, system, prompt: options.prompt, maxOutputTokens, abortSignal });
+      const result = await generateText({ model, system, prompt: options.prompt, maxOutputTokens: currentMaxOutputTokens, abortSignal });
       addAiTiming(Date.now() - startedAt);
-      const raw = tryParseJsonFromText(result.text);
+      const rawText = result.text ?? "";
+      debugLogRawOutput(options.agent, attempt, rawText);
+      const raw = tryParseJsonFromText(rawText);
+      const parseSucceeded = raw !== null;
+      const isTruncated = isTruncatedJsonText(rawText);
       const normalized = options.normalize ? options.normalize(raw) : raw;
       const parsed = options.schema.safeParse(normalized);
       if (parsed.success) {
@@ -185,10 +242,44 @@ export async function generateStructuredResult<T>(options: GenerateStructuredOpt
         });
         return { data: parsed.data, provider: settings.provider, model: settings.model, attempts: attempt, repaired };
       }
-      lastIssues = parsed.error.issues;
-      truncated = truncated || isTruncatedJsonText(result.text);
+      const zodIssues = parsed.error.issues;
+      lastIssues = zodIssues;
+      // Guarda o payload NORMALIZADO (pós-`normalize`, não o raw cru) — quem
+      // recebe `rawData` no AiValidationError (recuperação parcial) já
+      // aproveita a mesma normalização mecânica (ex.: quantity string→number).
+      lastRawData = parseSucceeded ? normalized : lastRawData;
+      truncated = truncated || isTruncated;
       repaired = true;
-      lastFailureCategory = truncated ? "structured_truncated" : "structured_invalid";
+      lastReason = classifyStructuredFailureReason({ rawText, parseSucceeded, zodIssues, truncated: isTruncated });
+      lastFailureCategory = lastReason === "TRUNCATED_RESPONSE" ? "structured_truncated" : "structured_invalid";
+      await logUsage(options, {
+        settings,
+        durationMs: Date.now() - startedAt,
+        success: false,
+        errorMessage: `attempt ${attempt}: ${lastReason}`,
+        extra: {
+          attempts: attempt,
+          structuredFailureReason: lastReason,
+          responseLength: rawText.length,
+          parseSucceeded,
+          validationSucceeded: false,
+          truncated: isTruncated,
+          zodIssuePaths: zodIssues.slice(0, 8).map((i) => i.path.join(".") || "(raiz)"),
+          zodIssueCodes: zodIssues.slice(0, 8).map((i) => i.code),
+        },
+      });
+      // Estratégia de retry diferenciada por causa (seção 7): schema errado
+      // com JSON válido ganha feedback específico (path+code) em vez do
+      // aviso genérico; truncamento ganha mais orçamento de tokens (uma vez,
+      // com teto) em vez de só repetir a mesma chamada que já cortou.
+      if (VALIDATION_FEEDBACK_REASONS.has(lastReason) && zodIssues.length) {
+        nextSystemAddendum = buildValidationFeedbackPrompt(zodIssues);
+      } else {
+        nextSystemAddendum = STRUCTURED_RECOVERY_PROMPT;
+      }
+      if (lastReason === "TRUNCATED_RESPONSE") {
+        currentMaxOutputTokens = Math.min(Math.round(currentMaxOutputTokens * 1.5), MAX_TRUNCATION_RETRY_TOKENS);
+      }
     } catch (cause) {
       const wrapped = wrapProviderError(cause);
       const category = classifyAiError(wrapped);
@@ -197,6 +288,7 @@ export async function generateStructuredResult<T>(options: GenerateStructuredOpt
         throw wrapped;
       }
       lastFailureCategory = category;
+      nextSystemAddendum = STRUCTURED_RECOVERY_PROMPT;
       await new Promise((resolve) => setTimeout(resolve, attempt === 1 ? 250 : 750));
     }
   }
@@ -206,14 +298,16 @@ export async function generateStructuredResult<T>(options: GenerateStructuredOpt
     durationMs: Date.now() - startedAt,
     success: false,
     errorMessage: "Saida estruturada invalida apos todas as tentativas.",
-    extra: { attempts: maxAttempts, repaired, failureCategory: lastFailureCategory },
+    extra: { attempts: maxAttempts, repaired, failureCategory: lastFailureCategory, structuredFailureReason: lastReason },
   });
   if (STRUCTURED_FAILURE_CATEGORIES.has(lastFailureCategory)) {
     throw new AiValidationError(
       "A IA nao retornou um resultado no formato esperado.",
       lastIssues,
       lastFailureCategory,
-      truncated
+      truncated,
+      lastReason,
+      lastRawData
     );
   }
   throw new AiProviderError("Falha persistente do provedor de IA.", new Error(`failureCategory: ${lastFailureCategory}`));

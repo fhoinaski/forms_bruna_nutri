@@ -281,7 +281,7 @@ export default async function PrintPage({
 
       <div className="page">
         <div className="header">
-          <div className="brand">Bruna Flores Nutri — Nutrição Materna</div>
+          <div className="brand">Bruna Flores Nutri — Nutrição Clínica</div>
           <h1>Formulário Pré-Consulta</h1>
           <div className="meta">Paciente: {submission.patient_name}</div>
           <div className="meta">Recebido em {dateStr}</div>

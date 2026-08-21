@@ -26,6 +26,14 @@ export interface FoodSearchResult {
   carbohydrateG?: number | null;
   fatG?: number | null;
   fiberG?: number | null;
+  /**
+   * Nivel do match que gerou este resultado (0=exato, 1=alias exato,
+   * 2=comeca-com, 3=contem, 4=todos os tokens presentes) — exposto pra
+   * quem precisa decidir se aceita uma resolucao automaticamente ou marca
+   * como ambigua (lib/nutrition/food-resolver.ts), sem duplicar a logica
+   * de ranking que ja vive em scoreText() acima.
+   */
+  matchRank?: number;
 }
 
 export interface FoodDetails extends FoodSearchResult {
@@ -239,7 +247,7 @@ export async function searchFoods(options: FoodCatalogSearchOptions): Promise<Fo
       || a.candidate.name.localeCompare(b.candidate.name, "pt-BR")
     )
     .slice(0, limit)
-    .map(({ candidate }) => ({
+    .map(({ candidate, score }) => ({
       ref: candidate.ref,
       name: candidate.name,
       brand: candidate.brand ?? null,
@@ -250,6 +258,7 @@ export async function searchFoods(options: FoodCatalogSearchOptions): Promise<Fo
       carbohydrateG: candidate.carbohydrateG ?? null,
       fatG: candidate.fatG ?? null,
       fiberG: candidate.fiberG ?? null,
+      matchRank: score.rank,
     }));
 }
 

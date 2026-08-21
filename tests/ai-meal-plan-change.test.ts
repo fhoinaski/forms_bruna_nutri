@@ -332,7 +332,12 @@ describe("executeProposedAction — meal_plan_change (handler de confirmação)"
     expect(payloadArg.status).toBe(plan.status);
     expect(payloadArg.notes).toBe(plan.notes);
     expect(payloadArg.weekly_slots).toBe(plan.weekly_slots);
-    expect(payloadArg.substitutions).toBe(plan.substitutions);
+    // Substituições agora passam pelo mesmo motor de aplicação que as
+    // refeições (applyMealPlanChangesWithPreview) — sempre uma cópia nova
+    // (permite add_substitution/remove_substitution/approve_substitution na
+    // mesma proposta), então já não é a MESMA referência; conteúdo
+    // continua idêntico quando nenhuma operação de substituição é usada.
+    expect(payloadArg.substitutions).toEqual(plan.substitutions);
     expect(payloadArg.supplements).toBe(plan.supplements);
     expect(payloadArg.meals.find((m: MealPlanMealPayload) => m.id === "meal-1").items[0].food).toBe("Maçã, Fuji, com casca, crua");
     expect(result).toEqual({ data: { mealPlanId: "plan-1", previousVersion: 3, newVersion: 4 } });

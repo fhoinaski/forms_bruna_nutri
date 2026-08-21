@@ -173,6 +173,33 @@ export const mealPlanChangeOperationSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("duplicate_item"), mealId: z.string().min(1), itemId: z.string().min(1) }),
   /** Lista COMPLETA (permutacao) dos ids reais dos itens desta refeicao, na ordem final desejada — nunca um indice solto. */
   z.object({ operation: z.literal("reorder_items"), mealId: z.string().min(1), itemIds: z.array(z.string().min(1)).min(1).max(100) }),
+  // ── Substituições nutricionais equivalentes (evolução do pedido de
+  // substituições) — o LLM NUNCA fornece quantidade/kcal aqui, só a
+  // identidade do candidato (já resolvida via searchMealPlanFoods, mesma
+  // garantia de add_item/replace_item acima). A quantidade final SEMPRE é
+  // calculada dentro de applyMealPlanChangesWithPreview pela substitution
+  // engine + engine nutricional — nunca pelo modelo.
+  z.object({
+    operation: z.literal("add_substitution"),
+    mealId: z.string().min(1),
+    itemId: z.string().min(1),
+    optionFood: mealPlanFoodReferenceSchema,
+    mode: z.enum(["energy", "nutritional"]).optional(),
+  }),
+  z.object({
+    operation: z.literal("remove_substitution"),
+    mealId: z.string().min(1),
+    itemId: z.string().min(1),
+    optionFoodSource: mealPlanFoodSourceSchema,
+    optionFoodRefId: z.string().min(1).max(120),
+  }),
+  z.object({
+    operation: z.literal("approve_substitution"),
+    mealId: z.string().min(1),
+    itemId: z.string().min(1),
+    optionFoodSource: mealPlanFoodSourceSchema,
+    optionFoodRefId: z.string().min(1).max(120),
+  }),
 ]);
 export type MealPlanChangeOperation = z.infer<typeof mealPlanChangeOperationSchema>;
 

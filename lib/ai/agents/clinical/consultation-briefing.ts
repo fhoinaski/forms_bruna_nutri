@@ -7,8 +7,9 @@ import { getClientProtocols } from "@/lib/repositories/client-protocols";
 import { listPatientRequests } from "@/lib/repositories/patient-requests";
 import { listPatientClinicalMarkers } from "@/lib/repositories/patient-clinical-markers";
 import { listRecentPatientFoodSubstitutionEvents } from "@/lib/repositories/patient-food-substitution-events";
-import { estimateFoodMacrosFromTaco } from "@/lib/nutrition/taco";
-import { sumMacros, roundedMacros, type MacroTotals } from "@/lib/nutrition/macros";
+import type { MacroTotals } from "@/lib/nutrition/macros";
+import { calculatePlanNutrients } from "@/lib/nutrition/nutrients";
+import { resolveMealPlanChangeReferences, buildFoodReferenceLookup } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { calculateWeightDelta } from "@/lib/clinical/anthropometry";
 import type { Client } from "@/lib/repositories/clients";
 import { generateStructuredResult } from "@/lib/ai/gateway/ai-gateway";
@@ -77,10 +78,26 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-function sumMealPlanMacros(plan: NonNullable<Awaited<ReturnType<typeof getActiveMealPlan>>>): MacroTotals {
-  const items = plan.meals.flatMap((meal) => meal.items);
-  const totals = items.map((item) => estimateFoodMacrosFromTaco(item.food, item.quantity ?? undefined, item.unit ?? undefined));
-  return roundedMacros(sumMacros(totals));
+/**
+ * MESMO motor usado pelo editor e pela impressao (calculatePlanNutrients +
+ * resolveMealPlanChangeReferences/buildFoodReferenceLookup, reaproveitados
+ * de meal-plan-change-agent.ts) — antes este briefing calculava com
+ * estimateFoodMacrosFromTaco (so combina texto contra a base TACO, ignora
+ * food_source/food_ref_id), podendo divergir do total real mostrado no
+ * editor/impressao para qualquer item vinculado a CUSTOM/MANUFACTURER/USDA.
+ */
+async function sumMealPlanMacros(plan: NonNullable<Awaited<ReturnType<typeof getActiveMealPlan>>>): Promise<MacroTotals> {
+  const { references, measuresById } = await resolveMealPlanChangeReferences(plan);
+  const lookup = buildFoodReferenceLookup(references, measuresById);
+  const { total, quality } = calculatePlanNutrients(plan, lookup);
+  return {
+    kcal: total.values.energyKcal ?? 0,
+    protein: total.values.proteinG ?? 0,
+    carbs: total.values.carbohydrateG ?? 0,
+    fat: total.values.fatG ?? 0,
+    recognizedItems: quality.total - quality.unresolved,
+    totalItems: quality.total,
+  };
 }
 
 export async function buildConsultationSystemData(client: Client): Promise<ConsultationSystemData> {
@@ -110,6 +127,7 @@ export async function buildConsultationSystemData(client: Client): Promise<Consu
     .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0];
 
   const activeProtocolRow = protocols.find((protocol) => protocol.status === "ativo") ?? null;
+  const activePlanMacros = activeMealPlan ? await sumMealPlanMacros(activeMealPlan) : null;
 
   return {
     lastVisit: {
@@ -156,7 +174,7 @@ export async function buildConsultationSystemData(client: Client): Promise<Consu
       version: activeMealPlan?.version ?? null,
       status: activeMealPlan?.status ?? null,
       mealCount: activeMealPlan?.meals.length ?? 0,
-      macros: activeMealPlan ? sumMealPlanMacros(activeMealPlan) : null,
+      macros: activePlanMacros,
     },
     activeProtocol: activeProtocolRow
       ? {

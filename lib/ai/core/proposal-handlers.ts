@@ -385,8 +385,11 @@ const executeMealPlanChange: ProposalHandler<"meal_plan_change"> = async (action
   if (referenceError) throw new ProposalExecutionError(referenceError, 422);
 
   let newMeals;
+  let newSubstitutions;
   try {
-    newMeals = applyMealPlanChangesWithPreview(plan.meals, action.changes, plan.title, undefined, references, measuresById).meals;
+    const applied = applyMealPlanChangesWithPreview(plan.meals, action.changes, plan.title, undefined, references, measuresById, plan.substitutions);
+    newMeals = applied.meals;
+    newSubstitutions = applied.substitutions;
   } catch (error) {
     const message = error instanceof MealPlanChangeValidationError ? error.message : "Não foi possível aplicar esta alteração.";
     throw new ProposalExecutionError(message, 422);
@@ -417,7 +420,7 @@ const executeMealPlanChange: ProposalHandler<"meal_plan_change"> = async (action
       target_fat_g: plan.target_fat_g,
       meals: newMeals,
       weekly_slots: plan.weekly_slots,
-      substitutions: plan.substitutions,
+      substitutions: newSubstitutions,
       supplements: plan.supplements,
     }, { expectedVersion: action.baseVersion, changedByAdminId: ctx.adminId, source: "ai_proposal" });
   } catch (error) {

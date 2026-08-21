@@ -434,11 +434,12 @@ export default function ClientPortalPage() {
                 )}
                 {mealPlan.substitutions.length > 0 && (
                   <div className="rounded-xl bg-[#F7F0E8] p-4">
-                    <h3 className="font-serif text-lg font-semibold">Substituições</h3>
+                    <h3 className="font-serif text-lg font-semibold">Opções de substituição</h3>
+                    <p className="mt-1 text-xs text-[#8C6E52]">Escolha uma opção de substituição quando necessário — não é preciso usar todas.</p>
                     <ul className="mt-3 space-y-2 text-sm text-[#75675E]">
                       {mealPlan.substitutions.slice(0, 12).map((item, index) => (
                         <li key={`${item.base_food}-${item.option_food}-${index}`}>
-                          {item.base_food}: pode trocar por {item.option_food} {[item.quantity, item.unit].filter(Boolean).join(" ")}
+                          {item.base_food} ↳ {item.option_food} {[item.quantity, item.unit].filter(Boolean).join(" ")}
                         </li>
                       ))}
                     </ul>

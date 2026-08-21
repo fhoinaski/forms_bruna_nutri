@@ -63,6 +63,14 @@ export type MealPlanItemPayload = {
   nutrition_snapshot?: string | null;
   resolved_grams_snapshot?: number | null;
   quantity_resolution_snapshot?: string | null;
+  // Locks (seções 4-5 do pedido de fechamento de gaps) — reaproveitados
+  // pelo Optimizer V2 (nunca ajusta quantidade de um item com
+  // quantity_locked) e pela sugestão de substituições (nunca sugere para um
+  // item com substitutions_locked, automática ou manualmente — mas a
+  // nutricionista ainda pode adicionar substituição manual mesmo com o item
+  // bloqueado, se explicitamente escolher fazer isso pela UI).
+  quantity_locked?: boolean;
+  substitutions_locked?: boolean;
 };
 
 export type MealPlanWeeklySlotPayload = {
@@ -81,6 +89,29 @@ export type MealPlanSubstitutionPayload = {
   quantity?: string | null;
   unit?: string | null;
   notes?: string | null;
+  // Substituições nutricionais equivalentes por item (evolução desta mesma
+  // tabela — nunca uma tabela nova). Todos os campos abaixo são opcionais e
+  // `null` por padrão: uma linha SEM eles continua sendo uma substituição de
+  // "grupo de troca" em texto livre, exatamente como já funcionava antes.
+  //
+  // base_food_source/base_food_ref_id: identidade do alimento PRESCRITO ao
+  // qual esta substituição pertence (quando ele tem vínculo estruturado) —
+  // não usamos um item_id porque os itens são recriados a cada save
+  // (ver buildMealPlanDetailStatements), então um id nunca é estável entre
+  // salvamentos; a identidade fonte+refId é.
+  base_food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | null;
+  base_food_ref_id?: string | null;
+  option_food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | null;
+  option_food_ref_id?: string | null;
+  option_household_measure_id?: string | null;
+  option_nutrition_snapshot?: string | null;
+  equivalence_mode?: "energy" | "nutritional" | null;
+  equivalence_score?: number | null;
+  equivalence_quality?: "EXCELLENT" | "GOOD" | "REVIEW" | "UNSUITABLE" | null;
+  // Default true nas linhas já existentes (curadoria humana por definição —
+  // templates/edição manual); só sugestões novas da IA começam em false.
+  approved_by_professional?: boolean;
+  ai_suggested?: boolean;
 };
 
 export type MealPlanSupplementPayload = {
@@ -415,6 +446,8 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
         nutrition_snapshot: item.nutrition_snapshot ?? null,
         resolved_grams_snapshot: item.resolved_grams_snapshot ?? null,
         quantity_resolution_snapshot: item.quantity_resolution_snapshot ?? null,
+        quantity_locked: Boolean(item.quantity_locked),
+        substitutions_locked: Boolean(item.substitutions_locked),
         })),
       })),
     weekly_slots: (weeklySlotsByPlan.get(row.id) ?? []).map(({ id, weekday, meal_type, title, notes, source_meal_id }) => ({
@@ -429,7 +462,25 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
     // do dedupe existir no caminho de escrita) sem precisar de uma migracao
     // de limpeza; mantem a primeira ocorrencia (sort_order menor).
     substitutions: dedupeMealPlanSubstitutions(
-      (substitutionsByPlan.get(row.id) ?? []).map(({ id, base_food, option_food, quantity, unit, notes }) => ({ id, base_food, option_food, quantity, unit, notes }))
+      (substitutionsByPlan.get(row.id) ?? []).map((row) => ({
+        id: row.id,
+        base_food: row.base_food,
+        option_food: row.option_food,
+        quantity: row.quantity,
+        unit: row.unit,
+        notes: row.notes,
+        base_food_source: row.base_food_source ?? null,
+        base_food_ref_id: row.base_food_ref_id ?? null,
+        option_food_source: row.option_food_source ?? null,
+        option_food_ref_id: row.option_food_ref_id ?? null,
+        option_household_measure_id: row.option_household_measure_id ?? null,
+        option_nutrition_snapshot: row.option_nutrition_snapshot ?? null,
+        equivalence_mode: row.equivalence_mode ?? null,
+        equivalence_score: row.equivalence_score ?? null,
+        equivalence_quality: row.equivalence_quality ?? null,
+        approved_by_professional: Boolean(row.approved_by_professional ?? true),
+        ai_suggested: Boolean(row.ai_suggested ?? false),
+      }))
     ),
     supplements: (supplementsByPlan.get(row.id) ?? []).map(({ id, name, dosage, unit, instructions, notes }) => ({ id, name, dosage, unit, instructions, notes })),
   }));
@@ -681,6 +732,8 @@ function buildMealPlanVersionSnapshot(
         nutrition_snapshot: item.nutrition_snapshot ?? null,
         resolved_grams_snapshot: item.resolved_grams_snapshot ?? null,
         quantity_resolution_snapshot: item.quantity_resolution_snapshot ?? null,
+        quantity_locked: Boolean(item.quantity_locked),
+        substitutions_locked: Boolean(item.substitutions_locked),
       })),
     })),
     weekly_slots: input.weekly_slots ?? [],
@@ -868,6 +921,8 @@ function buildMealPlanDetailStatements(
         nutritionSnapshot: item.nutrition_snapshot ?? null,
         resolvedGramsSnapshot: item.resolved_grams_snapshot ?? null,
         quantityResolutionSnapshot: item.quantity_resolution_snapshot ?? null,
+        quantityLocked: item.quantity_locked ? 1 : 0,
+        substitutionsLocked: item.substitutions_locked ? 1 : 0,
         order: itemIndex,
         now,
       });
@@ -896,7 +951,26 @@ function buildMealPlanDetailStatements(
   const substitutionRows = dedupeMealPlanSubstitutions(
     substitutions.filter((item) => item.base_food.trim() && item.option_food.trim())
   ).map((item, order) => ({
-    id: crypto.randomUUID(), planId, baseFood: item.base_food, optionFood: item.option_food, quantity: item.quantity ?? null, unit: item.unit ?? null, notes: item.notes ?? null, order, now,
+    id: crypto.randomUUID(),
+    planId,
+    baseFood: item.base_food,
+    optionFood: item.option_food,
+    quantity: item.quantity ?? null,
+    unit: item.unit ?? null,
+    notes: item.notes ?? null,
+    baseFoodSource: item.base_food_source ?? null,
+    baseFoodRefId: item.base_food_ref_id ?? null,
+    optionFoodSource: item.option_food_source ?? null,
+    optionFoodRefId: item.option_food_ref_id ?? null,
+    optionHouseholdMeasureId: item.option_household_measure_id ?? null,
+    optionNutritionSnapshot: item.option_nutrition_snapshot ?? null,
+    equivalenceMode: item.equivalence_mode ?? null,
+    equivalenceScore: item.equivalence_score ?? null,
+    equivalenceQuality: item.equivalence_quality ?? null,
+    approvedByProfessional: item.approved_by_professional === false ? 0 : 1,
+    aiSuggested: item.ai_suggested === true ? 1 : 0,
+    order,
+    now,
   }));
   const supplementRows = supplements.filter((item) => item.name.trim()).map((item, order) => ({
     id: crypto.randomUUID(), planId, name: item.name, dosage: item.dosage ?? null, unit: item.unit ?? null, instructions: item.instructions ?? null, notes: item.notes ?? null, order, now,
@@ -914,8 +988,8 @@ function buildMealPlanDetailStatements(
     params: [JSON.stringify(mealRows)],
   });
   if (itemRows.length) statements.push({
-    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, household_measure_id, food_name_snapshot, nutrition_snapshot, resolved_grams_snapshot, quantity_resolution_snapshot, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.foodNameSnapshot'), json_extract(value,'$.nutritionSnapshot'), json_extract(value,'$.resolvedGramsSnapshot'), json_extract(value,'$.quantityResolutionSnapshot'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, household_measure_id, food_name_snapshot, nutrition_snapshot, resolved_grams_snapshot, quantity_resolution_snapshot, quantity_locked, substitutions_locked, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.foodNameSnapshot'), json_extract(value,'$.nutritionSnapshot'), json_extract(value,'$.resolvedGramsSnapshot'), json_extract(value,'$.quantityResolutionSnapshot'), json_extract(value,'$.quantityLocked'), json_extract(value,'$.substitutionsLocked'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(itemRows)],
   });
   if (weeklyRows.length) statements.push({
@@ -924,8 +998,19 @@ function buildMealPlanDetailStatements(
     params: [JSON.stringify(weeklyRows)],
   });
   if (substitutionRows.length) statements.push({
-    sql: `INSERT INTO meal_plan_substitutions (id, meal_plan_id, base_food, option_food, quantity, unit, notes, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.planId'), json_extract(value,'$.baseFood'), json_extract(value,'$.optionFood'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO meal_plan_substitutions (
+            id, meal_plan_id, base_food, option_food, quantity, unit, notes,
+            base_food_source, base_food_ref_id, option_food_source, option_food_ref_id,
+            option_household_measure_id, option_nutrition_snapshot, equivalence_mode,
+            equivalence_score, equivalence_quality, approved_by_professional, ai_suggested,
+            sort_order, created_at, updated_at)
+          SELECT
+            json_extract(value,'$.id'), json_extract(value,'$.planId'), json_extract(value,'$.baseFood'), json_extract(value,'$.optionFood'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'),
+            json_extract(value,'$.baseFoodSource'), json_extract(value,'$.baseFoodRefId'), json_extract(value,'$.optionFoodSource'), json_extract(value,'$.optionFoodRefId'),
+            json_extract(value,'$.optionHouseholdMeasureId'), json_extract(value,'$.optionNutritionSnapshot'), json_extract(value,'$.equivalenceMode'),
+            json_extract(value,'$.equivalenceScore'), json_extract(value,'$.equivalenceQuality'), json_extract(value,'$.approvedByProfessional'), json_extract(value,'$.aiSuggested'),
+            json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now')
+          FROM json_each(?1)`,
     params: [JSON.stringify(substitutionRows)],
   });
   if (supplementRows.length) statements.push({

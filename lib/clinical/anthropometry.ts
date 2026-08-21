@@ -22,6 +22,22 @@ export function formatClinicalNumber(value: number | null): string | null {
   return value.toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 0 });
 }
 
+/**
+ * Formata altura para exibição sem assumir a unidade cegamente — o campo é
+ * texto livre (o profissional pode digitar "165" ou "1,65"), então usa o
+ * MESMO critério já usado por calculateBmiValue (valor > 10 = centímetros,
+ * caso contrário metros) em vez de sempre apendar "cm", que produzia
+ * exibições sem sentido como "1.65 cm" quando o valor já estava em metros.
+ */
+export function formatHeightDisplay(heightCm: string | number | null | undefined): string | null {
+  const height = parseMeasurement(heightCm);
+  if (height === null) return null;
+  if (height > 10) {
+    return `${Math.round(height)} cm`;
+  }
+  return `${height.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m`;
+}
+
 export function classifyAdultBmi(bmi: number | string | null | undefined): string | null {
   const value = parseMeasurement(bmi);
   if (!value) return null;

@@ -309,10 +309,14 @@ export function ProtocolBuilder({
     onChange({ ...value, phases: value.phases.filter((_, phaseIndex) => phaseIndex !== index) });
   };
 
-  const phaseMacros = useMemo(() => value.phases.map((phase) => roundedMacros(sumMacros(
+  // Mesma regra do editor de plano alimentar: soma bruta primeiro, arredonda
+  // so na apresentacao — nunca soma valores de fase ja arredondados (item 23
+  // do pedido de auditoria nutricional).
+  const rawPhaseMacros = useMemo(() => value.phases.map((phase) => sumMacros(
     phase.actions.filter((action) => action.trim()).map(estimateMacrosFromLine),
-  ))), [value.phases]);
-  const protocolMacros = useMemo(() => roundedMacros(sumMacros(phaseMacros)), [phaseMacros]);
+  )), [value.phases]);
+  const phaseMacros = useMemo(() => rawPhaseMacros.map((raw) => roundedMacros(raw)), [rawPhaseMacros]);
+  const protocolMacros = useMemo(() => roundedMacros(sumMacros(rawPhaseMacros)), [rawPhaseMacros]);
 
   const quality = {
     hasTitle: Boolean(value.title.trim()),

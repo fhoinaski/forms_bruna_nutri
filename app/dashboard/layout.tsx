@@ -36,6 +36,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AiChatWidget } from "@/components/dashboard/AiChatWidget";
+import { BmiQuickCalculator } from "@/components/dashboard/BmiQuickCalculator";
 import { AssistantPageContextProvider } from "@/lib/ai/context/assistant-page-context";
 
 const jost = Jost({ subsets: ["latin"], variable: "--font-sans" });
@@ -404,6 +405,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )}
             </form>
             <div className="flex shrink-0 items-center gap-2">
+              <BmiQuickCalculator />
               <div className="relative">
                 <IconButton label="Notificações" onClick={toggleNotifications}>
                   <Bell className="h-4 w-4" />

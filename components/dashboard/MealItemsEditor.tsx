@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Beef, ChevronDown, ChevronUp, Copy, Flame, MoreHorizontal, Plus, RefreshCw, Save, Sparkles, Trash2, Utensils, Wheat } from "lucide-react";
+import { AlertTriangle, Beef, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, Plus, RefreshCw, Save, Sparkles, Trash2, Unlock, Utensils, Wheat } from "lucide-react";
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
+import { scaleRecipeIngredientsToPortions } from "@/lib/nutrition/recipes";
 import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
 import type { FoodPortion } from "@/lib/repositories/food-portions";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
+import { ItemSubstitutionsPanel, type ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
 import type { FoodReference } from "@/lib/nutrition/food-catalog";
 
 export type MealItem = {
@@ -26,6 +28,12 @@ export type MealItem = {
   household_measure_id?: string | null;
   resolved_grams_snapshot?: number | null;
   quantity_resolution_snapshot?: string | null;
+  // Locks — reaproveitados pelo Optimizer V2 (nunca ajusta um item com
+  // quantity_locked) e por geração automática/global de substituições
+  // (nunca gera pra um item com substitutions_locked); adição MANUAL de
+  // substituição continua disponível mesmo com o item bloqueado.
+  quantity_locked?: boolean;
+  substitutions_locked?: boolean;
 };
 
 function toMeasureOption(portion: FoodPortion): HouseholdMeasureOption {
@@ -71,6 +79,7 @@ type RecipeLibraryItem = {
   ingredients: Array<{ taco_number: number; food_name: string; grams: number }>;
   source_note: string | null;
   per_portion_kcal: number;
+  servings: number;
 };
 
 type RecipeDraft = {
@@ -145,6 +154,11 @@ export function cleanMealsForSave(meals: Meal[]): Meal[] {
           food_source: item.food_source ?? null,
           food_ref_id: item.food_ref_id ?? null,
           household_measure_id: item.household_measure_id ?? null,
+          // Locks persistidos (Optimizer V2 sobre plano salvo + geração
+          // automática de substituições) — sem isso, o toggle 🔒 na UI
+          // nunca sobrevivia a um "Salvar rascunho".
+          quantity_locked: item.quantity_locked ?? false,
+          substitutions_locked: item.substitutions_locked ?? false,
         })),
     }))
     .filter((meal) => meal.name.trim() && meal.items.length);
@@ -161,6 +175,9 @@ export function MealItemsEditor({
   onMessage,
   onError,
   showMacroFooter = true,
+  clientId,
+  substitutions,
+  onSubstitutionsChange,
 }: {
   meals: Meal[];
   onChange: (meals: Meal[]) => void;
@@ -172,7 +189,12 @@ export function MealItemsEditor({
   onMessage?: (message: string) => void;
   onError?: (message: string) => void;
   showMacroFooter?: boolean;
+  /** Substituições nutricionais equivalentes (evolução de plan.substitutions) — só disponível no contexto de um cliente real (não em templates/receitas, que não têm substituições por item). */
+  clientId?: string;
+  substitutions?: ItemSubstitution[];
+  onSubstitutionsChange?: (substitutions: ItemSubstitution[]) => void;
 }) {
+  const [openSubstitutionsKey, setOpenSubstitutionsKey] = useState("");
   const [activeFoodField, setActiveFoodField] = useState("");
   const [foodSearch, setFoodSearch] = useState<{ key: string; query: string }>({ key: "", query: "" });
   const [foodSuggestions, setFoodSuggestions] = useState<Record<string, FoodSuggestion[]>>({});
@@ -373,11 +395,20 @@ export function MealItemsEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meals, knownFoodReferences, measuresByFood, foodSuggestions]);
 
-  const mealMacros = useMemo(() => meals.map((meal, mealIndex) => roundedMacros(sumMacros(
+  // Soma sempre em precisao total (nunca arredonda cedo demais): cada
+  // refeicao acumula os macros brutos dos itens, e o total do plano soma os
+  // brutos das refeicoes — arredondamento so acontece na apresentacao
+  // (mealMacros/planMacros abaixo), nunca antes de somar o proximo nivel.
+  // Antes disso o total do dia era a soma de N refeicoes ja arredondadas
+  // individualmente, o que podia divergir da soma real em ate ~0.5 kcal por
+  // refeicao (auditoria do motor nutricional, item 23 do pedido).
+  const rawMealMacros = useMemo(() => meals.map((meal, mealIndex) => sumMacros(
     meal.items.map((_, itemIndex) => itemResolutions[`${mealIndex}:${itemIndex}`]?.macros).filter((value): value is MacroTotals => Boolean(value))
-  ))), [meals, itemResolutions]);
+  )), [meals, itemResolutions]);
 
-  const planMacros = useMemo(() => roundedMacros(sumMacros(mealMacros)), [mealMacros]);
+  const mealMacros = useMemo(() => rawMealMacros.map((raw) => roundedMacros(raw)), [rawMealMacros]);
+
+  const planMacros = useMemo(() => roundedMacros(sumMacros(rawMealMacros)), [rawMealMacros]);
 
   function updateMeal(index: number, patch: Partial<Meal>) {
     onChange(meals.map((meal, mealIndex) => mealIndex === index ? { ...meal, ...patch } : meal));
@@ -414,17 +445,38 @@ export function MealItemsEditor({
 
   function insertRecipe(recipe: RecipeLibraryItem) {
     const mealIndex = meals.length;
+    // Insere 1 PORCAO prescrita, nao o lote inteiro da receita: as gramas
+    // dos ingredientes vem cadastradas para o RENDIMENTO TOTAL (ex.:
+    // servings=4), entao copiar direto fazia o motor calcular e exibir o
+    // total da receita inteira como se fosse a refeicao de uma pessoa (ex.:
+    // 1510 kcal em vez dos 377,5 kcal de 1 porcao). Escala pelo mesmo
+    // rendimento cadastrado na receita (lib/nutrition/recipes.ts) — nunca
+    // inventa um numero, so aplica a proporcao real porcoes/rendimento.
+    const scaledIngredients = scaleRecipeIngredientsToPortions(recipe.ingredients, recipe.servings, 1);
     const meal: Meal = {
       name: recipe.title,
       suggested_time: "",
-      notes: recipe.source_note ? `Receita da biblioteca. Observacao: ${recipe.source_note}` : "Receita inserida da biblioteca.",
+      notes: [
+        `Receita da biblioteca - 1 porcao (rendimento total: ${recipe.servings} porcao(oes)).`,
+        recipe.source_note ? `Observacao: ${recipe.source_note}` : null,
+      ].filter(Boolean).join(" "),
       source_recipe_id: recipe.id,
-      items: recipe.ingredients.map((ingredient) => ({
+      // food_source/food_ref_id (nao so o taco_number legado) — o motor
+      // central (resolveItemReference em lib/nutrition/nutrients.ts) SO
+      // consulta food_source+food_ref_id para vinculo por identidade; sem
+      // isso o item caia no fuzzy-match por texto do nome do ingrediente
+      // (lookup.fuzzyMatch), que falha silenciosamente para nomes que nao
+      // batem bem com a descricao TACO — causa raiz de refeicoes com
+      // receita mostrando "— kcal" mesmo com ingrediente 100% identificado
+      // no cadastro da receita.
+      items: scaledIngredients.map((ingredient) => ({
         food: ingredient.food_name,
         quantity: String(ingredient.grams),
         unit: "g",
         notes: null,
         taco_number: ingredient.taco_number,
+        food_source: "TACO" as const,
+        food_ref_id: String(ingredient.taco_number),
       })),
     };
     onChange([...meals, meal]);
@@ -440,7 +492,7 @@ export function MealItemsEditor({
       });
     });
     setRecipeSelectorOpen(false);
-    onMessage?.(`Receita "${recipe.title}" inserida como copia. Salve para registrar.`);
+    onMessage?.(`Receita "${recipe.title}" inserida (1 porção). Salve para registrar.`);
   }
 
   function inferMealGroup(mealName: string): RecipeMealGroup {
@@ -814,6 +866,39 @@ export function MealItemsEditor({
                       <RefreshCw className="h-4 w-4" />
                       <span>Substituir</span>
                     </button>
+                    {clientId && (
+                      <button
+                        type="button"
+                        onClick={() => setOpenSubstitutionsKey((current) => current === `${mealIndex}:${itemIndex}` ? "" : `${mealIndex}:${itemIndex}`)}
+                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]"
+                        aria-label="Substituições equivalentes"
+                        title="Encontrar alimentos nutricionalmente equivalentes"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        <span>Substituições</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => updateMealItem(mealIndex, itemIndex, { quantity_locked: !item.quantity_locked })}
+                      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${item.quantity_locked ? "bg-[#F0D4C7] text-[#8C5F50]" : "text-[#75675E] hover:bg-[#FBF7F1]"}`}
+                      aria-label={item.quantity_locked ? "Desbloquear quantidade" : "Manter quantidade (bloquear ajuste automático)"}
+                      title={item.quantity_locked ? "Quantidade bloqueada — clique para desbloquear" : "Manter quantidade — o ajuste automático (Optimizer) nunca muda este item"}
+                    >
+                      {item.quantity_locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+                    </button>
+                    {clientId && (
+                      <button
+                        type="button"
+                        onClick={() => updateMealItem(mealIndex, itemIndex, { substitutions_locked: !item.substitutions_locked })}
+                        className={`inline-flex h-9 items-center justify-center gap-1 rounded-lg px-2 text-[11px] font-semibold ${item.substitutions_locked ? "bg-[#F0D4C7] text-[#8C5F50]" : "text-[#75675E] hover:bg-[#FBF7F1]"}`}
+                        aria-label={item.substitutions_locked ? "Permitir sugestão automática de substituições" : "Não sugerir substituições automaticamente para este item"}
+                        title={item.substitutions_locked ? "Sugestão automática/global de substituições desativada para este item — ainda dá pra adicionar manualmente" : "Bloquear sugestão automática/global de substituições para este item"}
+                      >
+                        {item.substitutions_locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+                        <span>Subst. auto</span>
+                      </button>
+                    )}
                     <button type="button" onClick={() => updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, -1) })} disabled={itemIndex === 0} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Mover alimento para cima" title="Mover para cima">
                       <ChevronUp className="h-4 w-4" />
                     </button>
@@ -827,6 +912,35 @@ export function MealItemsEditor({
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
+                  {clientId && openSubstitutionsKey === key && (
+                    <div className="2xl:col-span-3">
+                      <ItemSubstitutionsPanel
+                        clientId={clientId}
+                        itemFood={item.food}
+                        itemFoodSource={item.food_source}
+                        itemFoodRefId={item.food_ref_id}
+                        itemGrams={typeof grams === "number" && Number.isFinite(grams) ? grams : null}
+                        substitutionsLocked={Boolean(item.substitutions_locked)}
+                        currentMeals={meals}
+                        substitutions={(substitutions ?? []).filter((sub) =>
+                          item.food_ref_id && item.food_source
+                            ? sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id
+                            : sub.base_food === item.food
+                        )}
+                        onAdd={(sub) => onSubstitutionsChange?.([...(substitutions ?? []), sub])}
+                        onApprove={(indexInFiltered) => {
+                          const list = substitutions ?? [];
+                          const target = list.filter((sub) => item.food_ref_id && item.food_source ? sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id : sub.base_food === item.food)[indexInFiltered];
+                          onSubstitutionsChange?.(list.map((sub) => sub === target ? { ...sub, approved_by_professional: true } : sub));
+                        }}
+                        onRemove={(indexInFiltered) => {
+                          const list = substitutions ?? [];
+                          const target = list.filter((sub) => item.food_ref_id && item.food_source ? sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id : sub.base_food === item.food)[indexInFiltered];
+                          onSubstitutionsChange?.(list.filter((sub) => sub !== target));
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
                 );
               })}

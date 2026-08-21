@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CalendarDays, CheckCircle2, Copy, Plus, Save, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Copy, Plus, Save, Sparkles, Trash2 } from "lucide-react";
 import { MealItemsEditor, cleanMealsForSave, type Meal } from "@/components/dashboard/MealItemsEditor";
+import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
+import { AiMealPlanWizard } from "@/components/dashboard/AiMealPlanWizard";
 import { MealPlanNutritionWorkspacePanel } from "@/components/nutrition/MealPlanNutritionSummary";
 import { useDebouncedFoodSearch, type FoodSuggestion } from "@/hooks/use-debounced-food-search";
 import {
@@ -13,7 +15,7 @@ import {
 } from "@/lib/protocol-templates/constants";
 
 type MealPlanStatus = "draft" | "active" | "archived";
-type Substitution = { base_food: string; option_food: string; quantity?: string | null; unit?: string | null; notes?: string | null };
+type Substitution = ItemSubstitution;
 type Supplement = { name: string; dosage?: string | null; unit?: string | null; instructions?: string | null; notes?: string | null };
 type WeeklySlot = {
   weekday: number;
@@ -68,6 +70,8 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   const [targetGroup, setTargetGroup] = useState<ProtocolTemplateTargetGroup>("ADULTO_SAUDAVEL");
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [optimizingPlan, setOptimizingPlan] = useState(false);
+  const [optimizeSummary, setOptimizeSummary] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -77,6 +81,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   const [templateSaving, setTemplateSaving] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
+  const [aiWizardOpen, setAiWizardOpen] = useState(false);
 
   const loadPlans = useCallback(async (preferredPlanId?: string) => {
     const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, { cache: "no-store" });
@@ -198,6 +203,73 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     }
   }
 
+  /**
+   * Carrega o PRÉ-PLANO gerado pelo assistente de IA no editor real — nunca
+   * persiste sozinho e nunca ativa (mesmo princípio de duplicateCurrentPlan:
+   * cria um plano novo pelo endpoint já existente, depois só sobrescreve
+   * `meals` em memória; só vira gravação de verdade quando a nutricionista
+   * clicar em "Salvar rascunho"/"Ativar no portal" como sempre).
+   */
+  async function applyAiDraft(group: ProtocolTemplateTargetGroup, meals: Meal[], substitutions: Substitution[] = []) {
+    setCreating(true);
+    setError("");
+    setMessage("");
+    setConflict("");
+    try {
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetGroup: group }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Não foi possível criar o plano.");
+      await loadPlans(data.id);
+      setPlan((current) => current && current.id === data.id ? { ...current, meals, substitutions: [...current.substitutions, ...substitutions] } : current);
+      setMessage("Pré-plano da IA carregado no editor. Revise cada refeição, ajuste o que quiser e salve quando estiver pronto — nada foi ativado.");
+      onSaved?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar o pré-plano.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  // "✨ Ajustar quantidades" no plano SALVO (seção 4 do pedido de
+  // fechamento de gaps) — reaproveita o Optimizer V2 via rota dedicada, que
+  // já deriva os locks automaticamente do que está persistido em cada item.
+  // Nunca persiste sozinho: só substitui plan.meals localmente, exigindo o
+  // "Salvar rascunho"/"Ativar" normal, versionado, pra valer de verdade.
+  async function optimizePlanQuantities() {
+    if (!plan || !plan.target_energy_kcal) return;
+    setOptimizingPlan(true);
+    setOptimizeSummary("");
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/${plan.id}/optimize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetEnergyKcal: plan.target_energy_kcal ?? null,
+          targetProteinG: plan.target_protein_g ?? null,
+          targetCarbohydrateG: plan.target_carbohydrate_g ?? null,
+          targetFatG: plan.target_fat_g ?? null,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Não foi possível ajustar as quantidades.");
+      setPlan((current) => current ? { ...current, meals: data.meals } : current);
+      setOptimizeSummary(
+        data.adjustments.length > 0
+          ? `${data.adjustments.length} quantidade(s) ajustada(s). Itens bloqueados (🔒) não foram alterados. Revise e salve quando estiver pronto.`
+          : "Nenhum ajuste foi necessário ou possível dentro dos limites técnicos."
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível ajustar as quantidades.");
+    } finally {
+      setOptimizingPlan(false);
+    }
+  }
+
   async function save(nextStatus?: MealPlanStatus) {
     if (!plan) return;
     setSaving(true);
@@ -223,6 +295,21 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             quantity: item.quantity ?? null,
             unit: item.unit ?? null,
             notes: item.notes ?? null,
+            // Substituições nutricionais equivalentes por item (painel por
+            // item) — sem estes campos, o editor perdia identidade
+            // (source+refId), qualidade e aprovação ao salvar, quebrando a
+            // ligação com o item prescrito e a filtragem de print/portal.
+            base_food_source: item.base_food_source ?? null,
+            base_food_ref_id: item.base_food_ref_id ?? null,
+            option_food_source: item.option_food_source ?? null,
+            option_food_ref_id: item.option_food_ref_id ?? null,
+            option_household_measure_id: item.option_household_measure_id ?? null,
+            option_nutrition_snapshot: item.option_nutrition_snapshot ?? null,
+            equivalence_mode: item.equivalence_mode ?? null,
+            equivalence_score: item.equivalence_score ?? null,
+            equivalence_quality: item.equivalence_quality ?? null,
+            approved_by_professional: item.approved_by_professional,
+            ai_suggested: item.ai_suggested,
           })),
         supplements: plan.supplements
           .filter((item) => item.name.trim())
@@ -354,6 +441,16 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               <Plus className="h-4 w-4" />
               {creating ? "Criando..." : "Criar por modelo"}
             </button>
+            <button
+              type="button"
+              onClick={() => setAiWizardOpen(true)}
+              disabled={creating}
+              title={aiEnabled ? undefined : "Configure a chave de IA em Configurações para usar este recurso."}
+              className="brand-btn-secondary w-full sm:w-auto"
+            >
+              <Sparkles className="h-4 w-4" />
+              Criar com IA
+            </button>
           </div>
         </div>
       </section>
@@ -445,6 +542,19 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                   <NutrientTargetInput id="target-carbohydrate-g" label="Carboidrato (g)" value={plan.target_carbohydrate_g} onChange={(value) => setPlan({ ...plan, target_carbohydrate_g: value })} />
                   <NutrientTargetInput id="target-fat-g" label="Gordura (g)" value={plan.target_fat_g} onChange={(value) => setPlan({ ...plan, target_fat_g: value })} />
                 </div>
+                {plan.target_energy_kcal && (
+                  <button
+                    type="button"
+                    onClick={() => void optimizePlanQuantities()}
+                    disabled={optimizingPlan}
+                    className="brand-btn-secondary mt-2"
+                    title="Ajusta quantidades dos alimentos já vinculados para aproximar o plano da meta. Itens marcados com 🔒 nunca são alterados. Nada é salvo automaticamente."
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {optimizingPlan ? "Ajustando..." : "✨ Ajustar quantidades"}
+                  </button>
+                )}
+                {optimizeSummary && <p className="mt-1.5 text-xs text-[#607A56]">{optimizeSummary}</p>}
               </div>
 
               <MealItemsEditor
@@ -458,6 +568,9 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                 onMessage={setMessage}
                 onError={setError}
                 showMacroFooter={false}
+                clientId={clientId}
+                substitutions={plan.substitutions}
+                onSubstitutionsChange={(substitutions) => setPlan({ ...plan, substitutions })}
               />
             </div>
 
@@ -528,6 +641,15 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             </div>
           </div>
         </section>
+      )}
+
+      {aiWizardOpen && (
+        <AiMealPlanWizard
+          clientId={clientId}
+          defaultTargetGroup={plan?.target_group && PROTOCOL_TEMPLATE_TARGET_GROUPS.includes(plan.target_group as ProtocolTemplateTargetGroup) ? plan.target_group as ProtocolTemplateTargetGroup : targetGroup}
+          onClose={() => setAiWizardOpen(false)}
+          onApply={applyAiDraft}
+        />
       )}
 
       {portalReady && templateDraft && plan && createPortal(
