@@ -46,13 +46,13 @@ test.describe("sugestão de substituição via IA (provider determinístico)", (
     // Registra a fixture — a PRÓXIMA chamada de suggestSubstitutionCandidates
     // pra este clientId recebe estes nomes, sem chamar nenhum provider real.
     // Um nome exatamente no formato do catálogo ("Alimento, atributo,
-    // atributo") resolve com confiança total; o outro, em linguagem natural
-    // sem as vírgulas do catálogo (como um modelo real tende a responder —
-    // confirmado ao vivo na V3 do fechamento de gaps), fica de baixa
-    // confiança por design do resolver (lib/nutrition/food-resolver.ts:
-     // "rank 3+ nunca aceita sozinho") — os dois caminhos reais são cobertos.
+    // atributo") resolve com confiança total; o outro ("batata", sem
+    // qualificador) é genuinely ambíguo — bate em vários tipos de batata
+    // reais (inglesa/doce/baroa) — nunca escolhido sozinho pelo resolver
+    // (Food Resolver V2 continua exigindo candidato ÚNICO em todo o
+    // catálogo pra aceitar automaticamente) — os dois caminhos reais são cobertos.
     const fixtureRes = await request.post("/api/admin/e2e/set-substitution-suggestion-fixture", {
-      data: { clientId: patient.id, candidates: ["Batata, inglesa, cozida", "mandioca cozida"] },
+      data: { clientId: patient.id, candidates: ["Batata, inglesa, cozida", "batata"] },
     });
     expect(fixtureRes.ok(), await fixtureRes.text()).toBeTruthy();
 
@@ -61,7 +61,7 @@ test.describe("sugestão de substituição via IA (provider determinístico)", (
     });
     expect(suggestAiRes.ok(), await suggestAiRes.text()).toBeTruthy();
     const suggestAiBody = await suggestAiRes.json();
-    expect(suggestAiBody.candidates).toEqual(["Batata, inglesa, cozida", "mandioca cozida"]);
+    expect(suggestAiBody.candidates).toEqual(["Batata, inglesa, cozida", "batata"]);
 
     // Passo 2: os NOMES (nunca números) vão pro motor determinístico real —
     // exatamente o que o painel de substituições faz depois de "Sugerir com IA".
@@ -89,11 +89,11 @@ test.describe("sugestão de substituição via IA (provider determinístico)", (
     const names = suggestBody.results.map((r: { displayName: string }) => r.displayName.toLowerCase());
     expect(names.some((n: string) => n.includes("batata"))).toBe(true);
 
-    // "mandioca cozida" (linguagem natural, sem as vírgulas do catálogo)
-    // fica de baixa confiança por design — nunca escolhida sozinha, nunca
+    // "batata" (sem qualificador) é genuinamente ambígua — bate em vários
+    // tipos reais de batata no catálogo — nunca escolhida sozinha, nunca
     // vira um resultado calculado sem revisão humana.
     expect(suggestBody.needsReview.length).toBeGreaterThan(0);
-    expect(suggestBody.needsReview.some((r: { query: string }) => r.query === "mandioca cozida")).toBe(true);
+    expect(suggestBody.needsReview.some((r: { query: string }) => r.query === "batata")).toBe(true);
 
     // Nada foi persistido — as duas rotas de sugestão nunca gravam no plano.
     const afterRes = await request.get(`/api/admin/clients/${patient.id}/meal-plans`);

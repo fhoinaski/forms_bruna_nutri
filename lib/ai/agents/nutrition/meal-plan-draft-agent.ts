@@ -336,6 +336,7 @@ export async function generateMealPlanDraft(input: GenerateMealPlanDraftInput): 
       const result = await generateStructuredResult({
         agent: "meal-plan-draft",
         adminId: input.adminId,
+        e2eFixtureKey: input.clientId,
         system: DRAFT_SYSTEM_PROMPT,
         prompt: `Paciente: ${pseudonym}.\n\n${contextBlock}\n\nProponha a estrutura do pré-plano alimentar.`,
         schema: mealPlanDraftLlmSchema,

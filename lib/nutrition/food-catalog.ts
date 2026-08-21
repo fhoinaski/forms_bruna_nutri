@@ -1,4 +1,7 @@
 import { normalize, type MacroReferenceFood } from "@/lib/nutrition/macros";
+import { normalizeFoodText, tokenizeFoodQuery } from "@/lib/nutrition/food-query-normalize";
+import { applyFoodQueryAliases } from "@/lib/nutrition/food-query-aliases";
+import { usdaFallbackTermFor } from "@/lib/nutrition/usda-fallback-terms";
 import { TACO_REFERENCES, getTacoFoodByNumber } from "@/lib/nutrition/taco";
 import { listCustomFoods, getCustomFoodById, toMacroReferenceFood, type CustomFood } from "@/lib/repositories/custom-foods";
 import { listFoodPortions, type FoodPortion, type FoodPortionSource } from "@/lib/repositories/food-portions";
@@ -176,12 +179,20 @@ function toMacroCandidate(food: MacroReferenceFood, sourceOrder = 0): Candidate 
 }
 
 function scoreText(query: string, candidate: Candidate) {
-  const normalizedQuery = normalize(query);
-  const queryTokens = normalizedQuery.split(" ").filter(Boolean);
+  // normalizeFoodText/tokenizeFoodQuery (Food Resolver V2, seção 2): expande
+  // abreviações reais do TACO ("s/"="sem", "c/"="com") e remove preposições
+  // puras ("de"/"da"/"do") só da lista de tokens do match "todos os tokens"
+  // (rank 4) — nunca das comparações de substring/exato acima, que continuam
+  // exigindo o texto real.
+  // Alias layer (seção 3): "arroz branco" -> "arroz tipo 1", etc — reescrita
+  // de FRASE antes do ranking, nunca um source+refId hardcoded.
+  const aliasedQuery = applyFoodQueryAliases(query);
+  const normalizedQuery = normalizeFoodText(aliasedQuery);
+  const queryTokens = tokenizeFoodQuery(aliasedQuery);
   let best: { rank: number; tokenMisses: number; distance: number } | null = null;
 
-  const texts = candidate.searchableTexts.map((text) => normalize(text)).filter(Boolean);
-  const aliases = candidate.aliasTexts.map((text) => normalize(text)).filter(Boolean);
+  const texts = candidate.searchableTexts.map((text) => normalizeFoodText(text)).filter(Boolean);
+  const aliases = candidate.aliasTexts.map((text) => normalizeFoodText(text)).filter(Boolean);
 
   for (const text of texts) {
     let rank: number | null = null;
@@ -227,7 +238,16 @@ export async function searchFoods(options: FoodCatalogSearchOptions): Promise<Fo
 
   const explicitUsda = options.sources?.includes("USDA") ?? false;
   if (sourceFilter.has("USDA") && (explicitUsda || scoredLocal.length < LOCAL_RESULTS_SUFFICIENT_FOR_USDA)) {
-    const usdaCandidates = (await Promise.all((await searchUsdaFoods(options.query, limit)).map(toUsdaCandidate))).filter((candidate): candidate is Candidate => Boolean(candidate));
+    const usdaRows = await searchUsdaFoods(options.query, limit);
+    // Fallback PT->EN (Food Catalog Coverage Audit) — a busca do USDA é
+    // full-text contra descricoes em ingles; uma query em portugues pode
+    // nunca bater mesmo quando o alimento existe la. So tenta um segundo
+    // termo quando a busca real (options.query) nao achou nada — nunca
+    // substitui, so soma candidatos, que passam pelo MESMO scoreText/
+    // classifyMatches de sempre (ainda pode virar AMBIGUOUS).
+    const fallbackTerm = usdaRows.length === 0 ? usdaFallbackTermFor(options.query) : null;
+    const usdaFallbackRows = fallbackTerm ? await searchUsdaFoods(fallbackTerm, limit) : [];
+    const usdaCandidates = (await Promise.all([...usdaRows, ...usdaFallbackRows].map(toUsdaCandidate))).filter((candidate): candidate is Candidate => Boolean(candidate));
     for (const candidate of usdaCandidates) byKey.set(candidate.legacyKey, candidate);
   }
 

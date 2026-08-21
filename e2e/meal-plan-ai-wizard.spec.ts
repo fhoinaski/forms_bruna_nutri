@@ -60,7 +60,7 @@ test.describe("assistente guiado de criacao de plano com IA", () => {
 
     // Gerar -> sem provedor de IA configurado nesta suite -> fallback correto.
     await dialog.getByRole("button", { name: /^gerar pré-plano$/i }).click();
-    await expect(dialog.getByText(/não foi possível gerar o pré-plano/i)).toBeVisible({ timeout: 15000 });
+    await expect(dialog.getByText(/não conseguimos estruturar o pré-plano/i)).toBeVisible({ timeout: 15000 });
     await expect(dialog.getByRole("button", { name: /^tentar novamente$/i })).toBeVisible();
     const continueManuallyButton = dialog.getByRole("button", { name: /^continuar manualmente$/i });
     await expect(continueManuallyButton).toBeVisible();

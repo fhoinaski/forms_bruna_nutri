@@ -2,6 +2,7 @@ import { searchFoods, getFoodByReference, type FoodReference, type FoodSearchRes
 import { checkFoodAgainstPatientRestrictions } from "@/lib/clinical/food-safety";
 import type { PatientClinicalMarker } from "@/lib/repositories/patient-clinical-markers";
 import { normalize } from "@/lib/nutrition/macros";
+import { logger } from "@/lib/observability/logger";
 
 /**
  * Resolução rigorosa de um candidato de alimento em texto livre (proposto
@@ -59,7 +60,12 @@ export function toDisplayFoodName(technicalName: string): string {
  * - rank 2 (prefixo): só aceita se for o ÚNICO candidato nesse nível ou
  *   melhor — dois alimentos que começam igual (ex.: "Frango, peito..." e
  *   "Frango, coxa...") para a query "frango" NUNCA são resolvidos sozinhos.
- * - rank 3+ (contém/tokens): nunca aceita sozinho — sempre AMBIGUOUS/NOT_FOUND.
+ * - rank 3/4 (contém/todos os tokens): Food Resolver V2 (seção 5 do pedido)
+ *   — aceita SÓ quando é o ÚNICO resultado em TODO o catálogo (results.length
+ *   === 1), nunca só "único nesse rank". "Não há absolutamente mais nada
+ *   parecido" é um sinal forte de verdade (ex.: "pão de forma integral" só
+ *   bate com UM alimento no catálogo inteiro); dois OU MAIS candidatos no
+ *   mesmo rank 3/4 continuam sempre AMBIGUOUS — nunca escolhe entre eles.
  */
 function classifyMatches(results: FoodSearchResult[]): { accepted: FoodSearchResult | null; candidates: FoodSearchResult[] } {
   if (!results.length) return { accepted: null, candidates: [] };
@@ -74,7 +80,19 @@ function classifyMatches(results: FoodSearchResult[]): { accepted: FoodSearchRes
     if (!runnerUp || runnerUpRank > 2) return { accepted: best, candidates: [] };
   }
 
+  if ((bestRank === 3 || bestRank === 4) && results.length === 1) {
+    return { accepted: best, candidates: [] };
+  }
+
   return { accepted: null, candidates: results.slice(0, 5) };
+}
+
+/** rank -> rótulo de método pra observabilidade (seção 20 do pedido V5) — nunca o texto da query, só a classificação. */
+function resolutionMethodFromRank(rank: number | undefined): string {
+  if (rank === 0) return "EXACT";
+  if (rank === 1) return "ALIAS";
+  if (rank === 2 || rank === 3 || rank === 4) return "RANKED";
+  return "UNKNOWN";
 }
 
 /**
@@ -90,6 +108,31 @@ export async function resolveFoodCandidate(
   const results = await searchFoods({ query, limit: 5 });
   const { accepted, candidates } = classifyMatches(results);
 
+  // Observabilidade (seção 20 do pedido V5) — nunca o texto da query/nome
+  // do alimento (seção 20 pede explicitamente "não logar texto sensível"),
+  // só a classificação/fonte/rank/contagem. Só fora de produção —
+  // resolveFoodCandidate roda em paralelo pra cada item de um draft
+  // inteiro, não é o lugar pra volume de log em produção.
+  if (process.env.NODE_ENV !== "production") {
+    logger.debug("food_resolver_v2_resolution", {
+      resultCount: results.length,
+      accepted: Boolean(accepted),
+      source: accepted?.ref.source ?? null,
+      resolutionMethod: accepted ? resolutionMethodFromRank(accepted.matchRank) : results.length ? "AMBIGUOUS" : "NOT_FOUND",
+      candidateCount: candidates.length,
+    });
+  }
+
+  return resolveFoodCandidateInner(query, markers, results, accepted, candidates);
+}
+
+async function resolveFoodCandidateInner(
+  query: string,
+  markers: PatientClinicalMarker[],
+  results: FoodSearchResult[],
+  accepted: FoodSearchResult | null,
+  candidates: FoodSearchResult[]
+): Promise<FoodResolution> {
   if (!results.length) {
     return { status: "NOT_FOUND", query, ref: null, name: null, displayName: null, candidates: [], reason: `"${query}" não encontrado no catálogo de alimentos.` };
   }

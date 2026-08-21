@@ -65,10 +65,11 @@ describe("resolveFoodCandidate — classificação de confiança", () => {
     expect(result.ref?.sourceId).toBe("20");
   });
 
-  it("match por 'contém'/tokens (rank 3+) nunca resolve sozinho, mesmo sendo o único resultado — reproduz o risco 'tilápia -> merluza'", async () => {
+  it("match por 'contém'/tokens (rank 3+) com MAIS DE UM candidato nunca resolve sozinho — ambiguidade real fica pra revisão humana", async () => {
     vi.doMock("@/lib/nutrition/food-catalog", () => ({
       searchFoods: vi.fn().mockResolvedValue([
-        { ref: ref("30"), name: "Merluza, filé, cru", sourceLabel: "TACO", matchRank: 3 },
+        { ref: ref("30"), name: "Peixe, tilápia, filé, cru", sourceLabel: "TACO", matchRank: 3 },
+        { ref: ref("31"), name: "Peixe, tilápia, filé, assado", sourceLabel: "TACO", matchRank: 3 },
       ]),
       getFoodByReference: vi.fn(),
     }));
@@ -77,6 +78,30 @@ describe("resolveFoodCandidate — classificação de confiança", () => {
     const result = await resolveFoodCandidate("tilápia", []);
     expect(result.status).toBe("AMBIGUOUS");
     expect(result.ref).toBeNull();
+  });
+
+  // Food Resolver V2: um candidato ÚNICO em rank 3+ (nada mais no catálogo
+  // INTEIRO bate, nem parcialmente) agora resolve automaticamente — "não há
+  // absolutamente mais nada parecido" é sinal forte, não fraco (seção 5 do
+  // pedido V5). Isso NUNCA reabre o risco "tilápia -> merluza": rank 3/4 só
+  // existe quando a query é literalmente um substring/todos os tokens do
+  // texto do candidato (scoreText, food-catalog.ts) — "tilápia" nunca
+  // poderia gerar rank>=3 contra "Merluza, filé, cru" de verdade (o teste
+  // antigo simulava um cenário que o algoritmo real nunca produz). A prova
+  // real, contra o catálogo de verdade, está em
+  // tests/food-resolver-v2.test.ts ("tilápia" -> NOT_FOUND, nunca RESOLVED).
+  it("match por 'contém'/tokens (rank 3+) resolve quando é o ÚNICO candidato em todo o catálogo — nunca dois ou mais", async () => {
+    vi.doMock("@/lib/nutrition/food-catalog", () => ({
+      searchFoods: vi.fn().mockResolvedValue([
+        { ref: ref("32"), name: "Peixe, tilápia, filé, assado", sourceLabel: "TACO", matchRank: 4 },
+      ]),
+      getFoodByReference: vi.fn().mockResolvedValue({ macroReference: { fonte: "taco", numero: 32, descricao: "Peixe, tilápia, filé, assado", energia_kcal: 130, proteina_g: 26, carboidrato_g: 0, lipidios_g: 3 } }),
+    }));
+    vi.doMock("@/lib/clinical/food-safety", () => ({ checkFoodAgainstPatientRestrictions: vi.fn().mockReturnValue({ status: "compatible", checks: [] }) }));
+    const { resolveFoodCandidate } = await import("@/lib/nutrition/food-resolver");
+    const result = await resolveFoodCandidate("tilápia assada", []);
+    expect(result.status).toBe("RESOLVED");
+    expect(result.ref?.sourceId).toBe("32");
   });
 
   it("nenhum resultado -> NOT_FOUND, nunca inventa um vínculo", async () => {
