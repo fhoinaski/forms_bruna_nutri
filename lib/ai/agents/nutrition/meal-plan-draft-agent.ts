@@ -144,6 +144,7 @@ Regras absolutas:
 - Você NUNCA fornece kcal, calorias, gramas de proteína/carboidrato/gordura ou qualquer valor nutricional — o sistema calcula isso depois com uma engine determinística. Se você incluir esses campos eles serão descartados.
 - Para cada refeição solicitada, proponha alimentos como NOMES ESPECÍFICOS e reais (ex.: "arroz branco cozido", "peito de frango grelhado", "banana prata") — NUNCA um nome genérico demais (ex.: "arroz", "frango", "peixe") que pode combinar com vários alimentos diferentes no catálogo; quanto mais específico, maior a chance de resolução automática.
 - "recipeId" só pode ser um id EXATO da lista de receitas reais fornecida no contexto — nunca invente um id, nunca invente uma receita.
+- PRIORIDADE É "items" (alimentos individuais simples), NUNCA "recipeId": mesmo quando receitas compatíveis estão disponíveis no contexto, só use recipeId quando a refeição pedida claramente EXIGIR uma preparação composta específica (ex.: o objetivo/preferências mencionam explicitamente aquele prato) — uma refeição comum ("café da manhã com ovos, pão e fruta") deve SEMPRE virar itens individuais, nunca virar automaticamente uma receita só porque uma existe na lista.
 - Respeite rigorosamente alergias/restrições/aversões informadas — nunca proponha um alimento que contradiga isso.
 - Só proponha refeições cujas chaves (mealKey) estejam na lista de "Refeições solicitadas" — nunca adicione uma refeição extra.
 - Evite repetir o mesmo alimento em muitas refeições diferentes — priorize variedade quando fizer sentido para o objetivo.
@@ -271,6 +272,8 @@ function resolutionToMealParts(
       status: resolution.status,
       reason: resolution.reason,
       candidates: resolution.candidates,
+      preparation: resolution.preparation ?? null,
+      recipeCandidates: resolution.recipeCandidates ?? [],
     },
   };
 }
@@ -402,7 +405,7 @@ export async function generateMealPlanDraft(input: GenerateMealPlanDraftInput): 
     return { meals: fallback.meals, warnings: [...preAssembleWarnings, ...fallback.warnings], fallbackUsed: "meal_by_meal" };
   }
 
-  const assembled = await assembleDraft(data.meals, input.requestedMeals, candidateRecipes, markers);
+  const assembled = await assembleDraft(data.meals, input.requestedMeals, candidateRecipes, markers, input.adminId);
   return { meals: assembled.meals, warnings: [...preAssembleWarnings, ...assembled.warnings], fallbackUsed };
 }
 
@@ -476,7 +479,8 @@ async function assembleDraft(
   llmMeals: z.infer<typeof mealPlanDraftLlmSchema>["meals"],
   requestedMeals: RequestedMeal[],
   candidateRecipes: RecipePayload[],
-  markers: PatientClinicalMarker[]
+  markers: PatientClinicalMarker[],
+  adminId?: string | null
 ): Promise<MealPlanDraftResult> {
   const warnings: DraftWarning[] = [];
   const requestedByKey = new Map(requestedMeals.map((m) => [m.key, m]));
@@ -510,7 +514,7 @@ async function assembleDraft(
       queries.push({ query: item.query, key: `${mealIndex}:${itemIndex}` });
     });
   });
-  const resolutions = await resolveFoodCandidates(queries, markers);
+  const resolutions = await resolveFoodCandidates(queries, markers, adminId);
 
   const meals: DraftMeal[] = [];
   pending.forEach((entry, mealIndex) => {
@@ -644,13 +648,14 @@ export async function refineMealPlanDraft(input: RefineMealPlanDraftInput): Prom
     throw cause;
   }
 
-  return applyDraftOperations(input.currentMeals, data.operations, markers);
+  return applyDraftOperations(input.currentMeals, data.operations, markers, input.adminId);
 }
 
 export async function applyDraftOperations(
   meals: DraftMeal[],
   operations: z.infer<typeof draftOperationSchema>[],
-  markers: PatientClinicalMarker[]
+  markers: PatientClinicalMarker[],
+  adminId?: string | null
 ): Promise<MealPlanDraftResult> {
   const warnings: DraftWarning[] = [];
   let next = meals.map((meal) => ({ ...meal, items: meal.items.map((item) => ({ ...item })), needsReview: meal.needsReview.map((entry) => ({ ...entry })) }));
@@ -672,7 +677,7 @@ export async function applyDraftOperations(
       continue;
     }
     if (op.operation === "add_item") {
-      const resolution = await resolveFoodCandidate(op.item.query, markers);
+      const resolution = await resolveFoodCandidate(op.item.query, markers, adminId);
       const { item, needsReview } = resolutionToMealParts(resolution, String(op.item.quantity), op.item.unit);
       if (resolution.status !== "RESOLVED") warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey, message: resolution.reason });
       if (item) meal.items = [...meal.items, item];
@@ -688,7 +693,7 @@ export async function applyDraftOperations(
     } else if (op.operation === "change_quantity") {
       meal.items = meal.items.map((item, index) => index === op.itemIndex ? { ...item, quantity: String(op.quantity) } : item);
     } else if (op.operation === "replace_item") {
-      const resolution = await resolveFoodCandidate(op.item.query, markers);
+      const resolution = await resolveFoodCandidate(op.item.query, markers, adminId);
       const { item, needsReview } = resolutionToMealParts(resolution, String(op.item.quantity), op.item.unit);
       if (resolution.status !== "RESOLVED") warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey, message: resolution.reason });
       // Conflito/ambiguidade no replace: mantem o item original em vez de
@@ -742,7 +747,11 @@ export async function executeGenerateMealPlanDraft(input: GenerateMealPlanDraftT
     requestedMeals: input.requestedMeals.map((meal) => ({ key: meal.key, suggestedTime: meal.suggestedTime ?? null })),
     prioritizeFoods: input.prioritizeFoods ?? null,
     avoidFoods: input.avoidFoods ?? null,
-    useRecipes: input.useRecipes ?? true,
+    // Food-First Meal Plan V1: mesmo padrão do wizard — receita só entra
+    // quando explicitamente pedida (a nutricionista disse "use uma
+    // receita"/"sugira uma receita" e o LLM setou useRecipes=true por
+    // isso), nunca o comportamento automático do assistente de chat.
+    useRecipes: input.useRecipes ?? false,
   });
 }
 

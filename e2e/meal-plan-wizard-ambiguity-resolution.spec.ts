@@ -62,12 +62,17 @@ test.describe("wizard Criar com IA — resolução inline de ambiguidade", () =>
     await expect(kcalMetric).toBeVisible();
     const kcalBeforePick = Number(((await kcalMetric.textContent()) ?? "").replace(/\D/g, "") || "0");
 
-    const candidateButtons = reviewPanel.getByRole("button").filter({ hasNotText: /remover/i });
-    const candidateCount = await candidateButtons.count();
+    // Cada candidato mostra nome amigável + fonte (nunca o refId técnico) e
+    // dois botões: "Selecionar" e "Selecionar e lembrar" (seção 8/9 do
+    // pedido de terminologia).
+    const selectButtons = reviewPanel.getByRole("button", { name: /^selecionar$/i });
+    const candidateCount = await selectButtons.count();
     expect(candidateCount).toBeGreaterThan(1); // ambiguidade real, não um único candidato disfarçado
+    await expect(reviewPanel.getByRole("button", { name: /^selecionar e lembrar$/i }).first()).toBeVisible();
 
-    const chosenCandidateName = (await candidateButtons.first().textContent()) ?? "";
-    await candidateButtons.first().click();
+    const firstCandidateRow = reviewPanel.locator("div").filter({ has: page.getByRole("button", { name: /^selecionar$/i }) }).first();
+    const chosenCandidateName = ((await firstCandidateRow.locator("span").first().textContent()) ?? "").split("·")[0].trim();
+    await selectButtons.first().click();
 
     // Painel de revisão some (item resolvido manualmente), item escolhido
     // aparece na lista, nutrição recalculada pela engine real (nunca da fixture).
@@ -141,5 +146,71 @@ test.describe("wizard Criar com IA — resolução inline de ambiguidade", () =>
     const items = saved[0].meals.flatMap((meal) => meal.items.map((item) => item.food));
     expect(items.some((name) => /arroz/i.test(name))).toBe(true);
     expect(items.some((name) => /batata/i.test(name))).toBe(false); // nunca adivinhado silenciosamente
+  });
+
+  test('"Selecionar e lembrar" salva uma preferência do profissional (não um alias global) e reaplica automaticamente na próxima geração ambígua igual', async ({ page, request }) => {
+    const firstPatient = await createTestPatient(request);
+    const fixtureRes1 = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
+      data: { clientId: firstPatient.id, meals: [{ mealKey: "almoco", recipeId: null, items: [{ query: "iogurte", quantity: 100, unit: "g" }], rationale: "Laticínio." }] },
+    });
+    expect(fixtureRes1.ok(), await fixtureRes1.text()).toBeTruthy();
+
+    await page.goto(`/dashboard/clients/${firstPatient.id}`);
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await page.getByRole("button", { name: /^criar com ia$/i }).click();
+    let dialog = page.getByRole("dialog", { name: /criar plano com ia/i });
+    await dialog.getByRole("button", { name: /^continuar$/i }).click();
+    await dialog.getByRole("button", { name: /^continuar$/i }).click();
+    await dialog.getByRole("button", { name: /^continuar$/i }).click();
+    await dialog.getByRole("button", { name: /^gerar pré-plano$/i }).click();
+
+    // Robusto a rodar em mais de um projeto Playwright (chromium-desktop +
+    // mobile-chrome) contra o MESMO servidor/DB com o MESMO admin: se um
+    // projeto já rodou este teste antes, a preferência de "iogurte" já
+    // existe e a IA resolve automaticamente — o que é, em si, a prova de
+    // que a preferência persiste entre gerações (o teste não fica frágil à
+    // ordem de execução entre projetos).
+    let chosenName = "";
+    const needsReviewShown = await dialog.getByText(/precisa de revisão/i)
+      .waitFor({ state: "visible", timeout: 20_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (needsReviewShown) {
+      const reviewPanel1 = dialog.locator("text=Precisa de revisão").locator("..");
+      const firstCandidateRow1 = reviewPanel1.locator("div").filter({ has: page.getByRole("button", { name: /^selecionar$/i }) }).first();
+      chosenName = ((await firstCandidateRow1.locator("span").first().textContent()) ?? "").split("·")[0].trim();
+      await reviewPanel1.getByRole("button", { name: /^selecionar e lembrar$/i }).first().click();
+      await expect(dialog.getByText(/precisa de revisão/i)).not.toBeVisible();
+    } else {
+      await expect(dialog.getByText(/^\d+ kcal$/).first()).toBeVisible();
+    }
+    await dialog.getByRole("button", { name: /^fechar$/i }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // Segundo paciente, MESMA query ambígua ("iogurte") — a preferência é do
+    // PROFISSIONAL (sessão atual), nunca do paciente nem um alias global do
+    // catálogo: reaplicada aqui mesmo trocando de paciente.
+    const secondPatient = await createTestPatient(request);
+    const fixtureRes2 = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
+      data: { clientId: secondPatient.id, meals: [{ mealKey: "almoco", recipeId: null, items: [{ query: "iogurte", quantity: 100, unit: "g" }], rationale: "Laticínio." }] },
+    });
+    expect(fixtureRes2.ok(), await fixtureRes2.text()).toBeTruthy();
+
+    await page.goto(`/dashboard/clients/${secondPatient.id}`);
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await page.getByRole("button", { name: /^criar com ia$/i }).click();
+    dialog = page.getByRole("dialog", { name: /criar plano com ia/i });
+    await dialog.getByRole("button", { name: /^continuar$/i }).click();
+    await dialog.getByRole("button", { name: /^continuar$/i }).click();
+    await dialog.getByRole("button", { name: /^continuar$/i }).click();
+    await dialog.getByRole("button", { name: /^gerar pré-plano$/i }).click();
+
+    // Resolvido automaticamente desta vez — sem "precisa de revisão" —
+    // usando exatamente o alimento escolhido/lembrado antes.
+    await expect(dialog.getByText(/^\d+ kcal$/).first()).toBeVisible({ timeout: 20_000 });
+    await expect(dialog.getByText(/precisa de revisão/i)).not.toBeVisible();
+    if (chosenName) {
+      await expect(dialog.getByText(new RegExp(chosenName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"))).toBeVisible();
+    }
   });
 });

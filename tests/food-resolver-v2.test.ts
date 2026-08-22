@@ -11,7 +11,7 @@ import { resolveFoodCandidate } from "@/lib/nutrition/food-resolver";
  * ranking) medido de verdade, não suposto.
  *
  *   QUERY                              ANTES        DEPOIS      SOURCE  RESOLUTION METHOD
- *   café coado sem açúcar              NOT_FOUND    NOT_FOUND   —       — (não existe no catálogo offline; gap real, não forçado)
+ *   café coado sem açúcar              NOT_FOUND    RESOLVED    TACO    ALIAS ("café coado [sem açúcar]"->"café infusão", Food Terminology V1 — auditado: TACO não distingue açúcar pra café)
  *   pão de forma integral              AMBIGUOUS    AMBIGUOUS   —       — (2 candidatos reais: TACO + COMPLEMENTARY, corretamente não escolhido sozinho)
  *   ovo de galinha cozido              AMBIGUOUS    RESOLVED    TACO    RANKED (único candidato em todo o catálogo)
  *   mamão papaia                       AMBIGUOUS    RESOLVED    TACO    RANKED
@@ -23,14 +23,16 @@ import { resolveFoodCandidate } from "@/lib/nutrition/food-resolver";
  *   iogurte natural integral           NOT_FOUND    NOT_FOUND   —       — (TACO não distingue "integral" pra iogurte; gap real)
  *   granola sem açúcar                 NOT_FOUND    NOT_FOUND   —       — (TACO só tem "s/ óleo e s/ mel"; "açúcar" não é sinônimo, gap real)
  *   banana prata                       AMBIGUOUS    RESOLVED    TACO    RANKED
- *   filé de tilápia assado             NOT_FOUND    NOT_FOUND   —       — (tilápia não existe na TACO; gap real de catálogo, precisa de USDA/CUSTOM)
+ *   filé de tilápia assado             NOT_FOUND    PREPARATION_NEEDS_REVIEW — (Food Preparation Engine V1: "assado" detectado como preparo; em produção resolve via USDA, ver tests/food-catalog-usda-preparo.test.ts)
  *   batata doce cozida                 AMBIGUOUS    RESOLVED    TACO    RANKED
  *   alface americana                   AMBIGUOUS    RESOLVED    TACO    RANKED
  *   tomate cereja                      NOT_FOUND    NOT_FOUND   —       — (tomate cereja não existe na TACO; gap real)
  *
- * 10/16 passaram a resolver automaticamente (sem nenhum caso de escolha
- * errada — os 5 que continuam NOT_FOUND/AMBIGUOUS são gaps reais do
- * catálogo TACO offline ou ambiguidade genuína, nunca mascarados).
+ * 11/16 passaram a resolver automaticamente (sem nenhum caso de escolha
+ * errada — os 4 que continuam NOT_FOUND/AMBIGUOUS neste harness OFFLINE
+ * são gaps reais do catálogo TACO/ambiguidade genuína ou dependem de USDA
+ * via rede, que não roda aqui — ver tests/food-terminology.test.ts para a
+ * cobertura via fallback USDA de "tomate cereja"/"filé de tilápia assado").
  */
 describe("Food Resolver V2 — nomes comuns em linguagem natural (matriz real)", () => {
   it.each([
@@ -56,14 +58,28 @@ describe("Food Resolver V2 — nomes comuns em linguagem natural (matriz real)",
   });
 
   it.each([
-    "café coado sem açúcar",
+    ["café coado", "Café, infusão 10%"],
+    ["café coado sem açúcar", "Café, infusão 10%"],
+  ] as const)('"%s" -> RESOLVED via alias Food Terminology V1 (coado = método de infusão, TACO não distingue açúcar)', async (query, expectedName) => {
+    const resolution = await resolveFoodCandidate(query, []);
+    expect(resolution.status).toBe("RESOLVED");
+    expect(resolution.name).toBe(expectedName);
+  });
+
+  it.each([
     "iogurte natural integral",
     "granola sem açúcar",
-    "filé de tilápia assado",
     "tomate cereja",
   ])('"%s" continua NOT_FOUND — gap real do catálogo TACO offline, nunca mascarado com um alias inventado', async (query) => {
     const resolution = await resolveFoodCandidate(query, []);
     expect(resolution.status).toBe("NOT_FOUND");
+  });
+
+  it('"filé de tilápia assado" offline (sem USDA/receitas cadastradas neste harness) -> PREPARATION_NEEDS_REVIEW, não mais NOT_FOUND genérico (Food Preparation Engine V1: "assado" é um preparo detectado, nunca cai de volta pra tilápia crua)', async () => {
+    const resolution = await resolveFoodCandidate("filé de tilápia assado", []);
+    expect(resolution.status).toBe("PREPARATION_NEEDS_REVIEW");
+    expect(resolution.preparation).toBe("ROASTED");
+    expect(resolution.recipeCandidates).toEqual([]);
   });
 });
 

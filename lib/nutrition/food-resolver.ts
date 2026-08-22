@@ -3,6 +3,9 @@ import { checkFoodAgainstPatientRestrictions } from "@/lib/clinical/food-safety"
 import type { PatientClinicalMarker } from "@/lib/repositories/patient-clinical-markers";
 import { normalize } from "@/lib/nutrition/macros";
 import { logger } from "@/lib/observability/logger";
+import { getProfessionalFoodPreference } from "@/lib/repositories/professional-food-preferences";
+import { extractPreparation, needsPreparationReview, type PreparationCode } from "@/lib/nutrition/food-preparation";
+import { getRecipes } from "@/lib/repositories/recipes";
 
 /**
  * Resolução rigorosa de um candidato de alimento em texto livre (proposto
@@ -13,13 +16,20 @@ import { logger } from "@/lib/observability/logger";
  * humana do que arriscar "tilápia" virar "merluza" ou "frango" virar
  * silenciosamente uma coxa quando a intenção pode ter sido peito.
  */
-export type FoodResolutionStatus = "RESOLVED" | "AMBIGUOUS" | "NOT_FOUND" | "CLINICAL_CONFLICT" | "CLINICAL_UNKNOWN";
+export type FoodResolutionStatus = "RESOLVED" | "AMBIGUOUS" | "NOT_FOUND" | "CLINICAL_CONFLICT" | "CLINICAL_UNKNOWN" | "PREPARATION_NEEDS_REVIEW";
 
 export interface FoodResolutionCandidate {
   ref: FoodReference;
   name: string;
   displayName: string;
   sourceLabel: string;
+}
+
+/** Receita candidata a representar um preparo composto (seção 6/7/19 do pedido de Food Preparation Engine V1) — nunca fornece kcal por si só, só aponta pra uma receita real cujos ingredientes a nutrition engine já sabe calcular. */
+export interface RecipePreparationCandidate {
+  id: string;
+  title: string;
+  servings: number;
 }
 
 export interface FoodResolution {
@@ -33,6 +43,10 @@ export interface FoodResolution {
   /** Até 5 opções mais prováveis quando o status é AMBIGUOUS, para a nutricionista escolher manualmente. */
   candidates: FoodResolutionCandidate[];
   reason: string;
+  /** Preparo detectado na query (Food Preparation Engine V1) — só preenchido quando status é PREPARATION_NEEDS_REVIEW. */
+  preparation?: PreparationCode | null;
+  /** Receitas existentes que podem representar o preparo — só preenchido quando status é PREPARATION_NEEDS_REVIEW; nunca escolhida sozinha. */
+  recipeCandidates?: RecipePreparationCandidate[];
 }
 
 /**
@@ -103,23 +117,53 @@ function resolutionMethodFromRank(rank: number | undefined): string {
  */
 export async function resolveFoodCandidate(
   query: string,
-  markers: PatientClinicalMarker[]
+  markers: PatientClinicalMarker[],
+  adminId?: string | null
 ): Promise<FoodResolution> {
   const results = await searchFoods({ query, limit: 5 });
-  const { accepted, candidates } = classifyMatches(results);
+  let { accepted, candidates } = classifyMatches(results);
+  let usedProfessionalPreference = false;
 
-  // Observabilidade (seção 20 do pedido V5) — nunca o texto da query/nome
-  // do alimento (seção 20 pede explicitamente "não logar texto sensível"),
-  // só a classificação/fonte/rank/contagem. Só fora de produção —
-  // resolveFoodCandidate roda em paralelo pra cada item de um draft
-  // inteiro, não é o lugar pra volume de log em produção.
+  // Preferência profissional (Food Terminology V1, seção 8) — NUNCA um
+  // alias global: só se aplica quando (a) o profissional está identificado,
+  // (b) a resolução automática ficou AMBIGUOUS (nunca sobrepõe um match já
+  // confiável) e (c) a preferência salva ainda existe de verdade no
+  // catálogo (getFoodByReference revalida sempre — nunca confia num
+  // snapshot congelado). Continua passando pela MESMA checagem de
+  // segurança clínica de qualquer resolução (nunca pula o "conflict"/
+  // "unknown" abaixo).
+  if (!accepted && candidates.length && adminId) {
+    const preference = await getProfessionalFoodPreference(adminId, query);
+    if (preference) {
+      const details = await getFoodByReference({ source: preference.food_source, sourceId: preference.food_ref_id });
+      if (details) {
+        accepted = { ref: details.ref, name: details.name, sourceLabel: details.sourceLabel };
+        candidates = [];
+        usedProfessionalPreference = true;
+      }
+    }
+  }
+
+  // Observabilidade (seção 20 do pedido V5, seção 13 desta rodada) — nunca
+  // o texto da query/nome do alimento, só a classificação/fonte/rank/
+  // contagem. Só fora de produção — resolveFoodCandidate roda em paralelo
+  // pra cada item de um draft inteiro, não é o lugar pra volume de log em
+  // produção.
   if (process.env.NODE_ENV !== "production") {
     logger.debug("food_resolver_v2_resolution", {
       resultCount: results.length,
       accepted: Boolean(accepted),
       source: accepted?.ref.source ?? null,
-      resolutionMethod: accepted ? resolutionMethodFromRank(accepted.matchRank) : results.length ? "AMBIGUOUS" : "NOT_FOUND",
+      resolutionMethod: usedProfessionalPreference
+        ? "PROFESSIONAL_PREFERENCE"
+        : accepted
+          ? resolutionMethodFromRank(accepted.matchRank)
+          : results.length
+            ? "AMBIGUOUS"
+            : "NOT_FOUND",
       candidateCount: candidates.length,
+      aliasUsed: results.some((r) => r.matchRank === 1),
+      professionalPreferenceUsed: usedProfessionalPreference,
     });
   }
 
@@ -134,6 +178,31 @@ async function resolveFoodCandidateInner(
   candidates: FoodSearchResult[]
 ): Promise<FoodResolution> {
   if (!results.length) {
+    // Food Preparation Engine V1 (seção 6): sem referência direta no
+    // catálogo (nenhum resultado, nem ambíguo), mas a query descreve um
+    // preparo/composição real (ex.: "ovo mexido", "purê de batata", "café
+    // com leite") — NUNCA cai de volta pro alimento base sozinho (isso
+    // seria inventar identidade nutricional: "ovo mexido" != "ovo cru").
+    // Em vez disso, procura receitas reais que possam representar o
+    // preparo; a nutricionista escolhe (ou nenhuma, e o item continua sem
+    // cálculo até ser editado manualmente).
+    const extracted = extractPreparation(query);
+    if (needsPreparationReview(extracted)) {
+      const recipeCandidates = await findRecipeCandidatesForPreparation(query, extracted.baseFoodQuery);
+      return {
+        status: "PREPARATION_NEEDS_REVIEW",
+        query,
+        ref: null,
+        name: null,
+        displayName: null,
+        candidates: [],
+        reason: recipeCandidates.length
+          ? `"${query}" é um preparo composto — escolha uma receita cadastrada pra representar o cálculo.`
+          : `"${query}" é um preparo composto sem receita cadastrada — edite manualmente com os ingredientes reais.`,
+        preparation: extracted.preparation,
+        recipeCandidates,
+      };
+    }
     return { status: "NOT_FOUND", query, ref: null, name: null, displayName: null, candidates: [], reason: `"${query}" não encontrado no catálogo de alimentos.` };
   }
   if (!accepted) {
@@ -179,6 +248,21 @@ async function resolveFoodCandidateInner(
 }
 
 /**
+ * Busca receitas reais que podem representar um preparo composto (seção 19
+ * do pedido: reaproveita 100% o repositório de receitas já existente,
+ * nunca um sistema paralelo). Tenta primeiro a frase completa (ex.: "café
+ * com leite" acha uma receita chamada exatamente assim, se existir) e só
+ * cai pro alimento base (ex.: "café") se a frase completa não achar nada —
+ * nunca o contrário, pra não devolver toda receita genérica de "ovo"
+ * quando existe um preset mais específico pro preparo pedido.
+ */
+async function findRecipeCandidatesForPreparation(query: string, baseFoodQuery: string): Promise<RecipePreparationCandidate[]> {
+  const byFullQuery = await getRecipes({ q: query });
+  const recipes = byFullQuery.length ? byFullQuery : await getRecipes({ q: baseFoodQuery });
+  return recipes.slice(0, 5).map((recipe) => ({ id: recipe.id, title: recipe.title, servings: recipe.servings }));
+}
+
+/**
  * Resolve vários candidatos em paralelo, com cache por (query normalizada)
  * dentro da mesma chamada — "arroz branco cozido" pedido em duas refeições
  * diferentes do mesmo draft só busca no catálogo uma vez (seção 30/31 do
@@ -186,7 +270,8 @@ async function resolveFoodCandidateInner(
  */
 export async function resolveFoodCandidates(
   queries: { query: string; key: string }[],
-  markers: PatientClinicalMarker[]
+  markers: PatientClinicalMarker[],
+  adminId?: string | null
 ): Promise<Map<string, FoodResolution>> {
   const cache = new Map<string, Promise<FoodResolution>>();
   const byKey = new Map<string, FoodResolution>();
@@ -195,7 +280,7 @@ export async function resolveFoodCandidates(
     const cacheKey = normalize(query);
     let pending = cache.get(cacheKey);
     if (!pending) {
-      pending = resolveFoodCandidate(query, markers);
+      pending = resolveFoodCandidate(query, markers, adminId);
       cache.set(cacheKey, pending);
     }
     byKey.set(key, await pending);

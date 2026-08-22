@@ -1,7 +1,5 @@
 import { normalize, type MacroReferenceFood } from "@/lib/nutrition/macros";
-import { normalizeFoodText, tokenizeFoodQuery } from "@/lib/nutrition/food-query-normalize";
-import { applyFoodQueryAliases } from "@/lib/nutrition/food-query-aliases";
-import { usdaFallbackTermFor } from "@/lib/nutrition/usda-fallback-terms";
+import { normalizeFoodText, tokenizeFoodQuery, applyFoodQueryAliases, usdaFallbackTermFor, tokenMatchesCandidateText } from "@/lib/nutrition/food-terminology";
 import { TACO_REFERENCES, getTacoFoodByNumber } from "@/lib/nutrition/taco";
 import { listCustomFoods, getCustomFoodById, toMacroReferenceFood, type CustomFood } from "@/lib/repositories/custom-foods";
 import { listFoodPortions, type FoodPortion, type FoodPortionSource } from "@/lib/repositories/food-portions";
@@ -189,6 +187,7 @@ function scoreText(query: string, candidate: Candidate) {
   const aliasedQuery = applyFoodQueryAliases(query);
   const normalizedQuery = normalizeFoodText(aliasedQuery);
   const queryTokens = tokenizeFoodQuery(aliasedQuery);
+  const isUsdaCandidate = candidate.ref.source === "USDA";
   let best: { rank: number; tokenMisses: number; distance: number } | null = null;
 
   const texts = candidate.searchableTexts.map((text) => normalizeFoodText(text)).filter(Boolean);
@@ -200,9 +199,13 @@ function scoreText(query: string, candidate: Candidate) {
     else if (aliases.includes(normalizedQuery)) rank = 1;
     else if (text.startsWith(normalizedQuery)) rank = 2;
     else if (text.includes(normalizedQuery)) rank = 3;
-    else if (queryTokens.length && queryTokens.every((token) => text.includes(token))) rank = 4;
+    // Candidatos USDA (texto em inglês): além da substring literal, aceita
+    // a tradução auditada do modificador de preparo/corte (seção 5 do
+    // pedido) — nunca usado pra TACO/COMPLEMENTARY/CUSTOM (já em
+    // português, tokenMatchesCandidateText cai direto no includes() puro).
+    else if (queryTokens.length && queryTokens.every((token) => tokenMatchesCandidateText(token, text, isUsdaCandidate))) rank = 4;
     if (rank === null) continue;
-    const tokenMisses = queryTokens.filter((token) => !text.includes(token)).length;
+    const tokenMisses = queryTokens.filter((token) => !tokenMatchesCandidateText(token, text, isUsdaCandidate)).length;
     const distance = Math.abs(text.length - normalizedQuery.length);
     const scored = { rank, tokenMisses, distance };
     if (!best || rank < best.rank || (rank === best.rank && tokenMisses < best.tokenMisses) || (rank === best.rank && tokenMisses === best.tokenMisses && distance < best.distance)) {

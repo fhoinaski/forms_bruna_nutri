@@ -55,13 +55,20 @@ interface DraftNeedsReviewCandidate {
   displayName: string;
   sourceLabel: string;
 }
+interface DraftNeedsReviewRecipeCandidate {
+  id: string;
+  title: string;
+  servings: number;
+}
 interface DraftNeedsReview {
   query: string;
   quantity: string;
   unit: string;
-  status: "AMBIGUOUS" | "NOT_FOUND" | "CLINICAL_CONFLICT";
+  status: "AMBIGUOUS" | "NOT_FOUND" | "CLINICAL_CONFLICT" | "PREPARATION_NEEDS_REVIEW";
   reason: string;
   candidates: DraftNeedsReviewCandidate[];
+  preparation?: string | null;
+  recipeCandidates?: DraftNeedsReviewRecipeCandidate[];
 }
 interface OptimizerAdjustment {
   mealIndex: number;
@@ -225,7 +232,10 @@ export function AiMealPlanWizard({
 
   const [prioritizeFoods, setPrioritizeFoods] = useState("");
   const [avoidFoods, setAvoidFoods] = useState("");
-  const [useRecipes, setUseRecipes] = useState(true);
+  // Food-First Meal Plan V1: refeições simples (alimentos individuais) são
+  // o padrão — receita é um recurso opcional que a nutricionista liga
+  // deliberadamente, nunca o comportamento automático do gerador.
+  const [useRecipes, setUseRecipes] = useState(false);
 
   const [generateError, setGenerateError] = useState("");
   const [generateErrorReason, setGenerateErrorReason] = useState<string | null>(null);
@@ -246,6 +256,7 @@ export function AiMealPlanWizard({
   const [regeneratingMealKey, setRegeneratingMealKey] = useState<MealKey | null>(null);
   const [regenerateError, setRegenerateError] = useState("");
   const [recalculating, setRecalculating] = useState(false);
+  const [applyingRecipeId, setApplyingRecipeId] = useState<string | null>(null);
 
   // Substituições sugeridas dentro do wizard (seção 2 do pedido de
   // fechamento de gaps) — nunca persistidas aqui; só entram no plano de
@@ -532,7 +543,7 @@ export function AiMealPlanWizard({
     }
   }
 
-  function pickCandidate(mealIndex: number, reviewIndex: number, candidate: DraftNeedsReviewCandidate) {
+  function pickCandidate(mealIndex: number, reviewIndex: number, candidate: DraftNeedsReviewCandidate, remember = false) {
     if (!draft) return;
     const review = draft.meals[mealIndex].needsReview[reviewIndex];
     const newItem: DraftMealItem = {
@@ -550,6 +561,65 @@ export function AiMealPlanWizard({
       needsReview: meal.needsReview.filter((_, index2) => index2 !== reviewIndex),
     });
     void recalculate(nextMeals);
+    // "Selecionar e lembrar" (Food Terminology V1, seção 8) — preferência
+    // pessoal da nutricionista, nunca um alias global; falha aqui não deve
+    // travar a escolha já aplicada acima (best-effort, não bloqueante).
+    if (remember) {
+      void fetch("/api/admin/food-preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: review.query,
+          foodSource: candidate.ref.source,
+          foodRefId: candidate.ref.sourceId,
+          foodNameSnapshot: candidate.displayName,
+        }),
+      }).catch(() => undefined);
+    }
+  }
+
+  /**
+   * Food Preparation Engine V1 (seção 7/19) — expande os ingredientes REAIS
+   * de uma receita cadastrada no lugar de um preparo composto sem
+   * referência direta (ex.: "ovo mexido"). Nunca calcula nada aqui: busca a
+   * receita real (mesma API do Recipe Engine), escala pra 1 porção (mesmo
+   * helper já usado pelo draft agent pra refeições baseadas em receita) e
+   * deixa a nutrition engine recalcular a partir dos ingredientes com
+   * source+refId reais — a preparação em si nunca fornece kcal.
+   */
+  async function pickPreparationRecipe(mealIndex: number, reviewIndex: number, recipeCandidate: DraftNeedsReviewRecipeCandidate) {
+    if (!draft) return;
+    setApplyingRecipeId(recipeCandidate.id);
+    try {
+      const response = await fetch(`/api/admin/recipes/${recipeCandidate.id}`);
+      if (!response.ok) return;
+      const recipe = (await response.json()) as { servings: number; ingredients: { taco_number?: number | null; food_name: string; grams?: number | null }[] };
+      const servingCount = Number.isFinite(recipe.servings) && recipe.servings > 0 ? recipe.servings : 1;
+      const newItems: DraftMealItem[] = recipe.ingredients
+        .filter((ing) => ing.taco_number && ing.grams)
+        .map((ing) => {
+          const grams = Math.round(((ing.grams ?? 0) / servingCount) * 10) / 10;
+          const parts = ing.food_name.split(",").map((part) => part.trim()).filter(Boolean);
+          return {
+            food: ing.food_name,
+            displayName: parts.length > 1 ? parts.join(" ") : ing.food_name.trim(),
+            quantity: String(grams),
+            unit: "g",
+            food_source: "TACO" as const,
+            food_ref_id: String(ing.taco_number),
+            ai_suggested: true,
+          };
+        });
+      if (!newItems.length) return;
+      const nextMeals = draft.meals.map((meal, index) => index !== mealIndex ? meal : {
+        ...meal,
+        items: [...meal.items, ...newItems],
+        needsReview: meal.needsReview.filter((_, index2) => index2 !== reviewIndex),
+      });
+      void recalculate(nextMeals);
+    } finally {
+      setApplyingRecipeId(null);
+    }
   }
 
   function removeNeedsReview(mealIndex: number, reviewIndex: number) {
@@ -696,7 +766,10 @@ export function AiMealPlanWizard({
               </div>
               <div className="flex items-center gap-3 rounded-xl border border-[#EAD8C2] bg-[#FFFDFC] p-3">
                 <input type="checkbox" id="wizard-use-recipes" checked={useRecipes} onChange={(event) => setUseRecipes(event.target.checked)} className="h-4 w-4 accent-[#7A9A74]" />
-                <label htmlFor="wizard-use-recipes" className="text-sm font-semibold text-[#3A3028]">Aproveitar receitas já cadastradas na biblioteca quando fizer sentido</label>
+                <div>
+                  <label htmlFor="wizard-use-recipes" className="text-sm font-semibold text-[#3A3028]">Permitir substituir uma refeição inteira por uma receita cadastrada</label>
+                  <p className="mt-0.5 text-xs text-[#8C6E52]">Desligado por padrão — o gerador prioriza alimentos individuais simples (ex.: &ldquo;2 ovos, pão integral, mamão&rdquo;), não pratos elaborados.</p>
+                </div>
               </div>
             </div>
           )}
@@ -950,19 +1023,53 @@ export function AiMealPlanWizard({
                                   <p className="font-semibold text-[#3A2B1F]">&ldquo;{review.query}&rdquo; — {review.quantity} {review.unit}</p>
                                   <p className="mt-0.5 text-[#8C5F50]">{review.reason}</p>
                                   {review.status === "AMBIGUOUS" && review.candidates.length > 0 && (
-                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                    <div className="mt-1.5 space-y-1">
                                       {review.candidates.map((candidate, candidateIndex) => (
-                                        <button
-                                          key={candidateIndex}
-                                          type="button"
-                                          onClick={() => pickCandidate(mealIndex, reviewIndex, candidate)}
-                                          disabled={recalculating}
-                                          className="rounded-full border border-[#D9C4B2] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#8C6E52] hover:bg-[#FBF7F1] disabled:opacity-50"
-                                        >
-                                          {candidate.displayName}
-                                        </button>
+                                        <div key={candidateIndex} className="flex flex-wrap items-center gap-1.5 rounded-md border border-[#D9C4B2] bg-white px-2 py-1.5">
+                                          <span className="mr-auto text-[11px] font-semibold text-[#3A2B1F]">
+                                            {candidate.displayName}
+                                            <span className="ml-1 font-normal text-[#8C6E52]">· {candidate.sourceLabel}</span>
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => pickCandidate(mealIndex, reviewIndex, candidate)}
+                                            disabled={recalculating}
+                                            className="rounded-full border border-[#D9C4B2] px-2.5 py-1 text-[11px] font-semibold text-[#8C6E52] hover:bg-[#FBF7F1] disabled:opacity-50"
+                                          >
+                                            Selecionar
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => pickCandidate(mealIndex, reviewIndex, candidate, true)}
+                                            disabled={recalculating}
+                                            title="Salva esta escolha só para você — da próxima vez que este alimento aparecer ambíguo, você pode reaplicá-la com um clique."
+                                            className="rounded-full bg-[#8C6E52] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#7A5D45] disabled:opacity-50"
+                                          >
+                                            Selecionar e lembrar
+                                          </button>
+                                        </div>
                                       ))}
                                     </div>
+                                  )}
+                                  {review.status === "PREPARATION_NEEDS_REVIEW" && (review.recipeCandidates?.length ?? 0) > 0 && (
+                                    <div className="mt-1.5 space-y-1">
+                                      {review.recipeCandidates!.map((recipe) => (
+                                        <div key={recipe.id} className="flex flex-wrap items-center gap-1.5 rounded-md border border-[#D9C4B2] bg-white px-2 py-1.5">
+                                          <span className="mr-auto text-[11px] font-semibold text-[#3A2B1F]">{recipe.title}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => pickPreparationRecipe(mealIndex, reviewIndex, recipe)}
+                                            disabled={recalculating || applyingRecipeId === recipe.id}
+                                            className="rounded-full bg-[#8C6E52] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#7A5D45] disabled:opacity-50"
+                                          >
+                                            {applyingRecipeId === recipe.id ? "Aplicando…" : "Usar receita"}
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {review.status === "PREPARATION_NEEDS_REVIEW" && !(review.recipeCandidates?.length) && (
+                                    <p className="mt-1.5 text-[11px] italic text-[#8C6E52]">Nenhuma receita cadastrada pra esse preparo — edite manualmente depois de aplicar, ou remova.</p>
                                   )}
                                   <button
                                     type="button"

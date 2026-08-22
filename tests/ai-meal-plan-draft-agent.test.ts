@@ -487,3 +487,64 @@ describe("orçamento de tempo/tokens da geração — regressão do bug real de 
     expect(capturedOptions.timeoutMs).toBeGreaterThanOrEqual(30_000);
   });
 });
+
+describe("Food-First Meal Plan V1 — alimentos individuais são o padrão, receita é opt-in explícito", () => {
+  it('useRecipes=false (padrão do wizard/chat): nunca busca receitas candidatas, e o prompt diz explicitamente "não use recipeId"', async () => {
+    mockCommonRepos();
+    let capturedSystem = "";
+    let capturedPrompt = "";
+    vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({
+      generateStructuredResult: vi.fn().mockImplementation(async (options: { system: string; prompt: string }) => {
+        capturedSystem = options.system;
+        capturedPrompt = options.prompt;
+        return { data: { meals: [] }, provider: "test", model: "test", attempts: 1, repaired: false };
+      }),
+    }));
+    const { generateMealPlanDraft } = await import("@/lib/ai/agents/nutrition/meal-plan-draft-agent");
+    await generateMealPlanDraft({
+      clientId: "client-1", objectiveLabel: "x", targetEnergyKcal: null, targetProteinG: null, targetCarbohydrateG: null, targetFatG: null,
+      requestedMeals: [{ key: "cafe_da_manha", suggestedTime: null }], prioritizeFoods: null, avoidFoods: null, useRecipes: false,
+    });
+    // "recipes" nunca é chamado quando useRecipes é false — candidateRecipesForMeals
+    // só roda com useRecipes:true (custo zero de rede/prompt no caminho padrão).
+    const recipesModule = await import("@/lib/repositories/recipes");
+    expect(recipesModule.getRecipes).not.toHaveBeenCalled();
+    expect(capturedPrompt).toContain("Nenhuma receita disponível — não use recipeId.");
+    expect(capturedSystem).toContain("PRIORIDADE É");
+  });
+
+  it("useRecipes=true: busca receitas candidatas, mas o prompt continua instruindo a priorizar itens simples sobre recipeId", async () => {
+    mockCommonRepos({ recipes: [{ id: "r1", title: "Panqueca proteica", meal_group: "cafe_da_manha" }] });
+    let capturedPrompt = "";
+    vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({
+      generateStructuredResult: vi.fn().mockImplementation(async (options: { prompt: string }) => {
+        capturedPrompt = options.prompt;
+        return { data: { meals: [] }, provider: "test", model: "test", attempts: 1, repaired: false };
+      }),
+    }));
+    const { generateMealPlanDraft } = await import("@/lib/ai/agents/nutrition/meal-plan-draft-agent");
+    await generateMealPlanDraft({
+      clientId: "client-1", objectiveLabel: "x", targetEnergyKcal: null, targetProteinG: null, targetCarbohydrateG: null, targetFatG: null,
+      requestedMeals: [{ key: "cafe_da_manha", suggestedTime: null }], prioritizeFoods: null, avoidFoods: null, useRecipes: true,
+    });
+    const recipesModule = await import("@/lib/repositories/recipes");
+    expect(recipesModule.getRecipes).toHaveBeenCalled();
+    expect(capturedPrompt).toContain("Panqueca proteica");
+  });
+
+  it("executeGenerateMealPlanDraft (tool do assistente de chat): useRecipes omitido pela IA vira false, nunca true por padrão", async () => {
+    mockCommonRepos();
+    vi.doMock("@/lib/ai/gateway/ai-gateway", () => ({
+      generateStructuredResult: vi.fn().mockResolvedValue({ data: { meals: [] }, provider: "test", model: "test", attempts: 1, repaired: false }),
+    }));
+    const recipesModule = await import("@/lib/repositories/recipes");
+    const getRecipesSpy = vi.mocked(recipesModule.getRecipes);
+    const { executeGenerateMealPlanDraft } = await import("@/lib/ai/agents/nutrition/meal-plan-draft-agent");
+    await executeGenerateMealPlanDraft({
+      clientId: "client-1", objectiveLabel: "x",
+      requestedMeals: [{ key: "cafe_da_manha", suggestedTime: null }],
+    });
+    // Sem useRecipes explícito, getRecipes (candidateRecipesForMeals) nunca é chamado.
+    expect(getRecipesSpy).not.toHaveBeenCalled();
+  });
+});

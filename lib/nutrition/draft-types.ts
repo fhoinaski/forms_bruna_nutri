@@ -44,10 +44,14 @@ export interface DraftMealNeedsReview {
   query: string;
   quantity: string;
   unit: string;
-  status: "AMBIGUOUS" | "NOT_FOUND" | "CLINICAL_CONFLICT";
+  status: "AMBIGUOUS" | "NOT_FOUND" | "CLINICAL_CONFLICT" | "PREPARATION_NEEDS_REVIEW";
   reason: string;
   /** Opções mais prováveis para escolha manual, só quando status é AMBIGUOUS. */
   candidates: { ref: FoodReference; name: string; displayName: string; sourceLabel: string }[];
+  /** Preparo detectado (Food Preparation Engine V1) — só quando status é PREPARATION_NEEDS_REVIEW. */
+  preparation?: string | null;
+  /** Receitas reais que podem representar o preparo — só quando status é PREPARATION_NEEDS_REVIEW; nunca escolhida sozinha. */
+  recipeCandidates?: { id: string; title: string; servings: number }[];
 }
 
 export interface DraftMeal {
