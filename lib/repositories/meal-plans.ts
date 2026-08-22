@@ -1,5 +1,5 @@
 import { d1Batch, d1Query, type D1Statement } from "@/lib/d1/client";
-import { getAllTemplates } from "@/lib/repositories/protocol-templates";
+import { getAllTemplates, getSlotClassificationBySourceItemId } from "@/lib/repositories/protocol-templates";
 import type { ProtocolTemplateTargetGroup } from "@/lib/protocol-templates/constants";
 import { buildItemSnapshot } from "@/lib/nutrition/food-snapshot-server";
 import type { MealPlanVersionSource } from "@/lib/repositories/meal-plan-versions";
@@ -17,6 +17,13 @@ export type MealPlanPayload = {
   status: MealPlanStatus;
   version: number;
   notes: string | null;
+  // FASE 8 (item 13) — proveniência do template usado pra criar o plano
+  // ("Criar por modelo"). NULL em todo plano criado de outra forma (manual,
+  // IA, duplicado) e em todo plano histórico anterior a esta fase — nunca
+  // retroativo (item 14: "planos já criados com versão antiga não podem
+  // mudar retroativamente").
+  template_id?: string | null;
+  template_version?: number | null;
   // Metas nutricionais do plano (FASE 2, seçao 11) — definidas manualmente
   // pela nutricionista, nunca calculadas automaticamente (seçao 12).
   // Opcionais no tipo (alem de aceitarem null) para nao exigir atualizar
@@ -51,8 +58,14 @@ export type MealPlanItemPayload = {
   // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2.
   // Ambos nulos = item legado ou digitado livremente; o calculo cai para o
   // match aproximado por texto ja existente (findBestFoodReference).
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | null;
+  // FASE 6.5 (item 5): TBCA/IBGE_POF aceitos aqui — identidade transportada,
+  // mas o Nutrition Engine ainda trata como "nao reconhecido" pro calculo
+  // (ver lib/nutrition/nutrients.ts#resolveItemReference, item 8).
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | null;
   food_ref_id?: string | null;
+  // FASE 6.5 (item 3) — identidade canonica completa quando food_source e
+  // TBCA/IBGE_POF (ex.: "tbca:medidas_caseiras:BRC0001C"). NULL pra item legado.
+  canonical_food_id?: string | null;
   // Vinculo a uma medida caseira especifica (food_portions.id) — FASE 3.
   // Quando presente, tem prioridade maxima na resolucao de quantidade
   // (lib/nutrition/quantity-resolution.ts), independente do texto de `unit`.
@@ -71,6 +84,14 @@ export type MealPlanItemPayload = {
   // bloqueado, se explicitamente escolher fazer isso pela UI).
   quantity_locked?: boolean;
   substitutions_locked?: boolean;
+  // FASE 8 (item 8) — proveniência do slot de template que originou este
+  // item (grupo/subgrupo/papel nutricional), quando o plano foi criado "por
+  // modelo" e o alimento do item bate com uma sugestão de um slot. NULL para
+  // item manual, gerado por IA, ou de um template ainda não migrado (item 7
+  // — informativo, nunca obrigatório: o item continua funcionando sem isso).
+  slot_food_group?: string | null;
+  slot_food_subgroup?: string | null;
+  slot_nutritional_role?: string | null;
 };
 
 export type MealPlanWeeklySlotPayload = {
@@ -441,6 +462,7 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
         notes: item.notes,
         food_source: item.food_source ?? null,
         food_ref_id: item.food_ref_id ?? null,
+        canonical_food_id: item.canonical_food_id ?? null,
         household_measure_id: item.household_measure_id ?? null,
         food_name_snapshot: item.food_name_snapshot ?? null,
         nutrition_snapshot: item.nutrition_snapshot ?? null,
@@ -448,6 +470,9 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
         quantity_resolution_snapshot: item.quantity_resolution_snapshot ?? null,
         quantity_locked: Boolean(item.quantity_locked),
         substitutions_locked: Boolean(item.substitutions_locked),
+        slot_food_group: item.slot_food_group ?? null,
+        slot_food_subgroup: item.slot_food_subgroup ?? null,
+        slot_nutritional_role: item.slot_nutritional_role ?? null,
         })),
       })),
     weekly_slots: (weeklySlotsByPlan.get(row.id) ?? []).map(({ id, weekday, meal_type, title, notes, source_meal_id }) => ({
@@ -486,6 +511,13 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
   }));
 }
 
+export class NoTemplateForTargetGroupError extends Error {
+  constructor(targetGroup: string) {
+    super(`Nenhum modelo DIETA ativo encontrado para o grupo ${targetGroup}.`);
+    this.name = "NoTemplateForTargetGroupError";
+  }
+}
+
 export async function createMealPlanFromTemplates(input: {
   clientId: string;
   targetGroup: ProtocolTemplateTargetGroup;
@@ -493,11 +525,35 @@ export async function createMealPlanFromTemplates(input: {
 }): Promise<MealPlanPayload> {
   const templates = await getAllTemplates({ targetGroup: input.targetGroup });
   const dietTemplates = templates.filter((template) => template.type === "DIETA");
+  // FASE 8 (auditoria) — Bariátrico/Renal/Oncológico nunca tiveram nenhum
+  // modelo DIETA cadastrado (gap real encontrado na auditoria, não algo que
+  // esta fase deveria inventar — ver relatório final). Antes desta checagem,
+  // "Criar por modelo" pra esses 3 grupos criava silenciosamente um plano
+  // com zero refeições, sem qualquer sinal pra nutricionista do porquê.
+  if (!dietTemplates.length) throw new NoTemplateForTargetGroupError(input.targetGroup);
   const relationalTemplates = await getRelationalDietTemplates(templates.map((template) => template.id));
+  // FASE 8 (item 8) — mapa sourceItemId -> classificação de slot (só existe
+  // pra template já migrado, structure_version='v2'; template ainda
+  // "legacy" simplesmente não produz nenhuma entrada aqui, e os itens
+  // criados ficam sem slot_* — comportamento idêntico ao de antes desta fase).
+  const slotBySourceItemId = await getSlotClassificationBySourceItemId(dietTemplates.map((template) => template.id));
   const meals = dietTemplates.flatMap((template) => {
     const relational = relationalTemplates.get(template.id);
-    return relational?.meals.length ? relational.meals : extractMeals(parseJson(template.content));
+    const templateMeals = relational?.meals.length ? relational.meals : extractMeals(parseJson(template.content));
+    return templateMeals.map((meal) => ({
+      ...meal,
+      items: meal.items.map((item) => {
+        const slot = item.id ? slotBySourceItemId.get(item.id) : undefined;
+        return slot
+          ? { ...item, slot_food_group: slot.food_group, slot_food_subgroup: slot.food_subgroup, slot_nutritional_role: slot.nutritional_role }
+          : item;
+      }),
+    }));
   });
+  // Proveniência (item 13): quando há exatamente um template DIETA ativo
+  // pro grupo (o caso normal, após a Fase 8 desativar os duplicados
+  // legados), registra sua identidade no plano criado.
+  const primaryDietTemplate = dietTemplates.length === 1 ? dietTemplates[0] : null;
   const supplements = templates.filter((template) => template.type === "SUPLEMENTACAO").flatMap((template) => {
     const relational = relationalTemplates.get(template.id);
     return relational?.supplements.length ? relational.supplements : extractSupplements(parseJson(template.content));
@@ -521,6 +577,8 @@ export async function createMealPlanFromTemplates(input: {
     weekly_slots: [],
     substitutions,
     supplements,
+    templateId: primaryDietTemplate?.id ?? null,
+    templateVersion: primaryDietTemplate?.version ?? null,
   });
 }
 
@@ -768,6 +826,8 @@ export async function createMealPlan(input: {
   weekly_slots?: MealPlanWeeklySlotPayload[];
   substitutions: MealPlanSubstitutionPayload[];
   supplements: MealPlanSupplementPayload[];
+  templateId?: string | null;
+  templateVersion?: number | null;
 }): Promise<MealPlanPayload> {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -780,9 +840,9 @@ export async function createMealPlan(input: {
     });
   }
   statements.push({
-    sql: `INSERT INTO meal_plans (id, client_id, title, target_group, status, version, notes, created_at, updated_at)
-          VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8)`,
-    params: [id, input.clientId, input.title, input.targetGroup ?? null, input.status ?? "draft", input.notes ?? null, now, now],
+    sql: `INSERT INTO meal_plans (id, client_id, title, target_group, status, version, notes, template_id, template_version, created_at, updated_at)
+          VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8, ?9, ?10)`,
+    params: [id, input.clientId, input.title, input.targetGroup ?? null, input.status ?? "draft", input.notes ?? null, input.templateId ?? null, input.templateVersion ?? null, now, now],
   });
   statements.push(mealPlanVersionStatement({
     mealPlanId: id,
@@ -916,6 +976,7 @@ function buildMealPlanDetailStatements(
         notes: item.notes ?? null,
         foodSource: item.food_source ?? null,
         foodRefId: item.food_ref_id ?? null,
+        canonicalFoodId: item.canonical_food_id ?? null,
         householdMeasureId: item.household_measure_id ?? null,
         foodNameSnapshot: item.food_name_snapshot ?? null,
         nutritionSnapshot: item.nutrition_snapshot ?? null,
@@ -923,6 +984,9 @@ function buildMealPlanDetailStatements(
         quantityResolutionSnapshot: item.quantity_resolution_snapshot ?? null,
         quantityLocked: item.quantity_locked ? 1 : 0,
         substitutionsLocked: item.substitutions_locked ? 1 : 0,
+        slotFoodGroup: item.slot_food_group ?? null,
+        slotFoodSubgroup: item.slot_food_subgroup ?? null,
+        slotNutritionalRole: item.slot_nutritional_role ?? null,
         order: itemIndex,
         now,
       });
@@ -988,8 +1052,8 @@ function buildMealPlanDetailStatements(
     params: [JSON.stringify(mealRows)],
   });
   if (itemRows.length) statements.push({
-    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, household_measure_id, food_name_snapshot, nutrition_snapshot, resolved_grams_snapshot, quantity_resolution_snapshot, quantity_locked, substitutions_locked, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.foodNameSnapshot'), json_extract(value,'$.nutritionSnapshot'), json_extract(value,'$.resolvedGramsSnapshot'), json_extract(value,'$.quantityResolutionSnapshot'), json_extract(value,'$.quantityLocked'), json_extract(value,'$.substitutionsLocked'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, canonical_food_id, household_measure_id, food_name_snapshot, nutrition_snapshot, resolved_grams_snapshot, quantity_resolution_snapshot, quantity_locked, substitutions_locked, slot_food_group, slot_food_subgroup, slot_nutritional_role, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.canonicalFoodId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.foodNameSnapshot'), json_extract(value,'$.nutritionSnapshot'), json_extract(value,'$.resolvedGramsSnapshot'), json_extract(value,'$.quantityResolutionSnapshot'), json_extract(value,'$.quantityLocked'), json_extract(value,'$.substitutionsLocked'), json_extract(value,'$.slotFoodGroup'), json_extract(value,'$.slotFoodSubgroup'), json_extract(value,'$.slotNutritionalRole'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(itemRows)],
   });
   if (weeklyRows.length) statements.push({

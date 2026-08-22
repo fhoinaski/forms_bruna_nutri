@@ -97,6 +97,13 @@ type PortalSummary = {
     substitutions: Array<{ base_food: string; option_food: string; quantity: string | null; unit: string | null; notes: string | null }>;
     supplements: Array<{ name: string; dosage: string | null; unit: string | null; instructions: string | null; notes: string | null }>;
   } | null;
+  /** FASE 7 (item 22) — só grupos com pelo menos 1 alternativa já aprovada pela nutricionista chegam aqui. */
+  exchangeGroups: Array<{
+    id: string;
+    primaryFoodName: string;
+    foodGroup: string;
+    approvedAlternatives: Array<{ id: string; foodName: string; quantityGrams: number }>;
+  }>;
 };
 
 const WEEK_DAYS = ["Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado", "Domingo"] as const;
@@ -459,6 +466,28 @@ export default function ClientPortalPage() {
                     </ul>
                   </div>
                 )}
+              </div>
+            )}
+            {data.exchangeGroups.length > 0 && (
+              <div className="mt-5 rounded-xl bg-[#F7F0E8] p-4">
+                <h3 className="font-serif text-lg font-semibold">Grupos de troca aprovados</h3>
+                <p className="mt-1 text-xs text-[#8C6E52]">Escolha 1 opção de cada grupo quando quiser variar — todas foram revisadas pela nutricionista.</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {data.exchangeGroups.map((group) => (
+                    <div key={group.id} className="rounded-lg border border-[#EAD8C2] bg-white p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">{group.foodGroup} — escolha 1</p>
+                      <ul className="mt-2 space-y-1.5 text-sm text-[#3A3028]">
+                        <li className="flex items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full border border-[#8C6E52]" aria-hidden />{friendlyFoodName(group.primaryFoodName)}</li>
+                        {group.approvedAlternatives.map((alt) => (
+                          <li key={alt.id} className="flex items-center gap-2 text-[#607066]">
+                            <span className="h-3 w-3 shrink-0 rounded-full border border-[#B7A79A]" aria-hidden />
+                            {friendlyFoodName(alt.foodName)} — {Math.round(alt.quantityGrams)} g
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </section>

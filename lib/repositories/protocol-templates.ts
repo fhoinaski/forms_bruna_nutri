@@ -24,6 +24,11 @@ export interface ProtocolTemplate {
   is_active: number;
   created_at: string;
   updated_at: string;
+  // FASE 8 (itens 3/11/13) — metadados de estrutura/risco clínico/versão.
+  clinical_risk_level: "low" | "medium" | "high";
+  requires_professional_review: number;
+  version: number;
+  structure_version: "legacy" | "v2";
 }
 
 export interface ProtocolTemplateInput {
@@ -198,7 +203,7 @@ export async function getAllTemplates(filters: {
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   return d1Query<ProtocolTemplate>(
-    `SELECT id, type, target_group, title, content, notes, is_active, created_at, updated_at FROM protocol_templates ${where} ORDER BY target_group ASC, type ASC, title ASC`,
+    `SELECT id, type, target_group, title, content, notes, is_active, created_at, updated_at, clinical_risk_level, requires_professional_review, version, structure_version FROM protocol_templates ${where} ORDER BY target_group ASC, type ASC, title ASC`,
     params
   );
 }
@@ -212,7 +217,7 @@ export async function getTemplatesByGroup(
 
 export async function getTemplateById(id: string): Promise<ProtocolTemplate | null> {
   const rows = await d1Query<ProtocolTemplate>(
-    "SELECT id, type, target_group, title, content, notes, is_active, created_at, updated_at FROM protocol_templates WHERE id = ?1 LIMIT 1",
+    "SELECT id, type, target_group, title, content, notes, is_active, created_at, updated_at, clinical_risk_level, requires_professional_review, version, structure_version FROM protocol_templates WHERE id = ?1 LIMIT 1",
     [id]
   );
   return rows[0] ?? null;
@@ -348,4 +353,145 @@ export async function updateTemplate(
 
 export async function deleteTemplate(id: string): Promise<void> {
   await d1Execute("DELETE FROM protocol_templates WHERE id = ?1", [id]);
+}
+
+// FASE 8 — modelo estruturado do template (item 3 do pedido): refeições com
+// slots (grupo/subgrupo/papel nutricional) e alimentos-sugestão dentro de
+// cada slot, em vez da prescrição fixa que diet_template_items representa
+// sozinho. Não substitui getTemplateDetail (que a UI de CRUD atual continua
+// usando) — é uma leitura adicional, paralela, da mesma fonte de dados.
+export interface TemplateSlotFood {
+  food: string;
+  quantity: string | null;
+  unit: string | null;
+}
+export interface TemplateSlot {
+  foodGroup: string;
+  foodSubgroup: string;
+  nutritionalRole: string;
+  required: boolean;
+  exchangeEligible: boolean;
+  minItems: number;
+  maxItems: number;
+  suggestedFoods: TemplateSlotFood[];
+}
+export interface TemplateMealStructure {
+  name: string;
+  suggestedTime: string | null;
+  slots: TemplateSlot[];
+}
+export interface TemplateStructure {
+  id: string;
+  name: string;
+  description: string | null;
+  category: ProtocolTemplateTargetGroup;
+  clinicalRiskLevel: "low" | "medium" | "high";
+  requiresProfessionalReview: boolean;
+  version: number;
+  structureVersion: "legacy" | "v2";
+  meals: TemplateMealStructure[];
+}
+
+interface SlotRow {
+  id: string;
+  meal_id: string;
+  food_group: string;
+  food_subgroup: string;
+  nutritional_role: string;
+  required: number;
+  exchange_eligible: number;
+  min_items: number;
+  max_items: number;
+  sort_order: number;
+}
+interface SlotFoodRow {
+  slot_id: string;
+  food: string;
+  quantity: string | null;
+  unit: string | null;
+  source_item_id: string | null;
+  sort_order: number;
+}
+
+/**
+ * FASE 8 (item 8) — para cada item de template já classificado em slot,
+ * devolve sua classificação, indexada pelo id ORIGINAL de diet_template_items
+ * (o mesmo id preservado em getRelationalDietTemplates). Usado por
+ * createMealPlanFromTemplates pra carimbar slot_food_group/subgroup/role no
+ * meal_plan_item criado a partir desse item de template.
+ */
+export async function getSlotClassificationBySourceItemId(
+  templateIds: string[]
+): Promise<Map<string, { food_group: string; food_subgroup: string; nutritional_role: string }>> {
+  const result = new Map<string, { food_group: string; food_subgroup: string; nutritional_role: string }>();
+  if (!templateIds.length) return result;
+  const rows = await d1Query<{ source_item_id: string; food_group: string; food_subgroup: string; nutritional_role: string }>(
+    `SELECT sf.source_item_id as source_item_id, s.food_group as food_group, s.food_subgroup as food_subgroup, s.nutritional_role as nutritional_role
+     FROM diet_template_slot_foods sf
+     JOIN diet_template_slots s ON s.id = sf.slot_id
+     JOIN diet_template_meals m ON m.id = s.meal_id
+     JOIN json_each(?1) ids ON m.template_id = ids.value
+     WHERE sf.source_item_id IS NOT NULL`,
+    [JSON.stringify(templateIds)]
+  );
+  for (const row of rows) {
+    if (!row.source_item_id) continue;
+    result.set(row.source_item_id, { food_group: row.food_group, food_subgroup: row.food_subgroup, nutritional_role: row.nutritional_role });
+  }
+  return result;
+}
+
+export async function getTemplateStructure(id: string): Promise<TemplateStructure | null> {
+  const template = await getTemplateById(id);
+  if (!template) return null;
+
+  const results = await d1Batch([
+    { sql: "SELECT * FROM diet_template_meals WHERE template_id = ?1 ORDER BY sort_order ASC", params: [id] },
+    {
+      sql: `SELECT s.* FROM diet_template_slots s
+            JOIN diet_template_meals m ON m.id = s.meal_id
+            WHERE m.template_id = ?1
+            ORDER BY m.sort_order ASC, s.sort_order ASC`,
+      params: [id],
+    },
+    {
+      sql: `SELECT sf.* FROM diet_template_slot_foods sf
+            JOIN diet_template_slots s ON s.id = sf.slot_id
+            JOIN diet_template_meals m ON m.id = s.meal_id
+            WHERE m.template_id = ?1
+            ORDER BY s.sort_order ASC, sf.sort_order ASC`,
+      params: [id],
+    },
+  ]);
+
+  const meals = (results[0]?.results ?? []) as DietTemplateMealRow[];
+  const slots = (results[1]?.results ?? []) as SlotRow[];
+  const slotFoods = (results[2]?.results ?? []) as SlotFoodRow[];
+  const slotsByMeal = groupBy(slots, (slot) => slot.meal_id);
+  const foodsBySlot = groupBy(slotFoods, (food) => food.slot_id);
+
+  return {
+    id: template.id,
+    name: template.title,
+    description: template.notes,
+    category: template.target_group,
+    clinicalRiskLevel: template.clinical_risk_level,
+    requiresProfessionalReview: Boolean(template.requires_professional_review),
+    version: template.version,
+    structureVersion: template.structure_version,
+    meals: meals.map((meal) => ({
+      name: meal.name,
+      suggestedTime: meal.suggested_time ?? null,
+      slots: (slotsByMeal.get(meal.id) ?? []).map((slot) => ({
+        foodGroup: slot.food_group,
+        foodSubgroup: slot.food_subgroup,
+        nutritionalRole: slot.nutritional_role,
+        required: Boolean(slot.required),
+        exchangeEligible: Boolean(slot.exchange_eligible),
+        minItems: slot.min_items,
+        maxItems: slot.max_items,
+        suggestedFoods: (foodsBySlot.get(slot.id) ?? []).map((food) => ({ food: food.food, quantity: food.quantity, unit: food.unit })),
+      })),
+    })),
+  };
 }

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PROTOCOL_TEMPLATE_TARGET_GROUPS } from "@/lib/protocol-templates/constants";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
-import { createMealPlanFromTemplates, getClientMealPlans } from "@/lib/repositories/meal-plans";
+import { createMealPlanFromTemplates, getClientMealPlans, NoTemplateForTargetGroupError } from "@/lib/repositories/meal-plans";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
@@ -46,11 +46,19 @@ export async function POST(
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
   }
 
-  const plan = await createMealPlanFromTemplates({
-    clientId: id,
-    targetGroup: parsed.data.targetGroup,
-    title: parsed.data.title,
-  });
+  let plan;
+  try {
+    plan = await createMealPlanFromTemplates({
+      clientId: id,
+      targetGroup: parsed.data.targetGroup,
+      title: parsed.data.title,
+    });
+  } catch (error) {
+    if (error instanceof NoTemplateForTargetGroupError) {
+      return NextResponse.json({ message: "Ainda não existe um modelo cadastrado para este grupo. Crie o plano manualmente ou cadastre um modelo em Modelos profissionais." }, { status: 422 });
+    }
+    throw error;
+  }
   await addTimelineEvent({
     client_id: id,
     type: "meal_plan_created",

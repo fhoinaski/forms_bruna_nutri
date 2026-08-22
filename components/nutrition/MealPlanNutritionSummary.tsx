@@ -11,7 +11,11 @@ type SummaryItem = {
   food: string;
   quantity?: string | null;
   unit?: string | null;
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | null;
+  // FASE 6.5 (item 5) — TBCA/IBGE_POF aceitos no tipo (identidade
+  // transportada), mas o filtro abaixo (linha ~110) so reconhece
+  // TACO/CUSTOM/MANUFACTURER de proposito — item com essas 2 fontes cai
+  // como "nao reconhecido", igual USDA ja caia antes desta fase (item 8).
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | null;
   food_ref_id?: string | null;
   household_measure_id?: string | null;
   resolved_grams_snapshot?: number | null;

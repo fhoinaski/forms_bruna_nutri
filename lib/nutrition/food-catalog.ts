@@ -6,9 +6,18 @@ import { listFoodPortions, type FoodPortion, type FoodPortionSource } from "@/li
 import { normalizePortionUnit, type UnifiedFoodPortion } from "@/lib/nutrition/portion-resolution";
 import { getUsdaFoodBySourceId, searchUsdaFoods, toUsdaMacroReference, toUsdaSearchMacroReference, type UsdaFood, type UsdaFoodSearchRow } from "@/lib/repositories/usda-foods";
 
-export type FoodCatalogSource = "TACO" | "COMPLEMENTARY" | "CUSTOM" | "MANUFACTURER" | "USDA" | "OPEN_FOOD_FACTS";
+// FASE 6.5 (item 1/2) — TBCA/IBGE_POF adicionados SO em FoodCatalogSource e
+// PersistedMealFoodSource (as duas pontas que realmente precisam
+// representar/persistir a identidade de um match canonico confiavel).
+// RuntimeFoodCatalogSource (filtro de busca do catalogo LEGADO,
+// searchFoods()) fica INTOCADO de proposito — searchFoods nunca pesquisa
+// TBCA/POF diretamente (isso e papel de canonicalFoodSearch, ja existente
+// e isolado); ver lib/nutrition/canonical-food-admin-search.ts pra como a
+// identidade canonica entra na resposta sem essa busca legada precisar
+// saber nada sobre TBCA/POF.
+export type FoodCatalogSource = "TACO" | "COMPLEMENTARY" | "CUSTOM" | "MANUFACTURER" | "USDA" | "OPEN_FOOD_FACTS" | "TBCA" | "IBGE_POF";
 export type RuntimeFoodCatalogSource = "TACO" | "COMPLEMENTARY" | "CUSTOM" | "MANUFACTURER" | "USDA";
-export type PersistedMealFoodSource = "TACO" | "CUSTOM" | "MANUFACTURER";
+export type PersistedMealFoodSource = "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF";
 
 export interface FoodReference {
   source: FoodCatalogSource;
@@ -105,7 +114,11 @@ export function sourceFromMacroReference(food: MacroReferenceFood): RuntimeFoodC
 }
 
 export function toPersistedMealFoodSource(source: FoodCatalogSource): PersistedMealFoodSource | null {
-  if (source === "CUSTOM" || source === "MANUFACTURER") return source;
+  // FASE 6.5 (item 2) — USDA/TBCA/IBGE_POF adicionados aqui (achado real da
+  // auditoria: USDA ja era uma fonte persistivel valida — CHECK constraint
+  // de meal_plan_items ja aceitava — mas esta funcao devolvia null pra ela,
+  // uma lacuna pre-existente, nao introduzida agora).
+  if (source === "CUSTOM" || source === "MANUFACTURER" || source === "USDA" || source === "TBCA" || source === "IBGE_POF") return source;
   if (source === "TACO" || source === "COMPLEMENTARY") return "TACO";
   return null;
 }

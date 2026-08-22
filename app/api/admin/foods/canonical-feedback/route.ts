@@ -19,7 +19,9 @@ const FeedbackSchema = z.object({
   queryHash: z.string().min(1).max(64),
   suggestedCanonicalFoodId: z.string().max(120).nullable().optional(),
   suggestedMatchClass: z.string().max(60).nullable().optional(),
-  chosenSource: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]).nullable().optional(),
+  // FASE 6.5 (item 5) — TBCA/IBGE_POF aceitos: o piloto agora pode
+  // preselecionar essas fontes, entao o feedback precisa poder registrar.
+  chosenSource: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA", "TBCA", "IBGE_POF"]).nullable().optional(),
   chosenSourceId: z.string().max(120).nullable().optional(),
   outcome: z.enum(["CORRECT", "WRONG", "CHANGED_SELECTION"]),
 }).strict();

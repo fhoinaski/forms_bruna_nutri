@@ -272,7 +272,12 @@ describe("createMealPlanFromTemplates — substituicoes de templates", () => {
         is_active: 1,
         created_at: "now",
         updated_at: "now",
+        clinical_risk_level: "low",
+        requires_professional_review: 0,
+        version: 1,
+        structure_version: "legacy",
       }))),
+      getSlotClassificationBySourceItemId: vi.fn().mockResolvedValue(new Map()),
     }));
     vi.doMock("@/lib/security/encrypted-fields", () => ({ encryptJsonValue: (v: unknown) => `encj:${JSON.stringify(v)}` }));
 

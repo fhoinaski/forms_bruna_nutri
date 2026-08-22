@@ -7,6 +7,7 @@ import { getExistingNutritionRecord, type NutritionRecord } from "@/lib/reposito
 import type { Payment } from "@/lib/repositories/payments";
 import { getActiveMealPlan, type MealPlanPayload, type MealPlanMealPayload } from "@/lib/repositories/meal-plans";
 import { getRecipeById } from "@/lib/repositories/recipes";
+import { listApprovedAlternativesForPlan } from "@/lib/repositories/exchange-groups";
 
 export interface ClientPortalAccess {
   id: string;
@@ -56,6 +57,13 @@ export interface ClientPortalSummary {
   protocols: PortalProtocol[];
   carePlan: Pick<NutritionRecord, "goals" | "care_plan" | "hydration" | "physical_activity" | "sleep_routine"> | null;
   mealPlan: (Omit<MealPlanPayload, "meals"> & { meals: PortalMealPayload[] }) | null;
+  /** FASE 7 (item 22) — só grupos de troca com pelo menos 1 alternativa APPROVED; cada grupo só traz as alternativas aprovadas, nunca SUGGESTED/EDITED/REJECTED. */
+  exchangeGroups: Array<{
+    id: string;
+    primaryFoodName: string;
+    foodGroup: string;
+    approvedAlternatives: Array<{ id: string; foodName: string; quantityGrams: number }>;
+  }>;
   payments: Pick<Payment, "id" | "description" | "amount_cents" | "due_date" | "status" | "payment_link" | "receipt_url" | "installment_number" | "installment_total">[];
 }
 
@@ -199,6 +207,10 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
       })))
     : [];
 
+  // FASE 7 (item 22) — mesma regra de "só aprovado sai pro portal" já
+  // aplicada acima pras substituições legadas, agora pros grupos de troca.
+  const exchangeGroupsForPortal = mealPlan ? await listApprovedAlternativesForPlan(mealPlan.id) : [];
+
   return {
     client: { id: client.id, name: client.name, email: client.email, phone: client.phone },
     appointments,
@@ -216,6 +228,12 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
     // servidor pro portal (seção 17/20 do pedido: paciente não aprova nem
     // altera equivalência clínica, e nada sem revisão profissional chega até ele).
     mealPlan: mealPlan ? { ...mealPlan, meals: mealsWithRecipe, substitutions: mealPlan.substitutions.filter((item) => item.approved_by_professional !== false) } : null,
+    exchangeGroups: exchangeGroupsForPortal.map(({ group, approved }) => ({
+      id: group.id,
+      primaryFoodName: group.primary_food_name,
+      foodGroup: group.food_group,
+      approvedAlternatives: approved.map((a) => ({ id: a.id, foodName: a.food_name, quantityGrams: a.quantity_grams })),
+    })),
     payments,
   };
 }

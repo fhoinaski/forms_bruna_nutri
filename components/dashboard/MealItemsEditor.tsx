@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Beef, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, Plus, RefreshCw, Save, Sparkles, Trash2, Unlock, Utensils, Wheat } from "lucide-react";
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
@@ -10,6 +10,7 @@ import type { FoodPortion } from "@/lib/repositories/food-portions";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
 import { ItemSubstitutionsPanel, type ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
+import { ExchangeGroupPanel, type ExchangeAlternativeView, type ExchangeGroupView } from "@/components/dashboard/ExchangeGroupPanel";
 import type { FoodReference } from "@/lib/nutrition/food-catalog";
 
 export type MealItem = {
@@ -22,8 +23,14 @@ export type MealItem = {
   // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2. So
   // preenchido quando o alimento vem de um resultado de busca escolhido;
   // digitacao livre mantem os dois como null (mesmo comportamento de hoje).
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | null;
+  // FASE 6.5 (item 5): TBCA/IBGE_POF aceitos — vem do piloto de busca
+  // canonica; identidade transportada, calculo do plano ainda trata como
+  // "nao reconhecido" (ver lib/nutrition/nutrients.ts, item 8).
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | null;
   food_ref_id?: string | null;
+  // FASE 6.5 (item 3) — identidade canonica completa, so quando
+  // food_source e TBCA/IBGE_POF (ou TACO vindo do piloto canonico).
+  canonical_food_id?: string | null;
   // Vinculo a uma medida caseira especifica (food_portions.id) — FASE 3.
   household_measure_id?: string | null;
   resolved_grams_snapshot?: number | null;
@@ -59,8 +66,10 @@ type FoodSuggestion = MacroReferenceFood & {
   displayName?: string;
 };
 
-function toMealPlanFoodSource(suggestion: FoodSuggestion): "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" {
-  if (suggestion.ref?.source === "CUSTOM" || suggestion.ref?.source === "MANUFACTURER" || suggestion.ref?.source === "USDA") return suggestion.ref.source;
+function toMealPlanFoodSource(suggestion: FoodSuggestion): "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" {
+  // FASE 6.5 (item 5) — TBCA/IBGE_POF vem so do piloto canonico (nunca de
+  // `fonte`, que e vocabulario legado) — sempre via ref.source explicito.
+  if (suggestion.ref?.source === "CUSTOM" || suggestion.ref?.source === "MANUFACTURER" || suggestion.ref?.source === "USDA" || suggestion.ref?.source === "TBCA" || suggestion.ref?.source === "IBGE_POF") return suggestion.ref.source;
   if (suggestion.fonte === "custom") return "CUSTOM";
   if (suggestion.fonte === "manufacturer") return "MANUFACTURER";
   if (suggestion.fonte === "usda") return "USDA";
@@ -157,6 +166,7 @@ export function cleanMealsForSave(meals: Meal[]): Meal[] {
           notes: item.notes ?? null,
           food_source: item.food_source ?? null,
           food_ref_id: item.food_ref_id ?? null,
+          canonical_food_id: item.canonical_food_id ?? null,
           household_measure_id: item.household_measure_id ?? null,
           // Locks persistidos (Optimizer V2 sobre plano salvo + geração
           // automática de substituições) — sem isso, o toggle 🔒 na UI
@@ -182,6 +192,7 @@ export function MealItemsEditor({
   clientId,
   substitutions,
   onSubstitutionsChange,
+  mealPlanId,
 }: {
   meals: Meal[];
   onChange: (meals: Meal[]) => void;
@@ -197,8 +208,33 @@ export function MealItemsEditor({
   clientId?: string;
   substitutions?: ItemSubstitution[];
   onSubstitutionsChange?: (substitutions: ItemSubstitution[]) => void;
+  /** FASE 7 — grupos de troca só existem pra um plano já salvo (precisam de um id estável pra vincular por identidade). Ausente em templates/receitas/planos ainda não salvos. */
+  mealPlanId?: string;
 }) {
   const [openSubstitutionsKey, setOpenSubstitutionsKey] = useState("");
+  const [openExchangeKey, setOpenExchangeKey] = useState("");
+  const [exchangeGroups, setExchangeGroups] = useState<Array<{ group: ExchangeGroupView & { primary_food_source: string; primary_food_ref_id: string }; alternatives: ExchangeAlternativeView[] }>>([]);
+
+  const loadExchangeGroups = useCallback(async () => {
+    if (!clientId || !mealPlanId) return;
+    try {
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/exchange-groups?mealPlanId=${encodeURIComponent(mealPlanId)}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      setExchangeGroups(
+        (data.groups ?? []).map((entry: { group: ExchangeGroupView & { primary_food_source: string; primary_food_ref_id: string }; alternatives: ExchangeAlternativeView[] }) => ({
+          group: entry.group,
+          alternatives: entry.alternatives,
+        }))
+      );
+    } catch {
+      // falha silenciosa — o painel simplesmente mostra "nenhum grupo gerado ainda"
+    }
+  }, [clientId, mealPlanId]);
+
+  useEffect(() => {
+    loadExchangeGroups();
+  }, [loadExchangeGroups]);
   const [activeFoodField, setActiveFoodField] = useState("");
   const [foodSearch, setFoodSearch] = useState<{ key: string; query: string }>({ key: "", query: "" });
   const [foodSuggestions, setFoodSuggestions] = useState<Record<string, FoodSuggestion[]>>({});
@@ -438,6 +474,10 @@ export function MealItemsEditor({
       taco_number: suggestion.numero,
       food_source: toMealPlanFoodSource(suggestion),
       food_ref_id: suggestion.ref?.sourceId ?? String(suggestion.numero),
+      // FASE 6.5 (item 3) — identidade canonica completa, so presente
+      // quando a sugestao veio do piloto canonico (TBCA/IBGE_POF/TACO via
+      // canonicalPilot); null pra qualquer sugestao do catalogo legado comum.
+      canonical_food_id: suggestion.ref?.canonicalId ?? null,
       // Alimento trocado: a medida caseira anterior (se havia) era de outro alimento e nao se aplica mais.
       household_measure_id: null,
       resolved_grams_snapshot: null,
@@ -889,6 +929,18 @@ export function MealItemsEditor({
                         <span>Substituições</span>
                       </button>
                     )}
+                    {clientId && mealPlanId && (
+                      <button
+                        type="button"
+                        onClick={() => setOpenExchangeKey((current) => current === `${mealIndex}:${itemIndex}` ? "" : `${mealIndex}:${itemIndex}`)}
+                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]"
+                        aria-label="Grupo de troca"
+                        title="Gerar grupo de troca (alternativas organizadas por grupo alimentar, com aprovação obrigatória)"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        <span>Grupo de troca</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => updateMealItem(mealIndex, itemIndex, { quantity_locked: !item.quantity_locked })}
@@ -928,8 +980,11 @@ export function MealItemsEditor({
                       <ItemSubstitutionsPanel
                         clientId={clientId}
                         itemFood={item.food}
-                        itemFoodSource={item.food_source}
-                        itemFoodRefId={item.food_ref_id}
+                        // FASE 6.5 (item 13) — substituicoes continuam so pro catalogo
+                        // legado; um item TBCA/IBGE_POF aparece aqui como se nao tivesse
+                        // fonte estruturada (mesmo fallback de "nao fazer ainda").
+                        itemFoodSource={item.food_source === "TBCA" || item.food_source === "IBGE_POF" ? null : item.food_source}
+                        itemFoodRefId={item.food_source === "TBCA" || item.food_source === "IBGE_POF" ? null : item.food_ref_id}
                         itemGrams={typeof grams === "number" && Number.isFinite(grams) ? grams : null}
                         substitutionsLocked={Boolean(item.substitutions_locked)}
                         currentMeals={meals}
@@ -952,6 +1007,26 @@ export function MealItemsEditor({
                       />
                     </div>
                   )}
+                  {clientId && mealPlanId && openExchangeKey === key && (() => {
+                    const entry = exchangeGroups.find(
+                      (e) => e.group.primary_food_source === item.food_source && e.group.primary_food_ref_id === item.food_ref_id
+                    );
+                    return (
+                      <div className="col-span-full">
+                        <ExchangeGroupPanel
+                          clientId={clientId}
+                          mealPlanId={mealPlanId}
+                          primaryFoodSource={item.food_source}
+                          primaryFoodRefId={item.food_ref_id}
+                          primaryCanonicalFoodId={item.canonical_food_id}
+                          primaryGrams={typeof grams === "number" && Number.isFinite(grams) ? grams : null}
+                          group={entry?.group ?? null}
+                          alternatives={entry?.alternatives ?? []}
+                          onRefresh={loadExchangeGroups}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
                 );
               })}

@@ -569,6 +569,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                 onError={setError}
                 showMacroFooter={false}
                 clientId={clientId}
+                mealPlanId={plan.id}
                 substitutions={plan.substitutions}
                 onSubstitutionsChange={(substitutions) => setPlan({ ...plan, substitutions })}
               />

@@ -1,59 +1,64 @@
 {
-  "generatedAt": "2026-08-22T20:53:48.951Z",
-  "totalQueries": 652,
+  "generatedAt": "2026-08-22T21:51:51.568Z",
+  "totalQueries": 653,
   "adminFoodSearchPilot": {
     "outcomes": {
-      "autoAcceptV2": 57,
-      "fallbackCurrent": 592,
-      "ambiguous": 22,
+      "autoAcceptV2": 283,
+      "fallbackCurrent": 367,
+      "ambiguous": 23,
       "preparationReview": 0,
       "notFound": 3,
       "wrongAutoAccept": 0,
       "errors": 0
     },
+    "preselectedBySource": {
+      "TBCA": 186,
+      "TACO": 61,
+      "IBGE_POF": 36
+    },
     "latencyMs": {
       "cold": {
         "n": 642,
-        "p50": 373.95,
-        "p95": 514.87,
-        "p99": 592.52,
-        "max": 637.84
+        "p50": 456.09,
+        "p95": 732.81,
+        "p99": 832.8,
+        "max": 1143.44
       },
       "warm": {
-        "n": 10,
-        "p50": 351.47,
-        "p95": 375.08,
-        "p99": 375.08,
-        "max": 375.08
+        "n": 11,
+        "p50": 274.09,
+        "p95": 487.51,
+        "p99": 487.51,
+        "max": 487.51
       }
     }
   },
   "substitutionsShadow": {
     "outcomes": {
-      "v2AutoAccept": 286,
-      "v2Blocked": 366,
+      "v2AutoAccept": 283,
+      "v2Blocked": 370,
       "errors": 0
     },
     "latency": {
-      "n": 652,
-      "p50": 367.05,
-      "p95": 742.27,
-      "p99": 824.71,
-      "max": 986.52
+      "n": 653,
+      "p50": 402.72,
+      "p95": 847.98,
+      "p99": 1042.11,
+      "max": 1325.48
     }
   },
   "mealPlanAiShadow": {
     "outcomes": {
-      "v2AutoAccept": 286,
-      "v2Blocked": 366,
+      "v2AutoAccept": 283,
+      "v2Blocked": 370,
       "errors": 0
     },
     "latency": {
-      "n": 652,
-      "p50": 362.24,
-      "p95": 759.08,
-      "p99": 1151.65,
-      "max": 1779.15
+      "n": 653,
+      "p50": 391.34,
+      "p95": 810.18,
+      "p99": 917.44,
+      "max": 1084.02
     }
   }
 }

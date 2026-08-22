@@ -52,6 +52,10 @@ async function main() {
 
   // ---------- admin_food_search (piloto real) ----------
   const adminOutcomes = { autoAcceptV2: 0, fallbackCurrent: 0, ambiguous: 0, preparationReview: 0, notFound: 0, wrongAutoAccept: 0, errors: 0 };
+  // FASE 6.5 (item 6) — distribuicao das preselecoes reais por fonte,
+  // pra medir o quanto TBCA/IBGE_POF passaram a ser realmente utilizaveis
+  // (antes desta fase, so TACO podia ser preselecionado).
+  const preselectedBySource: Record<string, number> = {};
   const adminLatCold: number[] = [];
   const adminLatWarm: number[] = [];
   const seenAdmin = new Set<string>();
@@ -76,6 +80,7 @@ async function main() {
           adminOutcomes.notFound++;
         } else if (canonicalPilot.preselected) {
           adminOutcomes.autoAcceptV2++;
+          preselectedBySource[canonicalPilot.source] = (preselectedBySource[canonicalPilot.source] ?? 0) + 1;
           const expected = gtByQuery.get(query);
           if (expected && canonicalPilot.canonicalFoodId !== expected) {
             adminOutcomes.wrongAutoAccept++;
@@ -134,6 +139,7 @@ async function main() {
     totalQueries: queries.length,
     adminFoodSearchPilot: {
       outcomes: adminOutcomes,
+      preselectedBySource,
       latencyMs: { cold: stats(adminLatCold), warm: stats(adminLatWarm) },
     },
     substitutionsShadow: substitutionsResult,

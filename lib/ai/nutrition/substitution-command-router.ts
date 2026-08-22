@@ -276,7 +276,12 @@ export async function tryHandleSubstitutionCommand(
   }
 
   const persistedSource = toPersistedMealFoodSource(sourceFromMacroReference((await getFoodByReference(resolution.ref!))!.macroReference));
-  if (!persistedSource) {
+  // FASE 6.5 (item 13: "nao fazer ainda — ativar canonical em
+  // substitutions") — substituicoes via IA continuam aceitando SO
+  // TACO/CUSTOM/MANUFACTURER, igual antes desta fase. toPersistedMealFoodSource
+  // agora tambem devolve USDA/TBCA/IBGE_POF pra OUTROS chamadores (busca
+  // administrativa) — nunca pra este fluxo, de proposito.
+  if (persistedSource !== "TACO" && persistedSource !== "CUSTOM" && persistedSource !== "MANUFACTURER") {
     return clarify(`"${resolution.displayName}" não tem uma fonte que o plano alimentar suporta como substituição.`);
   }
 

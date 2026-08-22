@@ -515,6 +515,14 @@ export function applyMealPlanChangesWithPreview(
         if (!item.food_source || !item.food_ref_id) {
           throw new MealPlanChangeValidationError(`"${item.food}" não tem um alimento vinculado ao catálogo — não é possível calcular uma substituição equivalente para ele.`);
         }
+        // FASE 6.5 (item 13) — substituições via IA continuam SÓ pro catálogo
+        // legado (TACO/CUSTOM/MANUFACTURER/USDA); um item com identidade TBCA/
+        // IBGE_POF (transportada pelo piloto de busca administrativa) ainda
+        // não pode virar substituição por este caminho — nunca "ativar
+        // canonical em meal_plan_ai" nesta fase.
+        if (item.food_source === "TBCA" || item.food_source === "IBGE_POF") {
+          throw new MealPlanChangeValidationError(`"${item.food}" ainda não suporta substituição automática por este assistente — edite manualmente pelo editor de plano.`);
+        }
         const baseFood = findFoodReferenceByIdentity(references, item.food_source, item.food_ref_id);
         const candidateFood = findFoodReferenceByIdentity(references, change.optionFood.source, change.optionFood.refId);
         if (!baseFood || !candidateFood) {

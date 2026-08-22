@@ -4,27 +4,29 @@ import { toDisplayFoodName } from "@/lib/nutrition/food-terminology";
 import { resolveCanonicalFood } from "@/lib/nutrition/canonical-food-resolver";
 import { computeV2Features, canUseCanonical } from "@/lib/nutrition/canonical-food-shadow";
 import { canAutoResolveCanonicalV2 } from "@/lib/nutrition/canonical-confidence-v2";
-import { getPortions } from "@/lib/repositories/canonical-foods";
+import { getPortions, getNutrients } from "@/lib/repositories/canonical-foods";
 import { getCanonicalFoodResolverModeForScope } from "@/lib/nutrition/canonical-food-resolver-flag";
-import type { CanonicalDbExecutor, CanonicalPortionSummary } from "@/lib/nutrition/canonical-food-search";
+import type { CanonicalDbExecutor, CanonicalPortionSummary, CanonicalFoodSearchResult } from "@/lib/nutrition/canonical-food-search";
 import type { MatchClass, PreparationEvidence } from "@/lib/nutrition/canonical-confidence-features";
 import type { CanonicalFoodSource } from "@/lib/nutrition-import/types";
 import { logger } from "@/lib/observability/logger";
 
 /**
- * FASE 6 (item 3) — PILOTO 1: busca administrativa. Envolve
- * app/api/admin/foods/search/route.ts (searchFoods, intocado) com o
- * resolver canônico no escopo `admin_food_search` — NUNCA muda cálculo:
- * quando a V2 autoriza, so REORDENA/marca qual candidato já presente (ou
- * buscável via getFoodByReference) é o mais confiável; o item selecionado
- * continua sendo um `FoodReference` TACO válido, salvo pelo MESMO fluxo de
- * sempre (PUT do plano inteiro, food_source/food_ref_id inalterados).
+ * FASE 6 (item 3) / FASE 6.5 (itens 1-6) — PILOTO 1: busca administrativa.
+ * Envolve app/api/admin/foods/search/route.ts (searchFoods, intocado) com
+ * o resolver canônico no escopo `admin_food_search` — NUNCA muda cálculo:
+ * quando a V2 autoriza, so REORDENA/marca qual candidato é o mais
+ * confiável; o item selecionado é salvo pelo MESMO fluxo de sempre (PUT do
+ * plano inteiro), agora com food_source podendo ser TACO/TBCA/IBGE_POF
+ * (FASE 6.5 expandiu o enum — ver db/20260822_0058_meal_plan_items_canonical_source.sql).
  *
- * Escopo restrito a fontes canônicas TACO (item 4/5): TBCA/IBGE_POF não
- * têm equivalente em `food_source` (enum fixo: TACO/CUSTOM/MANUFACTURER/
- * USDA) — promovê-las exigiria mudança de schema incompatível, fora do
- * "não fazer ainda". Candidatos não-TACO aparecem só na anotação
- * `canonicalPilot` (informativo), nunca reordenam a lista.
+ * TACO usa getFoodByReference (catálogo legado, macro real já calculável).
+ * TBCA/IBGE_POF constroem o item DIRETO dos dados canônicos (identidade +
+ * preview de macro só pra exibição no dropdown) — o Nutrition Engine
+ * ainda NÃO consome esses nutrientes no cálculo oficial do plano (item 8:
+ * nutrients.ts#resolveItemReference devolve null pra esses dois, tratando
+ * como "não reconhecido", igual qualquer item sem match — nunca um número
+ * inventado nem herdado do preview).
  */
 
 export interface CanonicalPilotAnnotation {
@@ -37,7 +39,7 @@ export interface CanonicalPilotAnnotation {
   source: CanonicalFoodSource;
   sourceFoodId: string;
   displayName: string;
-  /** true só quando prefer_canonical + V2 autorizou + fonte TACO + o item foi de fato movido pro topo da lista. */
+  /** true só quando prefer_canonical + V2 autorizou (qualquer fonte canônica: TACO/TBCA/IBGE_POF, ver FASE 6.5) + o item foi de fato movido pro topo da lista. */
   preselected: boolean;
   /** FASE 6 (item 10) — medidas caseiras reais do alimento canônico, só quando preselected (nunca busca porções de candidato não usado). */
   portions?: CanonicalPortionSummary[];
@@ -58,6 +60,52 @@ function moveToFront<T>(items: T[], index: number): T[] {
   const [item] = copy.splice(index, 1);
   copy.unshift(item);
   return copy;
+}
+
+const SOURCE_LABEL_BY_CANONICAL: Record<CanonicalFoodSource, string> = { TACO: "TACO", TBCA: "TBCA", IBGE_POF: "IBGE POF" };
+
+/**
+ * FASE 6.5 (item 6) — constroi um LegacyFoodSearchResponseItem DIRETO dos
+ * dados canonicos pra TBCA/IBGE_POF (getFoodByReference devolve null pra
+ * essas fontes de proposito — ver food-catalog.ts). Os 4 macros aqui sao
+ * so PREVIEW pro dropdown (valores REAIS da fonte canonica, nao
+ * inventados) — nunca a fonte de verdade do calculo do plano, que
+ * continua vindo exclusivamente de nutrients.ts#resolveItemReference
+ * (devolve null pra estas fontes, item 8).
+ */
+async function buildCanonicalLegacyItem(top: CanonicalFoodSearchResult, db: CanonicalDbExecutor | undefined): Promise<LegacyFoodSearchResponseItem> {
+  const nutrients = await getNutrients(top.foodId, db);
+  const valueFor = (code: string): number | null => {
+    const row = nutrients.find((n) => n.nutrientCode === code && n.status === "reported");
+    return row?.value ?? null;
+  };
+  const displayName = toDisplayFoodName(top.name);
+  return {
+    numero: top.sourceFoodId,
+    grupo: top.classification?.group ?? "",
+    ref: { source: top.source, sourceId: top.sourceFoodId, canonicalId: top.foodId },
+    sourceLabel: SOURCE_LABEL_BY_CANONICAL[top.source],
+    name: top.name,
+    displayName,
+    brand: null,
+    group: top.classification?.group ?? null,
+    descricao: top.name,
+    energyKcal: valueFor("ENERGY_KCAL"),
+    proteinG: valueFor("PROTEIN"),
+    carbohydrateG: valueFor("CARBOHYDRATE"),
+    fatG: valueFor("TOTAL_FAT"),
+    fiberG: valueFor("FIBER"),
+    // MacroReferenceFood exige os 4 macros centrais como number (nunca
+    // null) por convencao do projeto ("0 e sempre valor real, nunca
+    // ausencia de dado") — como aqui e so preview de dropdown, nunca a
+    // fonte de calculo oficial, 0 quando a fonte canonica ainda nao tem o
+    // valor reportado e seguro (nunca persistido/somado ao plano).
+    energia_kcal: valueFor("ENERGY_KCAL") ?? 0,
+    proteina_g: valueFor("PROTEIN") ?? 0,
+    carboidrato_g: valueFor("CARBOHYDRATE") ?? 0,
+    lipidios_g: valueFor("TOTAL_FAT") ?? 0,
+    fibra_g: valueFor("FIBER"),
+  };
 }
 
 export interface AdminSearchPilotContext {
@@ -120,26 +168,37 @@ export async function annotateAdminFoodSearchWithCanonicalPilot(
   };
 
   let items = baselineItems;
-  // FASE 6 (item 4): qualquer bloqueio da V2 (AMBIGUOUS/PREPARATION_REVIEW/
-  // VARIETY_REQUIRED/conflito de marca ou composto/preparo fraco/query
-  // generica — todos já cobertos por verdict.autoAccept=false) e QUALQUER
-  // fonte que não seja TACO caem automaticamente no fallback: a lista
+  // FASE 6 (item 4) / FASE 6.5 (item 6): qualquer bloqueio da V2
+  // (AMBIGUOUS/PREPARATION_REVIEW/VARIETY_REQUIRED/conflito de marca ou
+  // composto/preparo fraco/query generica — todos já cobertos por
+  // verdict.autoAccept=false) cai automaticamente no fallback: a lista
   // original nunca é reordenada, só a anotação informativa é preenchida.
-  if (mode === "prefer_canonical" && verdict.autoAccept && top.source === "TACO") {
-    const idx = baselineItems.findIndex((it) => it.ref.source === "TACO" && it.ref.sourceId === top.sourceFoodId);
-    if (idx >= 0) {
-      items = moveToFront(baselineItems, idx);
-      annotation.preselected = true;
-    } else {
-      // Candidato confiante mas fora do top-N do searchFoods atual (limite
-      // de resultados diferente) — busca direto pela referência real, nunca
-      // inventa um item; se a fonte TACO não tiver mais esse id, cai pro
-      // fallback normal sem quebrar nada.
-      const details = await getFoodByReference({ source: "TACO", sourceId: top.sourceFoodId });
-      if (details) {
-        items = [toLegacyFoodSearchResponseItem(details), ...baselineItems];
+  // A partir da FASE 6.5, QUALQUER fonte canônica (TACO/TBCA/IBGE_POF) pode
+  // ser preselecionada — meal_plan_items.food_source já aceita as 3.
+  if (mode === "prefer_canonical" && verdict.autoAccept) {
+    if (top.source === "TACO") {
+      const idx = baselineItems.findIndex((it) => it.ref.source === "TACO" && it.ref.sourceId === top.sourceFoodId);
+      if (idx >= 0) {
+        items = moveToFront(baselineItems, idx);
         annotation.preselected = true;
+      } else {
+        // Candidato confiante mas fora do top-N do searchFoods atual (limite
+        // de resultados diferente) — busca direto pela referência real, nunca
+        // inventa um item; se a fonte TACO não tiver mais esse id, cai pro
+        // fallback normal sem quebrar nada.
+        const details = await getFoodByReference({ source: "TACO", sourceId: top.sourceFoodId });
+        if (details) {
+          items = [toLegacyFoodSearchResponseItem(details), ...baselineItems];
+          annotation.preselected = true;
+        }
       }
+    } else {
+      // TBCA/IBGE_POF: getFoodByReference devolve null de proposito (essas
+      // fontes nao existem no catalogo legado) — construido direto dos
+      // dados canonicos ja resolvidos acima, nunca uma segunda busca.
+      const canonicalItem = await buildCanonicalLegacyItem(top, context.db);
+      items = [canonicalItem, ...baselineItems];
+      annotation.preselected = true;
     }
     if (annotation.preselected) {
       // item 10 — medidas caseiras reais, so do alimento de fato preselecionado.

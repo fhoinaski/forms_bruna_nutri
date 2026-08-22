@@ -411,6 +411,17 @@ export function resolveItemReference(item: MealPlanItemLike, lookup: FoodReferen
     if (item.food_source === "TACO") return lookup.byTacoNumber(item.food_ref_id);
     if (item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER") return lookup.byCustomId(item.food_ref_id);
     if (item.food_source === "USDA") return lookup.byUsdaId?.(item.food_ref_id) ?? null;
+    // FASE 6.5 (item 8) — TBCA/IBGE_POF tem identidade transportada (item
+    // salvo com food_source/food_ref_id/canonical_food_id corretos), mas o
+    // Nutrition Engine ainda NAO consome nutrientes canonicos nesta fase
+    // (proibido explicitamente no pedido). Sem este branch explicito, o
+    // item cairia no fuzzyMatch(item.food) abaixo — um risco real: um nome
+    // TBCA parecido poderia casar por texto com um alimento TACO
+    // DIFERENTE, calculando macro de um alimento errado silenciosamente.
+    // Retornar null aqui e o fallback HONESTO: item aparece como "nao
+    // reconhecido pelo calculo automatico" (mesmo aviso ja usado pra
+    // qualquer item sem match), nunca um numero adivinhado.
+    if (item.food_source === "TBCA" || item.food_source === "IBGE_POF") return null;
   }
   return lookup.fuzzyMatch(item.food);
 }

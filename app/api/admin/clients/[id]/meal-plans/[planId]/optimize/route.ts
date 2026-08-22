@@ -77,8 +77,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         displayName: item.food,
         quantity: item.quantity ?? "0",
         unit: item.unit ?? "g",
-        food_source: item.food_source ?? null,
-        food_ref_id: item.food_ref_id ?? null,
+        // FASE 6.5 (item 8) — o Optimizer ainda nao sabe recalcular
+        // TBCA/IBGE_POF (o Nutrition Engine trata esses itens como "nao
+        // reconhecido" — ver nutrients.ts#resolveItemReference); em vez de
+        // widenar o tipo compartilhado com o gerador de IA (que nunca deve
+        // produzir esses valores ainda, item 25), trata como sem fonte
+        // estruturada aqui — mesmo fallback grácil de qualquer item sem match.
+        food_source: item.food_source === "TBCA" || item.food_source === "IBGE_POF" ? null : (item.food_source ?? null),
+        food_ref_id: item.food_source === "TBCA" || item.food_source === "IBGE_POF" ? null : (item.food_ref_id ?? null),
         ai_suggested: true as const,
       })),
   }));
