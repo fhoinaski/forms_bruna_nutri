@@ -41,7 +41,7 @@ describe("resolveFoodWithCanonicalShadow — Fase 4 (item 12)", () => {
     // o fato de passar comprova que o canonico nunca foi invocado (early
     // return antes do Promise.all, ver lib/nutrition/canonical-food-shadow.ts).
     const { resolveFoodWithCanonicalShadow } = await import("@/lib/nutrition/canonical-food-shadow");
-    const result = await resolveFoodWithCanonicalShadow("Arroz, integral, cozido", []);
+    const result = await resolveFoodWithCanonicalShadow("Arroz, integral, cozido", [], undefined, "admin_food_search");
     expect(result.status).toBe("RESOLVED");
   });
 
@@ -56,7 +56,7 @@ describe("resolveFoodWithCanonicalShadow — Fase 4 (item 12)", () => {
       vi.doMock("@/lib/clinical/food-safety", () => ({ checkFoodAgainstPatientRestrictions: vi.fn().mockReturnValue({ status: "compatible", checks: [] }) }));
 
       const { resolveFoodWithCanonicalShadow } = await import("@/lib/nutrition/canonical-food-shadow");
-      const result = await resolveFoodWithCanonicalShadow("Arroz, integral, cozido", [], null, { db: executor });
+      const result = await resolveFoodWithCanonicalShadow("Arroz, integral, cozido", [], null, "admin_food_search", { db: executor });
       expect(result.status).toBe("RESOLVED");
       expect(result.ref?.sourceId).toBe("999"); // sempre o ATUAL, nunca o canonico, em shadow
     } finally {
@@ -76,7 +76,7 @@ describe("resolveFoodWithCanonicalShadow — Fase 4 (item 12)", () => {
       vi.doMock("@/lib/clinical/food-safety", () => ({ checkFoodAgainstPatientRestrictions: vi.fn().mockReturnValue({ status: "compatible", checks: [] }) }));
 
       const { resolveFoodWithCanonicalShadow } = await import("@/lib/nutrition/canonical-food-shadow");
-      const result = await resolveFoodWithCanonicalShadow("Arroz, integral, cozido", [], null, { db: executor });
+      const result = await resolveFoodWithCanonicalShadow("Arroz, integral, cozido", [], null, "admin_food_search", { db: executor });
       expect(result.status).toBe("RESOLVED");
       expect(result.ref?.sourceId).toBe("1");
     } finally {
@@ -110,7 +110,7 @@ describe("resolveFoodWithCanonicalShadow — Fase 4 (item 12)", () => {
 
       const { resolveFoodWithCanonicalShadow } = await import("@/lib/nutrition/canonical-food-shadow");
       // Query EXATA do nome tecnico — o canonico bate EXACT_NAME (score alto, decisivo), o atual (mockado) fica AMBIGUOUS sozinho.
-      const result = await resolveFoodWithCanonicalShadow("Arroz, integral, cozido", [], null, { db: executor });
+      const result = await resolveFoodWithCanonicalShadow("Arroz, integral, cozido", [], null, "admin_food_search", { db: executor });
       // O canonico achou "Arroz, integral, cozido" (taco:1) com confianca —
       // o resolver atual re-resolvido pelo NOME exato (mesma tecnica do substitution-command-router.ts) confirma e usa.
       expect(result.status).toBe("RESOLVED");
@@ -136,7 +136,7 @@ describe("resolveFoodWithCanonicalShadow — Fase 4 (item 12)", () => {
       vi.doMock("@/lib/clinical/food-safety", () => ({ checkFoodAgainstPatientRestrictions: vi.fn() }));
 
       const { resolveFoodWithCanonicalShadow } = await import("@/lib/nutrition/canonical-food-shadow");
-      const result = await resolveFoodWithCanonicalShadow("xyz_query_sem_correspondencia_nenhuma_12345", [], null, { db: executor });
+      const result = await resolveFoodWithCanonicalShadow("xyz_query_sem_correspondencia_nenhuma_12345", [], null, "admin_food_search", { db: executor });
       expect(result.status).toBe("AMBIGUOUS");
     } finally {
       db.close();
@@ -157,7 +157,7 @@ describe("resolveFoodWithCanonicalShadow — Fase 4 (item 12)", () => {
 
       const { resolveFoodWithCanonicalShadow } = await import("@/lib/nutrition/canonical-food-shadow");
       const events: Array<Record<string, unknown>> = [];
-      await resolveFoodWithCanonicalShadow("Arroz, integral, cozido", [], null, { db: executor, onTelemetry: (e) => events.push(e as unknown as Record<string, unknown>) });
+      await resolveFoodWithCanonicalShadow("Arroz, integral, cozido", [], null, "admin_food_search", { db: executor, onTelemetry: (e) => events.push(e as unknown as Record<string, unknown>) });
       expect(events).toHaveLength(1);
       expect(events[0]).toHaveProperty("scoreGap");
       expect(events[0]).toHaveProperty("preparationConflict");
@@ -189,7 +189,9 @@ describe("resolveFoodCandidatesWithCanonicalShadow — Fase 5 (item 1)", () => {
         { query: "arroz integral cozido", key: "meal-1:item-0" },
         { query: "Arroz Integral Cozido", key: "meal-2:item-0" },
       ],
-      []
+      [],
+      undefined,
+      "meal_plan_ai"
     );
     expect(result.size).toBe(2);
     expect(result.get("meal-1:item-0")?.status).toBe("RESOLVED");
@@ -206,7 +208,7 @@ describe("resolveFoodCandidatesWithCanonicalShadow — Fase 5 (item 1)", () => {
     vi.doMock("@/lib/clinical/food-safety", () => ({ checkFoodAgainstPatientRestrictions: vi.fn() }));
 
     const { resolveFoodCandidatesWithCanonicalShadow } = await import("@/lib/nutrition/canonical-food-shadow");
-    const result = await resolveFoodCandidatesWithCanonicalShadow([{ query: "alimento inexistente xyz", key: "a" }], []);
+    const result = await resolveFoodCandidatesWithCanonicalShadow([{ query: "alimento inexistente xyz", key: "a" }], [], undefined, "meal_plan_ai");
     expect(result.get("a")?.status).toBe("NOT_FOUND");
   });
 });

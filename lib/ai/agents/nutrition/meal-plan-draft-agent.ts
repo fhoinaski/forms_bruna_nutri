@@ -518,7 +518,7 @@ async function assembleDraft(
       queries.push({ query: item.query, key: `${mealIndex}:${itemIndex}` });
     });
   });
-  const resolutions = await resolveFoodCandidatesWithCanonicalShadow(queries, markers, adminId);
+  const resolutions = await resolveFoodCandidatesWithCanonicalShadow(queries, markers, adminId, "meal_plan_ai");
 
   const meals: DraftMeal[] = [];
   pending.forEach((entry, mealIndex) => {
@@ -681,7 +681,7 @@ export async function applyDraftOperations(
       continue;
     }
     if (op.operation === "add_item") {
-      const resolution = await resolveFoodWithCanonicalShadow(op.item.query, markers, adminId);
+      const resolution = await resolveFoodWithCanonicalShadow(op.item.query, markers, adminId, "meal_plan_ai");
       const { item, needsReview } = resolutionToMealParts(resolution, String(op.item.quantity), op.item.unit);
       if (resolution.status !== "RESOLVED") warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey, message: resolution.reason });
       if (item) meal.items = [...meal.items, item];
@@ -697,7 +697,7 @@ export async function applyDraftOperations(
     } else if (op.operation === "change_quantity") {
       meal.items = meal.items.map((item, index) => index === op.itemIndex ? { ...item, quantity: String(op.quantity) } : item);
     } else if (op.operation === "replace_item") {
-      const resolution = await resolveFoodWithCanonicalShadow(op.item.query, markers, adminId);
+      const resolution = await resolveFoodWithCanonicalShadow(op.item.query, markers, adminId, "meal_plan_ai");
       const { item, needsReview } = resolutionToMealParts(resolution, String(op.item.quantity), op.item.unit);
       if (resolution.status !== "RESOLVED") warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey, message: resolution.reason });
       // Conflito/ambiguidade no replace: mantem o item original em vez de

@@ -224,3 +224,19 @@ export const ESSENTIAL_FOOD_MODIFIERS = [
  * específicas (mais candidatos ambíguos, não menos), o oposto do objetivo.
  */
 export const LINGUISTIC_FOOD_MODIFIERS = ["de", "da", "do", "das", "dos"] as const;
+
+/**
+ * Nome amigável para exibição — reordena o formato típico da TACO
+ * ("Alimento, atributo1, atributo2" → "Alimento atributo1 atributo2"),
+ * nunca um replace ingênuo de vírgula. NUNCA usado para resolver
+ * identidade — source/refId/nutrientes continuam vindo do nome técnico
+ * original, só a apresentação muda. Mora aqui (modulo de base, sem
+ * dependência de food-resolver.ts/food-catalog.ts) pra os dois poderem
+ * usar sem criar import circular — reexportado por
+ * lib/nutrition/food-resolver.ts pra compatibilidade.
+ */
+export function toDisplayFoodName(technicalName: string): string {
+  const parts = technicalName.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length <= 1) return technicalName.trim();
+  return parts.join(" ");
+}

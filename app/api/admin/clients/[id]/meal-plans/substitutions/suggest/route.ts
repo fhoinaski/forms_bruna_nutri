@@ -69,7 +69,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const markers = await listPatientClinicalMarkers(id);
   const resolutions = await resolveFoodCandidatesWithCanonicalShadow(
     input.candidateQueries.map((query, index) => ({ query, key: String(index) })),
-    markers
+    markers,
+    undefined,
+    "substitutions"
   );
 
   const needsReview: { query: string; status: FoodResolution["status"]; reason: string; candidates: FoodResolution["candidates"] }[] = [];

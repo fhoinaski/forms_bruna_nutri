@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2026-08-22T20:53:48.951Z",
+  "totalQueries": 652,
+  "adminFoodSearchPilot": {
+    "outcomes": {
+      "autoAcceptV2": 57,
+      "fallbackCurrent": 592,
+      "ambiguous": 22,
+      "preparationReview": 0,
+      "notFound": 3,
+      "wrongAutoAccept": 0,
+      "errors": 0
+    },
+    "latencyMs": {
+      "cold": {
+        "n": 642,
+        "p50": 373.95,
+        "p95": 514.87,
+        "p99": 592.52,
+        "max": 637.84
+      },
+      "warm": {
+        "n": 10,
+        "p50": 351.47,
+        "p95": 375.08,
+        "p99": 375.08,
+        "max": 375.08
+      }
+    }
+  },
+  "substitutionsShadow": {
+    "outcomes": {
+      "v2AutoAccept": 286,
+      "v2Blocked": 366,
+      "errors": 0
+    },
+    "latency": {
+      "n": 652,
+      "p50": 367.05,
+      "p95": 742.27,
+      "p99": 824.71,
+      "max": 986.52
+    }
+  },
+  "mealPlanAiShadow": {
+    "outcomes": {
+      "v2AutoAccept": 286,
+      "v2Blocked": 366,
+      "errors": 0
+    },
+    "latency": {
+      "n": 652,
+      "p50": 362.24,
+      "p95": 759.08,
+      "p99": 1151.65,
+      "max": 1779.15
+    }
+  }
+}

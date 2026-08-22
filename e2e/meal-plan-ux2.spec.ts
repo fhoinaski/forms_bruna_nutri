@@ -177,4 +177,103 @@ test.describe("plano alimentar — UX 2.0", () => {
     const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(hasOverflow).toBe(false);
   });
+
+  // Layout do editor de alimentos (correcao de UX — o campo de alimento
+  // estava colapsando pra poucos pixels de largura no desktop porque o
+  // grid da linha do item so definia colunas a partir do breakpoint 2xl
+  // (1536px) e a coluna de acoes usava "auto" sem teto, competindo pelo
+  // espaco do 1fr do alimento antes dele crescer. Ver
+  // components/dashboard/MealItemsEditor.tsx.
+  test("campo de alimento mantem largura legivel mesmo com todas as acoes do item visiveis (desktop)", async ({ page, request }) => {
+    test.skip(test.info().project.name !== "chromium-desktop", "layout de desktop — cobertura mobile e o teste dedicado abaixo");
+    const patient = await createTestPatient(request);
+    await page.goto(`/dashboard/clients/${patient.id}`);
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await page.getByRole("button", { name: /^criar por modelo$/i }).click();
+    await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
+
+    const meal = await addMealWithArroz(page, "Refeicao Layout");
+    const foodInput = meal.getByPlaceholder("Buscar alimento").last();
+
+    // Larguras reais medidas manualmente contra a mesma tela (Fase de
+    // correcao deste bug): 1440px de viewport nunca deve deixar o campo
+    // abaixo do piso de 240px definido no grid (minmax(240px,1fr)/md e
+    // minmax(260px,1fr)/xl) — o bug original reduzia isso a poucos pixels.
+    const box = await foodInput.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeGreaterThanOrEqual(230);
+
+    // As acoes do item (Substituir/mover/duplicar/excluir) continuam
+    // presentes e clicaveis — nunca escondidas pela correcao de layout.
+    await expect(meal.getByRole("button", { name: /^substituir alimento$/i }).last()).toBeVisible();
+    await expect(meal.getByRole("button", { name: /^remover alimento$/i }).last()).toBeVisible();
+  });
+
+  test("nome longo do alimento fica legivel e acessivel via tooltip (title)", async ({ page, request }) => {
+    const patient = await createTestPatient(request);
+    await page.goto(`/dashboard/clients/${patient.id}`);
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await page.getByRole("button", { name: /^criar por modelo$/i }).click();
+    await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
+
+    await page.getByRole("button", { name: /^refeicao$/i }).click();
+    const meal = page.locator("article").last();
+    const foodInput = meal.getByPlaceholder("Buscar alimento").last();
+    const longName = "Pão integral, forma, tradicional, fatiado, sem casca";
+    await foodInput.fill(longName);
+
+    // O valor inteiro continua no input (nunca truncado/perdido) e o
+    // title reflete o nome completo — permite ver via tooltip mesmo
+    // quando a coluna nao tem espaco pra mostrar tudo sem corte visual.
+    await expect(foodInput).toHaveValue(longName);
+    await expect(foodInput).toHaveAttribute("title", longName);
+  });
+
+  test("mobile: quantidade e unidade ficam lado a lado numa linha propria, abaixo do alimento", async ({ page, request }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    const patient = await createTestPatient(request);
+    await page.goto(`/dashboard/clients/${patient.id}`);
+    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await page.getByRole("button", { name: /^criar por modelo$/i }).click();
+    await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
+
+    const meal = await addMealWithArroz(page, "Refeicao Mobile");
+    const foodInput = meal.getByPlaceholder("Buscar alimento").last();
+    const qtyInput = meal.getByPlaceholder("Qtd.").last();
+    // addMealWithArroz seleciona um resultado de busca real -> o item fica
+    // RESOLVIDO, e o segundo campo vira o <select> de medida ("Medida"),
+    // nao o <input> de unidade livre ("Unidade") do estado nao resolvido.
+    const unitField = meal.getByLabel("Medida").last();
+
+    // Selecionar a comida dispara um fetch assincrono de medidas caseiras
+    // pro <select> de "Medida" — medir a posicao ANTES dele resolver pode
+    // pegar o layout no meio de um reflow (achado real: sob carga paralela
+    // dos outros specs, a leitura ficava ate 100px fora do lugar). Espera a
+    // MESMA posicao se repetir em 2 leituras seguidas antes de afirmar nada.
+    async function stableBox(locator: typeof foodInput) {
+      let previous = await locator.boundingBox();
+      for (let attempt = 0; attempt < 10; attempt++) {
+        await page.waitForTimeout(100);
+        const current = await locator.boundingBox();
+        if (previous && current && Math.abs(previous.y - current.y) < 1 && Math.abs(previous.x - current.x) < 1) return current;
+        previous = current;
+      }
+      return previous;
+    }
+
+    const foodBox = await stableBox(foodInput);
+    const qtyBox = await stableBox(qtyInput);
+    const unitBox = await stableBox(unitField);
+    expect(foodBox && qtyBox && unitBox).toBeTruthy();
+
+    // Alimento numa linha propria, acima da linha de quantidade/unidade.
+    expect(qtyBox!.y).toBeGreaterThan(foodBox!.y + foodBox!.height - 5);
+    // Quantidade e unidade compartilham a MESMA linha (lado a lado), nunca empilhadas.
+    expect(Math.abs(qtyBox!.y - unitBox!.y)).toBeLessThan(5);
+    expect(unitBox!.x).toBeGreaterThan(qtyBox!.x);
+
+    // Sem overflow horizontal em nenhuma etapa (alimento, qtd/unidade e acoes empilhados).
+    const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(hasOverflow).toBe(false);
+  });
 });

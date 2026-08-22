@@ -53,7 +53,7 @@ async function main() {
   for (const query of queries) {
     const t0 = performance.now();
     try {
-      await resolveFoodWithCanonicalShadow(query, [], null, {
+      await resolveFoodWithCanonicalShadow(query, [], null, "meal_plan_ai", {
         onTelemetry: (event) => {
           outcomes[event.outcome] = (outcomes[event.outcome] ?? 0) + 1;
           latenciesCurrent.push(event.currentTimeMs);

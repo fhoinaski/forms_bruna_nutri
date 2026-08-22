@@ -1,5 +1,5 @@
 import { normalize, type MacroReferenceFood } from "@/lib/nutrition/macros";
-import { normalizeFoodText, tokenizeFoodQuery, applyFoodQueryAliases, usdaFallbackTermFor, tokenMatchesCandidateText } from "@/lib/nutrition/food-terminology";
+import { normalizeFoodText, tokenizeFoodQuery, applyFoodQueryAliases, usdaFallbackTermFor, tokenMatchesCandidateText, toDisplayFoodName } from "@/lib/nutrition/food-terminology";
 import { TACO_REFERENCES, getTacoFoodByNumber } from "@/lib/nutrition/taco";
 import { listCustomFoods, getCustomFoodById, toMacroReferenceFood, type CustomFood } from "@/lib/repositories/custom-foods";
 import { listFoodPortions, type FoodPortion, type FoodPortionSource } from "@/lib/repositories/food-portions";
@@ -53,6 +53,8 @@ export interface LegacyFoodSearchResponseItem extends MacroReferenceFood {
   ref: FoodReference;
   sourceLabel: string;
   name: string;
+  /** FASE 6 (item 7) — versão segura pra exibição ("Arroz integral cozido"), separada de `name`/`descricao` (nome técnico, "Arroz, integral, cozido") — nunca usada pra resolver identidade, só apresentação. */
+  displayName: string;
   brand?: string | null;
   group?: string | null;
   energyKcal: number | null;
@@ -379,6 +381,7 @@ export function toLegacyFoodSearchResponseItem(result: FoodSearchResult): Legacy
     ref: result.ref,
     sourceLabel: result.sourceLabel,
     name: result.name,
+    displayName: toDisplayFoodName(macro?.descricao ?? result.name),
     brand: result.brand ?? null,
     group: result.group ?? null,
     energyKcal: result.energyKcal ?? null,

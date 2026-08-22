@@ -37,6 +37,16 @@ export interface CanonicalFoodResolution {
   preparation?: PreparationCode | null;
   portions?: CanonicalPortionSummary[];
   reason: string;
+  /**
+   * FASE 6 (item 1) — lista COMPLETA de candidatos rankeados (ate o limite
+   * da busca), sempre presente independente do status. `candidates` acima
+   * so guarda ate 5 e fica vazio em EXACT/RESOLVED (perde o 2o colocado,
+   * exatamente o dado que canAutoResolveCanonicalV2 precisa pra calcular
+   * gapToSecond/numberOfCloseCandidates) — este campo nunca corta essa
+   * informacao, pra lib/nutrition/canonical-confidence-features.ts sempre
+   * poder extrair features reais, nao so quando o status ja e AMBIGUOUS.
+   */
+  allCandidates: CanonicalFoodSearchResult[];
 }
 
 /** Diferenca minima de score pra considerar um vencedor "claro" (item 9: nunca escolher silenciosamente quando candidatos relevantes tem score muito proximo). */
@@ -82,7 +92,7 @@ export async function resolveCanonicalFood(query: string, context: CanonicalReso
   // portions de todos os N resultados de novo.
 
   if (results.length === 0) {
-    return { status: "NOT_FOUND", query, candidates: [], preparation: queryPreparation, reason: `"${query}" não encontrado no catálogo canônico (TBCA+TACO+POF).` };
+    return { status: "NOT_FOUND", query, candidates: [], allCandidates: [], preparation: queryPreparation, reason: `"${query}" não encontrado no catálogo canônico (TBCA+TACO+POF).` };
   }
 
   const [top, second] = results;
@@ -99,6 +109,7 @@ export async function resolveCanonicalFood(query: string, context: CanonicalReso
       status: "PREPARATION_REVIEW",
       query,
       candidates: results.slice(0, 5),
+      allCandidates: results,
       preparation: queryPreparation,
       reason: `"${query}" não tem uma correspondência exata para a preparação pedida — candidatos com outra preparação foram encontrados, nenhum escolhido automaticamente.`,
     };
@@ -111,6 +122,7 @@ export async function resolveCanonicalFood(query: string, context: CanonicalReso
       query,
       selected,
       candidates: [],
+      allCandidates: results,
       preparation: queryPreparation,
       reason: "",
       ...toSelection(selected),
@@ -124,6 +136,7 @@ export async function resolveCanonicalFood(query: string, context: CanonicalReso
       query,
       selected,
       candidates: [],
+      allCandidates: results,
       preparation: queryPreparation,
       reason: "",
       ...toSelection(selected),
@@ -134,6 +147,7 @@ export async function resolveCanonicalFood(query: string, context: CanonicalReso
     status: "AMBIGUOUS",
     query,
     candidates: results.slice(0, 5),
+    allCandidates: results,
     preparation: queryPreparation,
     reason: `"${query}" tem mais de uma correspondência plausível no catálogo canônico — nenhuma foi escolhida automaticamente (diferença de score menor que ${DECISIVE_SCORE_GAP}).`,
   };

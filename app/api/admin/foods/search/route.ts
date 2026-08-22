@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { normalize } from "@/lib/nutrition/macros";
 import { searchFoods, toLegacyFoodSearchResponseItem, type RuntimeFoodCatalogSource } from "@/lib/nutrition/food-catalog";
+import { annotateAdminFoodSearchWithCanonicalPilot } from "@/lib/nutrition/canonical-food-admin-search";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,17 @@ export async function GET(request: NextRequest) {
   }
 
   const startedAt = performance.now();
-  const results = await searchFoods({ query, limit, sources: source ? [source] : undefined });
+  // FASE 6 (item 3/15) — searchFoods (atual) e o piloto do resolver
+  // canonico rodam em PARALELO (nunca em serie — medido: serie dobrava a
+  // latencia, ~700ms vs ~350ms de cada lado). O piloto so precisa da
+  // lista base no fim, pra reordenar; a resolucao canonica em si nao
+  // depende dela.
+  const baselineItemsPromise = searchFoods({ query, limit, sources: source ? [source] : undefined }).then((results) => results.map(toLegacyFoodSearchResponseItem));
+  const { items, canonicalPilot } = await annotateAdminFoodSearchWithCanonicalPilot(query, baselineItemsPromise);
   const durationMs = Math.round((performance.now() - startedAt) * 10) / 10;
   return NextResponse.json({
-    items: results.map(toLegacyFoodSearchResponseItem),
+    items,
+    canonicalPilot,
     meta: { durationMs, limit: Math.max(1, Math.min(50, Math.trunc(limit))) },
   });
 }

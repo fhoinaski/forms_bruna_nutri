@@ -247,7 +247,7 @@ export async function tryHandleSubstitutionCommand(
   const base = baseMatches[0];
 
   const markers = await listPatientClinicalMarkers(ctx.clientId);
-  let resolution = await resolveFoodWithCanonicalShadow(candidateFoodText, markers);
+  let resolution = await resolveFoodWithCanonicalShadow(candidateFoodText, markers, undefined, "substitutions");
 
   // scoreText (lib/nutrition/food-catalog.ts) só aceita rank 0 (exato) se o
   // texto bater literalmente com "Alimento, atributo1, atributo2" — texto
@@ -257,7 +257,7 @@ export async function tryHandleSubstitutionCommand(
   // só reconsulta com o nome técnico exato do único candidato encontrado,
   // reaproveitando 100% da mesma lógica de segurança clínica do resolver.
   if (resolution.status === "AMBIGUOUS" && resolution.candidates.length === 1 && normalizeForComparison(resolution.candidates[0].displayName) === normalizeForComparison(candidateFoodText)) {
-    resolution = await resolveFoodWithCanonicalShadow(resolution.candidates[0].name, markers);
+    resolution = await resolveFoodWithCanonicalShadow(resolution.candidates[0].name, markers, undefined, "substitutions");
   }
 
   if (resolution.status === "AMBIGUOUS") {

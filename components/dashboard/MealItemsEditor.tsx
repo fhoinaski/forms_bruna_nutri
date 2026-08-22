@@ -53,6 +53,10 @@ type FoodSuggestion = MacroReferenceFood & {
   grupo: string;
   ref?: FoodReference;
   sourceLabel?: string;
+  // FASE 6 (item 7) — versão segura pra exibição ("Arroz integral cozido"),
+  // separada do nome técnico (descricao, "Arroz, integral, cozido"). Nunca
+  // usada pra resolver identidade — so a apresentação muda.
+  displayName?: string;
 };
 
 function toMealPlanFoodSource(suggestion: FoodSuggestion): "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" {
@@ -719,7 +723,7 @@ export function MealItemsEditor({
                 const showLoading = activeFoodField === key && searchLoadingKey === key;
                 const listboxId = `food-suggestions-${key}`;
                 return (
-                <div key={itemIndex} className="grid min-w-0 gap-1.5 rounded-lg border border-transparent bg-white/70 p-1.5 2xl:grid-cols-[minmax(0,1fr)_210px_auto] 2xl:items-start">
+                <div key={itemIndex} className="grid min-w-0 gap-1.5 rounded-lg border border-transparent bg-white/70 p-1.5 md:grid-cols-[minmax(240px,1fr)_210px] md:items-start xl:grid-cols-[minmax(260px,1fr)_210px_auto]">
                   <div className="relative min-w-0">
                     <label className="sr-only" htmlFor={foodInputId}>Alimento</label>
                     <input
@@ -763,7 +767,8 @@ export function MealItemsEditor({
                         }
                       }}
                       className="brand-input"
-                      placeholder="Buscar alimento"
+                      placeholder="Buscar alimento..."
+                      title={item.food || undefined}
                     />
                     {item.ai_suggested && (
                       <span className="mt-1 inline-flex rounded-full bg-[#FFF7F3] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">
@@ -791,7 +796,7 @@ export function MealItemsEditor({
                       );
                     })()}
                     {dropdownOpen && (
-                      <div id={listboxId} role="listbox" aria-label="Sugestoes de alimentos" className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 overflow-y-auto rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
+                      <div id={listboxId} role="listbox" aria-label="Sugestoes de alimentos" className="absolute left-0 top-[calc(100%+6px)] z-30 max-h-64 w-full min-w-[280px] max-w-[min(92vw,480px)] overflow-y-auto rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_18px_44px_rgba(58,48,40,0.16)] sm:min-w-[340px]">
                         {suggestions.map((suggestion, suggestionIndex) => (
                           <button
                             key={suggestion.numero}
@@ -804,7 +809,7 @@ export function MealItemsEditor({
                             onClick={() => selectSuggestion(mealIndex, itemIndex, suggestion)}
                             className={`block w-full rounded-lg px-3 py-2 text-left transition-colors ${suggestionIndex === highlightedIndex ? "bg-[#FAF7F2]" : "hover:bg-[#FAF7F2]"}`}
                           >
-                            <span className="block text-sm font-medium text-[#3A3028]">{suggestion.descricao}</span>
+                            <span className="block text-sm font-medium text-[#3A3028]">{suggestion.displayName ?? suggestion.descricao}</span>
                             <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">
                               {suggestion.grupo || "Alimento personalizado"} - {Math.round(suggestion.energia_kcal)} kcal/100g
                               {" - "}{suggestion.sourceLabel ?? (suggestion.fonte === "complementar" ? "Complementar" : suggestion.fonte === "custom" ? "Personalizado" : suggestion.fonte === "manufacturer" ? "Fabricante" : "TACO")}
@@ -861,7 +866,13 @@ export function MealItemsEditor({
                       <p className="mt-1 text-[10px] font-medium text-[#9A8B80]">≈ {Math.round(grams * 10) / 10} g</p>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center justify-end gap-1">
+                  {/* xl:max-w caps o quanto essa coluna "auto" pode pedir do grid —
+                      sem isso, o track auto tenta chegar no max-content (todos os
+                      botoes numa linha so) ANTES do alimento (1fr) crescer, entao
+                      o alimento fica preso no minimo mesmo com tela larga sobrando.
+                      Com o teto, os botoes que nao cabem quebram linha aqui dentro
+                      (flex-wrap) e o espaco extra vai pro nome do alimento. */}
+                  <div className="flex flex-wrap items-center gap-1 md:col-span-2 md:justify-end xl:col-span-1 xl:max-w-[230px] xl:justify-end">
                     <button type="button" onClick={() => focusFoodField(mealIndex, itemIndex)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]" aria-label="Substituir alimento" title="Substituir alimento">
                       <RefreshCw className="h-4 w-4" />
                       <span>Substituir</span>
@@ -913,7 +924,7 @@ export function MealItemsEditor({
                     </button>
                   </div>
                   {clientId && openSubstitutionsKey === key && (
-                    <div className="2xl:col-span-3">
+                    <div className="col-span-full">
                       <ItemSubstitutionsPanel
                         clientId={clientId}
                         itemFood={item.food}

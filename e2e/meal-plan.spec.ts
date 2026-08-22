@@ -112,7 +112,10 @@ test.describe("plano alimentar", () => {
     const newMealCard = page.locator("article").last();
     const foodInput = page.getByPlaceholder("Buscar alimento").last();
     await foodInput.fill("Banana, nanica");
-    const suggestion = page.locator("button", { hasText: /banana, nanica/i }).first();
+    // O dropdown mostra o nome de exibição (sem vírgulas: "Banana nanica
+    // crua"), não o nome técnico da fonte ("Banana, nanica, crua") — regex
+    // sem vírgula fixa, tolera ambas as formas.
+    const suggestion = page.locator("button", { hasText: /banana[,\s]+nanica/i }).first();
     await expect(suggestion).toBeVisible();
     await suggestion.click();
 

@@ -6,6 +6,9 @@ import { logger } from "@/lib/observability/logger";
 import { getProfessionalFoodPreference } from "@/lib/repositories/professional-food-preferences";
 import { extractPreparation, needsPreparationReview, type PreparationCode } from "@/lib/nutrition/food-preparation";
 import { getRecipes } from "@/lib/repositories/recipes";
+import { toDisplayFoodName } from "@/lib/nutrition/food-terminology";
+
+export { toDisplayFoodName };
 
 /**
  * Resolução rigorosa de um candidato de alimento em texto livre (proposto
@@ -49,18 +52,11 @@ export interface FoodResolution {
   recipeCandidates?: RecipePreparationCandidate[];
 }
 
-/**
- * Nome amigável para exibição — reordena o formato típico da TACO
- * ("Alimento, atributo1, atributo2" → "Alimento atributo1 atributo2"),
- * nunca um replace ingênuo de vírgula. NUNCA usado para resolver
- * identidade — source/refId/nutrientes continuam vindo do nome técnico
- * original, só a apresentação muda.
- */
-export function toDisplayFoodName(technicalName: string): string {
-  const parts = technicalName.split(",").map((part) => part.trim()).filter(Boolean);
-  if (parts.length <= 1) return technicalName.trim();
-  return parts.join(" ");
-}
+// FASE 6 (item 7) — toDisplayFoodName mudou de casa pra lib/nutrition/food-terminology.ts
+// (modulo de base, sem dependencia de food-resolver.ts) pra lib/nutrition/food-catalog.ts
+// tambem poder usa-lo sem criar import circular (food-resolver.ts ja
+// depende de food-catalog.ts). Reexportado aqui pra nenhum dos 8+ arquivos
+// que ja importam daqui precisar mudar.
 
 /**
  * Decide se o melhor resultado pode ser aceito automaticamente, usando o

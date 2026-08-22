@@ -26,7 +26,7 @@ test.describe("substituições nutricionais equivalentes", () => {
     await page.getByRole("button", { name: /^refeicao$/i }).click();
     const foodInput = page.getByPlaceholder("Buscar alimento").last();
     await foodInput.fill("Arroz, tipo 1, cozido");
-    const suggestion = page.locator("button", { hasText: /arroz, tipo 1, cozido/i }).first();
+    const suggestion = page.locator("button", { hasText: /arroz[,\s]+tipo\s*1[,\s]+cozido/i }).first();
     await expect(suggestion).toBeVisible();
     await suggestion.click();
     await page.getByPlaceholder("Qtd.").last().fill("100");
@@ -67,7 +67,7 @@ test.describe("substituições nutricionais equivalentes", () => {
     await page.getByRole("button", { name: /^refeicao$/i }).click();
     const foodInput = page.getByPlaceholder("Buscar alimento").last();
     await foodInput.fill("Arroz, tipo 1, cozido");
-    await page.locator("button", { hasText: /arroz, tipo 1, cozido/i }).first().click();
+    await page.locator("button", { hasText: /arroz[,\s]+tipo\s*1[,\s]+cozido/i }).first().click();
     await page.getByPlaceholder("Qtd.").last().fill("100");
     await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
 
@@ -96,7 +96,7 @@ test.describe("substituições nutricionais equivalentes", () => {
     await page.getByRole("button", { name: /^refeicao$/i }).click();
     const foodInput = page.getByPlaceholder("Buscar alimento").last();
     await foodInput.fill("Arroz, tipo 1, cozido");
-    await page.locator("button", { hasText: /arroz, tipo 1, cozido/i }).first().click();
+    await page.locator("button", { hasText: /arroz[,\s]+tipo\s*1[,\s]+cozido/i }).first().click();
     await page.getByPlaceholder("Qtd.").last().fill("100");
     await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
 
@@ -139,7 +139,7 @@ test.describe("substituições nutricionais equivalentes", () => {
     await page.getByRole("button", { name: /^refeicao$/i }).click();
     const foodInput = page.getByPlaceholder("Buscar alimento").last();
     await foodInput.fill("Arroz, tipo 1, cozido");
-    await page.locator("button", { hasText: /arroz, tipo 1, cozido/i }).first().click();
+    await page.locator("button", { hasText: /arroz[,\s]+tipo\s*1[,\s]+cozido/i }).first().click();
     await page.getByPlaceholder("Qtd.").last().fill("100");
     await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
 
@@ -174,7 +174,7 @@ test.describe("substituições nutricionais equivalentes", () => {
     await page.getByRole("button", { name: /^refeicao$/i }).click();
     const foodInput = page.getByPlaceholder("Buscar alimento").last();
     await foodInput.fill("Arroz, tipo 1, cozido");
-    await page.locator("button", { hasText: /arroz, tipo 1, cozido/i }).first().click();
+    await page.locator("button", { hasText: /arroz[,\s]+tipo\s*1[,\s]+cozido/i }).first().click();
     await page.getByPlaceholder("Qtd.").last().fill("100");
     await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
 
