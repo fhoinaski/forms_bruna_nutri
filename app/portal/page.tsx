@@ -85,6 +85,8 @@ type PortalSummary = {
       suggested_time: string | null;
       notes: string | null;
       items: Array<{ food: string; quantity: string | null; unit: string | null; notes: string | null }>;
+      /** Food-First Meal Plan V1, Fase 8 — presente só quando a refeição tem uma receita aceita (source_recipe_id). */
+      recipe: { title: string; preparation_steps: string | null } | null;
     }>;
     weekly_slots: Array<{
       weekday: number;
@@ -129,6 +131,12 @@ function formatDate(value: string | null) {
 
 function firstName(name: string) {
   return name.trim().split(/\s+/)[0] ?? name;
+}
+
+/** Nome amigável só pra exibição ("Ovo, de galinha, cru" -> "Ovo de galinha cru") — mesma lógica do impresso, nunca usada pra cálculo. */
+function friendlyFoodName(technicalName: string) {
+  const parts = technicalName.split(",").map((part) => part.trim()).filter(Boolean);
+  return parts.length > 1 ? parts.join(" ") : technicalName.trim();
 }
 
 function localDateKey(date: Date) {
@@ -378,17 +386,23 @@ export default function ClientPortalPage() {
               {mealPlan.meals.map((meal) => (
                 <article key={meal.name} className="rounded-xl border border-[#EFE2D6] bg-[#FBF7F1] p-4">
                   <div className="mb-3 flex items-start justify-between gap-3">
-                    <h3 className="font-serif text-xl font-semibold">{meal.name}</h3>
+                    <div>
+                      <h3 className="font-serif text-xl font-semibold">{meal.name}</h3>
+                      {meal.recipe && <p className="text-xs font-semibold text-[#607A56]">{meal.recipe.title}</p>}
+                    </div>
                     {meal.suggested_time && <span className="rounded-full bg-white px-2.5 py-1 text-xs text-[#607A56]">{meal.suggested_time}</span>}
                   </div>
                   <ul className="space-y-2 text-sm text-[#75675E]">
                     {meal.items.map((item, index) => (
                       <li key={`${meal.name}-${item.food}-${index}`} className="flex justify-between gap-3 border-b border-[#EFE2D6] pb-2 last:border-b-0 last:pb-0">
-                        <span>{item.food}</span>
+                        <span>{friendlyFoodName(item.food)}</span>
                         <span className="shrink-0 font-semibold text-[#3A3028]">{[item.quantity, item.unit].filter(Boolean).join(" ")}</span>
                       </li>
                     ))}
                   </ul>
+                  {meal.recipe?.preparation_steps && (
+                    <p className="mt-3 whitespace-pre-line text-xs leading-5 text-[#9A8B80]"><strong className="text-[#75675E]">Modo de preparo: </strong>{meal.recipe.preparation_steps}</p>
+                  )}
                   {meal.notes && <p className="mt-3 text-xs leading-5 text-[#9A8B80]">{meal.notes}</p>}
                 </article>
               ))}

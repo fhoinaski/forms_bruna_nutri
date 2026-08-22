@@ -45,6 +45,19 @@ const NUTRIENT_KEY_BY_CODE: Record<NutrientCode, NutrientKey> = {
   FOLATE: "folateMcg",
   VITAMIN_B12: "vitaminB12Mcg",
   CHOLESTEROL: "cholesterolMg",
+  // Fase 2 da Canonical Nutrition Data Layer — shim exaustivo obrigatorio
+  // pelo TypeScript (Record<NutrientCode, NutrientKey>); nenhuma fonte
+  // popula estes campos hoje, entao a resposta desta rota nunca muda para
+  // nenhum alimento existente.
+  ADDED_SUGAR: "addedSugarG",
+  ADDED_SALT: "addedSaltG",
+  ADDED_FAT: "addedFatG",
+  PLANT_PROTEIN: "plantProteinG",
+  ANIMAL_PROTEIN: "animalProteinG",
+  LINOLEIC_ACID: "linoleicAcidG",
+  ALPHA_LINOLENIC_ACID: "alphaLinolenicAcidG",
+  EPA: "epaG",
+  DHA: "dhaG",
 };
 
 function nutrientList(values: NutrientValues, grams: number) {

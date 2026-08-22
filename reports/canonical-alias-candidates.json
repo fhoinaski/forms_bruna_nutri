@@ -1,0 +1,34 @@
+[
+  {
+    "query": "Abacate, polpa, in natura",
+    "currentResult": "NOT_FOUND",
+    "canonicalResult": "Abacate, polpa, in natura , Brasil",
+    "proposedAlias": "Abacate, polpa, in natura",
+    "reason": "Resolver atual não achou nada; canônico achou via PREFIX (score 96) — query curta e natural, boa candidata a alias exato em vez de depender de ranking fuzzy.",
+    "confidence": "high"
+  },
+  {
+    "query": "Damasco (abricó), in natura",
+    "currentResult": "NOT_FOUND",
+    "canonicalResult": "Damasco (abricó), in natura , Brasil",
+    "proposedAlias": "Damasco (abricó), in natura",
+    "reason": "Resolver atual não achou nada; canônico achou via CONTAINS (score 76) — query curta e natural, boa candidata a alias exato em vez de depender de ranking fuzzy.",
+    "confidence": "medium"
+  },
+  {
+    "query": "Iogurte, integral, pêssego",
+    "currentResult": "NOT_FOUND",
+    "canonicalResult": "Iogurte, integral, pêssego, Brasil",
+    "proposedAlias": "Iogurte, integral, pêssego",
+    "reason": "Resolver atual não achou nada; canônico achou via PREFIX (score 85) — query curta e natural, boa candidata a alias exato em vez de depender de ranking fuzzy.",
+    "confidence": "medium"
+  },
+  {
+    "query": "Leite, cabra, integral, fluído",
+    "currentResult": "NOT_FOUND",
+    "canonicalResult": "Leite, cabra, integral, fluído, Brasil",
+    "proposedAlias": "Leite, cabra, integral, fluído",
+    "reason": "Resolver atual não achou nada; canônico achou via PREFIX (score 85) — query curta e natural, boa candidata a alias exato em vez de depender de ranking fuzzy.",
+    "confidence": "medium"
+  }
+]

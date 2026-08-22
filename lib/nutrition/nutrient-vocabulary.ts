@@ -34,7 +34,21 @@ export type NutrientCode =
   | "VITAMIN_B6"
   | "FOLATE"
   | "VITAMIN_B12"
-  | "CHOLESTEROL";
+  | "CHOLESTEROL"
+  // Adicionados na Fase 2 da Canonical Nutrition Data Layer (auditoria real
+  // de TBCA/TACO/POF — ver docs/canonical-nutrition-model.md e o relatorio
+  // da rodada). Nenhuma fonte hoje em producao (TACO local, USDA, custom)
+  // popula estes codigos — sao inertes ate uma importacao futura ligar o
+  // Food Resolver/Nutrition Engine a eles.
+  | "ADDED_SUGAR" // CORE_CLINICAL — "açúcar de adição" (TBCA, quase universal) + POF, distinto de SUGARS (açúcar total)
+  | "ADDED_SALT" // CORE_CLINICAL — "sal de adição" (TBCA, quase universal), medido em g de sal, NAO em mg de sodio (distinto de SODIUM)
+  | "ADDED_FAT" // EXTENDED_CLINICAL — "gordura de adição" (TBCA, quase universal) — marcador de ultraprocessamento (NOVA)
+  | "PLANT_PROTEIN" // EXTENDED_CLINICAL — "proteína vegetal" (TBCA) — util para protocolos vegetarianos/veganos
+  | "ANIMAL_PROTEIN" // EXTENDED_CLINICAL — "proteína animal" (TBCA)
+  | "LINOLEIC_ACID" // EXTENDED_CLINICAL — omega-6 (18:2 n-6), TACO + POF
+  | "ALPHA_LINOLENIC_ACID" // EXTENDED_CLINICAL — omega-3 (18:3 n-3), TACO + POF
+  | "EPA" // EXTENDED_CLINICAL — omega-3 (20:5), TACO
+  | "DHA"; // EXTENDED_CLINICAL — omega-3 (22:6), TACO
 
 export interface NutrientDefinition {
   code: NutrientCode;
@@ -79,6 +93,17 @@ export const NUTRIENT_DEFINITIONS: readonly NutrientDefinition[] = [
   { code: "FOLATE", label: "Folato", unit: "mcg", v3Column: "folate_mcg" },
   { code: "VITAMIN_B12", label: "Vitamina B12", unit: "mcg", v3Column: "vitamin_b12_mcg" },
   { code: "CHOLESTEROL", label: "Colesterol", unit: "mg", v3Column: "cholesterol_mg" },
+  // Fase 2 — sem legacyKey/v3Column de proposito: nenhuma fonte em producao
+  // hoje popula estes campos (ver comentario no union NutrientCode acima).
+  { code: "ADDED_SUGAR", label: "Açúcar de adição", unit: "g" },
+  { code: "ADDED_SALT", label: "Sal de adição", unit: "g" },
+  { code: "ADDED_FAT", label: "Gordura de adição", unit: "g" },
+  { code: "PLANT_PROTEIN", label: "Proteína vegetal", unit: "g" },
+  { code: "ANIMAL_PROTEIN", label: "Proteína animal", unit: "g" },
+  { code: "LINOLEIC_ACID", label: "Ácido linoleico (ômega-6)", unit: "g" },
+  { code: "ALPHA_LINOLENIC_ACID", label: "Ácido alfa-linolênico (ômega-3)", unit: "g" },
+  { code: "EPA", label: "Ácido eicosapentaenoico (EPA)", unit: "g" },
+  { code: "DHA", label: "Ácido docosa-hexaenoico (DHA)", unit: "g" },
 ] as const;
 
 export const NUTRIENT_BY_CODE = Object.fromEntries(NUTRIENT_DEFINITIONS.map((item) => [item.code, item])) as Record<NutrientCode, NutrientDefinition>;

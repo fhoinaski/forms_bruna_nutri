@@ -1,0 +1,52 @@
+{
+  "generatedAt": "2026-08-22T16:48:57.828Z",
+  "totalQueries": 1078,
+  "elapsedSec": 146.358,
+  "queryErrors": 0,
+  "canonicalErrors": 0,
+  "outcomes": {
+    "CANONICAL_AMBIGUOUS": 200,
+    "CANONICAL_FOUND_MORE": 771,
+    "DIFFERENT_TOP": 23,
+    "SAME_TOP": 78,
+    "CANONICAL_PREPARATION_REVIEW": 3,
+    "CANONICAL_NOT_FOUND": 3
+  },
+  "latencyMs": {
+    "current": {
+      "n": 1078,
+      "p50": 369.5,
+      "p95": 750.67,
+      "p99": 971.93,
+      "max": 4313.12
+    },
+    "canonical": {
+      "n": 1078,
+      "p50": 353.22,
+      "p95": 401.42,
+      "p99": 511.35,
+      "max": 4321.87
+    },
+    "canonicalCold": {
+      "n": 1062,
+      "p50": 353.54,
+      "p95": 401.42,
+      "p99": 511.35,
+      "max": 4321.87
+    },
+    "canonicalWarm": {
+      "n": 16,
+      "p50": 190.08,
+      "p95": 201.14,
+      "p99": 201.14,
+      "max": 201.14
+    }
+  },
+  "confidencePolicy": {
+    "totalDecisiveCanonical": 627,
+    "withKnownCurrentIdentity": 101,
+    "precisionEstimate": 0.7722772277227723,
+    "note": "precisionEstimate so cobre casos onde o resolver ATUAL tambem resolveu (RESOLVED) pra comparar identidade — casos NOT_FOUND/AMBIGUOUS no atual nao tem 'gabarito' de comparacao aqui."
+  },
+  "sourceConflictsSampleCount": 66
+}

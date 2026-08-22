@@ -1,0 +1,2082 @@
+{
+  "schema_version": "1.0.0",
+  "source": {
+    "id": "taco",
+    "name": "Tabela Brasileira de Composição de Alimentos — TACO",
+    "version": "4ª edição revisada e ampliada (2011)",
+    "accessed_at": "2026-08-21",
+    "source_url": "https://nepa.unicamp.br/publicacoes/tabela-taco-excel/",
+    "download_url": "https://nepa.unicamp.br/publicacoes/tabela-taco-excel/",
+    "license": {
+      "name": "Permissão de reprodução com citação da fonte",
+      "url": "https://cfn.org.br/wp-content/uploads/2017/03/taco_4_edicao_ampliada_e_revisada.pdf"
+    },
+    "notes": "Conversão local da planilha TACO-4a-Edicao.xlsx. Valores especiais como Tr são preservados em raw/status."
+  },
+  "normalization": {
+    "default_basis": "per_100g_edible_portion",
+    "numeric_values": "original_units",
+    "special_statuses": [
+      "trace",
+      "missing"
+    ]
+  },
+  "nutrient_definitions": [
+    {
+      "id": "taco:umidade",
+      "name": "Umidade",
+      "unit": "(%)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:energia",
+      "name": "Energia",
+      "unit": "(kcal)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:proteina",
+      "name": "Proteína",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:lipideos",
+      "name": "Lipídeos",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:colesterol",
+      "name": "Colesterol",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:idrato",
+      "name": "idrato",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:alimentar",
+      "name": "Alimentar",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:cinzas",
+      "name": "Cinzas",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:calcio",
+      "name": "Cálcio",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:magnesio",
+      "name": "Magnésio",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:manganes",
+      "name": "Manganês",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:fosforo",
+      "name": "Fósforo",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:ferro",
+      "name": "Ferro",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:sodio",
+      "name": "Sódio",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:potassio",
+      "name": "Potássio",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:cobre",
+      "name": "Cobre",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:zinco",
+      "name": "Zinco",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:retinol",
+      "name": "Retinol",
+      "unit": "(mcg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:re",
+      "name": "RE",
+      "unit": "(mcg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:rae",
+      "name": "RAE",
+      "unit": "(mcg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:tiamina",
+      "name": "Tiamina",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:riboflavina",
+      "name": "Riboflavina",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:piridoxina",
+      "name": "Piridoxina",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:niacina",
+      "name": "Niacina",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:c",
+      "name": "C",
+      "unit": "(mg)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "CMVCol taco3",
+      "group": "proximate_and_minerals"
+    },
+    {
+      "id": "taco:turados",
+      "name": "turados",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:insaturados",
+      "name": "insaturados",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:12_0",
+      "name": "12:0",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:14_0",
+      "name": "14:0",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:16_0",
+      "name": "16:0",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:18_0",
+      "name": "18:0",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:20_0",
+      "name": "20:0",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:22_0",
+      "name": "22:0",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:24_0",
+      "name": "24:0",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:14_1",
+      "name": "14:1",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:16_1",
+      "name": "16:1",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:18_1",
+      "name": "18:1",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:20_1",
+      "name": "20:1",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:18_2_n_6",
+      "name": "18:2 n-6",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:18_3_n_3",
+      "name": "18:3 n-3",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:20_4",
+      "name": "20:4",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:20_5",
+      "name": "20:5",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:22_5",
+      "name": "22:5",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:22_6",
+      "name": "22:6",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:18_1t",
+      "name": "18:1t",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:18_2t",
+      "name": "18:2t",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "AGtaco3",
+      "group": "fatty_acids"
+    },
+    {
+      "id": "taco:triptofano",
+      "name": "Triptofano",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:treonina",
+      "name": "Treonina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:isoleucina",
+      "name": "Isoleucina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:leucina",
+      "name": "Leucina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:lisina",
+      "name": "Lisina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:metionina",
+      "name": "Metionina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:cistina",
+      "name": "Cistina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:fenilalanina",
+      "name": "Fenilalanina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:tirosina",
+      "name": "Tirosina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:valina",
+      "name": "Valina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:arginina",
+      "name": "Arginina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:histidina",
+      "name": "Histidina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:alanina",
+      "name": "Alanina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:aspartico",
+      "name": "Aspártico",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:glutamico",
+      "name": "Glutâmico",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:glicina",
+      "name": "Glicina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:prolina",
+      "name": "Prolina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    },
+    {
+      "id": "taco:serina",
+      "name": "Serina",
+      "unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "sheet": "Aminoácidos TACO3",
+      "group": "amino_acids"
+    }
+  ],
+  "foods": [
+    {
+      "id": "taco:1",
+      "source_food_id": "1",
+      "name": "Arroz, integral, cozido",
+      "basis": "per_100g_edible_portion",
+      "portion": {
+        "quantity": 100,
+        "unit": "g",
+        "edible": true
+      },
+      "nutrients": [
+        {
+          "nutrient_id": "taco:umidade",
+          "name": "Umidade",
+          "unit": "(%)",
+          "basis": "per_100g_edible_portion",
+          "value": 70.13866666666667,
+          "status": "reported",
+          "raw": "70.13866666666667"
+        },
+        {
+          "nutrient_id": "taco:energia",
+          "name": "Energia",
+          "unit": "(kcal)",
+          "basis": "per_100g_edible_portion",
+          "value": 123.53489250000001,
+          "status": "reported",
+          "raw": "123.53489250000001"
+        },
+        {
+          "nutrient_id": "taco:proteina",
+          "name": "Proteína",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 2.58825,
+          "status": "reported",
+          "raw": "2.58825"
+        },
+        {
+          "nutrient_id": "taco:lipideos",
+          "name": "Lipídeos",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 1.0003333333333333,
+          "status": "reported",
+          "raw": "1.0003333333333333"
+        },
+        {
+          "nutrient_id": "taco:colesterol",
+          "name": "Colesterol",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:idrato",
+          "name": "idrato",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 25.80975,
+          "status": "reported",
+          "raw": "25.80975"
+        },
+        {
+          "nutrient_id": "taco:alimentar",
+          "name": "Alimentar",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 2.749333333333334,
+          "status": "reported",
+          "raw": "2.749333333333334"
+        },
+        {
+          "nutrient_id": "taco:cinzas",
+          "name": "Cinzas",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.463,
+          "status": "reported",
+          "raw": "0.463"
+        },
+        {
+          "nutrient_id": "taco:calcio",
+          "name": "Cálcio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 5.204,
+          "status": "reported",
+          "raw": "5.204"
+        },
+        {
+          "nutrient_id": "taco:magnesio",
+          "name": "Magnésio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 58.702,
+          "status": "reported",
+          "raw": "58.702"
+        },
+        {
+          "nutrient_id": "taco:manganes",
+          "name": "Manganês",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.6273333333333333,
+          "status": "reported",
+          "raw": "0.6273333333333333"
+        },
+        {
+          "nutrient_id": "taco:fosforo",
+          "name": "Fósforo",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 105.85300000000001,
+          "status": "reported",
+          "raw": "105.85300000000001"
+        },
+        {
+          "nutrient_id": "taco:ferro",
+          "name": "Ferro",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.262,
+          "status": "reported",
+          "raw": "0.262"
+        },
+        {
+          "nutrient_id": "taco:sodio",
+          "name": "Sódio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 1.2446666666666666,
+          "status": "reported",
+          "raw": "1.2446666666666666"
+        },
+        {
+          "nutrient_id": "taco:potassio",
+          "name": "Potássio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 75.15166666666666,
+          "status": "reported",
+          "raw": "75.15166666666666"
+        },
+        {
+          "nutrient_id": "taco:cobre",
+          "name": "Cobre",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02033333333333333,
+          "status": "reported",
+          "raw": "0.02033333333333333"
+        },
+        {
+          "nutrient_id": "taco:zinco",
+          "name": "Zinco",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.6826666666666666,
+          "status": "reported",
+          "raw": "0.6826666666666666"
+        },
+        {
+          "nutrient_id": "taco:retinol",
+          "name": "Retinol",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:re",
+          "name": "RE",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:rae",
+          "name": "RAE",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:tiamina",
+          "name": "Tiamina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.08,
+          "status": "reported",
+          "raw": "0.08"
+        },
+        {
+          "nutrient_id": "taco:riboflavina",
+          "name": "Riboflavina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:piridoxina",
+          "name": "Piridoxina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.08,
+          "status": "reported",
+          "raw": "0.08"
+        },
+        {
+          "nutrient_id": "taco:niacina",
+          "name": "Niacina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:c",
+          "name": "C",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:turados",
+          "name": "turados",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.3,
+          "status": "reported",
+          "raw": "0.3"
+        },
+        {
+          "nutrient_id": "taco:insaturados",
+          "name": "insaturados",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.3,
+          "status": "reported",
+          "raw": "0.3"
+        },
+        {
+          "nutrient_id": "taco:12_0",
+          "name": "12:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:14_0",
+          "name": "14:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:16_0",
+          "name": "16:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.25,
+          "status": "reported",
+          "raw": "0.25"
+        },
+        {
+          "nutrient_id": "taco:18_0",
+          "name": "18:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02,
+          "status": "reported",
+          "raw": "0.02"
+        },
+        {
+          "nutrient_id": "taco:20_0",
+          "name": "20:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:22_0",
+          "name": "22:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:24_0",
+          "name": "24:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:14_1",
+          "name": "14:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:16_1",
+          "name": "16:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:18_1",
+          "name": "18:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.36,
+          "status": "reported",
+          "raw": "0.36"
+        },
+        {
+          "nutrient_id": "taco:20_1",
+          "name": "20:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:18_2_n_6",
+          "name": "18:2 n-6",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.31,
+          "status": "reported",
+          "raw": "0.31"
+        },
+        {
+          "nutrient_id": "taco:18_3_n_3",
+          "name": "18:3 n-3",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.01,
+          "status": "reported",
+          "raw": "0.01"
+        },
+        {
+          "nutrient_id": "taco:20_4",
+          "name": "20:4",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:20_5",
+          "name": "20:5",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:22_5",
+          "name": "22:5",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:22_6",
+          "name": "22:6",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:18_1t",
+          "name": "18:1t",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:18_2t",
+          "name": "18:2t",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        }
+      ],
+      "metadata": {
+        "source_sheets": [
+          "proximate_and_minerals",
+          "fatty_acids"
+        ]
+      }
+    },
+    {
+      "id": "taco:488",
+      "source_food_id": "488",
+      "name": "Ovo, de galinha, inteiro, cozido/10minutos",
+      "basis": "per_100g_edible_portion",
+      "portion": {
+        "quantity": 100,
+        "unit": "g",
+        "edible": true
+      },
+      "nutrients": [
+        {
+          "nutrient_id": "taco:umidade",
+          "name": "Umidade",
+          "unit": "(%)",
+          "basis": "per_100g_edible_portion",
+          "value": 75.76566666666666,
+          "status": "reported",
+          "raw": "75.76566666666666"
+        },
+        {
+          "nutrient_id": "taco:energia",
+          "name": "Energia",
+          "unit": "(kcal)",
+          "basis": "per_100g_edible_portion",
+          "value": 145.70017,
+          "status": "reported",
+          "raw": "145.70017"
+        },
+        {
+          "nutrient_id": "taco:proteina",
+          "name": "Proteína",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 13.29375,
+          "status": "reported",
+          "raw": "13.29375"
+        },
+        {
+          "nutrient_id": "taco:lipideos",
+          "name": "Lipídeos",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 9.476333333333333,
+          "status": "reported",
+          "raw": "9.476333333333333"
+        },
+        {
+          "nutrient_id": "taco:colesterol",
+          "name": "Colesterol",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 396.5716666666667,
+          "status": "reported",
+          "raw": "396.5716666666667"
+        },
+        {
+          "nutrient_id": "taco:idrato",
+          "name": "idrato",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.6149166666666736,
+          "status": "reported",
+          "raw": "0.6149166666666736"
+        },
+        {
+          "nutrient_id": "taco:alimentar",
+          "name": "Alimentar",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:cinzas",
+          "name": "Cinzas",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.8493333333333334,
+          "status": "reported",
+          "raw": "0.8493333333333334"
+        },
+        {
+          "nutrient_id": "taco:calcio",
+          "name": "Cálcio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 49.218333333333334,
+          "status": "reported",
+          "raw": "49.218333333333334"
+        },
+        {
+          "nutrient_id": "taco:magnesio",
+          "name": "Magnésio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 11.244333333333335,
+          "status": "reported",
+          "raw": "11.244333333333335"
+        },
+        {
+          "nutrient_id": "taco:manganes",
+          "name": "Manganês",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02366666666666667,
+          "status": "reported",
+          "raw": "0.02366666666666667"
+        },
+        {
+          "nutrient_id": "taco:fosforo",
+          "name": "Fósforo",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 184.1903333333333,
+          "status": "reported",
+          "raw": "184.1903333333333"
+        },
+        {
+          "nutrient_id": "taco:ferro",
+          "name": "Ferro",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 1.5153333333333332,
+          "status": "reported",
+          "raw": "1.5153333333333332"
+        },
+        {
+          "nutrient_id": "taco:sodio",
+          "name": "Sódio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 145.90099999999998,
+          "status": "reported",
+          "raw": "145.90099999999998"
+        },
+        {
+          "nutrient_id": "taco:potassio",
+          "name": "Potássio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 138.897,
+          "status": "reported",
+          "raw": "138.897"
+        },
+        {
+          "nutrient_id": "taco:cobre",
+          "name": "Cobre",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.03966666666666666,
+          "status": "reported",
+          "raw": "0.03966666666666666"
+        },
+        {
+          "nutrient_id": "taco:zinco",
+          "name": "Zinco",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 1.236,
+          "status": "reported",
+          "raw": "1.236"
+        },
+        {
+          "nutrient_id": "taco:retinol",
+          "name": "Retinol",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": 32.44,
+          "status": "reported",
+          "raw": "32.44"
+        },
+        {
+          "nutrient_id": "taco:re",
+          "name": "RE",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:rae",
+          "name": "RAE",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:tiamina",
+          "name": "Tiamina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.07666666666666667,
+          "status": "reported",
+          "raw": "0.07666666666666667"
+        },
+        {
+          "nutrient_id": "taco:riboflavina",
+          "name": "Riboflavina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.3,
+          "status": "reported",
+          "raw": "0.3"
+        },
+        {
+          "nutrient_id": "taco:piridoxina",
+          "name": "Piridoxina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:niacina",
+          "name": "Niacina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:c",
+          "name": "C",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:turados",
+          "name": "turados",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 2.9,
+          "status": "reported",
+          "raw": "2.9"
+        },
+        {
+          "nutrient_id": "taco:insaturados",
+          "name": "insaturados",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 1.1,
+          "status": "reported",
+          "raw": "1.1"
+        },
+        {
+          "nutrient_id": "taco:12_0",
+          "name": "12:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:14_0",
+          "name": "14:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02,
+          "status": "reported",
+          "raw": "0.02"
+        },
+        {
+          "nutrient_id": "taco:16_0",
+          "name": "16:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 2.07,
+          "status": "reported",
+          "raw": "2.07"
+        },
+        {
+          "nutrient_id": "taco:18_0",
+          "name": "18:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.76,
+          "status": "reported",
+          "raw": "0.76"
+        },
+        {
+          "nutrient_id": "taco:20_0",
+          "name": "20:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:22_0",
+          "name": "22:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.01,
+          "status": "reported",
+          "raw": "0.01"
+        },
+        {
+          "nutrient_id": "taco:24_0",
+          "name": "24:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:14_1",
+          "name": "14:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:16_1",
+          "name": "16:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.21,
+          "status": "reported",
+          "raw": "0.21"
+        },
+        {
+          "nutrient_id": "taco:18_1",
+          "name": "18:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 3.51,
+          "status": "reported",
+          "raw": "3.51"
+        },
+        {
+          "nutrient_id": "taco:20_1",
+          "name": "20:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02,
+          "status": "reported",
+          "raw": "0.02"
+        },
+        {
+          "nutrient_id": "taco:18_2_n_6",
+          "name": "18:2 n-6",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.94,
+          "status": "reported",
+          "raw": "0.94"
+        },
+        {
+          "nutrient_id": "taco:18_3_n_3",
+          "name": "18:3 n-3",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02,
+          "status": "reported",
+          "raw": "0.02"
+        },
+        {
+          "nutrient_id": "taco:20_4",
+          "name": "20:4",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.12,
+          "status": "reported",
+          "raw": "0.12"
+        },
+        {
+          "nutrient_id": "taco:20_5",
+          "name": "20:5",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:22_5",
+          "name": "22:5",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:22_6",
+          "name": "22:6",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02,
+          "status": "reported",
+          "raw": "0.02"
+        },
+        {
+          "nutrient_id": "taco:18_1t",
+          "name": "18:1t",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02,
+          "status": "reported",
+          "raw": "0.02"
+        },
+        {
+          "nutrient_id": "taco:18_2t",
+          "name": "18:2t",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        }
+      ],
+      "metadata": {
+        "source_sheets": [
+          "proximate_and_minerals",
+          "fatty_acids"
+        ]
+      }
+    },
+    {
+      "id": "taco:179",
+      "source_food_id": "179",
+      "name": "Banana, nanica, crua",
+      "basis": "per_100g_edible_portion",
+      "portion": {
+        "quantity": 100,
+        "unit": "g",
+        "edible": true
+      },
+      "nutrients": [
+        {
+          "nutrient_id": "taco:umidade",
+          "name": "Umidade",
+          "unit": "(%)",
+          "basis": "per_100g_edible_portion",
+          "value": 73.79666666666667,
+          "status": "reported",
+          "raw": "73.79666666666667"
+        },
+        {
+          "nutrient_id": "taco:energia",
+          "name": "Energia",
+          "unit": "(kcal)",
+          "basis": "per_100g_edible_portion",
+          "value": 91.52884782608696,
+          "status": "reported",
+          "raw": "91.52884782608696"
+        },
+        {
+          "nutrient_id": "taco:proteina",
+          "name": "Proteína",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 1.3985507246376814,
+          "status": "reported",
+          "raw": "1.3985507246376814"
+        },
+        {
+          "nutrient_id": "taco:lipideos",
+          "name": "Lipídeos",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.11666666666666665,
+          "status": "reported",
+          "raw": "0.11666666666666665"
+        },
+        {
+          "nutrient_id": "taco:colesterol",
+          "name": "Colesterol",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:idrato",
+          "name": "idrato",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 23.848115942028986,
+          "status": "reported",
+          "raw": "23.848115942028986"
+        },
+        {
+          "nutrient_id": "taco:alimentar",
+          "name": "Alimentar",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 1.9466666666666665,
+          "status": "reported",
+          "raw": "1.9466666666666665"
+        },
+        {
+          "nutrient_id": "taco:cinzas",
+          "name": "Cinzas",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.84,
+          "status": "reported",
+          "raw": "0.84"
+        },
+        {
+          "nutrient_id": "taco:calcio",
+          "name": "Cálcio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 3.4166666666666665,
+          "status": "reported",
+          "raw": "3.4166666666666665"
+        },
+        {
+          "nutrient_id": "taco:magnesio",
+          "name": "Magnésio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 27.796666666666663,
+          "status": "reported",
+          "raw": "27.796666666666663"
+        },
+        {
+          "nutrient_id": "taco:manganes",
+          "name": "Manganês",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.14,
+          "status": "reported",
+          "raw": "0.14"
+        },
+        {
+          "nutrient_id": "taco:fosforo",
+          "name": "Fósforo",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 26.72,
+          "status": "reported",
+          "raw": "26.72"
+        },
+        {
+          "nutrient_id": "taco:ferro",
+          "name": "Ferro",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.3466666666666667,
+          "status": "reported",
+          "raw": "0.3466666666666667"
+        },
+        {
+          "nutrient_id": "taco:sodio",
+          "name": "Sódio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:potassio",
+          "name": "Potássio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 376.47,
+          "status": "reported",
+          "raw": "376.47"
+        },
+        {
+          "nutrient_id": "taco:cobre",
+          "name": "Cobre",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.10333333333333333,
+          "status": "reported",
+          "raw": "0.10333333333333333"
+        },
+        {
+          "nutrient_id": "taco:zinco",
+          "name": "Zinco",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.17666666666666667,
+          "status": "reported",
+          "raw": "0.17666666666666667"
+        },
+        {
+          "nutrient_id": "taco:retinol",
+          "name": "Retinol",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:re",
+          "name": "RE",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": 13.625,
+          "status": "reported",
+          "raw": "13.625"
+        },
+        {
+          "nutrient_id": "taco:rae",
+          "name": "RAE",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": 6.8125,
+          "status": "reported",
+          "raw": "6.8125"
+        },
+        {
+          "nutrient_id": "taco:tiamina",
+          "name": "Tiamina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:riboflavina",
+          "name": "Riboflavina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02,
+          "status": "reported",
+          "raw": "0.02"
+        },
+        {
+          "nutrient_id": "taco:piridoxina",
+          "name": "Piridoxina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.14333333333333334,
+          "status": "reported",
+          "raw": "0.14333333333333334"
+        },
+        {
+          "nutrient_id": "taco:niacina",
+          "name": "Niacina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:c",
+          "name": "C",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 5.86,
+          "status": "reported",
+          "raw": "5.86"
+        }
+      ],
+      "metadata": {
+        "source_sheets": [
+          "proximate_and_minerals"
+        ]
+      }
+    },
+    {
+      "id": "taco:458",
+      "source_food_id": "458",
+      "name": "Leite, de vaca, integral",
+      "basis": "per_100g_edible_portion",
+      "portion": {
+        "quantity": 100,
+        "unit": "g",
+        "edible": true
+      },
+      "nutrients": [
+        {
+          "nutrient_id": "taco:umidade",
+          "name": "Umidade",
+          "unit": "(%)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "unparsed",
+          "raw": "*"
+        },
+        {
+          "nutrient_id": "taco:energia",
+          "name": "Energia",
+          "unit": "(kcal)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "unparsed",
+          "raw": "*"
+        },
+        {
+          "nutrient_id": "taco:proteina",
+          "name": "Proteína",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "unparsed",
+          "raw": "*"
+        },
+        {
+          "nutrient_id": "taco:lipideos",
+          "name": "Lipídeos",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "unparsed",
+          "raw": "*"
+        },
+        {
+          "nutrient_id": "taco:colesterol",
+          "name": "Colesterol",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 10.49,
+          "status": "reported",
+          "raw": "10.49"
+        },
+        {
+          "nutrient_id": "taco:idrato",
+          "name": "idrato",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "unparsed",
+          "raw": "*"
+        },
+        {
+          "nutrient_id": "taco:alimentar",
+          "name": "Alimentar",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:cinzas",
+          "name": "Cinzas",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.76,
+          "status": "reported",
+          "raw": "0.76"
+        },
+        {
+          "nutrient_id": "taco:calcio",
+          "name": "Cálcio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 122.58,
+          "status": "reported",
+          "raw": "122.58"
+        },
+        {
+          "nutrient_id": "taco:magnesio",
+          "name": "Magnésio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 9.636666666666668,
+          "status": "reported",
+          "raw": "9.636666666666668"
+        },
+        {
+          "nutrient_id": "taco:manganes",
+          "name": "Manganês",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:fosforo",
+          "name": "Fósforo",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 81.97666666666666,
+          "status": "reported",
+          "raw": "81.97666666666666"
+        },
+        {
+          "nutrient_id": "taco:ferro",
+          "name": "Ferro",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:sodio",
+          "name": "Sódio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 63.76,
+          "status": "reported",
+          "raw": "63.76"
+        },
+        {
+          "nutrient_id": "taco:potassio",
+          "name": "Potássio",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 133.19,
+          "status": "reported",
+          "raw": "133.19"
+        },
+        {
+          "nutrient_id": "taco:cobre",
+          "name": "Cobre",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02,
+          "status": "reported",
+          "raw": "0.02"
+        },
+        {
+          "nutrient_id": "taco:zinco",
+          "name": "Zinco",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.38,
+          "status": "reported",
+          "raw": "0.38"
+        },
+        {
+          "nutrient_id": "taco:retinol",
+          "name": "Retinol",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": 20.903333333333332,
+          "status": "reported",
+          "raw": "20.903333333333332"
+        },
+        {
+          "nutrient_id": "taco:re",
+          "name": "RE",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:rae",
+          "name": "RAE",
+          "unit": "(mcg)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:tiamina",
+          "name": "Tiamina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.04,
+          "status": "reported",
+          "raw": "0.04"
+        },
+        {
+          "nutrient_id": "taco:riboflavina",
+          "name": "Riboflavina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.24,
+          "status": "reported",
+          "raw": "0.24"
+        },
+        {
+          "nutrient_id": "taco:piridoxina",
+          "name": "Piridoxina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:niacina",
+          "name": "Niacina",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 1.52,
+          "status": "reported",
+          "raw": "1.52"
+        },
+        {
+          "nutrient_id": "taco:c",
+          "name": "C",
+          "unit": "(mg)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:turados",
+          "name": "turados",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 1.4,
+          "status": "reported",
+          "raw": "1.4"
+        },
+        {
+          "nutrient_id": "taco:insaturados",
+          "name": "insaturados",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.1,
+          "status": "reported",
+          "raw": "0.1"
+        },
+        {
+          "nutrient_id": "taco:12_0",
+          "name": "12:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.06,
+          "status": "reported",
+          "raw": "0.06"
+        },
+        {
+          "nutrient_id": "taco:14_0",
+          "name": "14:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.25,
+          "status": "reported",
+          "raw": "0.25"
+        },
+        {
+          "nutrient_id": "taco:16_0",
+          "name": "16:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.71,
+          "status": "reported",
+          "raw": "0.71"
+        },
+        {
+          "nutrient_id": "taco:18_0",
+          "name": "18:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.29,
+          "status": "reported",
+          "raw": "0.29"
+        },
+        {
+          "nutrient_id": "taco:20_0",
+          "name": "20:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:22_0",
+          "name": "22:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:24_0",
+          "name": "24:0",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:14_1",
+          "name": "14:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.01,
+          "status": "reported",
+          "raw": "0.01"
+        },
+        {
+          "nutrient_id": "taco:16_1",
+          "name": "16:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.03,
+          "status": "reported",
+          "raw": "0.03"
+        },
+        {
+          "nutrient_id": "taco:18_1",
+          "name": "18:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.65,
+          "status": "reported",
+          "raw": "0.65"
+        },
+        {
+          "nutrient_id": "taco:20_1",
+          "name": "20:1",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:18_2_n_6",
+          "name": "18:2 n-6",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.04,
+          "status": "reported",
+          "raw": "0.04"
+        },
+        {
+          "nutrient_id": "taco:18_3_n_3",
+          "name": "18:3 n-3",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0.02,
+          "status": "reported",
+          "raw": "0.02"
+        },
+        {
+          "nutrient_id": "taco:20_4",
+          "name": "20:4",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:20_5",
+          "name": "20:5",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:22_5",
+          "name": "22:5",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:22_6",
+          "name": "22:6",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": 0,
+          "status": "trace",
+          "raw": "Tr"
+        },
+        {
+          "nutrient_id": "taco:18_1t",
+          "name": "18:1t",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        },
+        {
+          "nutrient_id": "taco:18_2t",
+          "name": "18:2t",
+          "unit": "(g)",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": null
+        }
+      ],
+      "metadata": {
+        "source_sheets": [
+          "proximate_and_minerals",
+          "fatty_acids"
+        ]
+      }
+    }
+  ]
+}

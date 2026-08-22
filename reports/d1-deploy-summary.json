@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-08-22T14:17:03.281Z",
+  "elapsedSec": 1172.071,
+  "batchSize": 300,
+  "tables": [
+    {
+      "table": "food_nutrient_values",
+      "sourceRows": 636572,
+      "batches": 2122
+    }
+  ],
+  "ftsInsertedThisRun": 0,
+  "finalCountsInD1": {
+    "food_sources": 3,
+    "import_batches": 4,
+    "canonical_foods": 10063,
+    "canonical_food_portions": 8157,
+    "food_nutrient_values": 636572,
+    "nutrient_statistics": 252212,
+    "food_aliases": 4,
+    "canonical_foods_fts": 10063
+  }
+}

@@ -1,0 +1,1165 @@
+{
+  "generatedAt": "2026-08-22T13:01:28.795Z",
+  "totalCases": 130,
+  "byCategory": {
+    "cereais": 8,
+    "feijoes": 8,
+    "carnes": 8,
+    "ovos": 8,
+    "pescados": 8,
+    "frutas": 8,
+    "verduras": 8,
+    "laticinios": 8,
+    "industrializados": 14,
+    "preparacoes": 6,
+    "regionais": 8,
+    "cultivares": 8,
+    "taco_geral": 15,
+    "pof_geral": 15
+  },
+  "simpleVsComposite": {
+    "before": [
+      {
+        "query": "banana",
+        "top1": "Banana, doce em barra",
+        "foodType": null,
+        "extraTokens": 1.5
+      },
+      {
+        "query": "arroz branco",
+        "top1": "Papa de carne bovina moída (acém), arroz branco e brócolis, c/ caldo de carne, c/ cebola, s/ óleo, c/ sal",
+        "foodType": null,
+        "extraTokens": 15
+      },
+      {
+        "query": "leite integral",
+        "top1": "Leite, de vaca, integral",
+        "foodType": null,
+        "extraTokens": 0
+      },
+      {
+        "query": "leite desnatado",
+        "top1": "Leite de vaca desnatado",
+        "foodType": null,
+        "extraTokens": 0
+      },
+      {
+        "query": "banana flambada",
+        "top1": "Banana flambada (sorvete, banana, suco de laranja, conhaque)",
+        "foodType": null,
+        "extraTokens": 3
+      },
+      {
+        "query": "arroz de coco",
+        "top1": "Arroz de coco, c/ arroz integral, c/ sal (arroz integral cozido, c/ coco e leite de coco, c/ óleo, cebola e alho, c/ sal)",
+        "foodType": null,
+        "extraTokens": 15
+      }
+    ],
+    "after": [
+      {
+        "query": "banana",
+        "top1": "Banana, passa, Brasil",
+        "foodType": "A - Alimento in natura",
+        "extraTokens": 0
+      },
+      {
+        "query": "arroz branco",
+        "top1": "Papa de carne bovina moída (acém), arroz branco e brócolis, c/ caldo de carne, c/ cebola, s/ óleo, c/ sal",
+        "foodType": null,
+        "extraTokens": 15
+      },
+      {
+        "query": "leite integral",
+        "top1": "Leite, de vaca, integral",
+        "foodType": null,
+        "extraTokens": 0
+      },
+      {
+        "query": "leite desnatado",
+        "top1": "Leite de vaca desnatado",
+        "foodType": null,
+        "extraTokens": 0
+      },
+      {
+        "query": "banana flambada",
+        "top1": "Banana flambada (sorvete, banana, suco de laranja, conhaque)",
+        "foodType": null,
+        "extraTokens": 3
+      },
+      {
+        "query": "arroz de coco",
+        "top1": "Arroz de coco, c/ arroz integral, c/ sal (arroz integral cozido, c/ coco e leite de coco, c/ óleo, cebola e alho, c/ sal)",
+        "foodType": null,
+        "extraTokens": 15
+      }
+    ]
+  },
+  "before": {
+    "top1Correct": 90.77,
+    "top3ContainsExpected": 95.38,
+    "ambiguousRate": 13.85,
+    "notFoundRate": 0,
+    "preparationReviewRate": 0,
+    "total": 130
+  },
+  "after": {
+    "top1Correct": 90,
+    "top3ContainsExpected": 95.38,
+    "ambiguousRate": 13.85,
+    "notFoundRate": 0,
+    "preparationReviewRate": 0,
+    "total": 130
+  },
+  "regressions": [
+    {
+      "query": "Bebida láctea",
+      "expected": "Bebida láctea (média de diferentes sabores), Brasil",
+      "before": "Bebida láctea (média de diferentes sabores), Brasil",
+      "after": "Bebida láctea"
+    }
+  ],
+  "improvements": [],
+  "perCaseAfter": [
+    {
+      "query": "Amaranto, grão, cozido, s/ óleo, s/ sal",
+      "expected": "Amaranto, grão, cozido, s/ óleo, s/ sal (dado importado)",
+      "top1": "Amaranto, grão, cozido, s/ óleo, s/ sal (dado importado)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Aveia, flocos, finos",
+      "expected": "Aveia, flocos, finos, Brasil",
+      "top1": "Aveia, flocos, finos, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Canelone, c/ carne moída refogada, c/ molho de tomate, caseiro, c/ sal (massa com farinha de trigo, carne bovina, patinho moído, refogada, c/ molho de tomate (tomate, c/ óleo, cebolha e alho), c/ sal)",
+      "expected": "Canelone, c/ carne moída refogada, c/ molho de tomate, caseiro, c/ sal (massa com farinha de trigo, carne bovina, patinho moído, refogada, c/ molho de tomate  (tomate, c/ óleo, cebolha e alho), c/ sal)",
+      "top1": "Canelone, c/ carne moída refogada, c/ molho de tomate, caseiro, c/ sal (massa com farinha de trigo, carne bovina, patinho moído, refogada, c/ molho de tomate  (tomate, c/ óleo, cebolha e alho), c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Lasanha, vegetais, caseira (massa lasanha fresca, vegetais - cenoura, vagem, abobrinha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "expected": "Lasanha, vegetais, caseira (massa lasanha fresca, vegetais - cenoura, vagem, abobrinha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "top1": "Lasanha, vegetais, caseira (massa lasanha fresca, vegetais - cenoura, vagem, abobrinha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Milho, pipoca, grão, cru, Brasil",
+      "expected": "Milho, pipoca, grão, cru, Brasil (média diferentes amostras)",
+      "top1": "Milho, pipoca, grão, cru, Brasil (média diferentes amostras)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Pão, c/ farinha de trigo refinada, fonte de fibra, forma",
+      "expected": "Pão, c/ farinha de trigo refinada, fonte de fibra, forma (média de vários tipos), Brasil",
+      "top1": "Pão, c/ farinha de trigo refinada, fonte de fibra, forma (média de vários tipos), Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Sanduíche, misto quente, pão forma integral*, c/ presunto cozido* e queijo muçarela*",
+      "expected": "Sanduíche, misto quente, pão forma integral*, c/ presunto cozido* e queijo muçarela*, Brasil",
+      "top1": "Sanduíche, misto quente, pão forma integral*, c/ presunto cozido* e queijo muçarela*, Brasil",
+      "top1Correct": false,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Sanduíche, pão francês, c/ peito de peru defumado",
+      "expected": "Sanduíche, pão francês, c/ peito de peru defumado",
+      "top1": "Sanduíche, pão francês, c/ peito de peru defumado",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+      "expected": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+      "top1": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Ervilha, em vagem, fresca, cozida, drenada, s/ óleo, c/ sal",
+      "expected": "Ervilha, em vagem, fresca, cozida, drenada, s/ óleo, c/ sal, Brasil",
+      "top1": "Ervilha, em vagem, fresca, cozida, drenada, s/ óleo, c/ sal, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Feijão, branco, cozido, s/ óleo, c/ sal",
+      "expected": "Feijão, branco, cozido, s/ óleo, c/ sal",
+      "top1": "Feijão, branco, cozido, s/ óleo, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+      "expected": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+      "top1": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+      "expected": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+      "top1": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Picadinho de carne de soja, c/ sal",
+      "expected": "Picadinho de carne de soja, c/ sal (proteína de soja (hidratada com caldo de legumes, pimentão amarelo e vermelho, tomate, cebolinha e salsinha, c/ óleo de soja, cebola e alho, c/ sal)",
+      "top1": "Picadinho de carne de soja, c/ sal (proteína de soja (hidratada com caldo de legumes, pimentão amarelo e vermelho, tomate, cebolinha e salsinha, c/ óleo de soja, cebola e alho, c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Soja, extrato, c/ suco de maracujá",
+      "expected": "Soja, extrato, c/ suco de maracujá, Brasil",
+      "top1": "Soja, extrato, c/ suco de maracujá, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Sopa, feijão preto, c/ óleo, c/ sal, Brasil [caldo de vegetais, feijão preto, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ sal]",
+      "expected": "Sopa, feijão preto, c/ óleo, c/ sal, Brasil [caldo de vegetais, feijão preto, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ sal]",
+      "top1": "Sopa, feijão preto, c/ óleo, c/ sal, Brasil [caldo de vegetais, feijão preto, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ sal]",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Almôndega, ao sugo (molho de tomate)",
+      "expected": "Almôndega, ao sugo (molho de tomate) (carne, boi, frita, c/ molho de tomate (tomate, c/ óleo, cebola e alho, c/ sal)",
+      "top1": "Almôndega, ao sugo (molho de tomate) (carne, boi, frita, c/ molho de tomate (tomate, c/ óleo, cebola e alho, c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+      "expected": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+      "top1": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "expected": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "top1": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Carne, boi, quarto traseiro, c/ gordura, grelhada, c/ óleo, c/ sal",
+      "expected": "Carne, boi, quarto traseiro, c/ gordura, grelhada, c/ óleo, c/ sal",
+      "top1": "Carne, boi, quarto traseiro, c/ gordura, grelhada, c/ óleo, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Carne, caça (capivara, coelho), cozida, assada, s/ óleo, c/ sal",
+      "expected": "Carne, caça (capivara, coelho), cozida, assada, s/ óleo, c/ sal",
+      "top1": "Carne, caça (capivara, coelho), cozida, assada, s/ óleo, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Carne, frango, peito, s/ pele, frita (c/ óleo de soja), c/ sal",
+      "expected": "Carne, frango, peito, s/ pele, frita (c/ óleo de soja), c/ sal",
+      "top1": "Carne, frango, peito, s/ pele, frita (c/ óleo de soja), c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Carne, porco, lombo, grelhada/assada, s/ óleo, c/ sal",
+      "expected": "Carne, porco, lombo, grelhada/assada, s/ óleo, c/ sal",
+      "top1": "Carne, porco, lombo, grelhada/assada, s/ óleo, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Hambúrguer, industrializado, frango, grelhado, s/ óleo",
+      "expected": "Hambúrguer, industrializado, frango, grelhado, s/ óleo",
+      "top1": "Hambúrguer, industrializado, frango, grelhado, s/ óleo",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Omelete com vegetais e queijo, c/ azeite de oliva, c/ sal, Brasil [ovo de galinha, cebola, cenoura, pimentões, leite de vaca integral, queijo parmesão, azeite de oliva, alho, cebolinha, salsa (salsinha), pimenta-do-reino, c/ sal]",
+      "expected": "Omelete com vegetais e queijo, c/ azeite de oliva, c/ sal, Brasil [ovo de galinha, cebola, cenoura, pimentões, leite de vaca integral, queijo parmesão, azeite de oliva, alho, cebolinha, salsa (salsinha), pimenta-do-reino, c/ sal]",
+      "top1": "Omelete com vegetais e queijo, c/ azeite de oliva, c/ sal, Brasil [ovo de galinha, cebola, cenoura, pimentões, leite de vaca integral, queijo parmesão, azeite de oliva, alho, cebolinha, salsa (salsinha), pimenta-do-reino, c/ sal]",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal",
+      "expected": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal (ovo de galinha inteiro, queijo parmesão, c/ óleo de soja, c/ sal)",
+      "top1": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal (ovo de galinha inteiro, queijo parmesão, c/ óleo de soja, c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Omelete, vegetais e queijo parmesão, c/ sal",
+      "expected": "Omelete, vegetais e queijo parmesão, c/ sal (ovo de galinha, vegetais - cenoura, abobrinha, tomate, champignon paris, salsa, cebolinha verde, queijo parmesão, c/ óleo, cebola e alho, c/ sal)",
+      "top1": "Omelete, vegetais e queijo parmesão, c/ sal (ovo de galinha, vegetais - cenoura, abobrinha, tomate, champignon paris, salsa, cebolinha verde, queijo parmesão, c/ óleo, cebola e alho, c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Ovo, codorna, inteiro, cozido, c/ sal",
+      "expected": "Ovo, codorna, inteiro, cozido, c/ sal",
+      "top1": "Ovo, codorna, inteiro, cozido, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Ovo, galinha, clara, desidratada, pasteurizada",
+      "expected": "Ovo, galinha, clara, desidratada, pasteurizada, Brasil",
+      "top1": "Ovo, galinha, clara, desidratada, pasteurizada, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Ovo, galinha, inteiro, cozido, s/ sal, Brasil",
+      "expected": "Ovo, galinha, inteiro, cozido, s/ sal, Brasil (média de várias amostras)",
+      "top1": "Ovo, galinha, inteiro, cozido, s/ sal, Brasil (média de várias amostras)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Ovo, galinha, mexido, c/ salsa (salsinha), c/ óleo de soja, c/ sal",
+      "expected": "Ovo, galinha, mexido, c/ salsa (salsinha), c/ óleo de soja, c/ sal, Brasil",
+      "top1": "Ovo, galinha, mexido, c/ salsa (salsinha), c/ óleo de soja, c/ sal, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Ovo, galinha, vermelho, inteiro, cru",
+      "expected": "Ovo, galinha, vermelho, inteiro, cru, Brasil",
+      "top1": "Ovo, galinha, vermelho, inteiro, cru, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Alichela, caseira (peixe, água salgada, nchova (aliche), salsinha, alho, pimenta do reino, c/ azeite de oliva, s/ sal)",
+      "expected": "Alichela, caseira (peixe, água salgada, nchova (aliche), salsinha, alho, pimenta do reino, c/ azeite de oliva, s/ sal)",
+      "top1": "Alichela, caseira (peixe, água salgada, nchova (aliche), salsinha, alho, pimenta do reino, c/ azeite de oliva, s/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Ceviche de peixe, água doce, corvina, s/ sal",
+      "expected": "Ceviche de peixe, água doce, corvina, s/ sal (peixe, água doce, corvina, cru, c/ cebola, suco de limão, pepino, tomate, pimenta jalapeño, coentro, salsa, c/ azeite de oliva, c/ pimenta do reino, s/ sal)",
+      "top1": "Ceviche de peixe, água doce, corvina, s/ sal (peixe, água doce, corvina, cru, c/ cebola, suco de limão, pepino, tomate, pimenta jalapeño, coentro, salsa, c/ azeite de oliva, c/ pimenta do reino, s/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Molusco, ostra, cozido, s/ óleo, s/ sal",
+      "expected": "Molusco, ostra, cozido, s/ óleo, s/ sal, Brasil",
+      "top1": "Molusco, ostra, cozido, s/ óleo, s/ sal, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Peixe, água doce, Pirarucu, cultivado em Rondonia, à milanesa (a partir do peixe fresco), c/ sal (peixe, água doce, pirarucu, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), c/ sal)",
+      "expected": "Peixe, água doce, Pirarucu, cultivado em Rondonia, à milanesa (a partir do peixe fresco), c/ sal (peixe, água doce, pirarucu, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), c/ sal) (média de peixes com diferentes pesos e cortes)",
+      "top1": "Peixe, água doce, Pirarucu, cultivado em Rondonia, à milanesa (a partir do peixe fresco), c/ sal (peixe, água doce, pirarucu, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), c/ sal) (média de peixes com diferentes pesos e cortes)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Peixe, água salgada, Merluza, filé, assado, s/ óleo, s/ sal",
+      "expected": "Peixe, água salgada, Merluza, filé, assado, s/ óleo, s/ sal, Brasil",
+      "top1": "Peixe, água salgada, Merluza, filé, assado, s/ óleo, s/ sal, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Peixe, água salgada, cação, à milanesa (ovo e farinha de rosca), frito (c/ óleo de soja), c/ sal",
+      "expected": "Peixe, água salgada, cação, à milanesa (ovo e farinha de rosca), frito (c/ óleo de soja), c/ sal",
+      "top1": "Peixe, água salgada, cação, à milanesa (ovo e farinha de rosca), frito (c/ óleo de soja), c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "expected": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "top1": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Peixe, água salgada, salmão, filé, s/ pele, assado/grelhado, s/ óleo, c/ sal",
+      "expected": "Peixe, água salgada, salmão, filé, s/ pele, assado/grelhado, s/ óleo, c/ sal",
+      "top1": "Peixe, água salgada, salmão, filé, s/ pele, assado/grelhado, s/ óleo, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Abacate, polpa, in natura",
+      "expected": "Abacate, polpa, in natura , Brasil",
+      "top1": "Abacate, polpa, in natura , Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+      "expected": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+      "top1": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Damasco (abricó), in natura",
+      "expected": "Damasco (abricó), in natura , Brasil",
+      "top1": "Damasco (abricó), in natura , Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Mamão, Formosa, polpa, in natura",
+      "expected": "Mamão, Formosa, polpa, in natura , Brasil",
+      "top1": "Mamão, Formosa, polpa, in natura , Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Pera, cozida, s/ manteiga, s/ açúcar",
+      "expected": "Pera, cozida, s/ manteiga, s/ açúcar, Brasil",
+      "top1": "Pera, cozida, s/ manteiga, s/ açúcar, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Suco natural, bacuri, c/ açúcar",
+      "expected": "Suco natural, bacuri, c/ açúcar, Brasil",
+      "top1": "Suco natural, bacuri, c/ açúcar, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Suco natural, laranja, mamão, pera e maçã, c/ açúcar",
+      "expected": "Suco natural, laranja, mamão, pera e maçã, c/ açúcar",
+      "top1": "Suco natural, laranja, mamão, pera e maçã, c/ açúcar",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Suco, limonada, s/ açúcar",
+      "expected": "Suco, limonada, s/ açúcar",
+      "top1": "Suco, limonada, s/ açúcar",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "expected": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "top1": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Batata, inglesa, s/ casca, cozida, drenada, c/ óleo de soja, s/ sal",
+      "expected": "Batata, inglesa, s/ casca, cozida, drenada, c/ óleo de soja, s/ sal",
+      "top1": "Batata, inglesa, s/ casca, cozida, drenada, c/ óleo de soja, s/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Chuchu, s/ casca, cozido, drenado, s/ óleo, s/ sal, BrasiI",
+      "expected": "Chuchu, s/ casca, cozido, drenado, s/ óleo, s/ sal, BrasiI",
+      "top1": "Chuchu, s/ casca, cozido, drenado, s/ óleo, s/ sal, BrasiI",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+      "expected": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+      "top1": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+      "expected": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+      "top1": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Salada, alface americana, c/ molho vinagrete (tomate, cebola, salsa, vinagre, azeite de oliva), c/ sal",
+      "expected": "Salada, alface americana, c/ molho vinagrete (tomate, cebola, salsa, vinagre, azeite de oliva), c/ sal",
+      "top1": "Salada, alface americana, c/ molho vinagrete (tomate, cebola, salsa, vinagre, azeite de oliva), c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Salada, couve-flor, cozida, c/ molho de salada - salsa, suco de limão, azeite de oliva, c/ sal",
+      "expected": "Salada, couve-flor, cozida, c/ molho de salada - salsa, suco de limão, azeite de oliva, c/ sal",
+      "top1": "Salada, couve-flor, cozida, c/ molho de salada - salsa, suco de limão, azeite de oliva, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Salada, trigo em grão, c/ azeite de oliva, c/ sal",
+      "expected": "Salada, trigo em grão, c/ azeite de oliva, c/ sal (trigo em grão cozido, tomate, cebola, salsa, suco de limão, c/ azeite de oliva, c/ sal)",
+      "top1": "Salada, trigo em grão, c/ azeite de oliva, c/ sal (trigo em grão cozido, tomate, cebola, salsa, suco de limão, c/ azeite de oliva, c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Bebida láctea",
+      "expected": "Bebida láctea (média de diferentes sabores), Brasil",
+      "top1": "Bebida láctea",
+      "top1Correct": false,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Creme de queijo, caseiro (Tipo Catupiry)",
+      "expected": "Creme de queijo, caseiro (Tipo Catupiry) (leite, queijo minas, creme de leite, amido de milho, margarina, c/ sal)",
+      "top1": "Creme de queijo, caseiro (Tipo Catupiry) (leite, queijo minas, creme de leite, amido de milho, margarina, c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Iogurte, integral, pêssego",
+      "expected": "Iogurte, integral, pêssego, Brasil",
+      "top1": "Iogurte, integral, pêssego, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Leite, cabra, integral, fluído",
+      "expected": "Leite, cabra, integral, fluído, Brasil",
+      "top1": "Leite, cabra, integral, fluído, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Leite, vaca, integral, instantâneo, em pó",
+      "expected": "Leite, vaca, integral, instantâneo, em pó, Brasil",
+      "top1": "Leite, vaca, integral, instantâneo, em pó, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Mousse de peixe",
+      "expected": "Mousse de peixe (pescada cozida, gelatina s/ sabor, maionese, mostarda, creme de leite, salsa, c/ caldo de vegetais, c/ pimenta-do-reino, c/ sal)",
+      "top1": "Mousse de peixe (pescada cozida, gelatina s/ sabor, maionese, mostarda, creme de leite, salsa, c/ caldo de vegetais, c/ pimenta-do-reino, c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Queijo, leite de vaca, gorgonzola",
+      "expected": "Queijo, leite de vaca, gorgonzola (dado importado)",
+      "top1": "Queijo, leite de vaca, gorgonzola (dado importado)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Requeijão, caseiro, c/ sal",
+      "expected": "Requeijão, caseiro, c/ sal  (leite integral, suco de limão, manteiga, c/ sal)",
+      "top1": "Requeijão, caseiro, c/ sal  (leite integral, suco de limão, manteiga, c/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Bolo, baunilha, mistura p/",
+      "expected": "Bolo, baunilha, mistura p/, Brasil",
+      "top1": "Bolo, baunilha, mistura p/, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Creme, de milho, em pó",
+      "expected": "Creme, de milho, em pó, Brasil",
+      "top1": "Creme, de milho, em pó, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Gelatina, em pó",
+      "expected": "Gelatina, em pó (média de diferentes sabores), Brasil",
+      "top1": "Gelatina, em pó (média de diferentes sabores), Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Gelatina, tutti-frutti, em pó",
+      "expected": "Gelatina, tutti-frutti, em pó, Brasil",
+      "top1": "Gelatina, tutti-frutti, em pó, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Maria mole, coco, em pó",
+      "expected": "Maria mole, coco, em pó, Brasil",
+      "top1": "Maria mole, coco, em pó, Brasil",
+      "top1Correct": false,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Mousse, chocolate, mistura p/",
+      "expected": "Mousse, chocolate, mistura p/, Brasil",
+      "top1": "Mousse, chocolate, mistura p/, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Pudim, coco, mistura p/",
+      "expected": "Pudim, coco, mistura p/ (média de diferentes marcas), Brasil",
+      "top1": "Pudim, coco, mistura p/ (média de diferentes marcas), Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Pão de queijo, mistura p/",
+      "expected": "Pão de queijo, mistura p/, Brasil",
+      "top1": "Pão de queijo, mistura p/ (média de diferentes marcas), Brasil",
+      "top1Correct": false,
+      "top3Correct": false,
+      "status": "EXACT"
+    },
+    {
+      "query": "Abobrinha, italiana, c/ casca, refogada (c/ óleo, cebola e alho), s/ sal",
+      "expected": "Abobrinha, italiana, c/ casca, refogada (c/ óleo, cebola e alho), s/ sal",
+      "top1": "Abobrinha, italiana, c/ casca, refogada (c/ óleo, cebola e alho), s/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Carne, boi, lagarto, refogada (c/ óleo, cebola e alho), s/ sal",
+      "expected": "Carne, boi, lagarto, refogada (c/ óleo, cebola e alho), s/ sal",
+      "top1": "Carne, boi, lagarto, refogada (c/ óleo, cebola e alho), s/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Carne, peru, peito, ensopado (c/ tomate e pimentão), c/ óleo de soja, cebola e alho, c/ sal",
+      "expected": "Carne, peru, peito, ensopado (c/ tomate e pimentão), c/ óleo de soja, cebola e alho, c/ sal",
+      "top1": "Carne, peru, peito, ensopado (c/ tomate e pimentão), c/ óleo de soja, cebola e alho, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Edamame, cozida, c/ óleo, cebola e alho, s/ sal",
+      "expected": "Edamame, cozida, c/ óleo, cebola e alho, s/ sal",
+      "top1": "Edamame, cozida, c/ óleo, cebola e alho, s/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Peixe, água doce, Tucunaré, filé, congelado, frito (c/ óleo de soja), c/ sal",
+      "expected": "Peixe, água doce, Tucunaré, filé, congelado, frito (c/ óleo de soja), c/ sal",
+      "top1": "Peixe, água doce, Tucunaré, filé, congelado, frito (c/ óleo de soja), c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Peixe, água salgada, sardinha, assado/grelhado, s/ óleo, c/ sal",
+      "expected": "Peixe, água salgada, sardinha, assado/grelhado, s/ óleo, c/ sal",
+      "top1": "Peixe, água salgada, sardinha, assado/grelhado, s/ óleo, c/ sal",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Abacaxi, Ananas Comosus L. Merril, var. Pérola",
+      "expected": "Abacaxi, Ananas Comosus L. Merril, var. Pérola",
+      "top1": "Abacaxi, Ananas Comosus L. Merril, var. Pérola",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Alface, lisa, crua, Lactuca sativa L., var",
+      "expected": "Alface, lisa, crua, Lactuca sativa L., var",
+      "top1": "Alface, lisa, crua, Lactuca sativa L., var",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Batata, doce, descascada, crua, Ipomoea batatas Lam., var. Clone CNPH",
+      "expected": "Batata, doce, descascada, crua, Ipomoea batatas Lam., var. Clone CNPH",
+      "top1": "Batata, doce, descascada, crua, Ipomoea batatas Lam., var. Clone CNPH",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Camu-camu, fruto, in natura , Myrciaria dubia",
+      "expected": "Camu-camu, fruto, in natura , Myrciaria dubia",
+      "top1": "Camu-camu, fruto, in natura , Myrciaria dubia",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Cogumelo, shiitake, L. edodes",
+      "expected": "Cogumelo, shiitake, L. edodes",
+      "top1": "Cogumelo, shiitake, L. edodes",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Hortelã, micro-ondas/7 min. PM, Mentha piperita L., var",
+      "expected": "Hortelã, micro-ondas/7 min. PM, Mentha piperita L., var",
+      "top1": "Hortelã, micro-ondas/7 min. PM, Mentha piperita L., var",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Manga, parcialmente madura, Mangifera indica L., var. Tommy Atkins",
+      "expected": "Manga, parcialmente madura, Mangifera indica L.,  var. Tommy Atkins",
+      "top1": "Manga, parcialmente madura, Mangifera indica L.,  var. Tommy Atkins",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Peixe, água doce, Pacu, filé, cru, Mylossoma ssp",
+      "expected": "Peixe, água doce, Pacu, filé, cru, Mylossoma ssp",
+      "top1": "Peixe, água doce, Pacu, filé, cru, Mylossoma ssp",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Abacaxi cozido, s/ água de remolho (teor reduzido de potássio e resíduo), c/ adoçante",
+      "expected": "Abacaxi cozido, s/ água de remolho (teor reduzido de potássio e resíduo), c/ adoçante, Brasil",
+      "top1": "Abacaxi cozido, s/ água de remolho (teor reduzido de potássio e resíduo), c/ adoçante, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Caldo de batata e beterraba, c/ carne, c/ óleo, s/ sal, Brasil",
+      "expected": "Caldo de batata e beterraba, c/ carne, c/ óleo, s/ sal, Brasil (água, batata liofilizada, beterraba, caldo de carne, c/ cebola, alho e óleo de soja, s/ sal)",
+      "top1": "Caldo de batata e beterraba, c/ carne, c/ óleo, s/ sal, Brasil (água, batata liofilizada, beterraba, caldo de carne, c/ cebola, alho e óleo de soja, s/ sal)",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Cenoura refogada, c/ cebola, alho e óleo de soja, salsa (salsinha), c/ sal",
+      "expected": "Cenoura refogada, c/ cebola, alho e óleo de soja, salsa (salsinha), c/ sal, Brasil",
+      "top1": "Cenoura refogada, c/ cebola, alho e óleo de soja, salsa (salsinha), c/ sal, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Iscas de peito de frango, c/ molho roty, c/ óleo, c/ sal, Brasil [peito de frango, água, molho roty em pó, amido de milho (maisena), c/ cebola, alho e óleo de soja, salsa (salsinha), cebolinha, c/ sal]",
+      "expected": "Iscas de peito de frango, c/ molho roty, c/ óleo, c/ sal, Brasil [peito de frango, água, molho roty em pó, amido de milho (maisena), c/ cebola, alho e óleo de soja, salsa (salsinha), cebolinha, c/ sal]",
+      "top1": "Iscas de peito de frango, c/ molho roty, c/ óleo, c/ sal, Brasil [peito de frango, água, molho roty em pó, amido de milho (maisena), c/ cebola, alho e óleo de soja, salsa (salsinha), cebolinha, c/ sal]",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Polenta cremosa, c/ margarina, caldo de galinha, c/ cebola, alho e óleo de soja, s/ sal",
+      "expected": "Polenta cremosa, c/ margarina, caldo de galinha, c/ cebola, alho e óleo de soja, s/ sal, Brasil",
+      "top1": "Polenta cremosa, c/ margarina, caldo de galinha, c/ cebola, alho e óleo de soja, s/ sal, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Salada, escarola e tomate, s/ óleo, s/ sal",
+      "expected": "Salada, escarola e tomate, s/ óleo, s/ sal, Brasil",
+      "top1": "Salada, escarola e tomate, s/ óleo, s/ sal, Brasil",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "RESOLVED"
+    },
+    {
+      "query": "Arroz, tipo 1, cozido",
+      "expected": "Arroz, tipo 1, cozido",
+      "top1": "Arroz, tipo 1, cozido",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Arroz, tipo 1, cru",
+      "expected": "Arroz, tipo 1, cru",
+      "top1": "Arroz, tipo 1, cru",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Arroz, tipo 2, cozido",
+      "expected": "Arroz, tipo 2, cozido",
+      "top1": "Arroz, tipo 2, cozido",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Arroz, tipo 2, cru",
+      "expected": "Arroz, tipo 2, cru",
+      "top1": "Arroz, tipo 2, cru",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Banana, maçã, crua",
+      "expected": "Banana, maçã, crua",
+      "top1": "Banana, maçã, crua",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Banana, nanica, crua",
+      "expected": "Banana, nanica, crua",
+      "top1": "Banana, nanica, crua",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Banana, prata, crua",
+      "expected": "Banana, prata, crua",
+      "top1": "Banana, prata, crua",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Maçã, Argentina, com casca, crua",
+      "expected": "Maçã, Argentina, com casca, crua",
+      "top1": "Maçã, Argentina, com casca, crua",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Arroz, integral, cozido",
+      "expected": "Arroz, integral, cozido",
+      "top1": "Arroz, integral, cozido",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Maxixe, cru",
+      "expected": "Maxixe, cru",
+      "top1": "Maxixe, cru",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Bolo, pronto, coco",
+      "expected": "Bolo, pronto, coco",
+      "top1": "Bolo, pronto, coco",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Jaca, crua",
+      "expected": "Jaca, crua",
+      "top1": "Jaca, crua",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Cereais, mistura para vitamina, trigo, cevada e aveia",
+      "expected": "Cereais, mistura para vitamina, trigo, cevada e aveia",
+      "top1": "Cereais, mistura para vitamina, trigo, cevada e aveia",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Abadejo, filé, congelado, cru",
+      "expected": "Abadejo, filé, congelado, cru",
+      "top1": "Abadejo, filé, congelado, cru",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Farinha, de arroz, enriquecida",
+      "expected": "Farinha, de arroz, enriquecida",
+      "top1": "Farinha, de arroz, enriquecida",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Carne, bovina, contra-filé, sem gordura, cru",
+      "expected": "Carne, bovina, contra-filé, sem gordura, cru",
+      "top1": "Carne, bovina, contra-filé, sem gordura, cru",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Carne, bovina, picanha, com gordura, crua",
+      "expected": "Carne, bovina, picanha, com gordura, crua",
+      "top1": "Carne, bovina, picanha, com gordura, crua",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Hambúrguer, bovino, cru",
+      "expected": "Hambúrguer, bovino, cru",
+      "top1": "Hambúrguer, bovino, cru",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Iogurte, sabor abacaxi",
+      "expected": "Iogurte, sabor abacaxi",
+      "top1": "Iogurte, sabor abacaxi",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Ovo, de galinha, clara, cozida/10minutos",
+      "expected": "Ovo, de galinha, clara, cozida/10minutos",
+      "top1": "Ovo, de galinha, clara, cozida/10minutos",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Azeitona, preta, conserva",
+      "expected": "Azeitona, preta, conserva",
+      "top1": "Azeitona, preta, conserva",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Yakisoba",
+      "expected": "Yakisoba",
+      "top1": "Yakisoba",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Coco, verde, cru",
+      "expected": "Coco,  verde, cru",
+      "top1": "Coco,  verde, cru",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Arroz",
+      "expected": "Arroz (polido, parboilizado, agulha, agulhinha, etc.)",
+      "top1": "Arroz carreteiro",
+      "top1Correct": false,
+      "top3Correct": false,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Cenoura",
+      "expected": "Cenoura",
+      "top1": "Cenoura",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Couve",
+      "expected": "Couve",
+      "top1": "Couve",
+      "top1Correct": false,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Guariroba",
+      "expected": "Guariroba (palmito in natura )",
+      "top1": "Guariroba (palmito in natura )",
+      "top1Correct": false,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Mari",
+      "expected": "Mari",
+      "top1": "Mari",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Bombom de qualquer marca light",
+      "expected": "Bombom de qualquer marca light",
+      "top1": "Bombom de qualquer marca light",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Paleta",
+      "expected": "Paleta",
+      "top1": "Paleta",
+      "top1Correct": false,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Carne suína",
+      "expected": "Carne suína",
+      "top1": "Carne suína",
+      "top1Correct": false,
+      "top3Correct": false,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Carne bovina",
+      "expected": "Carne bovina",
+      "top1": "Carne bovina",
+      "top1Correct": false,
+      "top3Correct": false,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Palmito em conserva",
+      "expected": "Palmito em conserva",
+      "top1": "Palmito em conserva",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Asa de galinha ou frango",
+      "expected": "Asa de galinha ou frango",
+      "top1": "Asa de galinha ou frango",
+      "top1Correct": false,
+      "top3Correct": false,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Iogurte natural",
+      "expected": "Iogurte natural",
+      "top1": "Iogurte, natural",
+      "top1Correct": false,
+      "top3Correct": true,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Bolo de coco",
+      "expected": "Bolo de coco",
+      "top1": "Bolo de coco",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    },
+    {
+      "query": "Hambúrguer não especificado",
+      "expected": "Hambúrguer não especificado",
+      "top1": "Hambúrguer não especificado",
+      "top1Correct": false,
+      "top3Correct": false,
+      "status": "AMBIGUOUS"
+    },
+    {
+      "query": "Esfirra de queijo",
+      "expected": "Esfirra de queijo",
+      "top1": "Esfirra de queijo",
+      "top1Correct": true,
+      "top3Correct": true,
+      "status": "EXACT"
+    }
+  ]
+}

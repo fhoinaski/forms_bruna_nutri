@@ -1,0 +1,624 @@
+{
+  "generatedAt": "2026-08-22T11:28:57.353Z",
+  "distinctTagnames": 36,
+  "tagnames": [
+    {
+      "tagname": "—",
+      "names": [
+        "Sal de adição",
+        "Açúcar de adição",
+        "Gordura de adição",
+        "Proteína vegetal",
+        "Proteína animal"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:unknown:g"
+      ],
+      "occurrences": 30748,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, dendê, Brasil (BRC0001D)"
+      ]
+    },
+    {
+      "tagname": "ENERC",
+      "names": [
+        "Energia"
+      ],
+      "units": [
+        "kJ",
+        "kcal"
+      ],
+      "nutrientIds": [
+        "tbca:enerc:kj",
+        "tbca:enerc:kcal"
+      ],
+      "occurrences": 12296,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, dendê, Brasil (BRC0001D)"
+      ]
+    },
+    {
+      "tagname": "FAT",
+      "names": [
+        "Lipídios"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:fat:g"
+      ],
+      "occurrences": 6153,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "WATER",
+      "names": [
+        "Umidade"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:water:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "CHOCDF",
+      "names": [
+        "Carboidrato total"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:chocdf:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "CHOAVLDF",
+      "names": [
+        "Carboidrato disponível"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:choavldf:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "PROCNT",
+      "names": [
+        "Proteína"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:procnt:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "FIBTG",
+      "names": [
+        "Fibra alimentar"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:fibtg:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "ALC",
+      "names": [
+        "Álcool"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:alc:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "ASH",
+      "names": [
+        "Cinzas"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:ash:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "CHOLE",
+      "names": [
+        "Colesterol"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:chole:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "FASAT",
+      "names": [
+        "Ácidos graxos saturados"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:fasat:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "FAMS",
+      "names": [
+        "Ácidos graxos monoinsaturados"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:fams:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "FAPU",
+      "names": [
+        "Ácidos graxos poliinsaturados"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:fapu:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "FATRN",
+      "names": [
+        "Ácidos graxos trans"
+      ],
+      "units": [
+        "g"
+      ],
+      "nutrientIds": [
+        "tbca:fatrn:g"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "CA",
+      "names": [
+        "Cálcio"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:ca:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "FE",
+      "names": [
+        "Ferro"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:fe:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "NA",
+      "names": [
+        "Sódio"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:na:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "MG",
+      "names": [
+        "Magnésio"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:mg:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "P",
+      "names": [
+        "Fósforo"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:p:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "K",
+      "names": [
+        "Potássio"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:k:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "MN",
+      "names": [
+        "Manganês"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:mn:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "ZN",
+      "names": [
+        "Zinco"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:zn:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "CU",
+      "names": [
+        "Cobre"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:cu:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "SE",
+      "names": [
+        "Selênio"
+      ],
+      "units": [
+        "mcg"
+      ],
+      "nutrientIds": [
+        "tbca:se:mcg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "VITA",
+      "names": [
+        "Vitamina A (RE)"
+      ],
+      "units": [
+        "mcg"
+      ],
+      "nutrientIds": [
+        "tbca:vita:mcg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "VITD",
+      "names": [
+        "Vitamina D"
+      ],
+      "units": [
+        "mcg"
+      ],
+      "nutrientIds": [
+        "tbca:vitd:mcg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "TOCPHA",
+      "names": [
+        "Alfa-tocoferol (Vitamina E)"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:tocpha:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "THIA",
+      "names": [
+        "Tiamina"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:thia:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "RIBF",
+      "names": [
+        "Riboflavina"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:ribf:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "NIA",
+      "names": [
+        "Niacina"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:nia:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "VITB6A",
+      "names": [
+        "Vitamina B6"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:vitb6a:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "VITB12",
+      "names": [
+        "Vitamina B12"
+      ],
+      "units": [
+        "mcg"
+      ],
+      "nutrientIds": [
+        "tbca:vitb12:mcg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "VITC",
+      "names": [
+        "Vitamina C"
+      ],
+      "units": [
+        "mg"
+      ],
+      "nutrientIds": [
+        "tbca:vitc:mg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "FOLDFE",
+      "names": [
+        "Equivalente de folato"
+      ],
+      "units": [
+        "mcg"
+      ],
+      "nutrientIds": [
+        "tbca:foldfe:mcg"
+      ],
+      "occurrences": 6152,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    },
+    {
+      "tagname": "VITA RAE",
+      "names": [
+        "Vitamina A (RAE)"
+      ],
+      "units": [
+        "mcg"
+      ],
+      "nutrientIds": [
+        "tbca:vita_rae:mcg"
+      ],
+      "occurrences": 6151,
+      "examples": [
+        "Azeite, dendê, Brasil (BRC0001D)",
+        "Azeite, oliva, Brasil (BRC0002D)"
+      ]
+    }
+  ]
+}

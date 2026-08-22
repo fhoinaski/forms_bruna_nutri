@@ -1,0 +1,63 @@
+{
+  "generatedAt": "2026-08-22T20:21:14.959Z",
+  "totalRows": 337,
+  "rowsWithFeatures": 337,
+  "labelDistribution": {
+    "CORRECT": 200,
+    "INCORRECT": 6,
+    "AMBIGUOUS_VALID": 131,
+    "NOT_ENOUGH_INFORMATION": 0
+  },
+  "v1": {
+    "totalAccepted": 149,
+    "truePositives": 148,
+    "falsePositives": 1,
+    "precision": 0.9932885906040269,
+    "coverage": 0.4421364985163205,
+    "falsePositiveRate": 0.002967359050445104
+  },
+  "v2": {
+    "totalAccepted": 91,
+    "truePositives": 91,
+    "falsePositives": 0,
+    "precision": 1,
+    "coverage": 0.27002967359050445,
+    "falsePositiveRate": 0
+  },
+  "ambiguousRate": 0.3887240356083086,
+  "v1AmbiguousHandledSafely": 1,
+  "v2AmbiguousHandledSafely": 1,
+  "v2ByMatchClass": {
+    "EXACT_NAME_AND_PREPARATION": {
+      "total": 54,
+      "accepted": 44,
+      "tp": 44,
+      "fp": 0
+    },
+    "STRONG_TOKEN_MATCH": {
+      "total": 73,
+      "accepted": 10,
+      "tp": 10,
+      "fp": 0
+    },
+    "FTS_PARTIAL": {
+      "total": 58,
+      "accepted": 0,
+      "tp": 0,
+      "fp": 0
+    },
+    "EXACT_NAME": {
+      "total": 91,
+      "accepted": 37,
+      "tp": 37,
+      "fp": 0
+    },
+    "GENERIC_SHORT_QUERY": {
+      "total": 61,
+      "accepted": 0,
+      "tp": 0,
+      "fp": 0
+    }
+  },
+  "falsePositivesV2Count": 0
+}

@@ -1,0 +1,462 @@
+{
+  "generatedAt": "2026-08-22T13:02:14.931Z",
+  "totalQueries": 24,
+  "rows": [
+    {
+      "query": "arroz integral cozido",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Arroz, integral, cozido",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "EXACT",
+        "topName": "Arroz, integral, cozido",
+        "topSource": "TACO",
+        "score": 135,
+        "candidateCount": 0,
+        "preparation": "COOKED"
+      },
+      "sameFoodLikely": true,
+      "improvement": "CONSISTENT"
+    },
+    {
+      "query": "arroz branco",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Arroz, tipo 1, cozido",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "AMBIGUOUS",
+        "topName": "Papa de carne bovina moída (acém), arroz branco e brócolis, c/ caldo de carne, c/ cebola, s/ óleo, c/ sal",
+        "topSource": "TBCA",
+        "score": 47.95715952241189,
+        "candidateCount": 5,
+        "preparation": null
+      },
+      "sameFoodLikely": false,
+      "improvement": "DIFFERENT_TOP_MATCH"
+    },
+    {
+      "query": "feijão preto cozido",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Feijão, preto, cozido",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "EXACT",
+        "topName": "Feijão, preto, cozido",
+        "topSource": "TACO",
+        "score": 135,
+        "candidateCount": 0,
+        "preparation": "COOKED"
+      },
+      "sameFoodLikely": true,
+      "improvement": "CONSISTENT"
+    },
+    {
+      "query": "ovo cozido",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Ovo, de galinha, inteiro, cozido/10minutos",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "AMBIGUOUS",
+        "topName": "Ovo, codorna, inteiro, cozido, c/ sal",
+        "topSource": "TBCA",
+        "score": 71.77556066658332,
+        "candidateCount": 5,
+        "preparation": "COOKED"
+      },
+      "sameFoodLikely": false,
+      "improvement": "DIFFERENT_TOP_MATCH"
+    },
+    {
+      "query": "ovo mexido",
+      "current": {
+        "status": "NOT_FOUND",
+        "topName": null,
+        "topSource": null,
+        "matchRank": null
+      },
+      "canonical": {
+        "status": "PREPARATION_REVIEW",
+        "topName": "Ovo, galinha, clara, desidratada, pasteurizada, Brasil",
+        "topSource": "TBCA",
+        "score": 27.314701885866686,
+        "candidateCount": 5,
+        "preparation": "SCRAMBLED"
+      },
+      "sameFoodLikely": false,
+      "improvement": "CANONICAL_FOUND_MORE"
+    },
+    {
+      "query": "frango grelhado",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Frango, coração, grelhado",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "RESOLVED",
+        "topName": "Frango, coração, grelhado",
+        "topSource": "TACO",
+        "score": 68.9490491237337,
+        "candidateCount": 0,
+        "preparation": "GRILLED"
+      },
+      "sameFoodLikely": true,
+      "improvement": "CONSISTENT"
+    },
+    {
+      "query": "peito de frango",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Frango, peito, com pele, assado",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "AMBIGUOUS",
+        "topName": "Peito de frango, grelhado, c/ óleo, c/ sal, Brasil (peito de frango, óleo de soja, água, páprica doce, alho, c/ sal) (peito de frango, óleo de soja, água, páprica doce, alho, c/ sal)",
+        "topSource": "TBCA",
+        "score": 68.5366087910828,
+        "candidateCount": 5,
+        "preparation": null
+      },
+      "sameFoodLikely": false,
+      "improvement": "DIFFERENT_TOP_MATCH"
+    },
+    {
+      "query": "tilápia assada",
+      "current": {
+        "status": "NOT_FOUND",
+        "topName": null,
+        "topSource": null,
+        "matchRank": null
+      },
+      "canonical": {
+        "status": "PREPARATION_REVIEW",
+        "topName": "Peixe, água doce, tilápia, filé, cru, Brasil",
+        "topSource": "TBCA",
+        "score": 19.963969326905687,
+        "candidateCount": 5,
+        "preparation": "ROASTED"
+      },
+      "sameFoodLikely": false,
+      "improvement": "CANONICAL_FOUND_MORE"
+    },
+    {
+      "query": "banana",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Banana, da terra, crua",
+        "topSource": "TACO",
+        "matchRank": 2
+      },
+      "canonical": {
+        "status": "AMBIGUOUS",
+        "topName": "Banana, passa, Brasil",
+        "topSource": "TBCA",
+        "score": 87.60945378695487,
+        "candidateCount": 5,
+        "preparation": null
+      },
+      "sameFoodLikely": false,
+      "improvement": "DIFFERENT_TOP_MATCH"
+    },
+    {
+      "query": "banana prata",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Banana, prata, crua",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "AMBIGUOUS",
+        "topName": "Banana, prata, in natura , Brasil",
+        "topSource": "TBCA",
+        "score": 88,
+        "candidateCount": 5,
+        "preparation": null
+      },
+      "sameFoodLikely": false,
+      "improvement": "DIFFERENT_TOP_MATCH"
+    },
+    {
+      "query": "mamão",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Mamão, doce em calda, drenado",
+        "topSource": "TACO",
+        "matchRank": 2
+      },
+      "canonical": {
+        "status": "EXACT",
+        "topName": "Mamão",
+        "topSource": "IBGE_POF",
+        "score": 109.83384880450761,
+        "candidateCount": 0,
+        "preparation": null
+      },
+      "sameFoodLikely": true,
+      "improvement": "CONSISTENT"
+    },
+    {
+      "query": "abacate",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Abacate, cru",
+        "topSource": "TACO",
+        "matchRank": 2
+      },
+      "canonical": {
+        "status": "EXACT",
+        "topName": "Abacate",
+        "topSource": "IBGE_POF",
+        "score": 111,
+        "candidateCount": 0,
+        "preparation": null
+      },
+      "sameFoodLikely": true,
+      "improvement": "CONSISTENT"
+    },
+    {
+      "query": "leite integral",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Canjica, com leite integral",
+        "topSource": "TACO",
+        "matchRank": 3
+      },
+      "canonical": {
+        "status": "EXACT",
+        "topName": "Leite, de vaca, integral",
+        "topSource": "TACO",
+        "score": 100,
+        "candidateCount": 0,
+        "preparation": null
+      },
+      "sameFoodLikely": false,
+      "improvement": "DIFFERENT_TOP_MATCH"
+    },
+    {
+      "query": "leite desnatado",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Leite, de vaca, desnatado, pó",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "EXACT",
+        "topName": "Leite de vaca desnatado",
+        "topSource": "IBGE_POF",
+        "score": 96,
+        "candidateCount": 0,
+        "preparation": null
+      },
+      "sameFoodLikely": false,
+      "improvement": "DIFFERENT_TOP_MATCH"
+    },
+    {
+      "query": "milho cru",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Milho, amido, cru",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "AMBIGUOUS",
+        "topName": "Milho, fubá, cru",
+        "topSource": "TACO",
+        "score": 71.01491383822733,
+        "candidateCount": 5,
+        "preparation": "RAW"
+      },
+      "sameFoodLikely": false,
+      "improvement": "DIFFERENT_TOP_MATCH"
+    },
+    {
+      "query": "milho cozido",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Cuscuz, de milho, cozido com sal",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "EXACT",
+        "topName": "Milho cozido",
+        "topSource": "IBGE_POF",
+        "score": 121.94172877819818,
+        "candidateCount": 0,
+        "preparation": "COOKED"
+      },
+      "sameFoodLikely": false,
+      "improvement": "DIFFERENT_TOP_MATCH"
+    },
+    {
+      "query": "milho grelhado",
+      "current": {
+        "status": "NOT_FOUND",
+        "topName": null,
+        "topSource": null,
+        "matchRank": null
+      },
+      "canonical": {
+        "status": "PREPARATION_REVIEW",
+        "topName": "Bolo, pronto, milho",
+        "topSource": "TACO",
+        "score": 28.08992424139736,
+        "candidateCount": 5,
+        "preparation": "GRILLED"
+      },
+      "sameFoodLikely": false,
+      "improvement": "CANONICAL_FOUND_MORE"
+    },
+    {
+      "query": "milho assado",
+      "current": {
+        "status": "NOT_FOUND",
+        "topName": null,
+        "topSource": null,
+        "matchRank": null
+      },
+      "canonical": {
+        "status": "RESOLVED",
+        "topName": "Milho (em grão)",
+        "topSource": "IBGE_POF",
+        "score": 47.87030323393938,
+        "candidateCount": 0,
+        "preparation": "ROASTED"
+      },
+      "sameFoodLikely": false,
+      "improvement": "CANONICAL_FOUND_MORE"
+    },
+    {
+      "query": "abacaxi perola",
+      "current": {
+        "status": "NOT_FOUND",
+        "topName": null,
+        "topSource": null,
+        "matchRank": null
+      },
+      "canonical": {
+        "status": "RESOLVED",
+        "topName": "Abacaxi, Pérola, Ananas comosus L.",
+        "topSource": "TBCA",
+        "score": 79.5,
+        "candidateCount": 0,
+        "preparation": null
+      },
+      "sameFoodLikely": false,
+      "improvement": "CANONICAL_FOUND_MORE"
+    },
+    {
+      "query": "achocolatado em po dietetico",
+      "current": {
+        "status": "NOT_FOUND",
+        "topName": null,
+        "topSource": null,
+        "matchRank": null
+      },
+      "canonical": {
+        "status": "RESOLVED",
+        "topName": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+        "topSource": "TBCA",
+        "score": 83.5,
+        "candidateCount": 0,
+        "preparation": null
+      },
+      "sameFoodLikely": false,
+      "improvement": "CANONICAL_FOUND_MORE"
+    },
+    {
+      "query": "azeite de dende",
+      "current": {
+        "status": "NEEDS_REVIEW",
+        "topName": "Azeite, de dendê",
+        "topSource": "TACO",
+        "matchRank": 4
+      },
+      "canonical": {
+        "status": "EXACT",
+        "topName": "Azeite, de dendê",
+        "topSource": "TACO",
+        "score": 115,
+        "candidateCount": 0,
+        "preparation": null
+      },
+      "sameFoodLikely": true,
+      "improvement": "CONSISTENT"
+    },
+    {
+      "query": "peixe agua doce tilapia file cru",
+      "current": {
+        "status": "NOT_FOUND",
+        "topName": null,
+        "topSource": null,
+        "matchRank": null
+      },
+      "canonical": {
+        "status": "RESOLVED",
+        "topName": "Peixe, água doce, tilápia, filé, cru, Brasil",
+        "topSource": "TBCA",
+        "score": 111,
+        "candidateCount": 0,
+        "preparation": "RAW"
+      },
+      "sameFoodLikely": false,
+      "improvement": "CANONICAL_FOUND_MORE"
+    },
+    {
+      "query": "arroz de coco",
+      "current": {
+        "status": "NOT_FOUND",
+        "topName": null,
+        "topSource": null,
+        "matchRank": null
+      },
+      "canonical": {
+        "status": "AMBIGUOUS",
+        "topName": "Arroz de coco, c/ arroz integral, c/ sal (arroz integral cozido, c/ coco e leite de coco, c/ óleo, cebola e alho, c/ sal)",
+        "topSource": "TBCA",
+        "score": 70,
+        "candidateCount": 5,
+        "preparation": null
+      },
+      "sameFoodLikely": false,
+      "improvement": "CANONICAL_FOUND_MORE"
+    },
+    {
+      "query": "yakissoba",
+      "current": {
+        "status": "NOT_FOUND",
+        "topName": null,
+        "topSource": null,
+        "matchRank": null
+      },
+      "canonical": {
+        "status": "AMBIGUOUS",
+        "topName": "Yakissoba",
+        "topSource": "IBGE_POF",
+        "score": 112,
+        "candidateCount": 2,
+        "preparation": null
+      },
+      "sameFoodLikely": false,
+      "improvement": "CANONICAL_FOUND_MORE"
+    }
+  ]
+}

@@ -10,7 +10,11 @@ import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
 import { getRecipes, getRecipeById, type RecipePayload } from "@/lib/repositories/recipes";
 import { calculateAgeInYears, calculateBmiValue, formatHeightDisplay } from "@/lib/clinical/anthropometry";
 import { scaleRecipeIngredientsToPortions } from "@/lib/nutrition/recipes";
-import { resolveFoodCandidate, resolveFoodCandidates, toDisplayFoodName, type FoodResolution } from "@/lib/nutrition/food-resolver";
+import { toDisplayFoodName, type FoodResolution } from "@/lib/nutrition/food-resolver";
+// FASE 5 (item 1) — resolveFoodWithCanonicalShadow/resolveFoodCandidatesWithCanonicalShadow
+// tem exatamente o mesmo contrato de resolveFoodCandidate(s), so envolvendo
+// com o shadow do resolver canonico (ver lib/nutrition/canonical-food-shadow.ts).
+import { resolveFoodWithCanonicalShadow, resolveFoodCandidatesWithCanonicalShadow } from "@/lib/nutrition/canonical-food-shadow";
 import {
   MEAL_KEYS,
   MEAL_KEY_LABELS,
@@ -514,7 +518,7 @@ async function assembleDraft(
       queries.push({ query: item.query, key: `${mealIndex}:${itemIndex}` });
     });
   });
-  const resolutions = await resolveFoodCandidates(queries, markers, adminId);
+  const resolutions = await resolveFoodCandidatesWithCanonicalShadow(queries, markers, adminId);
 
   const meals: DraftMeal[] = [];
   pending.forEach((entry, mealIndex) => {
@@ -677,7 +681,7 @@ export async function applyDraftOperations(
       continue;
     }
     if (op.operation === "add_item") {
-      const resolution = await resolveFoodCandidate(op.item.query, markers, adminId);
+      const resolution = await resolveFoodWithCanonicalShadow(op.item.query, markers, adminId);
       const { item, needsReview } = resolutionToMealParts(resolution, String(op.item.quantity), op.item.unit);
       if (resolution.status !== "RESOLVED") warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey, message: resolution.reason });
       if (item) meal.items = [...meal.items, item];
@@ -693,7 +697,7 @@ export async function applyDraftOperations(
     } else if (op.operation === "change_quantity") {
       meal.items = meal.items.map((item, index) => index === op.itemIndex ? { ...item, quantity: String(op.quantity) } : item);
     } else if (op.operation === "replace_item") {
-      const resolution = await resolveFoodCandidate(op.item.query, markers, adminId);
+      const resolution = await resolveFoodWithCanonicalShadow(op.item.query, markers, adminId);
       const { item, needsReview } = resolutionToMealParts(resolution, String(op.item.quantity), op.item.unit);
       if (resolution.status !== "RESOLVED") warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey, message: resolution.reason });
       // Conflito/ambiguidade no replace: mantem o item original em vez de

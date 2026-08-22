@@ -5,7 +5,8 @@ import type { Appointment } from "@/lib/repositories/appointments";
 import type { ClientTask } from "@/lib/repositories/client-tasks";
 import { getExistingNutritionRecord, type NutritionRecord } from "@/lib/repositories/nutrition-records";
 import type { Payment } from "@/lib/repositories/payments";
-import { getActiveMealPlan, type MealPlanPayload } from "@/lib/repositories/meal-plans";
+import { getActiveMealPlan, type MealPlanPayload, type MealPlanMealPayload } from "@/lib/repositories/meal-plans";
+import { getRecipeById } from "@/lib/repositories/recipes";
 
 export interface ClientPortalAccess {
   id: string;
@@ -39,13 +40,22 @@ export interface PortalProtocol {
   }>;
 }
 
+/**
+ * Food-First Meal Plan V1, Fase 8 — mesma semântica do print (Fase 7): o
+ * paciente vê o nome humano da receita aceita + modo de preparo, nunca só
+ * os nomes técnicos crus dos ingredientes. Os itens/cálculo continuam
+ * exatamente os da refeição (nada muda em `items`/nutrição) — só um campo
+ * de apresentação a mais quando `source_recipe_id` está presente.
+ */
+export type PortalMealPayload = MealPlanMealPayload & { recipe: { title: string; preparation_steps: string | null } | null };
+
 export interface ClientPortalSummary {
   client: Pick<Client, "id" | "name" | "email" | "phone">;
   appointments: Appointment[];
   tasks: ClientTask[];
   protocols: PortalProtocol[];
   carePlan: Pick<NutritionRecord, "goals" | "care_plan" | "hydration" | "physical_activity" | "sleep_routine"> | null;
-  mealPlan: MealPlanPayload | null;
+  mealPlan: (Omit<MealPlanPayload, "meals"> & { meals: PortalMealPayload[] }) | null;
   payments: Pick<Payment, "id" | "description" | "amount_cents" | "due_date" | "status" | "payment_link" | "receipt_url" | "installment_number" | "installment_total">[];
 }
 
@@ -180,6 +190,15 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
     ),
   ]);
 
+  const mealsWithRecipe: PortalMealPayload[] = mealPlan
+    ? await Promise.all(mealPlan.meals.map(async (meal) => ({
+        ...meal,
+        recipe: meal.source_recipe_id
+          ? await getRecipeById(meal.source_recipe_id).then((r) => r ? { title: r.title, preparation_steps: r.preparation_steps } : null)
+          : null,
+      })))
+    : [];
+
   return {
     client: { id: client.id, name: client.name, email: client.email, phone: client.phone },
     appointments,
@@ -196,7 +215,7 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
     // sugestões pendentes (IA ou manuais ainda não revisadas) nunca saem do
     // servidor pro portal (seção 17/20 do pedido: paciente não aprova nem
     // altera equivalência clínica, e nada sem revisão profissional chega até ele).
-    mealPlan: mealPlan ? { ...mealPlan, substitutions: mealPlan.substitutions.filter((item) => item.approved_by_professional !== false) } : null,
+    mealPlan: mealPlan ? { ...mealPlan, meals: mealsWithRecipe, substitutions: mealPlan.substitutions.filter((item) => item.approved_by_professional !== false) } : null,
     payments,
   };
 }

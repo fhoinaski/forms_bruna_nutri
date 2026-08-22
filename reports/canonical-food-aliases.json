@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-08-22T13:01:08.351Z",
+  "totalRules": 4,
+  "inserted": 4,
+  "alreadyExisted": 0,
+  "aliases": [
+    {
+      "alias": "arroz branco cru",
+      "canonical_food_id": "taco:4",
+      "target_name": "Arroz, tipo 1, cru",
+      "source": "curated",
+      "reason": "\"Arroz branco\" é o nome popular do que a TACO chama \"Arroz, tipo 1\" (arroz polido comum, sem casca) — termo comprovável no próprio domínio (TACO não usa \"branco\" na nomenclatura técnica, mas é como a população brasileira se refere a esse produto). Sem alias, \"arroz branco\" só batia por CONTAINS em pratos compostos que citam \"arroz branco\" como ingrediente, nunca no alimento simples.",
+      "confidence": "MANUAL_CURATED"
+    },
+    {
+      "alias": "arroz branco cozido",
+      "canonical_food_id": "taco:3",
+      "target_name": "Arroz, tipo 1, cozido",
+      "source": "curated",
+      "reason": "Mesmo raciocínio de 'arroz branco cru', na variante cozida — preparo preservado explicitamente na query, nunca removido.",
+      "confidence": "MANUAL_CURATED"
+    },
+    {
+      "alias": "leite integral",
+      "canonical_food_id": "taco:458",
+      "target_name": "Leite, de vaca, integral",
+      "source": "curated",
+      "reason": "A TACO nomeia como \"Leite, de vaca, integral\" — a query natural \"leite integral\" omite \"de vaca\" (espécie), que em português corrente é o padrão implícito quando não se especifica outro animal (a própria base tem \"Leite, búfala, integral\" e \"Leite, cabra, integral\" como entradas SEPARADAS e explicitamente rotuladas). \"integral\" (o atributo de gordura) é preservado — nunca removido. Sem alias, a ordem \"leite, de vaca, integral\" nunca virava PREFIX/EXACT contra \"leite integral\" (a palavra \"vaca\" no meio quebra o prefixo).",
+      "confidence": "MANUAL_CURATED"
+    },
+    {
+      "alias": "leite desnatado",
+      "canonical_food_id": "ibge_pof:7903601:99",
+      "target_name": "Leite de vaca desnatado",
+      "source": "curated",
+      "reason": "Mesmo raciocínio de 'leite integral' — POF já nomeia exatamente 'Leite de vaca desnatado' sem qualificador de forma (pó/UHT), o candidato mais limpo pra a busca genérica. 'desnatado' preservado — nunca removido.",
+      "confidence": "MANUAL_CURATED"
+    }
+  ]
+}

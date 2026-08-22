@@ -1,0 +1,991 @@
+{
+  "schema_version": "1.0.0",
+  "source": {
+    "id": "ibge_pof_2008_2009",
+    "name": "IBGE — POF 2008–2009: Tabelas de Composição Nutricional dos Alimentos Consumidos no Brasil",
+    "version": "2008–2009",
+    "accessed_at": "2026-08-21",
+    "source_url": "https://biblioteca.ibge.gov.br/visualizacao/livros/liv50002.pdf",
+    "download_url": "https://biblioteca.ibge.gov.br/visualizacao/livros/liv50002.pdf",
+    "license": {
+      "name": "Publicação oficial do IBGE — verificar condições aplicáveis de redistribuição",
+      "url": "https://www.ibge.gov.br/"
+    },
+    "notes": "Extraído do PDF oficial. O CD-ROM/planilha complementar não foi incluído porque o download retornou 403. Valores 0,00 do PDF são preservados como zero, embora a publicação os descreva como abaixo do limite de quantificação."
+  },
+  "normalization": {
+    "default_basis": "per_100g_edible_portion",
+    "source_tables": [
+      "energy_macronutrients_fiber",
+      "fats_sugars",
+      "minerals",
+      "vitamins",
+      "reference_sources"
+    ]
+  },
+  "nutrient_definitions": [
+    {
+      "id": "ibge_pof_2008_2009:energy_kcal",
+      "name": "energy_kcal",
+      "unit": "kcal",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:protein_g",
+      "name": "protein_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:fat_g",
+      "name": "fat_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:carbohydrate_g",
+      "name": "carbohydrate_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:fiber_g",
+      "name": "fiber_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:cholesterol_mg",
+      "name": "cholesterol_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:saturated_fat_g",
+      "name": "saturated_fat_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:monounsaturated_fat_g",
+      "name": "monounsaturated_fat_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:polyunsaturated_fat_g",
+      "name": "polyunsaturated_fat_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:linoleic_g",
+      "name": "linoleic_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:linolenic_g",
+      "name": "linolenic_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:trans_fat_g",
+      "name": "trans_fat_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:total_sugar_g",
+      "name": "total_sugar_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:added_sugar_g",
+      "name": "added_sugar_g",
+      "unit": "g",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:calcium_mg",
+      "name": "calcium_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:magnesium_mg",
+      "name": "magnesium_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:manganese_mg",
+      "name": "manganese_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:phosphorus_mg",
+      "name": "phosphorus_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:iron_mg",
+      "name": "iron_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:sodium_mg",
+      "name": "sodium_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:added_sodium_mg",
+      "name": "added_sodium_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:potassium_mg",
+      "name": "potassium_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:copper_mg",
+      "name": "copper_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:zinc_mg",
+      "name": "zinc_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:selenium_ug",
+      "name": "selenium_ug",
+      "unit": "ug",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:retinol_rae_ug",
+      "name": "retinol_rae_ug",
+      "unit": "ug",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:thiamin_mg",
+      "name": "thiamin_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:riboflavin_mg",
+      "name": "riboflavin_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:niacin_ne_mg",
+      "name": "niacin_ne_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:niacin_mg",
+      "name": "niacin_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:pyridoxine_mg",
+      "name": "pyridoxine_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:folate_dfe_ug",
+      "name": "folate_dfe_ug",
+      "unit": "ug",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:vitamin_d_ug",
+      "name": "vitamin_d_ug",
+      "unit": "ug",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:vitamin_e_mg",
+      "name": "vitamin_e_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:vitamin_c_mg",
+      "name": "vitamin_c_mg",
+      "unit": "mg",
+      "basis": "per_100g_edible_portion"
+    },
+    {
+      "id": "ibge_pof_2008_2009:cobalamin_ug",
+      "name": "cobalamin_ug",
+      "unit": "ug",
+      "basis": "per_100g_edible_portion"
+    }
+  ],
+  "foods": [
+    {
+      "id": "ibge_pof_2008_2009:6300701:1",
+      "source_food_id": "6300701",
+      "name": "Milho (em grão)",
+      "preparation": {
+        "code": 1,
+        "name": "Cru(a)"
+      },
+      "basis": "per_100g_edible_portion",
+      "portion": {
+        "quantity": 100,
+        "unit": "g",
+        "edible": true
+      },
+      "nutrients": [
+        {
+          "nutrient_id": "ibge_pof_2008_2009:energy_kcal",
+          "name": "energy_kcal",
+          "unit": "kcal",
+          "basis": "per_100g_edible_portion",
+          "value": 160.14,
+          "status": "reported",
+          "raw": "160,14"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:protein_g",
+          "name": "protein_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.32,
+          "status": "reported",
+          "raw": "3,32"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:fat_g",
+          "name": "fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 7.18,
+          "status": "reported",
+          "raw": "7,18"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:carbohydrate_g",
+          "name": "carbohydrate_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 25.11,
+          "status": "reported",
+          "raw": "25,11"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:fiber_g",
+          "name": "fiber_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 4.25,
+          "status": "reported",
+          "raw": "4,25"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:cholesterol_mg",
+          "name": "cholesterol_mg",
+          "unit": "mg",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:saturated_fat_g",
+          "name": "saturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 1.12,
+          "status": "reported",
+          "raw": "1,12"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:monounsaturated_fat_g",
+          "name": "monounsaturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 1.72,
+          "status": "reported",
+          "raw": "1,72"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:polyunsaturated_fat_g",
+          "name": "polyunsaturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 4.01,
+          "status": "reported",
+          "raw": "4,01"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:linoleic_g",
+          "name": "linoleic_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.59,
+          "status": "reported",
+          "raw": "3,59"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:linolenic_g",
+          "name": "linolenic_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.42,
+          "status": "reported",
+          "raw": "0,42"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:trans_fat_g",
+          "name": "trans_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.03,
+          "status": "reported",
+          "raw": "0,03"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:total_sugar_g",
+          "name": "total_sugar_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.16,
+          "status": "reported",
+          "raw": "3,16"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:added_sugar_g",
+          "name": "added_sugar_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        }
+      ],
+      "metadata": {
+        "source_tables": [
+          "table_1",
+          "table_2"
+        ]
+      }
+    },
+    {
+      "id": "ibge_pof_2008_2009:6300701:2",
+      "source_food_id": "6300701",
+      "name": "Milho (em grão)",
+      "preparation": {
+        "code": 2,
+        "name": "Cozido(a)"
+      },
+      "basis": "per_100g_edible_portion",
+      "portion": {
+        "quantity": 100,
+        "unit": "g",
+        "edible": true
+      },
+      "nutrients": [
+        {
+          "nutrient_id": "ibge_pof_2008_2009:energy_kcal",
+          "name": "energy_kcal",
+          "unit": "kcal",
+          "basis": "per_100g_edible_portion",
+          "value": 160.14,
+          "status": "reported",
+          "raw": "160,14"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:protein_g",
+          "name": "protein_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.32,
+          "status": "reported",
+          "raw": "3,32"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:fat_g",
+          "name": "fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 7.18,
+          "status": "reported",
+          "raw": "7,18"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:carbohydrate_g",
+          "name": "carbohydrate_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 25.11,
+          "status": "reported",
+          "raw": "25,11"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:fiber_g",
+          "name": "fiber_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 4.25,
+          "status": "reported",
+          "raw": "4,25"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:cholesterol_mg",
+          "name": "cholesterol_mg",
+          "unit": "mg",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:saturated_fat_g",
+          "name": "saturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 1.12,
+          "status": "reported",
+          "raw": "1,12"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:monounsaturated_fat_g",
+          "name": "monounsaturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 1.72,
+          "status": "reported",
+          "raw": "1,72"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:polyunsaturated_fat_g",
+          "name": "polyunsaturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 4.01,
+          "status": "reported",
+          "raw": "4,01"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:linoleic_g",
+          "name": "linoleic_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.59,
+          "status": "reported",
+          "raw": "3,59"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:linolenic_g",
+          "name": "linolenic_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.42,
+          "status": "reported",
+          "raw": "0,42"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:trans_fat_g",
+          "name": "trans_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.03,
+          "status": "reported",
+          "raw": "0,03"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:total_sugar_g",
+          "name": "total_sugar_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.16,
+          "status": "reported",
+          "raw": "3,16"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:added_sugar_g",
+          "name": "added_sugar_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        }
+      ],
+      "metadata": {
+        "source_tables": [
+          "table_1",
+          "table_2"
+        ]
+      }
+    },
+    {
+      "id": "ibge_pof_2008_2009:6300701:3",
+      "source_food_id": "6300701",
+      "name": "Milho (em grão)",
+      "preparation": {
+        "code": 3,
+        "name": "Grelhado(a)/brasa/churrasco"
+      },
+      "basis": "per_100g_edible_portion",
+      "portion": {
+        "quantity": 100,
+        "unit": "g",
+        "edible": true
+      },
+      "nutrients": [
+        {
+          "nutrient_id": "ibge_pof_2008_2009:energy_kcal",
+          "name": "energy_kcal",
+          "unit": "kcal",
+          "basis": "per_100g_edible_portion",
+          "value": 160.14,
+          "status": "reported",
+          "raw": "160,14"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:protein_g",
+          "name": "protein_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.32,
+          "status": "reported",
+          "raw": "3,32"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:fat_g",
+          "name": "fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 7.18,
+          "status": "reported",
+          "raw": "7,18"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:carbohydrate_g",
+          "name": "carbohydrate_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 25.11,
+          "status": "reported",
+          "raw": "25,11"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:fiber_g",
+          "name": "fiber_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 4.25,
+          "status": "reported",
+          "raw": "4,25"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:cholesterol_mg",
+          "name": "cholesterol_mg",
+          "unit": "mg",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:saturated_fat_g",
+          "name": "saturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 1.12,
+          "status": "reported",
+          "raw": "1,12"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:monounsaturated_fat_g",
+          "name": "monounsaturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 1.72,
+          "status": "reported",
+          "raw": "1,72"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:polyunsaturated_fat_g",
+          "name": "polyunsaturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 4.01,
+          "status": "reported",
+          "raw": "4,01"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:linoleic_g",
+          "name": "linoleic_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.59,
+          "status": "reported",
+          "raw": "3,59"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:linolenic_g",
+          "name": "linolenic_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.42,
+          "status": "reported",
+          "raw": "0,42"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:trans_fat_g",
+          "name": "trans_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.03,
+          "status": "reported",
+          "raw": "0,03"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:total_sugar_g",
+          "name": "total_sugar_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.16,
+          "status": "reported",
+          "raw": "3,16"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:added_sugar_g",
+          "name": "added_sugar_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        }
+      ],
+      "metadata": {
+        "source_tables": [
+          "table_1",
+          "table_2"
+        ]
+      }
+    },
+    {
+      "id": "ibge_pof_2008_2009:6300701:4",
+      "source_food_id": "6300701",
+      "name": "Milho (em grão)",
+      "preparation": {
+        "code": 4,
+        "name": "Assado(a)"
+      },
+      "basis": "per_100g_edible_portion",
+      "portion": {
+        "quantity": 100,
+        "unit": "g",
+        "edible": true
+      },
+      "nutrients": [
+        {
+          "nutrient_id": "ibge_pof_2008_2009:energy_kcal",
+          "name": "energy_kcal",
+          "unit": "kcal",
+          "basis": "per_100g_edible_portion",
+          "value": 160.14,
+          "status": "reported",
+          "raw": "160,14"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:protein_g",
+          "name": "protein_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.32,
+          "status": "reported",
+          "raw": "3,32"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:fat_g",
+          "name": "fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 7.18,
+          "status": "reported",
+          "raw": "7,18"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:carbohydrate_g",
+          "name": "carbohydrate_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 25.11,
+          "status": "reported",
+          "raw": "25,11"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:fiber_g",
+          "name": "fiber_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 4.25,
+          "status": "reported",
+          "raw": "4,25"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:cholesterol_mg",
+          "name": "cholesterol_mg",
+          "unit": "mg",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:saturated_fat_g",
+          "name": "saturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 1.12,
+          "status": "reported",
+          "raw": "1,12"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:monounsaturated_fat_g",
+          "name": "monounsaturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 1.72,
+          "status": "reported",
+          "raw": "1,72"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:polyunsaturated_fat_g",
+          "name": "polyunsaturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 4.01,
+          "status": "reported",
+          "raw": "4,01"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:linoleic_g",
+          "name": "linoleic_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.59,
+          "status": "reported",
+          "raw": "3,59"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:linolenic_g",
+          "name": "linolenic_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.42,
+          "status": "reported",
+          "raw": "0,42"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:trans_fat_g",
+          "name": "trans_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.03,
+          "status": "reported",
+          "raw": "0,03"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:total_sugar_g",
+          "name": "total_sugar_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 3.16,
+          "status": "reported",
+          "raw": "3,16"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:added_sugar_g",
+          "name": "added_sugar_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        }
+      ],
+      "metadata": {
+        "source_tables": [
+          "table_1",
+          "table_2"
+        ]
+      }
+    },
+    {
+      "id": "ibge_pof_2008_2009:6300101:99",
+      "source_food_id": "6300101",
+      "name": "Arroz (polido, parboilizado, agulha, agulhinha, etc.)",
+      "preparation": {
+        "code": 99,
+        "name": "Não se aplica"
+      },
+      "basis": "per_100g_edible_portion",
+      "portion": {
+        "quantity": 100,
+        "unit": "g",
+        "edible": true
+      },
+      "nutrients": [
+        {
+          "nutrient_id": "ibge_pof_2008_2009:energy_kcal",
+          "name": "energy_kcal",
+          "unit": "kcal",
+          "basis": "per_100g_edible_portion",
+          "value": 135.62,
+          "status": "reported",
+          "raw": "135,62"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:protein_g",
+          "name": "protein_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 2.5,
+          "status": "reported",
+          "raw": "2,50"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:fat_g",
+          "name": "fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 1.2,
+          "status": "reported",
+          "raw": "1,20"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:carbohydrate_g",
+          "name": "carbohydrate_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 27.78,
+          "status": "reported",
+          "raw": "27,78"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:fiber_g",
+          "name": "fiber_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 1.55,
+          "status": "reported",
+          "raw": "1,55"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:cholesterol_mg",
+          "name": "cholesterol_mg",
+          "unit": "mg",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:saturated_fat_g",
+          "name": "saturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.35,
+          "status": "reported",
+          "raw": "0,35"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:monounsaturated_fat_g",
+          "name": "monounsaturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.22,
+          "status": "reported",
+          "raw": "0,22"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:polyunsaturated_fat_g",
+          "name": "polyunsaturated_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.56,
+          "status": "reported",
+          "raw": "0,56"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:linoleic_g",
+          "name": "linoleic_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.56,
+          "status": "reported",
+          "raw": "0,56"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:linolenic_g",
+          "name": "linolenic_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.07,
+          "status": "reported",
+          "raw": "0,07"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:trans_fat_g",
+          "name": "trans_fat_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": 0.01,
+          "status": "reported",
+          "raw": "0,01"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:total_sugar_g",
+          "name": "total_sugar_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        },
+        {
+          "nutrient_id": "ibge_pof_2008_2009:added_sugar_g",
+          "name": "added_sugar_g",
+          "unit": "g",
+          "basis": "per_100g_edible_portion",
+          "value": null,
+          "status": "missing",
+          "raw": "-"
+        }
+      ],
+      "metadata": {
+        "source_tables": [
+          "table_1",
+          "table_2"
+        ]
+      }
+    }
+  ]
+}

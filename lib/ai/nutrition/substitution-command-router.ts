@@ -18,7 +18,10 @@
  */
 import { getActiveMealPlan, type MealPlanItemPayload, type MealPlanMealPayload, type MealPlanPayload, type MealPlanSubstitutionPayload } from "@/lib/repositories/meal-plans";
 import { listPatientClinicalMarkers } from "@/lib/repositories/patient-clinical-markers";
-import { resolveFoodCandidate, toDisplayFoodName, type FoodResolution } from "@/lib/nutrition/food-resolver";
+import { toDisplayFoodName, type FoodResolution } from "@/lib/nutrition/food-resolver";
+// FASE 5 (item 1) — mesmo contrato de resolveFoodCandidate, so envolvendo
+// com o shadow do resolver canonico (ver lib/nutrition/canonical-food-shadow.ts).
+import { resolveFoodWithCanonicalShadow } from "@/lib/nutrition/canonical-food-shadow";
 import { toPersistedMealFoodSource, sourceFromMacroReference, getFoodByReference } from "@/lib/nutrition/food-catalog";
 import { executeProposeMealPlanChange } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { PROPOSE_MEAL_PLAN_CHANGE_TOOL_NAME } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
@@ -244,7 +247,7 @@ export async function tryHandleSubstitutionCommand(
   const base = baseMatches[0];
 
   const markers = await listPatientClinicalMarkers(ctx.clientId);
-  let resolution = await resolveFoodCandidate(candidateFoodText, markers);
+  let resolution = await resolveFoodWithCanonicalShadow(candidateFoodText, markers);
 
   // scoreText (lib/nutrition/food-catalog.ts) só aceita rank 0 (exato) se o
   // texto bater literalmente com "Alimento, atributo1, atributo2" — texto
@@ -254,7 +257,7 @@ export async function tryHandleSubstitutionCommand(
   // só reconsulta com o nome técnico exato do único candidato encontrado,
   // reaproveitando 100% da mesma lógica de segurança clínica do resolver.
   if (resolution.status === "AMBIGUOUS" && resolution.candidates.length === 1 && normalizeForComparison(resolution.candidates[0].displayName) === normalizeForComparison(candidateFoodText)) {
-    resolution = await resolveFoodCandidate(resolution.candidates[0].name, markers);
+    resolution = await resolveFoodWithCanonicalShadow(resolution.candidates[0].name, markers);
   }
 
   if (resolution.status === "AMBIGUOUS") {

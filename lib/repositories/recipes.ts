@@ -1,4 +1,5 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
+import { capForLikePattern } from "@/lib/d1/like-safety";
 import {
   calculateRecipeNutrition,
   normalizeRecipeMealGroup,
@@ -142,11 +143,11 @@ export async function getRecipes(filters: {
   }
   if (filters.tag) {
     conditions.push(`tags_json LIKE ?${idx++}`);
-    params.push(`%${filters.tag}%`);
+    params.push(`%${capForLikePattern(filters.tag)}%`);
   }
   if (filters.q?.trim()) {
     conditions.push(`(title LIKE ?${idx} OR description LIKE ?${idx} OR tags_json LIKE ?${idx})`);
-    params.push(`%${filters.q.trim()}%`);
+    params.push(`%${capForLikePattern(filters.q.trim())}%`);
     idx++;
   }
 

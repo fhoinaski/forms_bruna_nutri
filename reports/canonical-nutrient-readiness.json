@@ -1,0 +1,260 @@
+{
+  "generatedAt": "2026-08-22T16:47:40.680Z",
+  "totalFoodsBySource": {
+    "IBGE_POF": 1944,
+    "TACO": 597,
+    "TBCA": 7522
+  },
+  "CORE": [
+    "ENERGY_KCAL",
+    "PROTEIN",
+    "CARBOHYDRATE",
+    "TOTAL_FAT",
+    "FIBER"
+  ],
+  "CLINICAL": [
+    "SODIUM",
+    "CALCIUM",
+    "IRON",
+    "MAGNESIUM",
+    "POTASSIUM",
+    "ZINC",
+    "FOLATE",
+    "VITAMIN_B12",
+    "VITAMIN_D",
+    "VITAMIN_C",
+    "ADDED_SUGAR",
+    "ADDED_SALT"
+  ],
+  "coverageByNutrient": {
+    "ADDED_SUGAR": {
+      "IBGE_POF": {
+        "reported": 255,
+        "total": 1944,
+        "pct": 13.1
+      },
+      "TBCA": {
+        "reported": 4744,
+        "total": 7522,
+        "pct": 63.1
+      }
+    },
+    "CARBOHYDRATE": {
+      "IBGE_POF": {
+        "reported": 1349,
+        "total": 1944,
+        "pct": 69.4
+      },
+      "TACO": {
+        "reported": 582,
+        "total": 597,
+        "pct": 97.5
+      },
+      "TBCA": {
+        "reported": 6271,
+        "total": 7522,
+        "pct": 83.4
+      }
+    },
+    "ENERGY_KCAL": {
+      "IBGE_POF": {
+        "reported": 1894,
+        "total": 1944,
+        "pct": 97.4
+      },
+      "TACO": {
+        "reported": 591,
+        "total": 597,
+        "pct": 99
+      },
+      "TBCA": {
+        "reported": 6272,
+        "total": 7522,
+        "pct": 83.4
+      }
+    },
+    "FIBER": {
+      "IBGE_POF": {
+        "reported": 1070,
+        "total": 1944,
+        "pct": 55
+      },
+      "TACO": {
+        "reported": 355,
+        "total": 597,
+        "pct": 59.5
+      },
+      "TBCA": {
+        "reported": 6305,
+        "total": 7522,
+        "pct": 83.8
+      }
+    },
+    "FOLATE": {
+      "IBGE_POF": {
+        "reported": 6,
+        "total": 1944,
+        "pct": 0.3
+      },
+      "TBCA": {
+        "reported": 5891,
+        "total": 7522,
+        "pct": 78.3
+      }
+    },
+    "PROTEIN": {
+      "IBGE_POF": {
+        "reported": 1830,
+        "total": 1944,
+        "pct": 94.1
+      },
+      "TACO": {
+        "reported": 576,
+        "total": 597,
+        "pct": 96.5
+      },
+      "TBCA": {
+        "reported": 6498,
+        "total": 7522,
+        "pct": 86.4
+      }
+    },
+    "TOTAL_FAT": {
+      "IBGE_POF": {
+        "reported": 1816,
+        "total": 1944,
+        "pct": 93.4
+      },
+      "TACO": {
+        "reported": 560,
+        "total": 597,
+        "pct": 93.8
+      },
+      "TBCA": {
+        "reported": 6148,
+        "total": 7522,
+        "pct": 81.7
+      }
+    },
+    "VITAMIN_B12": {
+      "IBGE_POF": {
+        "reported": 7,
+        "total": 1944,
+        "pct": 0.4
+      },
+      "TBCA": {
+        "reported": 6017,
+        "total": 7522,
+        "pct": 80
+      }
+    },
+    "VITAMIN_C": {
+      "IBGE_POF": {
+        "reported": 10,
+        "total": 1944,
+        "pct": 0.5
+      },
+      "TACO": {
+        "reported": 208,
+        "total": 597,
+        "pct": 34.8
+      },
+      "TBCA": {
+        "reported": 5602,
+        "total": 7522,
+        "pct": 74.5
+      }
+    },
+    "VITAMIN_D": {
+      "IBGE_POF": {
+        "reported": 10,
+        "total": 1944,
+        "pct": 0.5
+      },
+      "TBCA": {
+        "reported": 5617,
+        "total": 7522,
+        "pct": 74.7
+      }
+    },
+    "CALCIUM": {
+      "TACO": {
+        "reported": 579,
+        "total": 597,
+        "pct": 97
+      },
+      "TBCA": {
+        "reported": 6408,
+        "total": 7522,
+        "pct": 85.2
+      }
+    },
+    "IRON": {
+      "TACO": {
+        "reported": 554,
+        "total": 597,
+        "pct": 92.8
+      },
+      "TBCA": {
+        "reported": 6352,
+        "total": 7522,
+        "pct": 84.4
+      }
+    },
+    "MAGNESIUM": {
+      "TACO": {
+        "reported": 577,
+        "total": 597,
+        "pct": 96.6
+      },
+      "TBCA": {
+        "reported": 6318,
+        "total": 7522,
+        "pct": 84
+      }
+    },
+    "POTASSIUM": {
+      "TACO": {
+        "reported": 582,
+        "total": 597,
+        "pct": 97.5
+      },
+      "TBCA": {
+        "reported": 6340,
+        "total": 7522,
+        "pct": 84.3
+      }
+    },
+    "SODIUM": {
+      "TACO": {
+        "reported": 523,
+        "total": 597,
+        "pct": 87.6
+      },
+      "TBCA": {
+        "reported": 6184,
+        "total": 7522,
+        "pct": 82.2
+      }
+    },
+    "ZINC": {
+      "TACO": {
+        "reported": 543,
+        "total": 597,
+        "pct": 91
+      },
+      "TBCA": {
+        "reported": 6308,
+        "total": 7522,
+        "pct": 83.9
+      }
+    },
+    "ADDED_SALT": {
+      "TBCA": {
+        "reported": 4763,
+        "total": 7522,
+        "pct": 63.3
+      }
+    }
+  }
+}

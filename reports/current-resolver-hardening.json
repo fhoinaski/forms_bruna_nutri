@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2026-08-22T15:44:00.000Z",
+  "bug": "LIKE or GLOB pattern too complex (D1 SQLITE_ERROR, code 7500)",
+  "rootCause": "D1 (Cloudflare's HTTP-hosted SQLite) rejects any LIKE/GLOB pattern whose total string length (including the '%' wildcards) exceeds ~50 characters. This is an undocumented platform limit, empirically measured via binary search against the real D1 database (40/42/44/46/48 chars of content = OK; 50/52/54/56/58/60/62 = FAIL). node:sqlite locally does NOT reproduce this even at 10,000 chars — it is D1-specific, not a general SQLite limitation.",
+  "triggerCondition": "A search query long enough that '%' + query + '%' exceeds 50 chars. TBCA-derived food names are frequently 90-150+ characters when normalized (e.g. long composite-dish descriptions), so any code path that builds a LIKE pattern directly from a full free-text food query was exposed.",
+  "callSitesFound": [
+    {
+      "file": "lib/repositories/custom-foods.ts",
+      "function": "listCustomFoods",
+      "role": "PRIMARY cause — runs on every single food search (CUSTOM/MANUFACTURER are always in the default source filter), so any long query broke the search before even reaching the USDA fallback.",
+      "foundIn": "initial LIKE audit (grep -rn \"LIKE ?\" lib/ app/)"
+    },
+    {
+      "file": "lib/repositories/usda-foods.ts",
+      "function": "searchUsdaFoods",
+      "role": "SECONDARY — only hit when the local (TACO/CUSTOM) catalog returns fewer than LOCAL_RESULTS_SUFFICIENT_FOR_USDA candidates, or USDA is explicitly requested.",
+      "foundIn": "initial LIKE audit"
+    },
+    {
+      "file": "lib/nutrition/canonical-food-search.ts",
+      "function": "fetchCandidatesByLike",
+      "role": "LATENT — the LIKE fallback only runs when FTS is unavailable; never actually triggered in the real shadow runs, fixed preventively.",
+      "foundIn": "initial LIKE audit"
+    },
+    {
+      "file": "lib/repositories/recipes.ts",
+      "function": "getRecipes",
+      "role": "MISSED IN THE FIRST PASS — the actual remaining cause of 115/519 residual errors after the first three fixes landed. Reached via lib/nutrition/food-resolver.ts's resolveFoodCandidateInner -> findRecipeCandidatesForPreparation, which runs getRecipes({ q: <full original query> }) whenever the current resolver finds ZERO catalog matches AND the query looks like a composite preparation (status PREPARATION_NEEDS_REVIEW). Long TBCA-derived names that aren't in the current resolver's catalog hit this path constantly in the 520-query dataset (roughly 22% of it).",
+      "foundIn": "isolated by bisecting resolveFoodCandidate's call graph after searchFoods alone (0 errors) failed to reproduce the residual 115 errors seen through the full resolveFoodCandidate/resolveFoodWithCanonicalShadow path"
+    }
+  ],
+  "fix": {
+    "approach": "Shared minimal module lib/d1/like-safety.ts exporting capForLikePattern(text) (caps content to 40 chars, safe margin under the 50-char total-pattern limit) and MAX_LIKE_PATTERN_CONTENT_LENGTH. Applied ONLY to the fuzzy/contains LIKE branches in all four call sites above.",
+    "preservedPrecision": "Exact-match (=) and FTS (MATCH) branches in usda-foods.ts and canonical-food-search.ts keep the FULL, untruncated query text — capping only ever touches the already-fuzzy prefix/contains LIKE branches, so no semantically critical term is ever silently dropped from the paths that actually decide identity.",
+    "noEscaping": "listCustomFoods and getRecipes do not escape literal '%'/'_' from user input (documented, accepted trade-off: the worst case is a slightly more permissive match, never a crash or data leak). searchUsdaFoods normalizes input to [a-z0-9 ] before building any pattern, so it has no literal wildcard characters to worry about."
+  },
+  "errorsBeforeFix": 203,
+  "errorsAfterFirstThreeFixes": 115,
+  "errorsAfterRecipesFix": 0,
+  "totalQueries": 519,
+  "regressionTestsAdded": [
+    "tests/like-pattern-hardening.test.ts (14 tests: capForLikePattern unit tests, LIKE/GLOB escaping behavior, listCustomFoods/searchUsdaFoods/getRecipes/canonical-food-search regression tests against the real 94-char TBCA name that reproduced the bug)"
+  ]
+}

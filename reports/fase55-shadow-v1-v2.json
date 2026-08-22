@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-08-22T20:21:54.978Z",
+  "totalQueries": 1076,
+  "elapsedSec": 35.061,
+  "v1Accept": 656,
+  "v2Accept": 516,
+  "bothAccept": 516,
+  "onlyV1": 140,
+  "onlyV2": 0,
+  "neither": 417,
+  "agreementRate": 0.8671003717472119,
+  "v1CoverageRate": 0.6096654275092936,
+  "v2CoverageRate": 0.4795539033457249,
+  "v1PrecisionOnGroundTruthAccepted": 0.9882352941176471,
+  "v2PrecisionOnGroundTruthAccepted": 1
+}

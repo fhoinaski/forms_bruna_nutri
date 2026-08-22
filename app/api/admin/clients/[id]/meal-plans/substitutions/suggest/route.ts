@@ -3,7 +3,8 @@ import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
 import { getFoodByReference, sourceFromMacroReference, toPersistedMealFoodSource, type FoodReference } from "@/lib/nutrition/food-catalog";
-import { resolveFoodCandidates, toDisplayFoodName, type FoodResolution } from "@/lib/nutrition/food-resolver";
+import { toDisplayFoodName, type FoodResolution } from "@/lib/nutrition/food-resolver";
+import { resolveFoodCandidatesWithCanonicalShadow } from "@/lib/nutrition/canonical-food-shadow";
 import { listPatientClinicalMarkers } from "@/lib/repositories/patient-clinical-markers";
 import { findFoodSubstitutes, type EquivalenceMode } from "@/lib/nutrition/substitution-engine";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const markers = await listPatientClinicalMarkers(id);
-  const resolutions = await resolveFoodCandidates(
+  const resolutions = await resolveFoodCandidatesWithCanonicalShadow(
     input.candidateQueries.map((query, index) => ({ query, key: String(index) })),
     markers
   );

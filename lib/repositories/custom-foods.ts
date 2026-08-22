@@ -1,4 +1,5 @@
 import { d1Execute, d1Query } from "@/lib/d1/client";
+import { capForLikePattern } from "@/lib/d1/like-safety";
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
 
 /**
@@ -51,12 +52,20 @@ export interface CustomFoodInput {
   notes?: string | null;
 }
 
+// FASE 4.5 — achado real (causa raiz principal de "LIKE or GLOB pattern too
+// complex" no resolver atual — ver lib/d1/like-safety.ts): listCustomFoods
+// roda em TODA busca de alimento (CUSTOM/MANUFACTURER estao sempre no
+// filtro padrao de searchFoods) — uma query longa (nome tecnico da TBCA,
+// 90+ caracteres) quebrava a busca inteira antes mesmo de chegar no
+// fallback USDA. So o padrao LIKE e limitado; a query completa continua
+// preservada pra outros usos futuros deste texto.
 export async function listCustomFoods(query?: string): Promise<CustomFood[]> {
   const trimmed = query?.trim();
   if (trimmed) {
+    const likeSafe = capForLikePattern(trimmed);
     return d1Query<CustomFood>(
       "SELECT * FROM custom_foods WHERE name LIKE ?1 OR brand LIKE ?1 ORDER BY name ASC",
-      [`%${trimmed}%`]
+      [`%${likeSafe}%`]
     );
   }
   return d1Query<CustomFood>("SELECT * FROM custom_foods ORDER BY name ASC");

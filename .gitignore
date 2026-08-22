@@ -21,3 +21,4 @@ reports/*.db
 lib/clinical/data/source/
 e2e/.tmp/
 *.cline/
+data-local/

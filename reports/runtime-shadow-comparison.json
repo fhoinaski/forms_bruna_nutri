@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-08-22T15:43:35.111Z",
+  "totalQueries": 519,
+  "queryErrors": 0,
+  "elapsedSec": 244.7,
+  "outcomes": {
+    "CANONICAL_FOUND_MORE": 378,
+    "CANONICAL_AMBIGUOUS": 84,
+    "DIFFERENT_TOP": 13,
+    "SAME_TOP": 44
+  },
+  "latencyMs": {
+    "totalRoundTrip": {
+      "p50": 365.66,
+      "p95": 723.57,
+      "p99": 810.47,
+      "max": 2399.85
+    },
+    "current": {
+      "p50": 361.91,
+      "p95": 723.44,
+      "p99": 810.33,
+      "max": 2396.99
+    },
+    "canonical": {
+      "p50": 351.97,
+      "p95": 390.24,
+      "p99": 600.79,
+      "max": 2399.73
+    }
+  }
+}

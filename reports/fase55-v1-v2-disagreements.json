@@ -1,0 +1,1002 @@
+[
+  {
+    "query": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+    "topName": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": 10
+  },
+  {
+    "query": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+    "topName": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": 10
+  },
+  {
+    "query": "Feijão, branco, cozido, s/ óleo, c/ sal",
+    "topName": "Feijão, branco, cozido, s/ óleo, c/ sal",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME_AND_PREPARATION",
+    "score": 131,
+    "gap": 89.5
+  },
+  {
+    "query": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+    "topName": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": 10
+  },
+  {
+    "query": "Picadinho de carne de soja, c/ sal",
+    "topName": "Picadinho de carne de soja, c/ sal (proteína de soja (hidratada com caldo de legumes, pimentão amarelo e vermelho, tomate, cebolinha e salsinha, c/ óleo de soja, cebola e alho, c/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME",
+    "score": 100,
+    "gap": 60
+  },
+  {
+    "query": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+    "topName": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": 10
+  },
+  {
+    "query": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+    "topName": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal",
+    "topName": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal (ovo de galinha inteiro, queijo parmesão, c/ óleo de soja, c/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME",
+    "score": 118.5,
+    "gap": 63
+  },
+  {
+    "query": "Omelete, vegetais e queijo parmesão, c/ sal",
+    "topName": "Omelete, vegetais e queijo parmesão, c/ sal (ovo de galinha, vegetais - cenoura, abobrinha, tomate, champignon paris, salsa, cebolinha verde, queijo parmesão, c/ óleo, cebola e alho, c/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME",
+    "score": 112.5,
+    "gap": 60
+  },
+  {
+    "query": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+    "topName": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": 48.5
+  },
+  {
+    "query": "Abacate, polpa, in natura",
+    "topName": "Abacate, polpa, in natura , Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 96.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 96,
+    "gap": null
+  },
+  {
+    "query": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+    "topName": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Mamão, Formosa, polpa, in natura",
+    "topName": "Mamão, Formosa, polpa, in natura , Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 96.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 96,
+    "gap": 46.5
+  },
+  {
+    "query": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+    "topName": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+    "topName": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME_AND_PREPARATION",
+    "score": 131,
+    "gap": 90.5
+  },
+  {
+    "query": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+    "topName": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Gelatina, em pó",
+    "topName": "Gelatina, em pó (média de diferentes sabores), Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query classificada como alto risco.",
+    "matchClass": "EXACT_NAME",
+    "score": 112,
+    "gap": 31.5
+  },
+  {
+    "query": "Pudim, coco, mistura p/",
+    "topName": "Pudim, coco, mistura p/ (média de diferentes marcas), Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query classificada como alto risco.",
+    "matchClass": "EXACT_NAME",
+    "score": 112,
+    "gap": 27
+  },
+  {
+    "query": "Pão de queijo, mistura p/",
+    "topName": "Pão de queijo, mistura p/ (média de diferentes marcas), Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query classificada como alto risco.",
+    "matchClass": "EXACT_NAME",
+    "score": 112,
+    "gap": 27
+  },
+  {
+    "query": "Batata, doce, descascada, crua, Ipomoea batatas Lam., var. Clone CNPH",
+    "topName": "Batata, doce, descascada, crua, Ipomoea batatas Lam., var. Clone CNPH",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query classificada como alto risco.",
+    "matchClass": "EXACT_NAME_AND_PREPARATION",
+    "score": 136,
+    "gap": null
+  },
+  {
+    "query": "Caldo de batata e beterraba, c/ carne, c/ óleo, s/ sal, Brasil",
+    "topName": "Caldo de batata e beterraba, c/ carne, c/ óleo, s/ sal, Brasil (água, batata liofilizada, beterraba, caldo de carne, c/ cebola, alho e óleo de soja, s/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME",
+    "score": 115.5,
+    "gap": 60
+  },
+  {
+    "query": "Abacaxi cozido, s/ água de remolho (teor reduzido de potássio e resíduo), c/ adoçante",
+    "topName": "Abacaxi cozido, s/ água de remolho (teor reduzido de potássio e resíduo), c/ adoçante, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Salada, escarola e tomate, s/ óleo, s/ sal",
+    "topName": "Salada, escarola e tomate, s/ óleo, s/ sal, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 90,
+    "gap": 34.5
+  },
+  {
+    "query": "Polenta cremosa, c/ margarina, caldo de galinha, c/ cebola, alho e óleo de soja, s/ sal",
+    "topName": "Polenta cremosa, c/ margarina, caldo de galinha, c/ cebola, alho e óleo de soja, s/ sal, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 90,
+    "gap": 33
+  },
+  {
+    "query": "Yakisoba",
+    "topName": "Yakisoba",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 115,
+    "gap": 47.372852786258306
+  },
+  {
+    "query": "Mari",
+    "topName": "Mari",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 110.38086007617157,
+    "gap": 27.76004264951824
+  },
+  {
+    "query": "mamão",
+    "topName": "Mamão",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 109.83384880450761,
+    "gap": 27.545209792582767
+  },
+  {
+    "query": "abacate",
+    "topName": "Abacate",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": 25.23760328178969
+  },
+  {
+    "query": "alface",
+    "topName": "Alface",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 109.02905956957608,
+    "gap": 21.91496684297013
+  },
+  {
+    "query": "tomate",
+    "topName": "Tomate",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 104.95510399020111,
+    "gap": 26
+  },
+  {
+    "query": "maçã",
+    "topName": "Maçã",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 105.94893705319521,
+    "gap": 25.937503737614264
+  },
+  {
+    "query": "morango",
+    "topName": "Morango",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 109.46096403773768,
+    "gap": 27.8931530906829
+  },
+  {
+    "query": "uva",
+    "topName": "Uva",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 109.39495505832221,
+    "gap": 24.171124327271002
+  },
+  {
+    "query": "manga",
+    "topName": "Manga",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 109.57675088773475,
+    "gap": 25.77484242841315
+  },
+  {
+    "query": "abacaxi",
+    "topName": "Abacaxi",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 109.83384880450761,
+    "gap": 25.892067383729227
+  },
+  {
+    "query": "melancia",
+    "topName": "Melancia",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": 24.5
+  },
+  {
+    "query": "melão",
+    "topName": "Melão",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": 24.77652429303214
+  },
+  {
+    "query": "granola",
+    "topName": "Granola",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": 43.70072316012548
+  },
+  {
+    "query": "amendoim",
+    "topName": "Amendoim (em grão) in natura",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 107.16348300286494,
+    "gap": 20.020034815976317
+  },
+  {
+    "query": "margarina",
+    "topName": "Margarina (média várias amostras, c/ e s/ sal), Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 102.2948506512104,
+    "gap": 21.76963492756356
+  },
+  {
+    "query": "presunto",
+    "topName": "Presunto",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 109.90694310773488,
+    "gap": 27.46408932684301
+  },
+  {
+    "query": "bacon",
+    "topName": "Bacon",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 109.83384880450761,
+    "gap": 30
+  },
+  {
+    "query": "cuscuz",
+    "topName": "Cuscuz",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": 26
+  },
+  {
+    "query": "rúcula",
+    "topName": "Rúcula",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 110.53861071847983,
+    "gap": 21.241633030566973
+  },
+  {
+    "query": "pepino",
+    "topName": "Pépino",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 109.39495505832221,
+    "gap": 24.39642845440521
+  },
+  {
+    "query": "pimentão",
+    "topName": "Pimentão",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 108.19534478376531,
+    "gap": 23.420871842073296
+  },
+  {
+    "query": "alho",
+    "topName": "Alho",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 105.15730137639835,
+    "gap": 21.410983296424476
+  },
+  {
+    "query": "coentro",
+    "topName": "Coentro",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111.20166576391378,
+    "gap": 23.783663170638803
+  },
+  {
+    "query": "Purê, batata, inglesa, s/ sal",
+    "topName": "Purê, batata, inglesa, s/ sal (batata inglesa, margarina, leite, c/ linguiça calabresa, s/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME",
+    "score": 109,
+    "gap": 29.5
+  },
+  {
+    "query": "Biscoito, doce, chocolate, c/ 5 cereais",
+    "topName": "Biscoito, doce, chocolate, c/ 5 cereais, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Pera, ´Williams´, c/ casca, in natura",
+    "topName": "Pera, ´Williams´, c/ casca, in natura , Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 96.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 96,
+    "gap": null
+  },
+  {
+    "query": "Guaiamu",
+    "topName": "Guaiamu",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": null
+  },
+  {
+    "query": "Brevidade",
+    "topName": "Brevidade",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": null
+  },
+  {
+    "query": "Sanduíche, cheese salada, hambúrguer bovino grelhado (c/ pão hambúrguer), c/ queijo muçarela, alface, tomate e maionese",
+    "topName": "Sanduíche, cheese salada, hambúrguer bovino grelhado (c/ pão hambúrguer), c/ queijo muçarela, alface, tomate e maionese",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Caldeirada de peixe e frutos do mar, s/ sal",
+    "topName": "Caldeirada de peixe e frutos do mar, s/ sal (peixe, água salgada, cação, camarão, lula, polvo, mexilhão, tomate, pimentão, coentro, suco de limão, c/ pimenta-do-reino e pimenta vermelha, c/ caldo de peixe, c/ óleo, cebola e alho, s/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME",
+    "score": 105,
+    "gap": 57
+  },
+  {
+    "query": "Mangaba, s/ casca, polpa,",
+    "topName": "Mangaba, s/ casca, polpa, , Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 91.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 91,
+    "gap": null
+  },
+  {
+    "query": "Salada, acelga crua, c/ molho vinagrete (tomate, cebola, vinagre de maçã e óleo de soja), s/ sal",
+    "topName": "Salada, acelga crua, c/ molho vinagrete (tomate, cebola, vinagre de maçã e óleo de soja), s/ sal, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Cremogema",
+    "topName": "Cremogema",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": null
+  },
+  {
+    "query": "Arroz, polido, glutionoso, cozido, s/ óleo, s/ sal (para sushi, Gohan)",
+    "topName": "Arroz, polido, glutionoso, cozido, s/ óleo, s/ sal (para sushi, Gohan) (dado importado)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 91.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 91,
+    "gap": null
+  },
+  {
+    "query": "Feijão, jalo, cozido (50% grão e 50% caldo), s/ óleo, s/ sal",
+    "topName": "Feijão, jalo, cozido (50% grão e 50% caldo), s/ óleo, s/ sal, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 96.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 96,
+    "gap": null
+  },
+  {
+    "query": "Caldo de batata, c/ carne e feijão, s/ sal, Brasil",
+    "topName": "Caldo de batata, c/ carne e feijão, s/ sal, Brasil (água, caldo de feijão, batata liofilizada, caldo de carne, c/ cebola, alho e óleo de soja, s/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME",
+    "score": 115.5,
+    "gap": 60
+  },
+  {
+    "query": "Carne, boi, contra-filé, s/ gordura, grelhada, c/ molho de mostarda (creme de leite, suco de limão e mostarda), s/ sal",
+    "topName": "Carne, boi, contra-filé, s/ gordura, grelhada, c/ molho de mostarda (creme de leite, suco de limão e mostarda), s/ sal",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": 10
+  },
+  {
+    "query": "Paella valenciana, c/ sal",
+    "topName": "Paella valenciana, c/ sal (arroz polido, frango, frutos do mar - camarão, lula, polvo, mexilhão, tomate, pimentão, ervilha, açafrão, c/ óleo, cebola e alho, c/ pimenta do reino, c/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME",
+    "score": 100,
+    "gap": 60
+  },
+  {
+    "query": "Lasanha, berinjela, c/ frios, caseira, c/ sal (berinjela grelhada, c/ muçarela, presunto, c/ molho de tomate (tomate, c/ óleo, cebola e alho) c/ sal)",
+    "topName": "Lasanha, berinjela, c/ frios, caseira, c/ sal (berinjela grelhada, c/ muçarela, presunto, c/ molho de tomate (tomate, c/ óleo, cebola e alho) c/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": 10
+  },
+  {
+    "query": "Jiló, c/ casca, assado, s/ óleo, c/ sal",
+    "topName": "Jiló, c/ casca, assado, s/ óleo, c/ sal",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME_AND_PREPARATION",
+    "score": 131,
+    "gap": 50
+  },
+  {
+    "query": "Uva",
+    "topName": "Uva",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 109.39495505832221,
+    "gap": 24.171124327271002
+  },
+  {
+    "query": "Croquete de carne bovina, assado, c/ óleo, s/ sal, Brasil [água, carne bovina moída (patinho), farinha de trigo refinada, c/ cebola, alho e óleo de soja, farinha de rosca*, ovo inteito, salsa (salsinha), margarina, ervas secas, s/ sal]",
+    "topName": "Croquete de carne bovina, assado, c/ óleo, s/ sal, Brasil [água, carne bovina moída (patinho), farinha de trigo refinada, c/ cebola, alho e óleo de soja, farinha de rosca*, ovo inteito, salsa (salsinha), margarina, ervas secas, s/ sal]",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Cajarana",
+    "topName": "Cajarana",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": null
+  },
+  {
+    "query": "Hambúrguer de carne bovina, assado, s/ óleo, s/ sal, Brasil [carne bovina moída (patinho), farinha de trigo refinada, ovo inteiro, cebola, água, farinha de rosca*, alho, salsa (salsinha), margarina, ervas secas, cúrcuma, alecrim, s/ sal]",
+    "topName": "Hambúrguer de carne bovina, assado, s/ óleo, s/ sal, Brasil [carne bovina moída (patinho), farinha de trigo refinada, ovo inteiro, cebola, água, farinha de rosca*, alho, salsa (salsinha), margarina, ervas secas, cúrcuma, alecrim, s/ sal]",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": 10
+  },
+  {
+    "query": "Molho para macarrão, c/ óleo de soja e alho, s/ sal",
+    "topName": "Molho para macarrão, c/ óleo de soja e alho, s/ sal, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Tofu",
+    "topName": "Tofu",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": 29.362564854550527
+  },
+  {
+    "query": "Camarão, Pitu, in natura",
+    "topName": "Camarão, Pitu, in natura , Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 96.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 96,
+    "gap": null
+  },
+  {
+    "query": "Lagarto recheado com cenoura, s/ sal (carne, boi, lagarto, cozida, c/ cenoura, c/ molho de tomate (tomate, c/ óleo, cebola e alho), s/ sal)",
+    "topName": "Lagarto recheado com cenoura, s/ sal (carne, boi, lagarto, cozida, c/ cenoura, c/ molho de tomate (tomate, c/ óleo, cebola e alho), s/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Sanduíche, c/ pão francês*, c/ carne grelhada (miolo da alcatra, s/ óleo, s/ sal), tomate, alface crespa e maionese",
+    "topName": "Sanduíche, c/ pão francês*, c/ carne grelhada (miolo da alcatra, s/ óleo, s/ sal), tomate, alface crespa e maionese, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Suco natural, araçá, s/ açúcar",
+    "topName": "Suco natural, araçá, s/ açúcar, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 91.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 91,
+    "gap": null
+  },
+  {
+    "query": "Bife à cavalo, c/ sal",
+    "topName": "Bife à cavalo, c/ sal (carne bovina contra-filé, ovo, c/ óleo, c/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME",
+    "score": 120,
+    "gap": 63
+  },
+  {
+    "query": "Arrumadinho",
+    "topName": "Arrumadinho",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": 42.015767078622645
+  },
+  {
+    "query": "Sanduíche, cheeseburguer, hambúrguer bovino grelhado (c/ pão hambúrguer), c/ queijo muçarela e maionese",
+    "topName": "Sanduíche, cheeseburguer, hambúrguer bovino grelhado (c/ pão hambúrguer), c/ queijo muçarela e maionese",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Carne, boi, seca, dessalgada, frita (c/ óleo de soja), s/ sal",
+    "topName": "Carne, boi, seca, dessalgada, frita (c/ óleo de soja), s/ sal, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 91.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 91,
+    "gap": 23
+  },
+  {
+    "query": "Caldeirada de frutos do mar, s/ sal",
+    "topName": "Caldeirada de frutos do mar, s/ sal (camarão, lula, polvo, mexilhão, tomate, pimentão, coentro, suco de limão, c/ pimenta-do-reino e pimenta vermelha, c/ caldo de peixe, c/ óleo, cebola e alho, s/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME",
+    "score": 105,
+    "gap": 60
+  },
+  {
+    "query": "Grustoli",
+    "topName": "Grustoli (bolinho doce)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": null
+  },
+  {
+    "query": "Tangerina",
+    "topName": "Tangerina",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 112,
+    "gap": 24.055600179632435
+  },
+  {
+    "query": "Cozido",
+    "topName": "Cozido",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 121.29440923941488,
+    "gap": 41.94576925838146
+  },
+  {
+    "query": "Vodka",
+    "topName": "Vodka",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 112,
+    "gap": 59
+  },
+  {
+    "query": "Soja, grão, seco em estufa",
+    "topName": "Soja, grão, seco em estufa, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 91.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 91,
+    "gap": null
+  },
+  {
+    "query": "Arroz chop suey, c/ arroz integral, c/ óleo, c/ molho de soja (shoyu), Brasil [arroz integral, presunto cozido*, cenoura, ovos mexidos, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ molho de soja* (shoyu)]",
+    "topName": "Arroz chop suey, c/ arroz integral, c/ óleo, c/ molho de soja (shoyu), Brasil [arroz integral, presunto cozido*, cenoura, ovos mexidos, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ molho de soja* (shoyu)]",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Óleo, soja, frito",
+    "topName": "Óleo, soja, frito",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME_AND_PREPARATION",
+    "score": 125.7181279380026,
+    "gap": 84.44956234042898
+  },
+  {
+    "query": "Linguiça de frango*, à milanesa (farinha de rosca, ovo e farinha de trigo refinada), frito (c/ óleo de soja), c/ sal",
+    "topName": "Linguiça de frango*, à milanesa (farinha de rosca, ovo e farinha de trigo refinada), frito (c/ óleo de soja), c/ sal, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Azeite, oliva, assado",
+    "topName": "Azeite, oliva, assado",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query simples casaria com um alimento simples, mas o topo e um prato/preparo composto — bloqueado (item 6).",
+    "matchClass": "EXACT_NAME_AND_PREPARATION",
+    "score": 129.67413638420015,
+    "gap": 76.3442225503148
+  },
+  {
+    "query": "Banana, terra, in natura , Musa acuminata Colla x Musa balbisiana Colla, Grupo AAB",
+    "topName": "Banana, terra, in natura , Musa acuminata Colla x Musa balbisiana Colla, Grupo AAB",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query classificada como alto risco.",
+    "matchClass": "EXACT_NAME",
+    "score": 116,
+    "gap": null
+  },
+  {
+    "query": "Sanduíche, pão forma tradicional, c/ atum em conserva e maionese",
+    "topName": "Sanduíche, pão forma tradicional, c/ atum em conserva e maionese, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 90,
+    "gap": null
+  },
+  {
+    "query": "Araçá-açu",
+    "topName": "Araçá-açu (goiaba)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": null
+  },
+  {
+    "query": "Peixe, água salgada, pescada, filé, cru",
+    "topName": "Peixe, água salgada, pescada, filé, cru, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "gap 10.0 abaixo do minimo 15 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 111,
+    "gap": 10
+  },
+  {
+    "query": "Mussaká, c/ proteína texturizada de soja, c/ sal (berinjela grelhada, c/ molho branco (farinha de trigo, manteiga e leite), c/ molho de tomate, c/ proteína texturizada de soja, queijo parmesão, salsa, cebolinha, pimenta-do-reino, c/ sal)",
+    "topName": "Mussaká, c/ proteína texturizada de soja, c/ sal (berinjela grelhada, c/ molho branco (farinha de trigo, manteiga e leite), c/ molho de tomate, c/ proteína texturizada de soja, queijo parmesão, salsa, cebolinha, pimenta-do-reino, c/ sal)",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": 10
+  },
+  {
+    "query": "Batata, baroa (mandioquinha, batata salsa), s/ casca, frita, s/ sal",
+    "topName": "Batata, baroa (mandioquinha, batata salsa), s/ casca, frita, s/ sal, Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 91.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 91,
+    "gap": 16
+  },
+  {
+    "query": "Manjar",
+    "topName": "Manjar",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": 29
+  },
+  {
+    "query": "Romã, in natura",
+    "topName": "Romã, in natura , Brasil",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 96.0 abaixo do minimo 100 pra classe STRONG_TOKEN_MATCH.",
+    "matchClass": "STRONG_TOKEN_MATCH",
+    "score": 96,
+    "gap": 77.5
+  },
+  {
+    "query": "Carne, boi, lagarto, cozida, c/ cenoura e ervilha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+    "topName": "Carne, boi, lagarto, cozida, c/ cenoura e ervilha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "score 90.0 abaixo do minimo 115 pra classe FTS_PARTIAL.",
+    "matchClass": "FTS_PARTIAL",
+    "score": 90,
+    "gap": 10
+  },
+  {
+    "query": "Ostra",
+    "topName": "Ostra",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": 42.06902466697858
+  },
+  {
+    "query": "Caldo-de-feijão",
+    "topName": "Caldo-de-feijão",
+    "v1Accept": true,
+    "v2Accept": false,
+    "v2Reason": "query generica de 1 token — nunca auto-resolvida, mesmo com score alto (item 6).",
+    "matchClass": "GENERIC_SHORT_QUERY",
+    "score": 111,
+    "gap": 39.34245220541882
+  }
+]

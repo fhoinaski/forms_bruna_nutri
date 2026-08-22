@@ -1,4 +1,5 @@
 import { d1Query } from "@/lib/d1/client";
+import { capForLikePattern } from "@/lib/d1/like-safety";
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
 import { NUTRIENT_BY_CODE, type NutrientCode, type NutrientUnit } from "@/lib/nutrition/nutrient-vocabulary";
 
@@ -53,6 +54,7 @@ export async function searchUsdaFoods(query: string, limit = 20): Promise<UsdaFo
   const normalized = normalizeSearchText(query);
   if (normalized.length < 2) return [];
   const safeLimit = Math.max(1, Math.min(50, limit));
+  const likeSafe = capForLikePattern(normalized);
   return d1Query<UsdaFoodSearchRow>(
     `WITH ranked AS (
         SELECT id, 0 AS search_rank
@@ -95,7 +97,7 @@ export async function searchUsdaFoods(query: string, limit = 20): Promise<UsdaFo
         length(original_name) ASC,
         original_name ASC
       LIMIT ?5`,
-    [normalized, `${normalized}%`, ftsQuery(normalized), `%${normalized}%`, safeLimit]
+    [normalized, `${likeSafe}%`, ftsQuery(normalized), `%${likeSafe}%`, safeLimit]
   );
 }
 

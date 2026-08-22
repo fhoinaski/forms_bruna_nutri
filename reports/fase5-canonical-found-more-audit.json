@@ -1,0 +1,542 @@
+[
+  {
+    "query": "Pão, c/ farinha de trigo refinada, fonte de fibra, forma",
+    "canonicalName": "Pão, c/ farinha de trigo refinada, fonte de fibra, forma (média de vários tipos), Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 112,
+    "preparation": null,
+    "classification": "A - Cereais e derivados"
+  },
+  {
+    "query": "Canelone, c/ carne moída refogada, c/ molho de tomate, caseiro, c/ sal (massa com farinha de trigo, carne bovina, patinho moído, refogada, c/ molho de tomate (tomate, c/ óleo, cebolha e alho), c/ sal)",
+    "canonicalName": "Canelone, c/ carne moída refogada, c/ molho de tomate, caseiro, c/ sal (massa com farinha de trigo, carne bovina, patinho moído, refogada, c/ molho de tomate  (tomate, c/ óleo, cebolha e alho), c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 70,
+    "preparation": null,
+    "classification": "A - Cereais e derivados"
+  },
+  {
+    "query": "Lasanha, vegetais, caseira (massa lasanha fresca, vegetais - cenoura, vagem, abobrinha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+    "canonicalName": "Lasanha, vegetais, caseira (massa lasanha fresca, vegetais - cenoura, vagem, abobrinha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 70,
+    "preparation": null,
+    "classification": "A - Cereais e derivados"
+  },
+  {
+    "query": "Milho, pipoca, grão, cru, Brasil",
+    "canonicalName": "Milho, pipoca, grão, cru, Brasil (média diferentes amostras)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 133.5,
+    "preparation": null,
+    "classification": "A - Cereais e derivados"
+  },
+  {
+    "query": "Amaranto, grão, cozido, s/ óleo, s/ sal",
+    "canonicalName": "Amaranto, grão, cozido, s/ óleo, s/ sal (dado importado)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 141,
+    "preparation": null,
+    "classification": "A - Cereais e derivados"
+  },
+  {
+    "query": "Sanduíche, pão francês, c/ peito de peru defumado",
+    "canonicalName": "Sanduíche, pão francês, c/ peito de peru defumado",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 115,
+    "preparation": null,
+    "classification": "A - Cereais e derivados"
+  },
+  {
+    "query": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+    "canonicalName": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 90,
+    "preparation": null,
+    "classification": "T - Leguminosas e derivados"
+  },
+  {
+    "query": "Ervilha, em vagem, fresca, cozida, drenada, s/ óleo, c/ sal",
+    "canonicalName": "Ervilha, em vagem, fresca, cozida, drenada, s/ óleo, c/ sal, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 101,
+    "preparation": null,
+    "classification": "T - Leguminosas e derivados"
+  },
+  {
+    "query": "Feijão, branco, cozido, s/ óleo, c/ sal",
+    "canonicalName": "Feijão, branco, cozido, s/ óleo, c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 131,
+    "preparation": null,
+    "classification": "T - Leguminosas e derivados"
+  },
+  {
+    "query": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+    "canonicalName": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 90,
+    "preparation": null,
+    "classification": "T - Leguminosas e derivados"
+  },
+  {
+    "query": "Picadinho de carne de soja, c/ sal",
+    "canonicalName": "Picadinho de carne de soja, c/ sal (proteína de soja (hidratada com caldo de legumes, pimentão amarelo e vermelho, tomate, cebolinha e salsinha, c/ óleo de soja, cebola e alho, c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 100,
+    "preparation": null,
+    "classification": "T - Leguminosas e derivados"
+  },
+  {
+    "query": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+    "canonicalName": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 90,
+    "preparation": null,
+    "classification": "T - Leguminosas e derivados"
+  },
+  {
+    "query": "Soja, extrato, c/ suco de maracujá",
+    "canonicalName": "Soja, extrato, c/ suco de maracujá, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 85,
+    "preparation": null,
+    "classification": "T - Leguminosas e derivados"
+  },
+  {
+    "query": "Almôndega, ao sugo (molho de tomate)",
+    "canonicalName": "Almôndega, ao sugo (molho de tomate) (carne, boi, frita, c/ molho de tomate (tomate, c/ óleo, cebola e alho, c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 51.5,
+    "preparation": null,
+    "classification": "F - Carnes e derivados"
+  },
+  {
+    "query": "Sopa, feijão preto, c/ óleo, c/ sal, Brasil [caldo de vegetais, feijão preto, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ sal]",
+    "canonicalName": "Sopa, feijão preto, c/ óleo, c/ sal, Brasil [caldo de vegetais, feijão preto, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ sal]",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 70,
+    "preparation": null,
+    "classification": "T - Leguminosas e derivados"
+  },
+  {
+    "query": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+    "canonicalName": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 90,
+    "preparation": null,
+    "classification": "F - Carnes e derivados"
+  },
+  {
+    "query": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+    "canonicalName": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 90,
+    "preparation": null,
+    "classification": "F - Carnes e derivados"
+  },
+  {
+    "query": "Carne, boi, quarto traseiro, c/ gordura, grelhada, c/ óleo, c/ sal",
+    "canonicalName": "Carne, boi, quarto traseiro, c/ gordura, grelhada, c/ óleo, c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 135,
+    "preparation": null,
+    "classification": "F - Carnes e derivados"
+  },
+  {
+    "query": "Carne, caça (capivara, coelho), cozida, assada, s/ óleo, c/ sal",
+    "canonicalName": "Carne, caça (capivara, coelho), cozida, assada, s/ óleo, c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 85,
+    "preparation": null,
+    "classification": "F - Carnes e derivados"
+  },
+  {
+    "query": "Carne, porco, lombo, grelhada/assada, s/ óleo, c/ sal",
+    "canonicalName": "Carne, porco, lombo, grelhada/assada, s/ óleo, c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 131,
+    "preparation": null,
+    "classification": "F - Carnes e derivados"
+  },
+  {
+    "query": "Omelete com vegetais e queijo, c/ azeite de oliva, c/ sal, Brasil [ovo de galinha, cebola, cenoura, pimentões, leite de vaca integral, queijo parmesão, azeite de oliva, alho, cebolinha, salsa (salsinha), pimenta-do-reino, c/ sal]",
+    "canonicalName": "Omelete com vegetais e queijo, c/ azeite de oliva, c/ sal, Brasil [ovo de galinha, cebola, cenoura, pimentões, leite de vaca integral, queijo parmesão, azeite de oliva, alho, cebolinha, salsa (salsinha), pimenta-do-reino, c/ sal]",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 70,
+    "preparation": null,
+    "classification": "J - Ovos e derivados"
+  },
+  {
+    "query": "Hambúrguer, industrializado, frango, grelhado, s/ óleo",
+    "canonicalName": "Hambúrguer, industrializado, frango, grelhado, s/ óleo",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 135,
+    "preparation": null,
+    "classification": "F - Carnes e derivados"
+  },
+  {
+    "query": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal",
+    "canonicalName": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal (ovo de galinha inteiro, queijo parmesão, c/ óleo de soja, c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 118.5,
+    "preparation": null,
+    "classification": "J - Ovos e derivados"
+  },
+  {
+    "query": "Omelete, vegetais e queijo parmesão, c/ sal",
+    "canonicalName": "Omelete, vegetais e queijo parmesão, c/ sal (ovo de galinha, vegetais - cenoura, abobrinha, tomate, champignon paris, salsa, cebolinha verde, queijo parmesão, c/ óleo, cebola e alho, c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 112.5,
+    "preparation": null,
+    "classification": "J - Ovos e derivados"
+  },
+  {
+    "query": "Ovo, galinha, clara, desidratada, pasteurizada",
+    "canonicalName": "Ovo, galinha, clara, desidratada, pasteurizada, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 85,
+    "preparation": null,
+    "classification": "J - Ovos e derivados"
+  },
+  {
+    "query": "Ovo, codorna, inteiro, cozido, c/ sal",
+    "canonicalName": "Ovo, codorna, inteiro, cozido, c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 135,
+    "preparation": null,
+    "classification": "J - Ovos e derivados"
+  },
+  {
+    "query": "Alichela, caseira (peixe, água salgada, nchova (aliche), salsinha, alho, pimenta do reino, c/ azeite de oliva, s/ sal)",
+    "canonicalName": "Alichela, caseira (peixe, água salgada, nchova (aliche), salsinha, alho, pimenta do reino, c/ azeite de oliva, s/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 65,
+    "preparation": null,
+    "classification": "E - Pescados e frutos do mar"
+  },
+  {
+    "query": "Ovo, galinha, inteiro, cozido, s/ sal, Brasil",
+    "canonicalName": "Ovo, galinha, inteiro, cozido, s/ sal, Brasil (média de várias amostras)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 139.5,
+    "preparation": null,
+    "classification": "J - Ovos e derivados"
+  },
+  {
+    "query": "Ovo, galinha, mexido, c/ salsa (salsinha), c/ óleo de soja, c/ sal",
+    "canonicalName": "Ovo, galinha, mexido, c/ salsa (salsinha), c/ óleo de soja, c/ sal, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 85,
+    "preparation": null,
+    "classification": "J - Ovos e derivados"
+  },
+  {
+    "query": "Ceviche de peixe, água doce, corvina, s/ sal",
+    "canonicalName": "Ceviche de peixe, água doce, corvina, s/ sal (peixe, água doce, corvina, cru, c/ cebola, suco de limão, pepino, tomate, pimenta jalapeño, coentro, salsa, c/ azeite de oliva, c/ pimenta do reino, s/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 100,
+    "preparation": null,
+    "classification": "E - Pescados e frutos do mar"
+  },
+  {
+    "query": "Ovo, galinha, vermelho, inteiro, cru",
+    "canonicalName": "Ovo, galinha, vermelho, inteiro, cru, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 105,
+    "preparation": null,
+    "classification": "J - Ovos e derivados"
+  },
+  {
+    "query": "Molusco, ostra, cozido, s/ óleo, s/ sal",
+    "canonicalName": "Molusco, ostra, cozido, s/ óleo, s/ sal, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 111,
+    "preparation": null,
+    "classification": "E - Pescados e frutos do mar"
+  },
+  {
+    "query": "Peixe, água doce, Pirarucu, cultivado em Rondonia, à milanesa (a partir do peixe fresco), c/ sal (peixe, água doce, pirarucu, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), c/ sal)",
+    "canonicalName": "Peixe, água doce, Pirarucu, cultivado em Rondonia, à milanesa (a partir do peixe fresco), c/ sal (peixe, água doce, pirarucu, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), c/ sal) (média de peixes com diferentes pesos e cortes)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 84.5,
+    "preparation": null,
+    "classification": "E - Pescados e frutos do mar"
+  },
+  {
+    "query": "Peixe, água salgada, Merluza, filé, assado, s/ óleo, s/ sal",
+    "canonicalName": "Peixe, água salgada, Merluza, filé, assado, s/ óleo, s/ sal, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 111,
+    "preparation": null,
+    "classification": "E - Pescados e frutos do mar"
+  },
+  {
+    "query": "Peixe, água salgada, cação, à milanesa (ovo e farinha de rosca), frito (c/ óleo de soja), c/ sal",
+    "canonicalName": "Peixe, água salgada, cação, à milanesa (ovo e farinha de rosca), frito (c/ óleo de soja), c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 86,
+    "preparation": null,
+    "classification": "E - Pescados e frutos do mar"
+  },
+  {
+    "query": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+    "canonicalName": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 90,
+    "preparation": null,
+    "classification": "E - Pescados e frutos do mar"
+  },
+  {
+    "query": "Peixe, água salgada, salmão, filé, s/ pele, assado/grelhado, s/ óleo, c/ sal",
+    "canonicalName": "Peixe, água salgada, salmão, filé, s/ pele, assado/grelhado, s/ óleo, c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 131,
+    "preparation": null,
+    "classification": "E - Pescados e frutos do mar"
+  },
+  {
+    "query": "Abacate, polpa, in natura",
+    "canonicalName": "Abacate, polpa, in natura , Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 96,
+    "preparation": null,
+    "classification": "C - Frutas e derivados"
+  },
+  {
+    "query": "Damasco (abricó), in natura",
+    "canonicalName": "Damasco (abricó), in natura , Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 76,
+    "preparation": null,
+    "classification": "C - Frutas e derivados"
+  },
+  {
+    "query": "Mamão, Formosa, polpa, in natura",
+    "canonicalName": "Mamão, Formosa, polpa, in natura , Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 96,
+    "preparation": null,
+    "classification": "C - Frutas e derivados"
+  },
+  {
+    "query": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+    "canonicalName": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 90,
+    "preparation": null,
+    "classification": "C - Frutas e derivados"
+  },
+  {
+    "query": "Suco natural, bacuri, c/ açúcar",
+    "canonicalName": "Suco natural, bacuri, c/ açúcar, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 81,
+    "preparation": null,
+    "classification": "C - Frutas e derivados"
+  },
+  {
+    "query": "Suco natural, laranja, mamão, pera e maçã, c/ açúcar",
+    "canonicalName": "Suco natural, laranja, mamão, pera e maçã, c/ açúcar",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 120,
+    "preparation": null,
+    "classification": "C - Frutas e derivados"
+  },
+  {
+    "query": "Pera, cozida, s/ manteiga, s/ açúcar",
+    "canonicalName": "Pera, cozida, s/ manteiga, s/ açúcar, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 111,
+    "preparation": null,
+    "classification": "C - Frutas e derivados"
+  },
+  {
+    "query": "Suco, limonada, s/ açúcar",
+    "canonicalName": "Suco, limonada, s/ açúcar",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 115,
+    "preparation": null,
+    "classification": "C - Frutas e derivados"
+  },
+  {
+    "query": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+    "canonicalName": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 90,
+    "preparation": null,
+    "classification": "B - Vegetais e derivados"
+  },
+  {
+    "query": "Batata, inglesa, s/ casca, cozida, drenada, c/ óleo de soja, s/ sal",
+    "canonicalName": "Batata, inglesa, s/ casca, cozida, drenada, c/ óleo de soja, s/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 131,
+    "preparation": null,
+    "classification": "B - Vegetais e derivados"
+  },
+  {
+    "query": "Chuchu, s/ casca, cozido, drenado, s/ óleo, s/ sal, BrasiI",
+    "canonicalName": "Chuchu, s/ casca, cozido, drenado, s/ óleo, s/ sal, BrasiI",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 141,
+    "preparation": null,
+    "classification": "B - Vegetais e derivados"
+  },
+  {
+    "query": "Salada, alface americana, c/ molho vinagrete (tomate, cebola, salsa, vinagre, azeite de oliva), c/ sal",
+    "canonicalName": "Salada, alface americana, c/ molho vinagrete (tomate, cebola, salsa, vinagre, azeite de oliva), c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 65,
+    "preparation": null,
+    "classification": "B - Vegetais e derivados"
+  },
+  {
+    "query": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+    "canonicalName": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 90,
+    "preparation": null,
+    "classification": "B - Vegetais e derivados"
+  },
+  {
+    "query": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+    "canonicalName": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 131,
+    "preparation": null,
+    "classification": "B - Vegetais e derivados"
+  },
+  {
+    "query": "Salada, trigo em grão, c/ azeite de oliva, c/ sal",
+    "canonicalName": "Salada, trigo em grão, c/ azeite de oliva, c/ sal (trigo em grão cozido, tomate, cebola, salsa, suco de limão, c/ azeite de oliva, c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 110.5,
+    "preparation": null,
+    "classification": "B - Vegetais e derivados"
+  },
+  {
+    "query": "Creme de queijo, caseiro (Tipo Catupiry)",
+    "canonicalName": "Creme de queijo, caseiro (Tipo Catupiry) (leite, queijo minas, creme de leite, amido de milho, margarina, c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "CONTAINS",
+    "canonicalScore": 56,
+    "preparation": null,
+    "classification": "G - Leite e derivados"
+  },
+  {
+    "query": "Iogurte, integral, pêssego",
+    "canonicalName": "Iogurte, integral, pêssego, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 85,
+    "preparation": null,
+    "classification": "G - Leite e derivados"
+  },
+  {
+    "query": "Salada, couve-flor, cozida, c/ molho de salada - salsa, suco de limão, azeite de oliva, c/ sal",
+    "canonicalName": "Salada, couve-flor, cozida, c/ molho de salada - salsa, suco de limão, azeite de oliva, c/ sal",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 140,
+    "preparation": null,
+    "classification": "B - Vegetais e derivados"
+  },
+  {
+    "query": "Leite, cabra, integral, fluído",
+    "canonicalName": "Leite, cabra, integral, fluído, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 85,
+    "preparation": null,
+    "classification": "G - Leite e derivados"
+  },
+  {
+    "query": "Leite, vaca, integral, instantâneo, em pó",
+    "canonicalName": "Leite, vaca, integral, instantâneo, em pó, Brasil",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "PREFIX",
+    "canonicalScore": 85,
+    "preparation": null,
+    "classification": "G - Leite e derivados"
+  },
+  {
+    "query": "Mousse de peixe",
+    "canonicalName": "Mousse de peixe (pescada cozida, gelatina s/ sabor, maionese, mostarda, creme de leite, salsa, c/ caldo de vegetais, c/ pimenta-do-reino, c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 100,
+    "preparation": null,
+    "classification": "G - Leite e derivados"
+  },
+  {
+    "query": "Queijo, leite de vaca, gorgonzola",
+    "canonicalName": "Queijo, leite de vaca, gorgonzola (dado importado)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 120,
+    "preparation": null,
+    "classification": "G - Leite e derivados"
+  },
+  {
+    "query": "Requeijão, caseiro, c/ sal",
+    "canonicalName": "Requeijão, caseiro, c/ sal  (leite integral, suco de limão, manteiga, c/ sal)",
+    "canonicalSource": "TBCA",
+    "canonicalMatchMethod": "EXACT_NAME",
+    "canonicalScore": 110.5,
+    "preparation": null,
+    "classification": "G - Leite e derivados"
+  }
+]

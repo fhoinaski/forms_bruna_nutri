@@ -47,6 +47,20 @@ export interface NutrientValues {
   folateMcg?: number | null;
   vitaminB12Mcg?: number | null;
   cholesterolMg?: number | null;
+  // Fase 2 da Canonical Nutrition Data Layer: campos opcionais adicionados
+  // so para o union NutrientCode continuar exaustivo em Record<NutrientCode, ...>
+  // (ver getFoodNutrientsFromReference abaixo). MacroReferenceFood NUNCA
+  // popula estes campos hoje — ficam sempre null/undefined em qualquer
+  // fluxo existente, comportamento identico a antes desta mudanca.
+  addedSugarG?: number | null;
+  addedSaltG?: number | null;
+  addedFatG?: number | null;
+  plantProteinG?: number | null;
+  animalProteinG?: number | null;
+  linoleicAcidG?: number | null;
+  alphaLinolenicAcidG?: number | null;
+  epaG?: number | null;
+  dhaG?: number | null;
 }
 
 export type NutrientKey = keyof NutrientValues;
@@ -86,6 +100,15 @@ export const NUTRIENT_KEYS: NutrientKey[] = [
   "folateMcg",
   "vitaminB12Mcg",
   "cholesterolMg",
+  "addedSugarG",
+  "addedSaltG",
+  "addedFatG",
+  "plantProteinG",
+  "animalProteinG",
+  "linoleicAcidG",
+  "alphaLinolenicAcidG",
+  "epaG",
+  "dhaG",
 ];
 
 export interface NutrientCoverage {
@@ -179,6 +202,17 @@ export function getFoodNutrientsFromReference(reference: MacroReferenceFood | nu
     FOLATE: reference.folate_mcg,
     VITAMIN_B12: reference.vitamin_b12_mcg,
     CHOLESTEROL: reference.cholesterol_mg,
+    // Fase 2 — MacroReferenceFood (TACO/custom/USDA hoje) nao tem estes
+    // campos; ficam sempre null ate uma fonte real popula-los.
+    ADDED_SUGAR: null,
+    ADDED_SALT: null,
+    ADDED_FAT: null,
+    PLANT_PROTEIN: null,
+    ANIMAL_PROTEIN: null,
+    LINOLEIC_ACID: null,
+    ALPHA_LINOLENIC_ACID: null,
+    EPA: null,
+    DHA: null,
   };
   return NUTRIENT_DEFINITIONS.map((definition) => ({
     code: definition.code,

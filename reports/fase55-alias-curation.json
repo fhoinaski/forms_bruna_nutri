@@ -1,0 +1,2241 @@
+{
+  "SAFE_ALIAS": [
+    {
+      "query": "Amaranto, grão, cozido, s/ óleo, s/ sal",
+      "topName": "Amaranto, grão, cozido, s/ óleo, s/ sal (dado importado)",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Milho, pipoca, grão, cru, Brasil",
+      "topName": "Milho, pipoca, grão, cru, Brasil (média diferentes amostras)",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Pão, c/ farinha de trigo refinada, fonte de fibra, forma",
+      "topName": "Pão, c/ farinha de trigo refinada, fonte de fibra, forma (média de vários tipos), Brasil",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Sanduíche, pão francês, c/ peito de peru defumado",
+      "topName": "Sanduíche, pão francês, c/ peito de peru defumado",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Feijão, branco, cozido, s/ óleo, c/ sal",
+      "topName": "Feijão, branco, cozido, s/ óleo, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Picadinho de carne de soja, c/ sal",
+      "topName": "Picadinho de carne de soja, c/ sal (proteína de soja (hidratada com caldo de legumes, pimentão amarelo e vermelho, tomate, cebolinha e salsinha, c/ óleo de soja, cebola e alho, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Carne, boi, quarto traseiro, c/ gordura, grelhada, c/ óleo, c/ sal",
+      "topName": "Carne, boi, quarto traseiro, c/ gordura, grelhada, c/ óleo, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Carne, porco, lombo, grelhada/assada, s/ óleo, c/ sal",
+      "topName": "Carne, porco, lombo, grelhada/assada, s/ óleo, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Hambúrguer, industrializado, frango, grelhado, s/ óleo",
+      "topName": "Hambúrguer, industrializado, frango, grelhado, s/ óleo",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal",
+      "topName": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal (ovo de galinha inteiro, queijo parmesão, c/ óleo de soja, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Omelete, vegetais e queijo parmesão, c/ sal",
+      "topName": "Omelete, vegetais e queijo parmesão, c/ sal (ovo de galinha, vegetais - cenoura, abobrinha, tomate, champignon paris, salsa, cebolinha verde, queijo parmesão, c/ óleo, cebola e alho, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Ovo, codorna, inteiro, cozido, c/ sal",
+      "topName": "Ovo, codorna, inteiro, cozido, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Ovo, galinha, inteiro, cozido, s/ sal, Brasil",
+      "topName": "Ovo, galinha, inteiro, cozido, s/ sal, Brasil (média de várias amostras)",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Ceviche de peixe, água doce, corvina, s/ sal",
+      "topName": "Ceviche de peixe, água doce, corvina, s/ sal (peixe, água doce, corvina, cru, c/ cebola, suco de limão, pepino, tomate, pimenta jalapeño, coentro, salsa, c/ azeite de oliva, c/ pimenta do reino, s/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Peixe, água salgada, salmão, filé, s/ pele, assado/grelhado, s/ óleo, c/ sal",
+      "topName": "Peixe, água salgada, salmão, filé, s/ pele, assado/grelhado, s/ óleo, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Suco natural, laranja, mamão, pera e maçã, c/ açúcar",
+      "topName": "Suco natural, laranja, mamão, pera e maçã, c/ açúcar",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Suco, limonada, s/ açúcar",
+      "topName": "Suco, limonada, s/ açúcar",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Batata, inglesa, s/ casca, cozida, drenada, c/ óleo de soja, s/ sal",
+      "topName": "Batata, inglesa, s/ casca, cozida, drenada, c/ óleo de soja, s/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Chuchu, s/ casca, cozido, drenado, s/ óleo, s/ sal, BrasiI",
+      "topName": "Chuchu, s/ casca, cozido, drenado, s/ óleo, s/ sal, BrasiI",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+      "topName": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Salada, couve-flor, cozida, c/ molho de salada - salsa, suco de limão, azeite de oliva, c/ sal",
+      "topName": "Salada, couve-flor, cozida, c/ molho de salada - salsa, suco de limão, azeite de oliva, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Salada, trigo em grão, c/ azeite de oliva, c/ sal",
+      "topName": "Salada, trigo em grão, c/ azeite de oliva, c/ sal (trigo em grão cozido, tomate, cebola, salsa, suco de limão, c/ azeite de oliva, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Mousse de peixe",
+      "topName": "Mousse de peixe (pescada cozida, gelatina s/ sabor, maionese, mostarda, creme de leite, salsa, c/ caldo de vegetais, c/ pimenta-do-reino, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Queijo, leite de vaca, gorgonzola",
+      "topName": "Queijo, leite de vaca, gorgonzola (dado importado)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Requeijão, caseiro, c/ sal",
+      "topName": "Requeijão, caseiro, c/ sal  (leite integral, suco de limão, manteiga, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Gelatina, em pó",
+      "topName": "Gelatina, em pó (média de diferentes sabores), Brasil",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Pudim, coco, mistura p/",
+      "topName": "Pudim, coco, mistura p/ (média de diferentes marcas), Brasil",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Edamame, cozida, c/ óleo, cebola e alho, s/ sal",
+      "topName": "Edamame, cozida, c/ óleo, cebola e alho, s/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Peixe, água salgada, sardinha, assado/grelhado, s/ óleo, c/ sal",
+      "topName": "Peixe, água salgada, sardinha, assado/grelhado, s/ óleo, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Abacaxi, Ananas Comosus L. Merril, var. Pérola",
+      "topName": "Abacaxi, Ananas Comosus L. Merril, var. Pérola",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Alface, lisa, crua, Lactuca sativa L., var",
+      "topName": "Alface, lisa, crua, Lactuca sativa L., var",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Batata, doce, descascada, crua, Ipomoea batatas Lam., var. Clone CNPH",
+      "topName": "Batata, doce, descascada, crua, Ipomoea batatas Lam., var. Clone CNPH",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Camu-camu, fruto, in natura , Myrciaria dubia",
+      "topName": "Camu-camu, fruto, in natura , Myrciaria dubia",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Cogumelo, shiitake, L. edodes",
+      "topName": "Cogumelo, shiitake, L. edodes",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Hortelã, micro-ondas/7 min. PM, Mentha piperita L., var",
+      "topName": "Hortelã, micro-ondas/7 min. PM, Mentha piperita L., var",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Manga, parcialmente madura, Mangifera indica L., var. Tommy Atkins",
+      "topName": "Manga, parcialmente madura, Mangifera indica L.,  var. Tommy Atkins",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Peixe, água doce, Pacu, filé, cru, Mylossoma ssp",
+      "topName": "Peixe, água doce, Pacu, filé, cru, Mylossoma ssp",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Caldo de batata e beterraba, c/ carne, c/ óleo, s/ sal, Brasil",
+      "topName": "Caldo de batata e beterraba, c/ carne, c/ óleo, s/ sal, Brasil (água, batata liofilizada, beterraba, caldo de carne, c/ cebola, alho e óleo de soja, s/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Arroz, tipo 1, cozido",
+      "topName": "Arroz, tipo 1, cozido",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Arroz, tipo 1, cru",
+      "topName": "Arroz, tipo 1, cru",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Arroz, tipo 2, cozido",
+      "topName": "Arroz, tipo 2, cozido",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Arroz, tipo 2, cru",
+      "topName": "Arroz, tipo 2, cru",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Banana, maçã, crua",
+      "topName": "Banana, maçã, crua",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Banana, nanica, crua",
+      "topName": "Banana, nanica, crua",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Banana, prata, crua",
+      "topName": "Banana, prata, crua",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Maçã, Argentina, com casca, crua",
+      "topName": "Maçã, Argentina, com casca, crua",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Arroz, integral, cozido",
+      "topName": "Arroz, integral, cozido",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Maxixe, cru",
+      "topName": "Maxixe, cru",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Bolo, pronto, coco",
+      "topName": "Bolo, pronto, coco",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Jaca, crua",
+      "topName": "Jaca, crua",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Cereais, mistura para vitamina, trigo, cevada e aveia",
+      "topName": "Cereais, mistura para vitamina, trigo, cevada e aveia",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Abadejo, filé, congelado, cru",
+      "topName": "Abadejo, filé, congelado, cru",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Farinha, de arroz, enriquecida",
+      "topName": "Farinha, de arroz, enriquecida",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Carne, bovina, contra-filé, sem gordura, cru",
+      "topName": "Carne, bovina, contra-filé, sem gordura, cru",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Carne, bovina, picanha, com gordura, crua",
+      "topName": "Carne, bovina, picanha, com gordura, crua",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Hambúrguer, bovino, cru",
+      "topName": "Hambúrguer, bovino, cru",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Iogurte, sabor abacaxi",
+      "topName": "Iogurte, sabor abacaxi",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Ovo, de galinha, clara, cozida/10minutos",
+      "topName": "Ovo, de galinha, clara, cozida/10minutos",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Azeitona, preta, conserva",
+      "topName": "Azeitona, preta, conserva",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Coco, verde, cru",
+      "topName": "Coco,  verde, cru",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Bombom de qualquer marca light",
+      "topName": "Bombom de qualquer marca light",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Palmito em conserva",
+      "topName": "Palmito em conserva",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Bolo de coco",
+      "topName": "Bolo de coco",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Esfirra de queijo",
+      "topName": "Esfirra de queijo",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Gelatina, em pó",
+      "topName": "Gelatina, em pó (média de diferentes sabores), Brasil",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Bolo de coco",
+      "topName": "Bolo de coco",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "milho cozido",
+      "topName": "Milho cozido",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "castanha do pará",
+      "topName": "Castanha-do-pará",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "castanha de caju",
+      "topName": "Castanha de caju",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "azeite de oliva",
+      "topName": "Azeite de oliva",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Cacau, em pó, s/ açúcar",
+      "topName": "Cacau, em pó, s/ açúcar (dado importado)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Mingau de milho",
+      "topName": "Mingau de milho",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Pão, c/ farinha de trigo refinada, fonte de fibra, forma",
+      "topName": "Pão, c/ farinha de trigo refinada, fonte de fibra, forma (média de vários tipos), Brasil",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Milho, pipoca, grão, cru, Brasil",
+      "topName": "Milho, pipoca, grão, cru, Brasil (média diferentes amostras)",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Amaranto, grão, cozido, s/ óleo, s/ sal",
+      "topName": "Amaranto, grão, cozido, s/ óleo, s/ sal (dado importado)",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Sanduíche, pão francês, c/ peito de peru defumado",
+      "topName": "Sanduíche, pão francês, c/ peito de peru defumado",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Feijão, branco, cozido, s/ óleo, c/ sal",
+      "topName": "Feijão, branco, cozido, s/ óleo, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Picadinho de carne de soja, c/ sal",
+      "topName": "Picadinho de carne de soja, c/ sal (proteína de soja (hidratada com caldo de legumes, pimentão amarelo e vermelho, tomate, cebolinha e salsinha, c/ óleo de soja, cebola e alho, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Carne, boi, quarto traseiro, c/ gordura, grelhada, c/ óleo, c/ sal",
+      "topName": "Carne, boi, quarto traseiro, c/ gordura, grelhada, c/ óleo, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Carne, porco, lombo, grelhada/assada, s/ óleo, c/ sal",
+      "topName": "Carne, porco, lombo, grelhada/assada, s/ óleo, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Hambúrguer, industrializado, frango, grelhado, s/ óleo",
+      "topName": "Hambúrguer, industrializado, frango, grelhado, s/ óleo",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal",
+      "topName": "Omelete, c/ ovo de galinha, c/ queijo parmesão, c/ sal (ovo de galinha inteiro, queijo parmesão, c/ óleo de soja, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Omelete, vegetais e queijo parmesão, c/ sal",
+      "topName": "Omelete, vegetais e queijo parmesão, c/ sal (ovo de galinha, vegetais - cenoura, abobrinha, tomate, champignon paris, salsa, cebolinha verde, queijo parmesão, c/ óleo, cebola e alho, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Ovo, codorna, inteiro, cozido, c/ sal",
+      "topName": "Ovo, codorna, inteiro, cozido, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Ovo, galinha, inteiro, cozido, s/ sal, Brasil",
+      "topName": "Ovo, galinha, inteiro, cozido, s/ sal, Brasil (média de várias amostras)",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Ceviche de peixe, água doce, corvina, s/ sal",
+      "topName": "Ceviche de peixe, água doce, corvina, s/ sal (peixe, água doce, corvina, cru, c/ cebola, suco de limão, pepino, tomate, pimenta jalapeño, coentro, salsa, c/ azeite de oliva, c/ pimenta do reino, s/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Peixe, água salgada, salmão, filé, s/ pele, assado/grelhado, s/ óleo, c/ sal",
+      "topName": "Peixe, água salgada, salmão, filé, s/ pele, assado/grelhado, s/ óleo, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Suco natural, laranja, mamão, pera e maçã, c/ açúcar",
+      "topName": "Suco natural, laranja, mamão, pera e maçã, c/ açúcar",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Suco, limonada, s/ açúcar",
+      "topName": "Suco, limonada, s/ açúcar",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Batata, inglesa, s/ casca, cozida, drenada, c/ óleo de soja, s/ sal",
+      "topName": "Batata, inglesa, s/ casca, cozida, drenada, c/ óleo de soja, s/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Chuchu, s/ casca, cozido, drenado, s/ óleo, s/ sal, BrasiI",
+      "topName": "Chuchu, s/ casca, cozido, drenado, s/ óleo, s/ sal, BrasiI",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+      "topName": "Pimentão, amarelo, assado, s/ óleo c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Salada, trigo em grão, c/ azeite de oliva, c/ sal",
+      "topName": "Salada, trigo em grão, c/ azeite de oliva, c/ sal (trigo em grão cozido, tomate, cebola, salsa, suco de limão, c/ azeite de oliva, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Salada, couve-flor, cozida, c/ molho de salada - salsa, suco de limão, azeite de oliva, c/ sal",
+      "topName": "Salada, couve-flor, cozida, c/ molho de salada - salsa, suco de limão, azeite de oliva, c/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Mousse de peixe",
+      "topName": "Mousse de peixe (pescada cozida, gelatina s/ sabor, maionese, mostarda, creme de leite, salsa, c/ caldo de vegetais, c/ pimenta-do-reino, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Queijo, leite de vaca, gorgonzola",
+      "topName": "Queijo, leite de vaca, gorgonzola (dado importado)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    },
+    {
+      "query": "Requeijão, caseiro, c/ sal",
+      "topName": "Requeijão, caseiro, c/ sal  (leite integral, suco de limão, manteiga, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "SAFE_ALIAS",
+      "reason": "Resultado correto (ground truth real ou auditoria manual da Fase 5) com match exato de nome — alias so formaliza o que ja funciona."
+    }
+  ],
+  "REQUIRES_REVIEW": [
+    {
+      "query": "Aveia, flocos, finos",
+      "topName": "Aveia, flocos, finos, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Canelone, c/ carne moída refogada, c/ molho de tomate, caseiro, c/ sal (massa com farinha de trigo, carne bovina, patinho moído, refogada, c/ molho de tomate (tomate, c/ óleo, cebolha e alho), c/ sal)",
+      "topName": "Canelone, c/ carne moída refogada, c/ molho de tomate, caseiro, c/ sal (massa com farinha de trigo, carne bovina, patinho moído, refogada, c/ molho de tomate  (tomate, c/ óleo, cebolha e alho), c/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Lasanha, vegetais, caseira (massa lasanha fresca, vegetais - cenoura, vagem, abobrinha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "topName": "Lasanha, vegetais, caseira (massa lasanha fresca, vegetais - cenoura, vagem, abobrinha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+      "topName": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Ervilha, em vagem, fresca, cozida, drenada, s/ óleo, c/ sal",
+      "topName": "Ervilha, em vagem, fresca, cozida, drenada, s/ óleo, c/ sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+      "topName": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+      "topName": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Soja, extrato, c/ suco de maracujá",
+      "topName": "Soja, extrato, c/ suco de maracujá, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Sopa, feijão preto, c/ óleo, c/ sal, Brasil [caldo de vegetais, feijão preto, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ sal]",
+      "topName": "Sopa, feijão preto, c/ óleo, c/ sal, Brasil [caldo de vegetais, feijão preto, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ sal]",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Almôndega, ao sugo (molho de tomate)",
+      "topName": "Almôndega, ao sugo (molho de tomate) (carne, boi, frita, c/ molho de tomate (tomate, c/ óleo, cebola e alho, c/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+      "topName": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "topName": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Carne, caça (capivara, coelho), cozida, assada, s/ óleo, c/ sal",
+      "topName": "Carne, caça (capivara, coelho), cozida, assada, s/ óleo, c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Carne, frango, peito, s/ pele, frita (c/ óleo de soja), c/ sal",
+      "topName": "Carne, frango, peito, s/ pele, frita (c/ óleo de soja), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Omelete com vegetais e queijo, c/ azeite de oliva, c/ sal, Brasil [ovo de galinha, cebola, cenoura, pimentões, leite de vaca integral, queijo parmesão, azeite de oliva, alho, cebolinha, salsa (salsinha), pimenta-do-reino, c/ sal]",
+      "topName": "Omelete com vegetais e queijo, c/ azeite de oliva, c/ sal, Brasil [ovo de galinha, cebola, cenoura, pimentões, leite de vaca integral, queijo parmesão, azeite de oliva, alho, cebolinha, salsa (salsinha), pimenta-do-reino, c/ sal]",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Ovo, galinha, clara, desidratada, pasteurizada",
+      "topName": "Ovo, galinha, clara, desidratada, pasteurizada, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Ovo, galinha, mexido, c/ salsa (salsinha), c/ óleo de soja, c/ sal",
+      "topName": "Ovo, galinha, mexido, c/ salsa (salsinha), c/ óleo de soja, c/ sal, Brasil",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Ovo, galinha, vermelho, inteiro, cru",
+      "topName": "Ovo, galinha, vermelho, inteiro, cru, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Alichela, caseira (peixe, água salgada, nchova (aliche), salsinha, alho, pimenta do reino, c/ azeite de oliva, s/ sal)",
+      "topName": "Alichela, caseira (peixe, água salgada, nchova (aliche), salsinha, alho, pimenta do reino, c/ azeite de oliva, s/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Molusco, ostra, cozido, s/ óleo, s/ sal",
+      "topName": "Molusco, ostra, cozido, s/ óleo, s/ sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Peixe, água doce, Pirarucu, cultivado em Rondonia, à milanesa (a partir do peixe fresco), c/ sal (peixe, água doce, pirarucu, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), c/ sal)",
+      "topName": "Peixe, água doce, Pirarucu, cultivado em Rondonia, à milanesa (a partir do peixe fresco), c/ sal (peixe, água doce, pirarucu, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), c/ sal) (média de peixes com diferentes pesos e cortes)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Peixe, água salgada, Merluza, filé, assado, s/ óleo, s/ sal",
+      "topName": "Peixe, água salgada, Merluza, filé, assado, s/ óleo, s/ sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Peixe, água salgada, cação, à milanesa (ovo e farinha de rosca), frito (c/ óleo de soja), c/ sal",
+      "topName": "Peixe, água salgada, cação, à milanesa (ovo e farinha de rosca), frito (c/ óleo de soja), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "topName": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Abacate, polpa, in natura",
+      "topName": "Abacate, polpa, in natura , Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+      "topName": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Damasco (abricó), in natura",
+      "topName": "Damasco (abricó), in natura , Brasil",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Mamão, Formosa, polpa, in natura",
+      "topName": "Mamão, Formosa, polpa, in natura , Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Pera, cozida, s/ manteiga, s/ açúcar",
+      "topName": "Pera, cozida, s/ manteiga, s/ açúcar, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Suco natural, bacuri, c/ açúcar",
+      "topName": "Suco natural, bacuri, c/ açúcar, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "topName": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+      "topName": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Salada, alface americana, c/ molho vinagrete (tomate, cebola, salsa, vinagre, azeite de oliva), c/ sal",
+      "topName": "Salada, alface americana, c/ molho vinagrete (tomate, cebola, salsa, vinagre, azeite de oliva), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Creme de queijo, caseiro (Tipo Catupiry)",
+      "topName": "Creme de queijo, caseiro (Tipo Catupiry) (leite, queijo minas, creme de leite, amido de milho, margarina, c/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Iogurte, integral, pêssego",
+      "topName": "Iogurte, integral, pêssego, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Leite, cabra, integral, fluído",
+      "topName": "Leite, cabra, integral, fluído, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Leite, vaca, integral, instantâneo, em pó",
+      "topName": "Leite, vaca, integral, instantâneo, em pó, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Bolo, baunilha, mistura p/",
+      "topName": "Bolo, baunilha, mistura p/, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Creme, de milho, em pó",
+      "topName": "Creme, de milho, em pó, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Gelatina, tutti-frutti, em pó",
+      "topName": "Gelatina, tutti-frutti, em pó, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Mousse, chocolate, mistura p/",
+      "topName": "Mousse, chocolate, mistura p/, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Abobrinha, italiana, c/ casca, refogada (c/ óleo, cebola e alho), s/ sal",
+      "topName": "Abobrinha, italiana, c/ casca, refogada (c/ óleo, cebola e alho), s/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Carne, boi, lagarto, refogada (c/ óleo, cebola e alho), s/ sal",
+      "topName": "Carne, boi, lagarto, refogada (c/ óleo, cebola e alho), s/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Carne, peru, peito, ensopado (c/ tomate e pimentão), c/ óleo de soja, cebola e alho, c/ sal",
+      "topName": "Carne, peru, peito, ensopado (c/ tomate e pimentão), c/ óleo de soja, cebola e alho, c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Peixe, água doce, Tucunaré, filé, congelado, frito (c/ óleo de soja), c/ sal",
+      "topName": "Peixe, água doce, Tucunaré, filé, congelado, frito (c/ óleo de soja), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Abacaxi cozido, s/ água de remolho (teor reduzido de potássio e resíduo), c/ adoçante",
+      "topName": "Abacaxi cozido, s/ água de remolho (teor reduzido de potássio e resíduo), c/ adoçante, Brasil",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Cenoura refogada, c/ cebola, alho e óleo de soja, salsa (salsinha), c/ sal",
+      "topName": "Cenoura refogada, c/ cebola, alho e óleo de soja, salsa (salsinha), c/ sal, Brasil",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Iscas de peito de frango, c/ molho roty, c/ óleo, c/ sal, Brasil [peito de frango, água, molho roty em pó, amido de milho (maisena), c/ cebola, alho e óleo de soja, salsa (salsinha), cebolinha, c/ sal]",
+      "topName": "Iscas de peito de frango, c/ molho roty, c/ óleo, c/ sal, Brasil [peito de frango, água, molho roty em pó, amido de milho (maisena), c/ cebola, alho e óleo de soja, salsa (salsinha), cebolinha, c/ sal]",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Polenta cremosa, c/ margarina, caldo de galinha, c/ cebola, alho e óleo de soja, s/ sal",
+      "topName": "Polenta cremosa, c/ margarina, caldo de galinha, c/ cebola, alho e óleo de soja, s/ sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Salada, escarola e tomate, s/ óleo, s/ sal",
+      "topName": "Salada, escarola e tomate, s/ óleo, s/ sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Canelone, c/ carne moída refogada, c/ molho de tomate, caseiro, c/ sal (massa com farinha de trigo, carne bovina, patinho moído, refogada, c/ molho de tomate (tomate, c/ óleo, cebolha e alho), c/ sal)",
+      "topName": "Canelone, c/ carne moída refogada, c/ molho de tomate, caseiro, c/ sal (massa com farinha de trigo, carne bovina, patinho moído, refogada, c/ molho de tomate  (tomate, c/ óleo, cebolha e alho), c/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Lasanha, vegetais, caseira (massa lasanha fresca, vegetais - cenoura, vagem, abobrinha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "topName": "Lasanha, vegetais, caseira (massa lasanha fresca, vegetais - cenoura, vagem, abobrinha, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+      "topName": "Acarajé, c/ sal [massa - feijão fradinho (de corda), cebola, frito (c/ azeite de dendê), molho - camarão seco, pimenta-malagueta, c/ azeite de dendê, cebola, c/ sal]",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Ervilha, em vagem, fresca, cozida, drenada, s/ óleo, c/ sal",
+      "topName": "Ervilha, em vagem, fresca, cozida, drenada, s/ óleo, c/ sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+      "topName": "Feijão, preto, cozido (50% grão e 50% caldo), c/ carne de boi, músculo, s/ gordura, c/ óleo, cebola e alho, c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+      "topName": "Lentilha, cozida (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Soja, extrato, c/ suco de maracujá",
+      "topName": "Soja, extrato, c/ suco de maracujá, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Almôndega, ao sugo (molho de tomate)",
+      "topName": "Almôndega, ao sugo (molho de tomate) (carne, boi, frita, c/ molho de tomate (tomate, c/ óleo, cebola e alho, c/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Sopa, feijão preto, c/ óleo, c/ sal, Brasil [caldo de vegetais, feijão preto, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ sal]",
+      "topName": "Sopa, feijão preto, c/ óleo, c/ sal, Brasil [caldo de vegetais, feijão preto, c/ óleo de soja, cebola e alho, salsa (salsinha), c/ sal]",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+      "topName": "Carne, boi, contra-filé, grelhado/frito, c/ molho de mostarda (creme de leite, suco de limão e mostarda), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "topName": "Carne, boi, lingua, cozida, recheada, c/ linguiça calabresa, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Carne, caça (capivara, coelho), cozida, assada, s/ óleo, c/ sal",
+      "topName": "Carne, caça (capivara, coelho), cozida, assada, s/ óleo, c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Omelete com vegetais e queijo, c/ azeite de oliva, c/ sal, Brasil [ovo de galinha, cebola, cenoura, pimentões, leite de vaca integral, queijo parmesão, azeite de oliva, alho, cebolinha, salsa (salsinha), pimenta-do-reino, c/ sal]",
+      "topName": "Omelete com vegetais e queijo, c/ azeite de oliva, c/ sal, Brasil [ovo de galinha, cebola, cenoura, pimentões, leite de vaca integral, queijo parmesão, azeite de oliva, alho, cebolinha, salsa (salsinha), pimenta-do-reino, c/ sal]",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Ovo, galinha, clara, desidratada, pasteurizada",
+      "topName": "Ovo, galinha, clara, desidratada, pasteurizada, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Alichela, caseira (peixe, água salgada, nchova (aliche), salsinha, alho, pimenta do reino, c/ azeite de oliva, s/ sal)",
+      "topName": "Alichela, caseira (peixe, água salgada, nchova (aliche), salsinha, alho, pimenta do reino, c/ azeite de oliva, s/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Ovo, galinha, mexido, c/ salsa (salsinha), c/ óleo de soja, c/ sal",
+      "topName": "Ovo, galinha, mexido, c/ salsa (salsinha), c/ óleo de soja, c/ sal, Brasil",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Ovo, galinha, vermelho, inteiro, cru",
+      "topName": "Ovo, galinha, vermelho, inteiro, cru, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Molusco, ostra, cozido, s/ óleo, s/ sal",
+      "topName": "Molusco, ostra, cozido, s/ óleo, s/ sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Peixe, água doce, Pirarucu, cultivado em Rondonia, à milanesa (a partir do peixe fresco), c/ sal (peixe, água doce, pirarucu, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), c/ sal)",
+      "topName": "Peixe, água doce, Pirarucu, cultivado em Rondonia, à milanesa (a partir do peixe fresco), c/ sal (peixe, água doce, pirarucu, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), c/ sal) (média de peixes com diferentes pesos e cortes)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Peixe, água salgada, Merluza, filé, assado, s/ óleo, s/ sal",
+      "topName": "Peixe, água salgada, Merluza, filé, assado, s/ óleo, s/ sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Peixe, água salgada, cação, à milanesa (ovo e farinha de rosca), frito (c/ óleo de soja), c/ sal",
+      "topName": "Peixe, água salgada, cação, à milanesa (ovo e farinha de rosca), frito (c/ óleo de soja), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "topName": "Peixe, água salgada, pescada, branca, cozido, c/ camarão, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Abacate, polpa, in natura",
+      "topName": "Abacate, polpa, in natura , Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Damasco (abricó), in natura",
+      "topName": "Damasco (abricó), in natura , Brasil",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Mamão, Formosa, polpa, in natura",
+      "topName": "Mamão, Formosa, polpa, in natura , Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+      "topName": "Banana, grelhada, s/ manteiga, c/ açúcar e canela (média de 5 tipos - Nanica (caturra ou dágua), da Terra, Maçã, Ouro e Prata)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Suco natural, bacuri, c/ açúcar",
+      "topName": "Suco natural, bacuri, c/ açúcar, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Pera, cozida, s/ manteiga, s/ açúcar",
+      "topName": "Pera, cozida, s/ manteiga, s/ açúcar, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "topName": "Abobrinha recheada, c/ sal (abobrinha grelhada, c/ muçarela, carne bovina, patinho moído, refogado, c/ molho de tomate (tomate, c/ óleo, cebola e alho), c/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Salada, alface americana, c/ molho vinagrete (tomate, cebola, salsa, vinagre, azeite de oliva), c/ sal",
+      "topName": "Salada, alface americana, c/ molho vinagrete (tomate, cebola, salsa, vinagre, azeite de oliva), c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+      "topName": "Flor de abóbora, à milanesa, s/ sal (flor de abóbora, farinha de trigo, farinha de rosca, ovo, frito (c/ óleo de soja), s/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Creme de queijo, caseiro (Tipo Catupiry)",
+      "topName": "Creme de queijo, caseiro (Tipo Catupiry) (leite, queijo minas, creme de leite, amido de milho, margarina, c/ sal)",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Iogurte, integral, pêssego",
+      "topName": "Iogurte, integral, pêssego, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Leite, cabra, integral, fluído",
+      "topName": "Leite, cabra, integral, fluído, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    },
+    {
+      "query": "Leite, vaca, integral, instantâneo, em pó",
+      "topName": "Leite, vaca, integral, instantâneo, em pó, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "REQUIRES_REVIEW",
+      "reason": "Resultado correto, mas via match fraco (token/FTS) — precisa confirmar que a query sempre aponta pra esse alimento antes de virar alias fixo."
+    }
+  ],
+  "UNSAFE": [
+    {
+      "query": "Sanduíche, misto quente, pão forma integral*, c/ presunto cozido* e queijo muçarela*",
+      "topName": "Sanduíche, misto quente, pão forma integral*, c/ presunto cozido* e queijo muçarela*, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Bebida láctea",
+      "topName": "Bebida láctea",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Maria mole, coco, em pó",
+      "topName": "Maria mole, coco, em pó, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Pão de queijo, mistura p/",
+      "topName": "Pão de queijo, mistura p/ (média de diferentes marcas), Brasil",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado INCORRECT no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Arroz",
+      "topName": "Arroz carreteiro",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado INCORRECT no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Couve",
+      "topName": "Couve",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Guariroba",
+      "topName": "Guariroba (palmito in natura )",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Paleta",
+      "topName": "Paleta",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado INCORRECT no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Carne suína",
+      "topName": "Carne suína",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado INCORRECT no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Carne bovina",
+      "topName": "Carne bovina",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado INCORRECT no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Asa de galinha ou frango",
+      "topName": "Asa de galinha ou frango",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Iogurte natural",
+      "topName": "Iogurte, natural",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado INCORRECT no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Hambúrguer não especificado",
+      "topName": "Hambúrguer não especificado",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "arroz",
+      "topName": "Arroz carreteiro",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "arroz branco",
+      "topName": "Papa de carne bovina moída (acém), arroz branco e brócolis, c/ caldo de carne, c/ cebola, s/ óleo, c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "feijão",
+      "topName": "Feijão tropeiro mineiro",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "feijão preto",
+      "topName": "Feijão, preto, cru, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "feijão carioca cozido",
+      "topName": "Feijão, carioca, cozido",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "ovo",
+      "topName": "Ovo, codorna, clara, crua, Brasil",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "ovo cozido",
+      "topName": "Ovo, codorna, inteiro, cozido, c/ sal",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "ovo mexido",
+      "topName": "Ovo, galinha, clara, desidratada, pasteurizada, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "ovo frito",
+      "topName": "Ovo de codorna",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "clara de ovo",
+      "topName": "Ovo, codorna, clara, crua, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "gema de ovo",
+      "topName": "Ovo, codorna, gema, crua, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "frango",
+      "topName": "Frango, com açafrão",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "peito de frango",
+      "topName": "Peito de frango, grelhado, c/ óleo, c/ sal, Brasil (peito de frango, óleo de soja, água, páprica doce, alho, c/ sal) (peito de frango, óleo de soja, água, páprica doce, alho, c/ sal)",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "peito de frango grelhado",
+      "topName": "Peito de frango, grelhado, c/ óleo, c/ sal, Brasil (peito de frango, óleo de soja, água, páprica doce, alho, c/ sal) (peito de frango, óleo de soja, água, páprica doce, alho, c/ sal)",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "coxa de frango",
+      "topName": "Carne, frango, coxa, c/ pele, crua, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "frango assado",
+      "topName": "Frango inteiro",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "banana",
+      "topName": "Banana, passa, Brasil",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "banana prata",
+      "topName": "Banana, prata, in natura , Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "banana nanica",
+      "topName": "Banana, nanica, crua",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "banana da terra",
+      "topName": "Banana, da terra, in natura , Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "milho",
+      "topName": "Milho (em grão)",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "milho cru",
+      "topName": "Milho, fubá, cru",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "milho verde",
+      "topName": "Milho, verde, grão, assado, c/ sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "tilápia assada",
+      "topName": "Peixe, água doce, tilápia, filé, cru, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "tilápia grelhada",
+      "topName": "Peixe, água doce, Tilápia, filé s/ pele, grelhado, s/ óleo, s/ sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "tilápia frita",
+      "topName": "Peixe, água doce, tilápia, filé, cru, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "carne moída",
+      "topName": "Carne moída",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "carne bovina",
+      "topName": "Carne bovina",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "alcatra grelhada",
+      "topName": "Carne, boi, miolo de alcatra, grelhada/assada, s/ óleo, c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "batata",
+      "topName": "Batata, inglesa, sauté",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "batata cozida",
+      "topName": "Batata, baroa, cozida",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "batata inglesa",
+      "topName": "Batata-inglesa",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "batata doce",
+      "topName": "Batata-doce",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "aipim",
+      "topName": "Aipim",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "pão francês",
+      "topName": "Pão francês, c/ geleia",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "pão de forma integral",
+      "topName": "Pão, trigo, forma, integral",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "queijo minas",
+      "topName": "Queijo, minas, frescal",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "queijo mussarela",
+      "topName": "Queijo, muçarela (mussarela, muzarela, mozarela), light, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "iogurte natural",
+      "topName": "Iogurte, natural",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "café sem açúcar",
+      "topName": "Bebida, café, descafeinado, infusão, s/ açúcar",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "brócolis",
+      "topName": "Brócolis (ou couve-flor), romanesco, cru (dado importado)",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "couve",
+      "topName": "Couve",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "couve refogada",
+      "topName": "Couve, refogada, Brassica Oleracea var. Manteiga",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "cenoura",
+      "topName": "Cenoura",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "abóbora cozida",
+      "topName": "Flor de abóbora, cozida, drenada, s/ óleo, c/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "abobrinha",
+      "topName": "Abobrinha",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "laranja",
+      "topName": "Laranja, baía, suco",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "aveia",
+      "topName": "Aveia, flocos, crua",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "amendoim torrado",
+      "topName": "Amendoim, torrado, salgado",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "óleo de soja",
+      "topName": "Óleo, de soja",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "manteiga",
+      "topName": "Manteiga, com sal",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "adoçante",
+      "topName": "Adoçante light",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "macarrão cozido",
+      "topName": "Macarrão",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "purê de batata",
+      "topName": "Purê de batata baroa (mandioquinha, batata baroa), batata inglesa e cenoura, c/ água, s/ óleo  e sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "salada de frutas",
+      "topName": "Salada de frutas  (melão, mamão e pêssego em calda)",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "peixe",
+      "topName": "Peixe, sticks, congelado, preparado",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "salmão",
+      "topName": "Salmão em conserva",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "salmão grelhado",
+      "topName": "Salmão, sem pele, fresco, grelhado",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "camarão",
+      "topName": "Camarão",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "peito de peru",
+      "topName": "Peito de peru",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "linguiça",
+      "topName": "Linguiça (suína, bovina, mista, etc.)",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "achocolatado",
+      "topName": "Achocolatado, pó",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "biscoito de água e sal",
+      "topName": "Biscoito, salgado, água e sal, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "tapioca",
+      "topName": "Tapioca, com manteiga",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "quinoa cozida",
+      "topName": "Quinoa, grão, cozida, s/ óleo, s/ sal (dado importado)",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "grão de bico cozido",
+      "topName": "Grão de bico, cozido (50% grão e 50% caldo), c/ óleo de soja, cebola e alho, s/ sal",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "ervilha",
+      "topName": "Ervilha, em vagem, crua, Brasil",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "vagem cozida",
+      "topName": "Vagem, cozida, drenada, c/ óleo de soja, c/ sal",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "cebola",
+      "topName": "Cebola",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "salsa",
+      "topName": "Salsa (salsinha), crua, Brasil",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Milho",
+      "topName": "Milho (em grão)",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Fraldinha",
+      "topName": "Fraldinha (capa de filé)",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Pepininho",
+      "topName": "Pepininho (maxixe)",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Laranja, suco, Citrus sinensis (L.) Osbeck, var. Lima",
+      "topName": "Laranja, suco, Citrus sinensis (L.) Osbeck, var. Lima",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Linguiça de frango",
+      "topName": "Linguiça de frango",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Jiló",
+      "topName": "Jiló",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Caranguejo",
+      "topName": "Caranguejo",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Carne de galinha",
+      "topName": "Carne de galinha",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Feijão , manteiga, caldo em meio salino, Phaseolus vulgaris L.",
+      "topName": "Feijão , manteiga, caldo em meio salino, Phaseolus vulgaris L.",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Peixe, água doce, cachara, músculo, silvestre, cru, Pseudoplatystoma fasciatum",
+      "topName": "Peixe, água doce, cachara, músculo, silvestre, cru, Pseudoplatystoma fasciatum",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Ameixa, em calda, enlatada",
+      "topName": "Ameixa, em calda, enlatada, drenada",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Jacaré",
+      "topName": "Jacaré (carne bovina de segunda c/ osso)",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Carne de caprino",
+      "topName": "Carne de caprino",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Salada, macarrão de arroz, c/ pepino e cenoura, c/ presunto, c/ molho de salada",
+      "topName": "Salada, macarrão de arroz, c/ pepino e cenoura, c/ presunto, c/ molho de salada (vinagre de arroz, gergelim, c/ óleo de gergelim, c/ açúcar, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Queijo ricota",
+      "topName": "Queijo, ricota",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Filé de frango",
+      "topName": "Filé de frango",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Carne de bode",
+      "topName": "Carne de bode",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Quibe, bovino, assado",
+      "topName": "Quibe, bovino, assado (trigo para quibe, carne bovina patinho, cebola, cebolinha, hortelã, pimenta-do-reino, canela, c/ manteiga, c/ sal)",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Cabeça de lombo",
+      "topName": "Cabeça de lombo (carne bovina)",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Língua suína",
+      "topName": "Língua suína",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Arroz doce, light",
+      "topName": "Arroz doce, light (arroz integral, leite desnatado, adoçante, canela em pó)",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Peru em pedaço não especificado",
+      "topName": "Peru em pedaço não especificado",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Steak de frango",
+      "topName": "Steak de frango",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Batata-inglesa",
+      "topName": "Batata-inglesa",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Caldo espessado (mel) de batata e beterraba, c/ carne, s/ sal, Brasil",
+      "topName": "Caldo espessado (mel) de batata e beterraba, c/ carne, c/ óleo, s/ sal, Brasil (água, batata liofilizada, beterraba, caldo de carne, c/ cebola, alho e óleo de soja, s/ sal)",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Carne de charque",
+      "topName": "Carne de charque",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Hambúrguer (hamburger), frango, cru",
+      "topName": "Hambúrguer (hamburger), frango, cru, Brasil",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Caju, suco, industrializado,",
+      "topName": "Caju, suco, industrializado,",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Miúdo de galinha ou frango",
+      "topName": "Miúdo de galinha ou frango",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Papa de feijão carioca, macarrão e chicória, c/ caldo de frango, c/ cebola, c/ óleo de soja, c/ sal",
+      "topName": "Papa de feijão carioca, macarrão e chicória, c/ caldo de frango, c/ cebola, c/ óleo de soja, c/ sal",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Frango inteiro",
+      "topName": "Frango inteiro",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Contrafilé",
+      "topName": "Contrafilé",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Rabanete",
+      "topName": "Rabanete",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Feijão, preto, cru",
+      "topName": "Feijão, preto, cru",
+      "matchClass": "EXACT_NAME_AND_PREPARATION",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Acerola, polpa, da vez, Malpighia emarginata D.C., var. UFRPE 8",
+      "topName": "Acerola, polpa, da vez, Malpighia emarginata D.C., var. UFRPE 8",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Biscoito, doce, amanteigado, leite",
+      "topName": "Biscoito, doce, amanteigado, leite, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Maminha",
+      "topName": "Maminha",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Acerola, polpa, congelada, comercial,",
+      "topName": "Acerola, polpa, congelada, comercial,",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Jabá",
+      "topName": "Jabá",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Peixe não especificado",
+      "topName": "Peixe não especificado (inteiro, em posta, em filé, etc.)",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Couve",
+      "topName": "Couve",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Bebida láctea, morango",
+      "topName": "Bebida láctea, morango, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Macarrão, c/ molho bolonhesa, c/ sal",
+      "topName": "Macarrão, c/ molho bolonhesa, c/ sal (macarrão - espaguete, carne bovina - patinho moído, tomate, cebola, alho, c/ óleo de soja, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Gelatina, morango, em pó",
+      "topName": "Gelatina, morango, em pó, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Acerola, polpa, congelada, embalada em copo plástico, Malpighia glabra L.",
+      "topName": "Acerola, polpa, congelada, embalada em copo plástico, Malpighia glabra L.",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Gelatina, cereja, em pó, diet",
+      "topName": "Gelatina, cereja, em pó, diet, Brasil",
+      "matchClass": "STRONG_TOKEN_MATCH",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Acerola, suco,",
+      "topName": "Acerola, suco,",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Sequilho",
+      "topName": "Sequilho",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Frango em pedaços",
+      "topName": "Frango em pedaços",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Carne de ovelha",
+      "topName": "Carne de ovelha",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Cebola",
+      "topName": "Cebola",
+      "matchClass": "GENERIC_SHORT_QUERY",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Ovos Benedict, c/ lombo canadense, c/ sal",
+      "topName": "Ovos Benedict, c/ lombo canadense, c/ sal (pão forma integral, ovo cozido, lombo canadense, molho holandês, salsa, c/ pimenta-do-reino, c/ sal)",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Carne, bovina, paleta, s/ gordura, refogada (c/ óleo, cebola e alho), s/ sal",
+      "topName": "Carne, bovina, paleta, s/ gordura, refogada (c/ óleo, cebola e alho), s/ sal",
+      "matchClass": "FTS_PARTIAL",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    },
+    {
+      "query": "Galinha em pedaços",
+      "topName": "Galinha em pedaços",
+      "matchClass": "EXACT_NAME",
+      "safety": "UNSAFE",
+      "reason": "Rotulado AMBIGUOUS_VALID no dataset de calibracao — identidade NAO esta clara, nunca deveria virar alias."
+    }
+  ]
+}

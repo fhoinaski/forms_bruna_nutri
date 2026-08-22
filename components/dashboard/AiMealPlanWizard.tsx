@@ -25,6 +25,45 @@ const NUTRIENT_LABELS: Record<string, string> = { energyKcal: "Energia", protein
 const DEFAULT_SELECTED_MEALS: MealKey[] = ["cafe_da_manha", "almoco", "lanche_tarde", "jantar"];
 const MAX_REFINE_ITERATIONS = 6;
 
+/** Grupo do Recipe Engine (lib/nutrition/recipe-constants.ts) mais próximo de cada refeição — só pra filtrar quais receitas cadastradas fazem sentido sugerir, nunca restringe o cálculo. */
+const MEAL_KEY_TO_RECIPE_GROUP: Record<MealKey, "cafe_da_manha" | "almoco" | "lanche" | "jantar" | "sobremesa" | "bebida"> = {
+  cafe_da_manha: "cafe_da_manha",
+  lanche_manha: "lanche",
+  almoco: "almoco",
+  lanche_tarde: "lanche",
+  jantar: "jantar",
+  ceia: "lanche",
+};
+
+interface RecipeIngredientPayload {
+  taco_number?: number | null;
+  food_name: string;
+  grams?: number | null;
+  free_text?: string | null;
+}
+
+interface RecipeCandidate {
+  id: string;
+  title: string;
+  servings: number;
+  preparation_steps: string | null;
+  ingredients: RecipeIngredientPayload[];
+  per_portion_kcal: number;
+  per_portion_protein_g: number;
+  per_portion_carbs_g: number;
+  per_portion_fat_g: number;
+}
+
+/** Estado efêmero (só existe na revisão do wizard, nunca persistido) — SUGGESTED enquanto aqui presente, ACCEPTED quando "Usar receita" aplica e limpa a entrada, REJECTED quando "Manter alimentos" limpa sem aplicar. */
+interface MealRecipeSuggestion {
+  status: "suggested" | "none";
+  recipe: RecipeCandidate | null;
+  mealKcalAtSuggestionTime: number | null;
+  mealProteinAtSuggestionTime: number | null;
+  mealCarbsAtSuggestionTime: number | null;
+  mealFatAtSuggestionTime: number | null;
+}
+
 interface DraftContext {
   clientName: string;
   ageYears: number | null;
@@ -155,6 +194,39 @@ function fmt(value: number | null | undefined, decimals = 0): string {
   return value.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
+/** Nome amigável só pra exibição (reordena "Alimento, atributo" -> "Alimento atributo") — nunca usado pra resolver/persistir identidade. Mesma lógica de lib/nutrition/food-resolver.ts#toDisplayFoodName, reimplementada aqui pra não puxar o módulo do resolver (que importa repositórios server-only) pro bundle do cliente. */
+function toFriendlyFoodName(technicalName: string): string {
+  const parts = technicalName.split(",").map((part) => part.trim()).filter(Boolean);
+  return parts.length > 1 ? parts.join(" ") : technicalName.trim();
+}
+
+/**
+ * Expande os ingredientes REAIS de uma receita (escalados pra 1 porção) em
+ * itens calculáveis — reaproveitado tanto pela revisão de preparo composto
+ * (Food Preparation Engine V1) quanto pela sugestão de receita opcional
+ * (Food-First Meal Plan V1, Fase 4): "Usar receita" SUBSTITUI os itens da
+ * refeição pelos ingredientes reais da receita (nunca soma aos itens
+ * existentes — evita dupla contagem por construção). A preparação/receita
+ * em si nunca fornece kcal; só os ingredientes com source+refId reais.
+ */
+function expandRecipeIngredientsToItems(recipe: { servings: number; ingredients: RecipeIngredientPayload[] }): DraftMealItem[] {
+  const servingCount = Number.isFinite(recipe.servings) && recipe.servings > 0 ? recipe.servings : 1;
+  return recipe.ingredients
+    .filter((ing) => ing.taco_number && ing.grams)
+    .map((ing) => {
+      const grams = Math.round(((ing.grams ?? 0) / servingCount) * 10) / 10;
+      return {
+        food: ing.food_name,
+        displayName: toFriendlyFoodName(ing.food_name),
+        quantity: String(grams),
+        unit: "g",
+        food_source: "TACO" as const,
+        food_ref_id: String(ing.taco_number),
+        ai_suggested: true,
+      };
+    });
+}
+
 function draftMealToEditorMeal(meal: DraftMeal): Meal {
   return {
     name: meal.name,
@@ -267,6 +339,14 @@ export function AiMealPlanWizard({
   const [suggestingSubstitutionsMealKey, setSuggestingSubstitutionsMealKey] = useState<MealKey | null>(null);
   const [suggestingItemKey, setSuggestingItemKey] = useState<string | null>(null);
   const [substitutionError, setSubstitutionError] = useState("");
+
+  // Food-First Meal Plan V1, Fase 2/3 — sugestão de receita OPCIONAL por
+  // refeição. Nunca altera os alimentos sozinha: só populada por
+  // suggestRecipeForMeal, só some ao aceitar/rejeitar explicitamente. Chave
+  // é mealKey — no máximo uma sugestão pendente por refeição por vez.
+  const [recipeSuggestions, setRecipeSuggestions] = useState<Record<string, MealRecipeSuggestion>>({});
+  const [suggestingRecipeMealKey, setSuggestingRecipeMealKey] = useState<MealKey | null>(null);
+  const [recipeDetailsOpen, setRecipeDetailsOpen] = useState<Record<string, boolean>>({});
 
   const [applying, setApplying] = useState(false);
 
@@ -526,6 +606,84 @@ export function AiMealPlanWizard({
     setSubstitutionSuggestions((current) => current.filter((_, i) => i !== index));
   }
 
+  /**
+   * Food-First Meal Plan V1, Fase 2 — "✨ Sugerir receita": procura PRIMEIRO
+   * (e só) receitas reais cadastradas no Recipe Engine pro grupo da
+   * refeição, nunca inventa recipeId. Ranqueia pela mais próxima
+   * nutricionalmente da refeição atual (kcal já calculada pela engine real,
+   * nunca um número da IA) — só a mais próxima é sugerida, pra não poluir a
+   * revisão com opções ruins. Se não houver nenhuma receita cadastrada pro
+   * grupo, marca "none" (nunca finge que existe).
+   */
+  async function suggestRecipeForMeal(mealIndex: number) {
+    if (!draft) return;
+    const meal = draft.meals[mealIndex];
+    setSuggestingRecipeMealKey(meal.mealKey);
+    try {
+      const group = MEAL_KEY_TO_RECIPE_GROUP[meal.mealKey];
+      const response = await fetch(`/api/admin/recipes?meal_group=${group}`);
+      if (!response.ok) return;
+      const { items } = (await response.json()) as { items: RecipeCandidate[] };
+      const mealNutrition = draft.nutrition?.perMeal[mealIndex];
+      const targetKcal = mealNutrition?.energyKcal ?? null;
+      const ranked = targetKcal !== null
+        ? [...items].sort((a, b) => Math.abs(a.per_portion_kcal - targetKcal) - Math.abs(b.per_portion_kcal - targetKcal))
+        : items;
+      setRecipeSuggestions((current) => ({
+        ...current,
+        [meal.mealKey]: {
+          status: ranked.length ? "suggested" : "none",
+          recipe: ranked[0] ?? null,
+          mealKcalAtSuggestionTime: mealNutrition?.energyKcal ?? null,
+          mealProteinAtSuggestionTime: mealNutrition?.proteinG ?? null,
+          mealCarbsAtSuggestionTime: mealNutrition?.carbohydrateG ?? null,
+          mealFatAtSuggestionTime: mealNutrition?.fatG ?? null,
+        },
+      }));
+    } finally {
+      setSuggestingRecipeMealKey(null);
+    }
+  }
+
+  /**
+   * "Usar receita" (Fase 4) — semântica escolhida: SUBSTITUI os itens atuais
+   * da refeição pelos ingredientes reais da receita (escalados a 1 porção)
+   * e vinculam meal.source_recipe_id — nunca soma aos itens existentes
+   * (elimina dupla contagem por construção, nunca por checagem a
+   * posteriori). Ação explícita só desta refeição; nenhuma outra refeição é
+   * tocada. Nutrição recalculada pela MESMA engine de sempre.
+   */
+  function applyRecipeToMeal(mealIndex: number) {
+    if (!draft) return;
+    const meal = draft.meals[mealIndex];
+    const suggestion = recipeSuggestions[meal.mealKey];
+    if (!suggestion?.recipe) return;
+    const newItems = expandRecipeIngredientsToItems(suggestion.recipe);
+    if (!newItems.length) return;
+    const nextMeals = draft.meals.map((m, index) => index !== mealIndex ? m : { ...m, items: newItems, source_recipe_id: suggestion.recipe!.id });
+    void recalculate(nextMeals);
+    setRecipeSuggestions((current) => {
+      const next = { ...current };
+      delete next[meal.mealKey];
+      return next;
+    });
+    setRecipeDetailsOpen((current) => ({ ...current, [meal.mealKey]: false }));
+  }
+
+  /** "Manter alimentos" — descarta a sugestão sem tocar em nada da refeição (REJECTED). */
+  function dismissRecipeSuggestion(mealKey: MealKey) {
+    setRecipeSuggestions((current) => {
+      const next = { ...current };
+      delete next[mealKey];
+      return next;
+    });
+    setRecipeDetailsOpen((current) => ({ ...current, [mealKey]: false }));
+  }
+
+  function toggleRecipeDetails(mealKey: MealKey) {
+    setRecipeDetailsOpen((current) => ({ ...current, [mealKey]: !current[mealKey] }));
+  }
+
   async function recalculate(nextMeals: DraftMeal[]) {
     if (!draft) return;
     setRecalculating(true);
@@ -593,23 +751,8 @@ export function AiMealPlanWizard({
     try {
       const response = await fetch(`/api/admin/recipes/${recipeCandidate.id}`);
       if (!response.ok) return;
-      const recipe = (await response.json()) as { servings: number; ingredients: { taco_number?: number | null; food_name: string; grams?: number | null }[] };
-      const servingCount = Number.isFinite(recipe.servings) && recipe.servings > 0 ? recipe.servings : 1;
-      const newItems: DraftMealItem[] = recipe.ingredients
-        .filter((ing) => ing.taco_number && ing.grams)
-        .map((ing) => {
-          const grams = Math.round(((ing.grams ?? 0) / servingCount) * 10) / 10;
-          const parts = ing.food_name.split(",").map((part) => part.trim()).filter(Boolean);
-          return {
-            food: ing.food_name,
-            displayName: parts.length > 1 ? parts.join(" ") : ing.food_name.trim(),
-            quantity: String(grams),
-            unit: "g",
-            food_source: "TACO" as const,
-            food_ref_id: String(ing.taco_number),
-            ai_suggested: true,
-          };
-        });
+      const recipe = (await response.json()) as { servings: number; ingredients: RecipeIngredientPayload[] };
+      const newItems = expandRecipeIngredientsToItems(recipe);
       if (!newItems.length) return;
       const nextMeals = draft.meals.map((meal, index) => index !== mealIndex ? meal : {
         ...meal,
@@ -953,6 +1096,16 @@ export function AiMealPlanWizard({
                                   Sugerir substituições
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => void suggestRecipeForMeal(mealIndex)}
+                                disabled={suggestingRecipeMealKey !== null}
+                                className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#EAD8C2] px-2 text-[11px] font-semibold text-[#8C6E52] hover:bg-[#FBF7F1] disabled:opacity-50"
+                                title={`Sugerir receita para ${meal.name} — opcional, nunca substitui os alimentos sozinha`}
+                              >
+                                <Sparkles className={`h-3.5 w-3.5 ${suggestingRecipeMealKey === meal.mealKey ? "animate-pulse" : ""}`} />
+                                Sugerir receita
+                              </button>
                             </div>
                           </div>
 
@@ -1014,6 +1167,56 @@ export function AiMealPlanWizard({
                               P {fmt(mealNutrition.proteinG, 1)}g · C {fmt(mealNutrition.carbohydrateG, 1)}g · G {fmt(mealNutrition.fatG, 1)}g{mealNutrition.fiberG !== undefined ? ` · Fibra ${fmt(mealNutrition.fiberG, 1)}g` : ""}
                             </p>
                           )}
+
+                          {recipeSuggestions[meal.mealKey]?.status === "none" && (
+                            <p className="mt-1.5 text-[11px] italic text-[#8C6E52]">Nenhuma receita cadastrada pra esse grupo de refeição.</p>
+                          )}
+
+                          {recipeSuggestions[meal.mealKey]?.status === "suggested" && recipeSuggestions[meal.mealKey]?.recipe && (() => {
+                            const suggestion = recipeSuggestions[meal.mealKey]!;
+                            const recipe = suggestion.recipe!;
+                            const deltaKcal = recipe.per_portion_kcal - (suggestion.mealKcalAtSuggestionTime ?? 0);
+                            const deltaProtein = recipe.per_portion_protein_g - (suggestion.mealProteinAtSuggestionTime ?? 0);
+                            const deltaCarbs = recipe.per_portion_carbs_g - (suggestion.mealCarbsAtSuggestionTime ?? 0);
+                            const deltaFat = recipe.per_portion_fat_g - (suggestion.mealFatAtSuggestionTime ?? 0);
+                            const signed = (value: number, decimals = 0) => `${value > 0 ? "+" : ""}${fmt(value, decimals)}`;
+                            const detailsOpen = Boolean(recipeDetailsOpen[meal.mealKey]);
+                            return (
+                              <div className="mt-2 space-y-2 rounded-lg border border-[#D9C4B2] bg-[#FBF7F1] p-2.5 text-xs">
+                                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-[#8C6E52]"><Sparkles className="h-3 w-3" /> Sugestão de receita (opcional)</p>
+                                <p className="font-semibold text-[#3A2B1F]">{recipe.title}</p>
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                  <div className="rounded-md bg-white/70 p-1.5">
+                                    <p className="font-semibold text-[#75675E]">Refeição atual</p>
+                                    <p className="text-[#3A2B1F]">{fmt(suggestion.mealKcalAtSuggestionTime)} kcal</p>
+                                    <p className="text-[#8C6E52]">P {fmt(suggestion.mealProteinAtSuggestionTime, 1)}g · C {fmt(suggestion.mealCarbsAtSuggestionTime, 1)}g · G {fmt(suggestion.mealFatAtSuggestionTime, 1)}g</p>
+                                  </div>
+                                  <div className="rounded-md bg-white/70 p-1.5">
+                                    <p className="font-semibold text-[#75675E]">Receita sugerida</p>
+                                    <p className="text-[#3A2B1F]">{fmt(recipe.per_portion_kcal)} kcal</p>
+                                    <p className="text-[#8C6E52]">P {fmt(recipe.per_portion_protein_g, 1)}g · C {fmt(recipe.per_portion_carbs_g, 1)}g · G {fmt(recipe.per_portion_fat_g, 1)}g</p>
+                                  </div>
+                                </div>
+                                <p className="text-[#8C6E52]">Diferença: {signed(deltaKcal)} kcal · {signed(deltaProtein, 1)}g proteína · {signed(deltaCarbs, 1)}g carboidrato · {signed(deltaFat, 1)}g gordura</p>
+                                {detailsOpen && (
+                                  <div className="rounded-md bg-white/70 p-1.5 text-[#3A2B1F]">
+                                    <p className="font-semibold">Ingredientes:</p>
+                                    <ul className="ml-3 list-disc">
+                                      {recipe.ingredients.filter((ing) => ing.taco_number && ing.grams).map((ing, ingIndex) => (
+                                        <li key={ingIndex}>{toFriendlyFoodName(ing.food_name)} — {ing.grams}g{recipe.servings > 1 ? ` (receita completa; escalado a 1 porção ao aplicar)` : ""}</li>
+                                      ))}
+                                    </ul>
+                                    {recipe.preparation_steps && <p className="mt-1.5 whitespace-pre-line">{recipe.preparation_steps}</p>}
+                                  </div>
+                                )}
+                                <div className="flex flex-wrap gap-1.5">
+                                  <button type="button" onClick={() => applyRecipeToMeal(mealIndex)} disabled={recalculating} className="rounded-full bg-[#8C6E52] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#7A5D45] disabled:opacity-50">Usar receita</button>
+                                  <button type="button" onClick={() => dismissRecipeSuggestion(meal.mealKey)} className="rounded-full border border-[#D9C4B2] px-2.5 py-1 text-[11px] font-semibold text-[#8C6E52] hover:bg-[#FBF7F1]">Manter alimentos</button>
+                                  <button type="button" onClick={() => toggleRecipeDetails(meal.mealKey)} className="rounded-full border border-[#D9C4B2] px-2.5 py-1 text-[11px] font-semibold text-[#8C6E52] hover:bg-[#FBF7F1]">{detailsOpen ? "Ocultar detalhes" : "Ver detalhes"}</button>
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           {meal.needsReview.length > 0 && (
                             <div className="mt-2 space-y-2 rounded-lg border border-[#F0D4C7] bg-[#FFF7F3] p-2.5">

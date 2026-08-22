@@ -1,0 +1,1894 @@
+{
+  "generatedAt": "2026-08-22T11:41:13.919Z",
+  "summary": {
+    "unmappedValueRows": 99,
+    "unmappedValueOccurrences": 87086,
+    "unmappedStatsRows": 20,
+    "unmappedStatsOccurrences": 61508
+  },
+  "foodNutrientValues": [
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:umidade:g",
+      "example_name": "Abacate, polpa, in natura , Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 14758,
+      "distinct_foods": 6603,
+      "example_foods": [
+        "Abacate, polpa, in natura , Brasil (86.3, reported)",
+        "Abacaxi, cozido, caramelizado, Brasil (65.3, reported)",
+        "Abacaxi, grelhado, c/ cobertura de chocolate ao leite, Brasil (48.4, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:carboidrato_disponivel:g",
+      "example_name": "Abacate, polpa, in natura , Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 14119,
+      "distinct_foods": 5964,
+      "example_foods": [
+        "Abacate, polpa, in natura , Brasil (1.81, reported)",
+        "Abacaxi, cozido, caramelizado, Brasil (32.6, reported)",
+        "Abacaxi, grelhado, c/ cobertura de chocolate ao leite, Brasil (31.6, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:alcool:g",
+      "example_name": "Abacate, polpa, in natura , Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 14026,
+      "distinct_foods": 5871,
+      "example_foods": [
+        "Abacate, polpa, in natura , Brasil (0, reported)",
+        "Abacaxi, cozido, caramelizado, Brasil (0, reported)",
+        "Abacaxi, grelhado, c/ cobertura de chocolate ao leite, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:cinzas:g",
+      "example_name": "Abacate, polpa, in natura , Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 14026,
+      "distinct_foods": 5871,
+      "example_foods": [
+        "Abacate, polpa, in natura , Brasil (0.47, reported)",
+        "Abacaxi, cozido, caramelizado, Brasil (0.42, reported)",
+        "Abacaxi, grelhado, c/ cobertura de chocolate ao leite, Brasil (0.95, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:vitamina_a_re:mcg",
+      "example_name": "Abacate, polpa, in natura , Brasil",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 14026,
+      "distinct_foods": 5871,
+      "example_foods": [
+        "Abacate, polpa, in natura , Brasil (6.21, reported)",
+        "Abacaxi, cozido, caramelizado, Brasil (1.42, reported)",
+        "Abacaxi, grelhado, c/ cobertura de chocolate ao leite, Brasil (1.05, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:cinzas",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 597,
+      "distinct_foods": 597,
+      "example_foods": [
+        "Arroz, integral, cozido (0.463, reported)",
+        "Arroz, integral, cru (1.1813333333333333, reported)",
+        "Arroz, tipo 1, cozido (0.07866666666666666, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:re",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "mcg",
+      "raw_unit": "(mcg)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 597,
+      "distinct_foods": 597,
+      "example_foods": [
+        "Arroz, integral, cozido (null, missing)",
+        "Arroz, integral, cru (null, missing)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:retinol",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "mcg",
+      "raw_unit": "(mcg)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 597,
+      "distinct_foods": 597,
+      "example_foods": [
+        "Arroz, integral, cozido (null, missing)",
+        "Arroz, integral, cru (null, missing)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:umidade",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "(%)",
+      "raw_unit": "(%)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 597,
+      "distinct_foods": 597,
+      "example_foods": [
+        "Arroz, integral, cozido (70.13866666666667, reported)",
+        "Arroz, integral, cru (12.179833333333335, reported)",
+        "Arroz, tipo 1, cozido (69.11366666666667, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:12_0",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (null, missing)",
+        "Arroz, integral, cru (null, missing)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:14_0",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0, trace)",
+        "Arroz, integral, cru (0.01, reported)",
+        "Arroz, tipo 1, cozido (0, trace)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:14_1",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (null, missing)",
+        "Arroz, integral, cru (null, missing)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:16_0",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0.25, reported)",
+        "Arroz, integral, cru (0.2393333392937978, reported)",
+        "Arroz, tipo 1, cozido (0.16, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:16_1",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (null, missing)",
+        "Arroz, integral, cru (0, trace)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:18_0",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0.02, reported)",
+        "Arroz, integral, cru (0.02, reported)",
+        "Arroz, tipo 1, cozido (0.01, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:18_1",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0.36, reported)",
+        "Arroz, integral, cru (0.45, reported)",
+        "Arroz, tipo 1, cozido (0.04, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:18_1t",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (null, missing)",
+        "Arroz, integral, cru (null, missing)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:18_2t",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (null, missing)",
+        "Arroz, integral, cru (null, missing)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:20_0",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0, trace)",
+        "Arroz, integral, cru (0.01, reported)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:20_1",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0, trace)",
+        "Arroz, integral, cru (0, trace)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:20_4",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (null, missing)",
+        "Arroz, integral, cru (null, missing)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:22_0",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0, trace)",
+        "Arroz, integral, cru (0, trace)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:22_5",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0, trace)",
+        "Arroz, integral, cru (null, missing)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:24_0",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0, trace)",
+        "Arroz, integral, cru (0, trace)",
+        "Arroz, tipo 1, cozido (null, missing)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:insaturados",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0.3, reported)",
+        "Arroz, integral, cru (0.4, reported)",
+        "Arroz, tipo 1, cozido (0, trace)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:turados",
+      "example_name": "Arroz, integral, cozido",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 423,
+      "distinct_foods": 423,
+      "example_foods": [
+        "Arroz, integral, cozido (0.3, reported)",
+        "Arroz, integral, cru (0.3, reported)",
+        "Arroz, tipo 1, cozido (0.2, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:cinza:g",
+      "example_name": "Abacaxi, eixo, maduro, Ananas Comosus L. Merril, pérola",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 391,
+      "distinct_foods": 391,
+      "example_foods": [
+        "Abacaxi, eixo, maduro, Ananas Comosus L. Merril, pérola (0.21, reported)",
+        "Abacaxi, Hawai, Ananas comosus L. (0.31, reported)",
+        "Abacaxi, Pérola, Ananas comosus L. (0.35, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:acido_l_ascorbico:mg",
+      "example_name": "Abacaxi, Ananas Comosus L. Merril, var. Pérola",
+      "unit": "mg",
+      "raw_unit": "mg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 333,
+      "distinct_foods": 333,
+      "example_foods": [
+        "Abacaxi, Ananas Comosus L. Merril, var. Pérola (20.5, reported)",
+        "Abacaxi, armazenado 17 dias a 14ºC, Ananas comosus var. Pérola (17.3, reported)",
+        "Abacaxi, armazenado 17 dias a 8ºC, Ananas comosus var. Pérola (14.4, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:alc:g",
+      "example_name": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 303,
+      "distinct_foods": 303,
+      "example_foods": [
+        "Achocolatado, em pó, dietético, Marca comercial, Brasil (0, reported)",
+        "Adoçante, líquido, Marca comercial, Brasil (média de diferentes tipos) (0, reported)",
+        "Purê de frutas (maçã, pera, banana), s/ açúcar, Marca comercial, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:ash:g",
+      "example_name": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 303,
+      "distinct_foods": 303,
+      "example_foods": [
+        "Achocolatado, em pó, dietético, Marca comercial, Brasil (1.5, reported)",
+        "Adoçante, líquido, Marca comercial, Brasil (média de diferentes tipos) (0, reported)",
+        "Purê de frutas (maçã, pera, banana), s/ açúcar, Marca comercial, Brasil (0.17, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:choavldf:g",
+      "example_name": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 303,
+      "distinct_foods": 303,
+      "example_foods": [
+        "Achocolatado, em pó, dietético, Marca comercial, Brasil (82.5, reported)",
+        "Adoçante, líquido, Marca comercial, Brasil (média de diferentes tipos) (0, reported)",
+        "Purê de frutas (maçã, pera, banana), s/ açúcar, Marca comercial, Brasil (70.9, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g",
+      "example_name": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 303,
+      "distinct_foods": 303,
+      "example_foods": [
+        "Achocolatado, em pó, dietético, Marca comercial, Brasil (0, reported)",
+        "Adoçante, líquido, Marca comercial, Brasil (média de diferentes tipos) (0, reported)",
+        "Purê de frutas (maçã, pera, banana), s/ açúcar, Marca comercial, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#acucar_de_adicao",
+      "example_name": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 303,
+      "distinct_foods": 303,
+      "example_foods": [
+        "Achocolatado, em pó, dietético, Marca comercial, Brasil (0, reported)",
+        "Adoçante, líquido, Marca comercial, Brasil (média de diferentes tipos) (0, reported)",
+        "Purê de frutas (maçã, pera, banana), s/ açúcar, Marca comercial, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#gordura_de_adicao",
+      "example_name": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 303,
+      "distinct_foods": 303,
+      "example_foods": [
+        "Achocolatado, em pó, dietético, Marca comercial, Brasil (0, reported)",
+        "Adoçante, líquido, Marca comercial, Brasil (média de diferentes tipos) (0, reported)",
+        "Purê de frutas (maçã, pera, banana), s/ açúcar, Marca comercial, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#proteina_animal",
+      "example_name": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 303,
+      "distinct_foods": 303,
+      "example_foods": [
+        "Achocolatado, em pó, dietético, Marca comercial, Brasil (0, reported)",
+        "Adoçante, líquido, Marca comercial, Brasil (média de diferentes tipos) (0, reported)",
+        "Purê de frutas (maçã, pera, banana), s/ açúcar, Marca comercial, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#proteina_vegetal",
+      "example_name": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 303,
+      "distinct_foods": 303,
+      "example_foods": [
+        "Achocolatado, em pó, dietético, Marca comercial, Brasil (5, reported)",
+        "Adoçante, líquido, Marca comercial, Brasil (média de diferentes tipos) (0, reported)",
+        "Purê de frutas (maçã, pera, banana), s/ açúcar, Marca comercial, Brasil (0.27, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:vita:mcg",
+      "example_name": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 303,
+      "distinct_foods": 303,
+      "example_foods": [
+        "Achocolatado, em pó, dietético, Marca comercial, Brasil (null, not_applicable)",
+        "Adoçante, líquido, Marca comercial, Brasil (média de diferentes tipos) (0, reported)",
+        "Purê de frutas (maçã, pera, banana), s/ açúcar, Marca comercial, Brasil (3.84, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:water:g",
+      "example_name": "Achocolatado, em pó, dietético, Marca comercial, Brasil",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 303,
+      "distinct_foods": 303,
+      "example_foods": [
+        "Achocolatado, em pó, dietético, Marca comercial, Brasil (2, reported)",
+        "Adoçante, líquido, Marca comercial, Brasil (média de diferentes tipos) (0, reported)",
+        "Purê de frutas (maçã, pera, banana), s/ açúcar, Marca comercial, Brasil (27.7, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:beta_caroteno_total:mcg",
+      "example_name": "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 285,
+      "distinct_foods": 285,
+      "example_foods": [
+        "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde (2250, reported)",
+        "Abóbora, crua, Curcubita moschata var. Menina verde (2410, reported)",
+        "Abóbora, madura, descascada, Cucurbita moschata var. Menina Brasileira (6670, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:vitamina_a:mcg",
+      "example_name": "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 280,
+      "distinct_foods": 280,
+      "example_foods": [
+        "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde (502, reported)",
+        "Abóbora, crua, Curcubita moschata var. Menina verde (543, reported)",
+        "Abóbora, madura, descascada, Cucurbita moschata var. Menina Brasileira (1335, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:lipidio_total_soxhlet:g",
+      "example_name": "Abacaxi, Hawai, Ananas comosus L.",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 278,
+      "distinct_foods": 278,
+      "example_foods": [
+        "Abacaxi, Hawai, Ananas comosus L. (0.3, reported)",
+        "Abacaxi, Pérola, Ananas comosus L. (0.23, reported)",
+        "Açaí, fruta, polpa, maduro, Euterpe oleraceae, var. BRS Pará (2.98, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:trans_beta_caroteno:mcg",
+      "example_name": "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 218,
+      "distinct_foods": 218,
+      "example_foods": [
+        "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde (2110, reported)",
+        "Abóbora, crua, Curcubita moschata var. Menina verde (2360, reported)",
+        "Abóbora, madura, descascada, Cucurbita moschata var. Menina Brasileira (6670, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:cis_beta_caroteno:mcg",
+      "example_name": "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 193,
+      "distinct_foods": 193,
+      "example_foods": [
+        "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde (140, reported)",
+        "Abóbora, crua, Curcubita moschata var. Menina verde (50, reported)",
+        "Abóbora, madura, descascada, Cucurbita moschata var. Menina Brasileira (null, not_applicable)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:alfa_caroteno_total:mcg",
+      "example_name": "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 102,
+      "distinct_foods": 102,
+      "example_foods": [
+        "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde (1670, reported)",
+        "Abóbora, crua, Curcubita moschata var. Menina verde (1750, reported)",
+        "Abóbora, madura, descascada, Cucurbita moschata var. Menina Brasileira (2680, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:beta_criptoxantina_total:mcg",
+      "example_name": "Acerola, Malpighia punicifolia L., var. Waldy Cati 30",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 101,
+      "distinct_foods": 101,
+      "example_foods": [
+        "Acerola, Malpighia punicifolia L., var. Waldy Cati 30 (32.9, reported)",
+        "Acerola, Malpighia punicifolia L., var. Waldy Cati 30 (39.3, reported)",
+        "Acerola, Malpighia glabra (40, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:9_cis_beta_caroteno:mcg",
+      "example_name": "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 98,
+      "distinct_foods": 98,
+      "example_foods": [
+        "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde (40, reported)",
+        "Abóbora, crua, Curcubita moschata var. Menina verde (30, reported)",
+        "Abóbora, refogada/10min., Curcubita moschata var. Menina verde (70, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:13_cis_beta_caroteno:mcg",
+      "example_name": "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 97,
+      "distinct_foods": 97,
+      "example_foods": [
+        "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde (100, reported)",
+        "Abóbora, crua, Curcubita moschata var. Menina verde (20, reported)",
+        "Abricó da Amazônia (abricó-selvagem), polpa, Mammea americana (50, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:vitamina_a_equivalente_de_atividade_de_retinol_rae:mcg",
+      "example_name": "Abóbora, moranga, polpa, crua, Cucurbita maxima var. Jerimum Caboclo",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 66,
+      "distinct_foods": 66,
+      "example_foods": [
+        "Abóbora, moranga, polpa, crua, Cucurbita maxima var. Jerimum Caboclo (176, reported)",
+        "Abóbora, moranga, refogada, Cucurbita máxima (47.7, reported)",
+        "Abóbora, polpa, crua, Cucurbita moschata var. Baianinha (2151, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:trans_beta_criptoxantina:mcg",
+      "example_name": "Acerola, Malpighia glabra",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 62,
+      "distinct_foods": 62,
+      "example_foods": [
+        "Acerola, Malpighia glabra (40, reported)",
+        "Caja, Spondias lutea (1690, reported)",
+        "Caja, polpa, congelada, Spondias lutea (694, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:vitamina_a_equivalente_de_retinol_re:mcg",
+      "example_name": "Abóbora, moranga, polpa, crua, Cucurbita maxima var. Jerimum Caboclo",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 62,
+      "distinct_foods": 62,
+      "example_foods": [
+        "Abóbora, moranga, polpa, crua, Cucurbita maxima var. Jerimum Caboclo (353, reported)",
+        "Abóbora, moranga, refogada, Cucurbita máxima (95.3, reported)",
+        "Abóbora, polpa, crua, Cucurbita moschata var. Baianinha (4302, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:lipidio_total_metodo_desconhecido:g",
+      "example_name": "Açai, frutos, liofilizado, Euterpe oleracea",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 55,
+      "distinct_foods": 55,
+      "example_foods": [
+        "Açai, frutos, liofilizado, Euterpe oleracea (31.4, reported)",
+        "Araçá, in natura , (0.49, reported)",
+        "Araticum, in natura , (3.83, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:trans_alfa_caroteno:mcg",
+      "example_name": "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 45,
+      "distinct_foods": 45,
+      "example_foods": [
+        "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde (1560, reported)",
+        "Abóbora, crua, Curcubita moschata var. Menina verde (1710, reported)",
+        "Abóbora, madura, descascada, Cucurbita moschata var. Menina Brasileira (2680, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:alfa_tocoferol:mg",
+      "example_name": "Açaí, polpa, Euterpe oleracea M.",
+      "unit": "mg",
+      "raw_unit": "mg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 40,
+      "distinct_foods": 40,
+      "example_foods": [
+        "Açaí, polpa, Euterpe oleracea M. (14.8, reported)",
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Aimore (0.95, reported)",
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Caiapó (0.5, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:acido_l_dehidroascorbico:mg",
+      "example_name": "Abacaxi, Ananas Comosus L. Merril, var. Pérola",
+      "unit": "mg",
+      "raw_unit": "mg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 39,
+      "distinct_foods": 39,
+      "example_foods": [
+        "Abacaxi, Ananas Comosus L. Merril, var. Pérola (2, reported)",
+        "Açaí, Euterpes oleraceae (null, unparsed)",
+        "Acerola, casca laranja e vermelha, in natura , Malpighia glabra L. x Malpighia puniciflora (280, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:gama_tocoferol:mg",
+      "example_name": "Açaí, polpa, Euterpe oleracea M.",
+      "unit": "mg",
+      "raw_unit": "mg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 37,
+      "distinct_foods": 37,
+      "example_foods": [
+        "Açaí, polpa, Euterpe oleracea M. (null, unparsed)",
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Aimore (0.07, reported)",
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Caiapó (0.23, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:vitamina_e:mg",
+      "example_name": "Açaí, polpa, Euterpe oleracea M.",
+      "unit": "mg",
+      "raw_unit": "mg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 37,
+      "distinct_foods": 37,
+      "example_foods": [
+        "Açaí, polpa, Euterpe oleracea M. (14.8, reported)",
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Aimore (1.2, reported)",
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Caiapó (0.67, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:alfa_tocotrienol:mg",
+      "example_name": "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Aimore",
+      "unit": "mg",
+      "raw_unit": "mg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 32,
+      "distinct_foods": 32,
+      "example_foods": [
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Aimore (0.82, reported)",
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Caiapó (0.56, reported)",
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Soberana (0.45, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:gama_tocotrienol:mg",
+      "example_name": "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Aimore",
+      "unit": "mg",
+      "raw_unit": "mg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 32,
+      "distinct_foods": 32,
+      "example_foods": [
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Aimore (0.63, reported)",
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Caiapó (0.46, reported)",
+        "Arroz, integral, cru, Oryza sativa L. subspec. Japonica, Soberana (0.82, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:alanina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.311139036, reported)",
+        "Alface, roxa, crua (0.047191066666666615, reported)",
+        "Alho-poró, cru (0.06452759999999998, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:arginina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.4131210373333334, reported)",
+        "Alface, roxa, crua (0.06295056666666661, reported)",
+        "Alho-poró, cru (0.08287650000000002, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:aspartico",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.5385353653333335, reported)",
+        "Alface, roxa, crua (0.05255459999999997, reported)",
+        "Alho-poró, cru (0.05421480000000001, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:cistina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.07132227093333333, reported)",
+        "Alface, roxa, crua (0.0016479319999999978, reported)",
+        "Alho-poró, cru (0.0036745800000000015, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:fenilalanina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.4958303480000001, reported)",
+        "Alface, roxa, crua (0.037060839999999984, reported)",
+        "Alho-poró, cru (0.04859670000000003, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:glicina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.29606361200000003, reported)",
+        "Alface, roxa, crua (0.03678363333333331, reported)",
+        "Alho-poró, cru (0.04686389999999999, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:glutamico",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (3.37078144, reported)",
+        "Alface, roxa, crua (0.10550336666666649, reported)",
+        "Alho-poró, cru (0.18196199999999996, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:histidina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.17601020666666667, reported)",
+        "Alface, roxa, crua (0.016078846666666664, reported)",
+        "Alho-poró, cru (0.022205399999999997, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:isoleucina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.4135465533333334, reported)",
+        "Alface, roxa, crua (0.03155626666666659, reported)",
+        "Alho-poró, cru (0.03875580000000001, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:leucina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.8109206040000001, reported)",
+        "Alface, roxa, crua (0.06001079999999992, reported)",
+        "Alho-poró, cru (0.07059599999999999, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:lisina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.388287692, reported)",
+        "Alface, roxa, crua (0.05475619999999992, reported)",
+        "Alho-poró, cru (0.0756393, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:metionina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.18852964000000003, reported)",
+        "Alface, roxa, crua (0.006675176666666671, reported)",
+        "Alho-poró, cru (0.009521699999999994, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:prolina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (1.1815450400000003, reported)",
+        "Alface, roxa, crua (0.029785669999999948, reported)",
+        "Alho-poró, cru (0.03357899999999999, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:serina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.4748382253333334, reported)",
+        "Alface, roxa, crua (0.030913846666666633, reported)",
+        "Alho-poró, cru (0.04344600000000002, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:tirosina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.36014863733333335, reported)",
+        "Alface, roxa, crua (0.03601851999999998, reported)",
+        "Alho-poró, cru (0.05521499999999998, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:treonina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.30319896533333335, reported)",
+        "Alface, roxa, crua (0.025713569999999963, reported)",
+        "Alho-poró, cru (0.03289740000000004, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:triptofano",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.11830502666666666, reported)",
+        "Alface, roxa, crua (0.0018633333333333325, reported)",
+        "Alho-poró, cru (0.007799999999999997, reported)"
+      ]
+    },
+    {
+      "source": "TACO",
+      "source_nutrient_id": "taco:valina",
+      "example_name": "Pastel, de carne, frito",
+      "unit": "g",
+      "raw_unit": "(g)",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 26,
+      "distinct_foods": 26,
+      "example_foods": [
+        "Pastel, de carne, frito (0.5030959613333333, reported)",
+        "Alface, roxa, crua (0.042147453333333286, reported)",
+        "Alho-poró, cru (0.0507012, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:cis_beta_criptoxantina:mcg",
+      "example_name": "Caja, polpa, congelada, Spondias lutea",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 25,
+      "distinct_foods": 25,
+      "example_foods": [
+        "Caja, polpa, congelada, Spondias lutea (53, reported)",
+        "Caja, suco, pasteurizado, (82, reported)",
+        "Caju, alongado, amarelo, Anacardium occidentale L. (11.6, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:lipidio_total_soma_dos_triglicerideos:g",
+      "example_name": "Camu-camu, fruto, in natura , Myrciaria dubia",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 20,
+      "distinct_foods": 20,
+      "example_foods": [
+        "Camu-camu, fruto, in natura , Myrciaria dubia (0.79, reported)",
+        "Camu-camu, fruto, in natura , Myrciaria dubia (0.48, reported)",
+        "Camu-camu, fruto, in natura , Myrciaria dubia (0.24, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:alcool:g#alcool",
+      "example_name": "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 16,
+      "distinct_foods": 7,
+      "example_foods": [
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (0, reported)",
+        "Carne, frango, sobrecoxa, c/ pele, assada, s/ óleo, c/ sal Frango sobrecoxa c/ pele assada (0, reported)",
+        "Carne, frango, sobrecoxa, s/ pele, assada, s/ óleo, c/ sal (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:carboidrato_disponivel:g#carboidrato_disponivel",
+      "example_name": "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 16,
+      "distinct_foods": 7,
+      "example_foods": [
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (0.58, reported)",
+        "Carne, frango, sobrecoxa, c/ pele, assada, s/ óleo, c/ sal Frango sobrecoxa c/ pele assada (0, reported)",
+        "Carne, frango, sobrecoxa, s/ pele, assada, s/ óleo, c/ sal (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:cinzas:g#cinzas",
+      "example_name": "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 16,
+      "distinct_foods": 7,
+      "example_foods": [
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (2, reported)",
+        "Carne, frango, sobrecoxa, c/ pele, assada, s/ óleo, c/ sal Frango sobrecoxa c/ pele assada (1.32, reported)",
+        "Carne, frango, sobrecoxa, s/ pele, assada, s/ óleo, c/ sal (1.49, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:umidade:g#umidade",
+      "example_name": "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 16,
+      "distinct_foods": 7,
+      "example_foods": [
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (68.6, reported)",
+        "Carne, frango, sobrecoxa, c/ pele, assada, s/ óleo, c/ sal Frango sobrecoxa c/ pele assada (55, reported)",
+        "Carne, frango, sobrecoxa, s/ pele, assada, s/ óleo, c/ sal (57.5, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:vitamina_a_re:mcg#vitamina_a_re",
+      "example_name": "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 16,
+      "distinct_foods": 7,
+      "example_foods": [
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (3.85, reported)",
+        "Carne, frango, sobrecoxa, c/ pele, assada, s/ óleo, c/ sal Frango sobrecoxa c/ pele assada (8.18, reported)",
+        "Carne, frango, sobrecoxa, s/ pele, assada, s/ óleo, c/ sal (10.7, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:cis_alfa_caroteno_total:mcg",
+      "example_name": "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 15,
+      "distinct_foods": 15,
+      "example_foods": [
+        "Abóbora, cozida/10 min., Curcubita moschata var. Menina verde (110, reported)",
+        "Abóbora, crua, Curcubita moschata var. Menina verde (40, reported)",
+        "Araçá, polpa, madura, Psidium cattleianum Sabine (null, unparsed)"
+      ]
+    },
+    {
+      "source": "IBGE_POF",
+      "source_nutrient_id": "ibge_pof_2008_2009:niacin_ne_mg",
+      "example_name": "Carne com legumes (exceto batata, inhame e aipim)",
+      "unit": "mg",
+      "raw_unit": "mg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 10,
+      "distinct_foods": 10,
+      "example_foods": [
+        "Carne com legumes (exceto batata, inhame e aipim) (113, reported)",
+        "Frango com batata, inhame batata-baroa ou aipim (128, reported)",
+        "Frango com legumes (exceto batata, inhame e aipim) (123, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:delta_tocoferol:mg",
+      "example_name": "Açaí, polpa, Euterpe oleracea M.",
+      "unit": "mg",
+      "raw_unit": "mg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 5,
+      "distinct_foods": 5,
+      "example_foods": [
+        "Açaí, polpa, Euterpe oleracea M. (null, unparsed)",
+        "Buriti, castanha, Mauritia flexuosa L., var (37.9, reported)",
+        "Buriti, polpa, Mauritia flexuosa L. (22.4, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:f18d3cn3:g",
+      "example_name": "Açaí, polpa, Euterpe oleracea Mart",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 3,
+      "distinct_foods": 3,
+      "example_foods": [
+        "Açaí, polpa, Euterpe oleracea Mart (0.04, reported)",
+        "Açaí, polpa, Euterpe precatoria Mart. (0.02, reported)",
+        "Açaí, polpa, Euterpe precatoria Mart. (0.07, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:f18d2cn6:g",
+      "example_name": "Açaí, polpa, Euterpe precatoria Mart.",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 2,
+      "distinct_foods": 2,
+      "example_foods": [
+        "Açaí, polpa, Euterpe precatoria Mart. (0.13, reported)",
+        "Açaí, polpa, Euterpe precatoria Mart. (0.37, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:alc:g#alcool",
+      "example_name": "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado)",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:ash:g#cinzas",
+      "example_name": "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado)",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (0.23, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:choavldf:g#carboidrato_disponivel",
+      "example_name": "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado)",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (30.4, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:f18d3:g",
+      "example_name": "Açaí, polpa, Euterpe oleracea Mart",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Açaí, polpa, Euterpe oleracea Mart (0.08, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#acucar_de_adicao_2",
+      "example_name": "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado)",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#gordura_de_adicao_2",
+      "example_name": "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado)",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (1, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#proteina_animal_2",
+      "example_name": "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado)",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#proteina_vegetal_2",
+      "example_name": "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado)",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (2.87, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#sal_de_adicao",
+      "example_name": "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado)",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:vita:mcg#vitamina_a_re",
+      "example_name": "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado)",
+      "unit": "mcg",
+      "raw_unit": "mcg",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (0, trace)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:water:g#umidade",
+      "example_name": "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado)",
+      "unit": "g",
+      "raw_unit": "g",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 1,
+      "distinct_foods": 1,
+      "example_foods": [
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (64.5, reported)"
+      ]
+    }
+  ],
+  "nutrientStatistics": [
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g",
+      "example_name": "Azeite, dendê, Brasil",
+      "unit": "n/a",
+      "raw_unit": "—",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 6145,
+      "distinct_foods": 6145,
+      "example_foods": [
+        "Azeite, dendê, Brasil (0, reported)",
+        "Azeite, oliva, Brasil (0, reported)",
+        "Gordura, vegetal, hidrogenada, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#proteina_animal",
+      "example_name": "Azeite, dendê, Brasil",
+      "unit": "n/a",
+      "raw_unit": "—",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 6145,
+      "distinct_foods": 6145,
+      "example_foods": [
+        "Azeite, dendê, Brasil (0, reported)",
+        "Azeite, oliva, Brasil (0, reported)",
+        "Gordura, vegetal, hidrogenada, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#proteina_vegetal",
+      "example_name": "Azeite, dendê, Brasil",
+      "unit": "n/a",
+      "raw_unit": "—",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 6145,
+      "distinct_foods": 6145,
+      "example_foods": [
+        "Azeite, dendê, Brasil (0, reported)",
+        "Azeite, oliva, Brasil (0, reported)",
+        "Gordura, vegetal, hidrogenada, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:alc:g",
+      "example_name": "Azeite, dendê, Brasil",
+      "unit": "n/a",
+      "raw_unit": "ALC",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 6144,
+      "distinct_foods": 6144,
+      "example_foods": [
+        "Azeite, dendê, Brasil (0, reported)",
+        "Azeite, oliva, Brasil (0, reported)",
+        "Gordura, vegetal, hidrogenada, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:ash:g",
+      "example_name": "Azeite, dendê, Brasil",
+      "unit": "n/a",
+      "raw_unit": "ASH",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 6144,
+      "distinct_foods": 6144,
+      "example_foods": [
+        "Azeite, dendê, Brasil (0, reported)",
+        "Azeite, oliva, Brasil (0, reported)",
+        "Gordura, vegetal, hidrogenada, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:choavldf:g",
+      "example_name": "Azeite, dendê, Brasil",
+      "unit": "n/a",
+      "raw_unit": "CHOAVLDF",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 6144,
+      "distinct_foods": 6144,
+      "example_foods": [
+        "Azeite, dendê, Brasil (0, reported)",
+        "Azeite, oliva, Brasil (0, reported)",
+        "Gordura, vegetal, hidrogenada, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#acucar_de_adicao",
+      "example_name": "Azeite, dendê, Brasil",
+      "unit": "n/a",
+      "raw_unit": "—",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 6144,
+      "distinct_foods": 6144,
+      "example_foods": [
+        "Azeite, dendê, Brasil (0, reported)",
+        "Azeite, oliva, Brasil (0, reported)",
+        "Gordura, vegetal, hidrogenada, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#gordura_de_adicao",
+      "example_name": "Azeite, dendê, Brasil",
+      "unit": "n/a",
+      "raw_unit": "—",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 6144,
+      "distinct_foods": 6144,
+      "example_foods": [
+        "Azeite, dendê, Brasil (100, reported)",
+        "Azeite, oliva, Brasil (100, reported)",
+        "Gordura, vegetal, hidrogenada, Brasil (100, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:vita:mcg",
+      "example_name": "Azeite, dendê, Brasil",
+      "unit": "n/a",
+      "raw_unit": "VITA",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 6144,
+      "distinct_foods": 6144,
+      "example_foods": [
+        "Azeite, dendê, Brasil (0, reported)",
+        "Azeite, oliva, Brasil (0, reported)",
+        "Gordura, vegetal, hidrogenada, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:water:g",
+      "example_name": "Azeite, dendê, Brasil",
+      "unit": "n/a",
+      "raw_unit": "WATER",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 6144,
+      "distinct_foods": 6144,
+      "example_foods": [
+        "Azeite, dendê, Brasil (0, reported)",
+        "Azeite, oliva, Brasil (0, reported)",
+        "Gordura, vegetal, hidrogenada, Brasil (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:alc:g#alcool",
+      "example_name": "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos)",
+      "unit": "n/a",
+      "raw_unit": "ALC",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 8,
+      "distinct_foods": 8,
+      "example_foods": [
+        "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos) (0, reported)",
+        "Sopa, feijão preto, c/ macarrão, c/ vegetais, s/ sal (feijão preto, c/ macarrão, c/ batata, abobrinha, repolho e chuchu, c/ caldo de carne, c/ óleo, cebola e alho, s/ sal) (0, reported)",
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:ash:g#cinzas",
+      "example_name": "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos)",
+      "unit": "n/a",
+      "raw_unit": "ASH",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 8,
+      "distinct_foods": 8,
+      "example_foods": [
+        "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos) (1.82, reported)",
+        "Sopa, feijão preto, c/ macarrão, c/ vegetais, s/ sal (feijão preto, c/ macarrão, c/ batata, abobrinha, repolho e chuchu, c/ caldo de carne, c/ óleo, cebola e alho, s/ sal) (0.99, reported)",
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (2, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:choavldf:g#carboidrato_disponivel",
+      "example_name": "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos)",
+      "unit": "n/a",
+      "raw_unit": "CHOAVLDF",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 8,
+      "distinct_foods": 8,
+      "example_foods": [
+        "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos) (53.4, reported)",
+        "Sopa, feijão preto, c/ macarrão, c/ vegetais, s/ sal (feijão preto, c/ macarrão, c/ batata, abobrinha, repolho e chuchu, c/ caldo de carne, c/ óleo, cebola e alho, s/ sal) (6.91, reported)",
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (0.58, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#acucar_de_adicao_2",
+      "example_name": "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos)",
+      "unit": "n/a",
+      "raw_unit": "—",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 8,
+      "distinct_foods": 8,
+      "example_foods": [
+        "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos) (null, not_applicable)",
+        "Sopa, feijão preto, c/ macarrão, c/ vegetais, s/ sal (feijão preto, c/ macarrão, c/ batata, abobrinha, repolho e chuchu, c/ caldo de carne, c/ óleo, cebola e alho, s/ sal) (0, reported)",
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#sal_de_adicao",
+      "example_name": "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos)",
+      "unit": "n/a",
+      "raw_unit": "—",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 8,
+      "distinct_foods": 8,
+      "example_foods": [
+        "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos) (null, not_applicable)",
+        "Sopa, feijão preto, c/ macarrão, c/ vegetais, s/ sal (feijão preto, c/ macarrão, c/ batata, abobrinha, repolho e chuchu, c/ caldo de carne, c/ óleo, cebola e alho, s/ sal) (0, reported)",
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (0.45, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:vita:mcg#vitamina_a_re",
+      "example_name": "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos)",
+      "unit": "n/a",
+      "raw_unit": "VITA",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 8,
+      "distinct_foods": 8,
+      "example_foods": [
+        "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos) (0, trace)",
+        "Sopa, feijão preto, c/ macarrão, c/ vegetais, s/ sal (feijão preto, c/ macarrão, c/ batata, abobrinha, repolho e chuchu, c/ caldo de carne, c/ óleo, cebola e alho, s/ sal) (0, reported)",
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (3.85, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:water:g#umidade",
+      "example_name": "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos)",
+      "unit": "n/a",
+      "raw_unit": "WATER",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 8,
+      "distinct_foods": 8,
+      "example_foods": [
+        "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos) (28.7, reported)",
+        "Sopa, feijão preto, c/ macarrão, c/ vegetais, s/ sal (feijão preto, c/ macarrão, c/ batata, abobrinha, repolho e chuchu, c/ caldo de carne, c/ óleo, cebola e alho, s/ sal) (72.2, reported)",
+        "Baço bovino, refogado (c/ óleo, cebola e alho), c/ sal (68.6, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#gordura_de_adicao_2",
+      "example_name": "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos)",
+      "unit": "n/a",
+      "raw_unit": "—",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 3,
+      "distinct_foods": 3,
+      "example_foods": [
+        "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos) (null, not_applicable)",
+        "Sálvia, seca (dado importado) (0, reported)",
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (1, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#proteina_animal_2",
+      "example_name": "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos)",
+      "unit": "n/a",
+      "raw_unit": "—",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 3,
+      "distinct_foods": 3,
+      "example_foods": [
+        "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos) (2.9, reported)",
+        "Sálvia, seca (dado importado) (0, reported)",
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (0, reported)"
+      ]
+    },
+    {
+      "source": "TBCA",
+      "source_nutrient_id": "tbca:unknown:g#proteina_vegetal_2",
+      "example_name": "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos)",
+      "unit": "n/a",
+      "raw_unit": "—",
+      "basis": "per_100g_edible_portion",
+      "nutrient_code": null,
+      "occurrences": 3,
+      "distinct_foods": 3,
+      "example_foods": [
+        "Pão, c/ farinha de trigo refinada, de padaria, hamburguer/hot dog/leite, Brasil (média de diferentes tipos) (null, not_applicable)",
+        "Sálvia, seca (dado importado) (10.6, reported)",
+        "Arroz polido, c/ cebola, alho e óleo de soja, s/ sal, Brasil (acloretado) (2.87, reported)"
+      ]
+    }
+  ]
+}

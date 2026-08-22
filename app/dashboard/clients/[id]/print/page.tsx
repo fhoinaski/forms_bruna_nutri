@@ -43,6 +43,12 @@ function fmtQuantity(quantity: string | null | undefined, unit: string | null | 
   return [display, unit].filter(Boolean).join(" ");
 }
 
+/** Nome amigável só pra exibição ("Ovo, de galinha, cru" -> "Ovo de galinha cru") — nunca usado pra cálculo/identidade, que continua vindo do food_source/food_ref_id real do item. */
+function friendlyFoodName(technicalName: string): string {
+  const parts = technicalName.split(",").map((part) => part.trim()).filter(Boolean);
+  return parts.length > 1 ? parts.join(" ") : technicalName.trim();
+}
+
 /**
  * Algumas notas de refeição são texto OPERACIONAL do profissional/IA
  * (ex.: "Sugerido por IA com base na TACO. Revisar antes de salvar." —
@@ -243,9 +249,14 @@ export default async function ClientPrintPage({
     fatG: activeMealPlan?.target_fat_g ?? null,
   };
   const targetComparison = nutrition ? compareTargetVsPrescribed(target, nutrition.total.values) : [];
-  const recipeNamesByMealIndex = activeMealPlan
+  // Food-First Meal Plan V1, Fase 7: quando a refeição tem uma receita
+  // aceita (source_recipe_id), o impresso mostra o nome humano da receita e
+  // o modo de preparo — nunca só os nomes técnicos crus dos ingredientes.
+  // O CÁLCULO continua vindo 100% dos itens reais (mealTotals acima, já
+  // calculado pela engine central) — isto é só apresentação.
+  const recipeByMealIndex = activeMealPlan
     ? await Promise.all(
-        activeMealPlan.meals.map(async (meal) => (meal.source_recipe_id ? (await getRecipeById(meal.source_recipe_id))?.title ?? null : null))
+        activeMealPlan.meals.map(async (meal) => (meal.source_recipe_id ? await getRecipeById(meal.source_recipe_id) : null))
       )
     : [];
 
@@ -524,7 +535,7 @@ export default async function ClientPrintPage({
             <div className="section">
               {activeMealPlan.meals.map((meal: MealPlanMealPayload, mealIndex: number) => {
                 const macros = mealTotals[mealIndex];
-                const recipeName = recipeNamesByMealIndex[mealIndex];
+                const recipe = recipeByMealIndex[mealIndex];
                 const hasFoodItems = meal.items.some((item) => item.food.trim());
                 const isIncomplete = hasFoodItems && (!macros || macros.energyKcal === null);
                 return (
@@ -533,7 +544,7 @@ export default async function ClientPrintPage({
                       <div>
                         {meal.suggested_time && <p className="meal-time">{meal.suggested_time}</p>}
                         <p className="meal-name">{meal.name}</p>
-                        {recipeName && <p className="meal-recipe">Receita: {recipeName} · 1 porção</p>}
+                        {recipe && <p className="meal-recipe">{recipe.title} · 1 porção</p>}
                       </div>
                       {hasFoodItems && (
                         isIncomplete
@@ -545,10 +556,15 @@ export default async function ClientPrintPage({
                       {isPatientFacingNote(meal.notes) && <p style={{ color: "#8C6E52", marginBottom: "6px", whiteSpace: "pre-wrap" }}>{meal.notes}</p>}
                       {meal.items.map((item, itemIndex) => (
                         <div key={`${item.food}-${itemIndex}`} className="meal-item">
-                          <span>{item.food}{isPatientFacingNote(item.notes) ? ` - ${item.notes}` : ""}</span>
+                          <span>{friendlyFoodName(item.food)}{isPatientFacingNote(item.notes) ? ` - ${item.notes}` : ""}</span>
                           <strong>{fmtQuantity(item.quantity, item.unit)}</strong>
                         </div>
                       ))}
+                      {recipe?.preparation_steps && (
+                        <p style={{ color: "#75675E", marginTop: "6px", whiteSpace: "pre-wrap" }}>
+                          <strong>Modo de preparo: </strong>{recipe.preparation_steps}
+                        </p>
+                      )}
                       {!isIncomplete && macros && (
                         <p className="meal-macros">
                           P {fmtMacro(macros.proteinG)}g · C {fmtMacro(macros.carbohydrateG)}g · G {fmtMacro(macros.fatG)}g · Fibra {fmtMacro(macros.fiberG)}g

@@ -1,0 +1,65 @@
+{
+  "generatedAt": "2026-08-22T16:46:54.403Z",
+  "total": 8157,
+  "byWeightSource": [
+    {
+      "weight_source": "structured_quantity",
+      "n": 6289
+    },
+    {
+      "weight_source": "parsed_from_label",
+      "n": 1809
+    },
+    {
+      "weight_source": "unknown",
+      "n": 59
+    }
+  ],
+  "byConfidence": [
+    {
+      "confidence": "high",
+      "n": 5644
+    },
+    {
+      "confidence": "low",
+      "n": 1868
+    },
+    {
+      "confidence": "medium",
+      "n": 645
+    }
+  ],
+  "byWeightSourceConfidence": [
+    {
+      "weight_source": "parsed_from_label",
+      "confidence": "low",
+      "n": 1809
+    },
+    {
+      "weight_source": "structured_quantity",
+      "confidence": "high",
+      "n": 5644
+    },
+    {
+      "weight_source": "structured_quantity",
+      "confidence": "medium",
+      "n": 645
+    },
+    {
+      "weight_source": "unknown",
+      "confidence": "low",
+      "n": 59
+    }
+  ],
+  "bySource": [
+    {
+      "source": "TBCA",
+      "n": 8157
+    }
+  ],
+  "explicitGrams": 5644,
+  "onlyMl": 645,
+  "dependsOnParsedLabel": 1809,
+  "ambiguous": 59,
+  "safeForMealPlanUseToday": 5644
+}
