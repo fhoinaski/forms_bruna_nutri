@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { classifyCulinaryRole, classifyFoodExchangeGroup, normalizeMealContext, type FoodClassification } from "../lib/nutrition/food-exchange-hierarchy";
+import { mealContextForTemplateMeal, SYSTEM_TEMPLATE_FOOD_CONTRACTS } from "../lib/meal-templates/system-template-contract";
 
 // Conteudo inicial para acelerar a rotina clinica. Todo modelo e apenas ponto
 // de partida e deve ser revisado pela nutricionista antes de virar prescricao.
@@ -54,13 +56,14 @@ if (existsSync(envPath)) {
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const databaseId = process.env.CLOUDFLARE_D1_DATABASE_ID;
 const apiToken = process.env.CLOUDFLARE_D1_API_TOKEN;
+const apiBaseUrl = process.env.CLOUDFLARE_D1_API_BASE_URL || "https://api.cloudflare.com";
 
 if (!accountId || !databaseId || !apiToken) {
   throw new Error("Configure CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_D1_DATABASE_ID e CLOUDFLARE_D1_API_TOKEN.");
 }
 
 async function query(sql: string, params: unknown[] = []) {
-  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`, {
+  const response = await fetch(`${apiBaseUrl}/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ sql, params }),
@@ -79,6 +82,19 @@ function meal(name: string, items: Meal["items"], notes = "", suggested_time = "
   return { name, suggested_time, notes, items };
 }
 
+function defaultExchangeListIdForSlot(classification: FoodClassification, mealName: string): string | null {
+  const mealContext = normalizeMealContext(mealName);
+  const culinaryRole = classifyCulinaryRole(classification, mealContext);
+  if (classification.foodGroup === "CARBOHYDRATE" && culinaryRole === "STARCH_MAIN") return "exl-system-main-meal-starches";
+  if (classification.foodGroup === "CARBOHYDRATE" && (culinaryRole === "BREAKFAST_CARB" || culinaryRole === "BREAD_BASE")) return "exl-system-breakfast-carbs";
+  if (classification.foodGroup === "PROTEIN" && culinaryRole === "LEAN_PROTEIN_MAIN") return "exl-system-lean-main-proteins";
+  if (classification.foodGroup === "FRUIT") return "exl-system-fruit-portions";
+  if (classification.foodGroup === "DAIRY") return "exl-system-dairy-options";
+  if (classification.foodSubgroup === "LEGUME" || classification.foodSubgroup === "SOY") return "exl-system-legume-options";
+  if (classification.foodGroup === "VEGETABLE") return "exl-system-vegetable-sides";
+  return null;
+}
+
 function commonSubstitutions(): Substitution[] {
   return [
     { base_food: "Arroz cozido", option_food: "Batata inglesa cozida", quantity: "150", unit: "g", notes: "Troca de carboidrato conforme preferencia e rotina." },
@@ -92,7 +108,7 @@ const genericMeals: Record<Exclude<TargetGroup, "SOP" | "VEGETARIANO_ESTRITO" | 
   ADULTO_SAUDAVEL: [
     meal("Cafe da manha", [{ food: "Pao de forma integral", quantity: "50", unit: "g" }, { food: "Ovo de galinha inteiro cozido", quantity: "100", unit: "g" }, { food: "Banana prata", quantity: "80", unit: "g" }]),
     meal("Almoco", [{ food: "Arroz integral cozido", quantity: "120", unit: "g" }, { food: "Feijao carioca cozido", quantity: "100", unit: "g" }, { food: "Peito de frango grelhado", quantity: "120", unit: "g" }, { food: "Brocolis cozido", quantity: "100", unit: "g" }]),
-    meal("Jantar", [{ food: "Batata doce cozida", quantity: "150", unit: "g" }, { food: "File de tilapia grelhado", quantity: "130", unit: "g" }, { food: "Abobrinha cozida", quantity: "120", unit: "g" }]),
+    meal("Jantar", [{ food: "Batata doce cozida", quantity: "150", unit: "g" }, { food: "Pintado grelhado", quantity: "130", unit: "g" }, { food: "Abobrinha cozida", quantity: "120", unit: "g" }]),
   ],
   EMAGRECIMENTO: [
     meal("Cafe da manha", [{ food: "Iogurte natural", quantity: "170", unit: "g" }, { food: "Aveia em flocos", quantity: "25", unit: "g" }, { food: "Morango", quantity: "100", unit: "g" }]),
@@ -193,21 +209,49 @@ const seeds: Seed[] = groups.flatMap((group) => {
 });
 
 async function replaceMeals(templateId: string, meals: Meal[]) {
+  await query("DELETE FROM diet_template_slot_foods WHERE slot_id IN (SELECT s.id FROM diet_template_slots s JOIN diet_template_meals m ON m.id = s.meal_id WHERE m.template_id = ?1)", [templateId]);
+  await query("DELETE FROM diet_template_slots WHERE meal_id IN (SELECT id FROM diet_template_meals WHERE template_id = ?1)", [templateId]);
   await query("DELETE FROM diet_template_items WHERE meal_id IN (SELECT id FROM diet_template_meals WHERE template_id = ?1)", [templateId]);
   await query("DELETE FROM diet_template_meals WHERE template_id = ?1", [templateId]);
   const now = new Date().toISOString();
   for (const [mealIndex, row] of meals.entries()) {
     const mealId = crypto.randomUUID();
     await query(
-      `INSERT INTO diet_template_meals (id, template_id, name, suggested_time, notes, source_recipe_id, sort_order, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, ?8)`,
-      [mealId, templateId, row.name, row.suggested_time ?? null, row.notes ?? null, mealIndex, now, now]
+      `INSERT INTO diet_template_meals (id, template_id, name, meal_context, suggested_time, notes, source_recipe_id, sort_order, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?8, ?9)`,
+      [mealId, templateId, row.name, mealContextForTemplateMeal(row.name), row.suggested_time ?? null, row.notes ?? null, mealIndex, now, now]
     );
     for (const [itemIndex, item] of row.items.entries()) {
+      const itemId = crypto.randomUUID();
+      const slotId = crypto.randomUUID();
+      const classification = classifyFoodExchangeGroup({ descricao: item.food, grupo: "", proteina_g: 0, carboidrato_g: 0, lipidios_g: 0 });
+      const contract = SYSTEM_TEMPLATE_FOOD_CONTRACTS[item.food];
+      const exchangeListId = contract?.exchange_list_id ?? defaultExchangeListIdForSlot(classification, row.name);
       await query(
-        `INSERT INTO diet_template_items (id, meal_id, food, quantity, unit, notes, sort_order, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
-        [crypto.randomUUID(), mealId, item.food, item.quantity, item.unit, item.notes ?? null, itemIndex, now, now]
+        `INSERT INTO diet_template_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, canonical_food_id, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
+        [itemId, mealId, item.food, item.quantity, item.unit, item.notes ?? null, contract?.food_source ?? null, contract?.food_ref_id ?? null, contract?.canonical_food_id ?? null, itemIndex, now, now]
+      );
+      await query(
+        `INSERT INTO diet_template_slots (id, meal_id, food_group, food_subgroup, nutritional_role, exchange_list_id, required, exchange_eligible, min_items, max_items, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, 1, 1, ?8, ?9, ?10)`,
+        [
+          slotId,
+          mealId,
+          contract?.food_group ?? classification.foodGroup,
+          contract?.food_subgroup ?? classification.foodSubgroup,
+          contract?.clinical_role ?? classification.nutritionalRole,
+          exchangeListId,
+          contract?.exchange_eligible ?? (classification.foodGroup === "OTHER" ? 0 : 1),
+          itemIndex,
+          now,
+          now,
+        ]
+      );
+      await query(
+        `INSERT INTO diet_template_slot_foods (id, slot_id, food, quantity, unit, source_item_id, food_source, food_ref_id, canonical_food_id, sort_order, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, ?10)`,
+        [crypto.randomUUID(), slotId, item.food, item.quantity, item.unit, itemId, contract?.food_source ?? null, contract?.food_ref_id ?? null, contract?.canonical_food_id ?? null, now]
       );
     }
   }
@@ -242,9 +286,19 @@ async function main() {
     const now = new Date().toISOString();
     await query(
       `INSERT OR REPLACE INTO protocol_templates
-        (id, type, target_group, title, content, notes, is_active, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, '', ?5, 1, COALESCE((SELECT created_at FROM protocol_templates WHERE id = ?1), ?6), ?7)`,
-      [seed.id, seed.type, seed.target_group, seed.title, seed.notes, now, now]
+        (id, type, target_group, title, content, notes, is_active, clinical_risk_level, requires_professional_review, version, structure_version, template_origin, owner_admin_id, is_default, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, '', ?5, ?6, COALESCE((SELECT clinical_risk_level FROM protocol_templates WHERE id = ?1), 'low'), COALESCE((SELECT requires_professional_review FROM protocol_templates WHERE id = ?1), 0), COALESCE((SELECT version FROM protocol_templates WHERE id = ?1), 1), 'v2', 'SYSTEM', NULL, ?7, COALESCE((SELECT created_at FROM protocol_templates WHERE id = ?1), ?8), ?9)`,
+      [
+        seed.id,
+        seed.type,
+        seed.target_group,
+        seed.title,
+        seed.notes,
+        seed.type === "DIETA" ? (seed.target_group === "ADULTO_SAUDAVEL" ? 1 : 0) : 1,
+        seed.type === "DIETA" && seed.target_group === "ADULTO_SAUDAVEL" ? 1 : 0,
+        now,
+        now,
+      ]
     );
     await replaceMeals(seed.id, seed.meals ?? []);
     await replaceSubstitutions(seed.id, seed.substitutions ?? []);

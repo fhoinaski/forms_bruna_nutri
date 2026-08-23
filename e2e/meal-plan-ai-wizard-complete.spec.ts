@@ -68,13 +68,13 @@ test.describe("wizard Criar com IA — geração completa com provider determin�
     await expect(editorKcal).toBeVisible();
     await expect(editorKcal).toHaveText(`${kcalBefore} kcal`);
 
-    // "Aplicar ao editor" cria o registro do plano (a partir do modelo), mas
-    // as refeições geradas pelo wizard só existem no estado local do editor
-    // até o "Salvar rascunho" explícito — o registro em si continua com
-    // meals=[] no banco (nunca a versão com o conteúdo do wizard).
+    // "Aplicar ao editor" cria o registro do plano a partir do modelo P0,
+    // mas as refeições geradas pelo wizard só existem no estado local do
+    // editor até o "Salvar rascunho" explícito. O banco pode conter o modelo
+    // semeado; ele não pode conter ainda o conteúdo específico do wizard.
     const plansBeforeSave = (await (await request.get(`/api/admin/clients/${patient.id}/meal-plans`)).json()) as { meals: unknown[] }[];
     expect(plansBeforeSave).toHaveLength(1);
-    expect(plansBeforeSave[0].meals).toEqual([]);
+    expect(JSON.stringify(plansBeforeSave[0].meals)).not.toMatch(/arroz,?\s*tipo 1,?\s*cozido/i);
 
     await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
     await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();

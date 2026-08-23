@@ -11,6 +11,8 @@ import {
   type ProtocolTemplateTargetGroup,
   type ProtocolTemplateType,
 } from "@/lib/protocol-templates/constants";
+import { classifyCulinaryRole, classifyFoodExchangeGroup, normalizeMealContext, type FoodClassification } from "@/lib/nutrition/food-exchange-hierarchy";
+import { mealContextForTemplateMeal, SYSTEM_TEMPLATE_FOOD_CONTRACTS } from "@/lib/meal-templates/system-template-contract";
 
 export type { ProtocolTemplateTargetGroup, ProtocolTemplateType };
 
@@ -29,6 +31,9 @@ export interface ProtocolTemplate {
   requires_professional_review: number;
   version: number;
   structure_version: "legacy" | "v2";
+  template_origin: "SYSTEM" | "USER";
+  owner_admin_id: string | null;
+  is_default: number;
 }
 
 export interface ProtocolTemplateInput {
@@ -41,6 +46,9 @@ export interface ProtocolTemplateInput {
   meals?: MealPlanMealPayload[];
   substitutions?: MealPlanSubstitutionPayload[];
   supplements?: MealPlanSupplementPayload[];
+  template_origin?: "SYSTEM" | "USER";
+  owner_admin_id?: string | null;
+  is_default?: boolean;
 }
 
 export type TemplateDetail = {
@@ -73,52 +81,124 @@ function groupBy<T>(rows: T[], keyOf: (row: T) => string): Map<string, T[]> {
   return grouped;
 }
 
+function classifyTemplateFood(food: string) {
+  return classifyFoodExchangeGroup({
+    descricao: food,
+    grupo: "",
+    proteina_g: 0,
+    carboidrato_g: 0,
+    lipidios_g: 0,
+  });
+}
+
+function defaultExchangeListIdForSlot(classification: FoodClassification, mealName: string): string | null {
+  const mealContext = normalizeMealContext(mealName);
+  const culinaryRole = classifyCulinaryRole(classification, mealContext);
+  if (classification.foodGroup === "CARBOHYDRATE" && culinaryRole === "STARCH_MAIN") return "exl-system-main-meal-starches";
+  if (classification.foodGroup === "CARBOHYDRATE" && (culinaryRole === "BREAKFAST_CARB" || culinaryRole === "BREAD_BASE")) return "exl-system-breakfast-carbs";
+  if (classification.foodGroup === "PROTEIN" && culinaryRole === "LEAN_PROTEIN_MAIN") return "exl-system-lean-main-proteins";
+  if (classification.foodGroup === "FRUIT") return "exl-system-fruit-portions";
+  if (classification.foodGroup === "DAIRY") return "exl-system-dairy-options";
+  if (classification.foodSubgroup === "LEGUME" || classification.foodSubgroup === "SOY") return "exl-system-legume-options";
+  if (classification.foodGroup === "VEGETABLE") return "exl-system-vegetable-sides";
+  return null;
+}
+
 function buildTemplateMealStatements(templateId: string, meals: MealPlanMealPayload[], now: string): D1Statement[] {
   const mealRows: Record<string, unknown>[] = [];
   const itemRows: Record<string, unknown>[] = [];
+  const slotRows: Record<string, unknown>[] = [];
+  const slotFoodRows: Record<string, unknown>[] = [];
 
   for (const [mealIndex, meal] of meals.entries()) {
     if (!meal.name.trim()) continue;
     const mealId = crypto.randomUUID();
-    mealRows.push({
-      id: mealId,
-      templateId,
-      name: meal.name,
-      time: meal.suggested_time ?? null,
-      notes: meal.notes ?? null,
-      sourceRecipeId: meal.source_recipe_id ?? null,
+      mealRows.push({
+        id: mealId,
+        templateId,
+        name: meal.name,
+        mealContext: meal.meal_context ?? mealContextForTemplateMeal(meal.name),
+        time: meal.suggested_time ?? null,
+        notes: meal.notes ?? null,
+        sourceRecipeId: meal.source_recipe_id ?? null,
       order: mealIndex,
       now,
     });
     for (const [itemIndex, item] of meal.items.entries()) {
       if (!item.food.trim()) continue;
+      const itemId = crypto.randomUUID();
+      const slotId = crypto.randomUUID();
+      const classification = classifyTemplateFood(item.food);
+      const contract = SYSTEM_TEMPLATE_FOOD_CONTRACTS[item.food];
       itemRows.push({
-        id: crypto.randomUUID(),
+        id: itemId,
         mealId,
         food: item.food,
         quantity: item.quantity ?? null,
         unit: item.unit ?? null,
         notes: item.notes ?? null,
+        foodSource: item.food_source ?? contract?.food_source ?? null,
+        foodRefId: item.food_ref_id ?? contract?.food_ref_id ?? null,
+        canonicalFoodId: item.canonical_food_id ?? contract?.canonical_food_id ?? null,
         order: itemIndex,
+        now,
+      });
+      slotRows.push({
+        id: slotId,
+        mealId,
+        foodGroup: item.slot_food_group ?? contract?.food_group ?? classification.foodGroup,
+        foodSubgroup: item.slot_food_subgroup ?? contract?.food_subgroup ?? classification.foodSubgroup,
+        nutritionalRole: item.slot_nutritional_role ?? contract?.clinical_role ?? classification.nutritionalRole,
+        exchangeListId: contract?.exchange_list_id ?? defaultExchangeListIdForSlot(classification, meal.name),
+        required: 1,
+        exchangeEligible: contract?.exchange_eligible ?? (classification.foodGroup === "OTHER" ? 0 : 1),
+        minItems: 1,
+        maxItems: 1,
+        order: itemIndex,
+        now,
+      });
+      slotFoodRows.push({
+        id: crypto.randomUUID(),
+        slotId,
+        food: item.food,
+        quantity: item.quantity ?? null,
+        unit: item.unit ?? null,
+        sourceItemId: itemId,
+        foodSource: item.food_source ?? contract?.food_source ?? null,
+        foodRefId: item.food_ref_id ?? contract?.food_ref_id ?? null,
+        canonicalFoodId: item.canonical_food_id ?? contract?.canonical_food_id ?? null,
+        order: 0,
         now,
       });
     }
   }
 
   const statements: D1Statement[] = [
+    { sql: "DELETE FROM diet_template_slot_foods WHERE slot_id IN (SELECT s.id FROM diet_template_slots s JOIN diet_template_meals m ON m.id = s.meal_id WHERE m.template_id = ?1)", params: [templateId] },
+    { sql: "DELETE FROM diet_template_slots WHERE meal_id IN (SELECT id FROM diet_template_meals WHERE template_id = ?1)", params: [templateId] },
     { sql: "DELETE FROM diet_template_items WHERE meal_id IN (SELECT id FROM diet_template_meals WHERE template_id = ?1)", params: [templateId] },
     { sql: "DELETE FROM diet_template_meals WHERE template_id = ?1", params: [templateId] },
   ];
 
   if (mealRows.length) statements.push({
-    sql: `INSERT INTO diet_template_meals (id, template_id, name, suggested_time, notes, source_recipe_id, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.templateId'), json_extract(value,'$.name'), json_extract(value,'$.time'), json_extract(value,'$.notes'), json_extract(value,'$.sourceRecipeId'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO diet_template_meals (id, template_id, name, meal_context, suggested_time, notes, source_recipe_id, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.templateId'), json_extract(value,'$.name'), json_extract(value,'$.mealContext'), json_extract(value,'$.time'), json_extract(value,'$.notes'), json_extract(value,'$.sourceRecipeId'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(mealRows)],
   });
   if (itemRows.length) statements.push({
-    sql: `INSERT INTO diet_template_items (id, meal_id, food, quantity, unit, notes, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO diet_template_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, canonical_food_id, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.canonicalFoodId'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(itemRows)],
+  });
+  if (slotRows.length) statements.push({
+    sql: `INSERT INTO diet_template_slots (id, meal_id, food_group, food_subgroup, nutritional_role, exchange_list_id, required, exchange_eligible, min_items, max_items, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.foodGroup'), json_extract(value,'$.foodSubgroup'), json_extract(value,'$.nutritionalRole'), json_extract(value,'$.exchangeListId'), json_extract(value,'$.required'), json_extract(value,'$.exchangeEligible'), json_extract(value,'$.minItems'), json_extract(value,'$.maxItems'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    params: [JSON.stringify(slotRows)],
+  });
+  if (slotFoodRows.length) statements.push({
+    sql: `INSERT INTO diet_template_slot_foods (id, slot_id, food, quantity, unit, source_item_id, food_source, food_ref_id, canonical_food_id, sort_order, created_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.slotId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.sourceItemId'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.canonicalFoodId'), json_extract(value,'$.order'), json_extract(value,'$.now') FROM json_each(?1)`,
+    params: [JSON.stringify(slotFoodRows)],
   });
 
   return statements;
@@ -203,7 +283,7 @@ export async function getAllTemplates(filters: {
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   return d1Query<ProtocolTemplate>(
-    `SELECT id, type, target_group, title, content, notes, is_active, created_at, updated_at, clinical_risk_level, requires_professional_review, version, structure_version FROM protocol_templates ${where} ORDER BY target_group ASC, type ASC, title ASC`,
+    `SELECT id, type, target_group, title, content, notes, is_active, created_at, updated_at, clinical_risk_level, requires_professional_review, version, structure_version, template_origin, owner_admin_id, is_default FROM protocol_templates ${where} ORDER BY target_group ASC, type ASC, template_origin ASC, is_default DESC, title ASC`,
     params
   );
 }
@@ -217,7 +297,7 @@ export async function getTemplatesByGroup(
 
 export async function getTemplateById(id: string): Promise<ProtocolTemplate | null> {
   const rows = await d1Query<ProtocolTemplate>(
-    "SELECT id, type, target_group, title, content, notes, is_active, created_at, updated_at, clinical_risk_level, requires_professional_review, version, structure_version FROM protocol_templates WHERE id = ?1 LIMIT 1",
+    "SELECT id, type, target_group, title, content, notes, is_active, created_at, updated_at, clinical_risk_level, requires_professional_review, version, structure_version, template_origin, owner_admin_id, is_default FROM protocol_templates WHERE id = ?1 LIMIT 1",
     [id]
   );
   return rows[0] ?? null;
@@ -245,9 +325,10 @@ export async function getTemplateDetail(id: string): Promise<TemplateDetail> {
 
   return {
     meals: meals.map((meal) => ({
-      id: meal.id,
-      name: meal.name,
-      suggested_time: meal.suggested_time,
+        id: meal.id,
+        name: meal.name,
+        meal_context: meal.meal_context ?? null,
+        suggested_time: meal.suggested_time,
       notes: meal.notes,
       source_recipe_id: meal.source_recipe_id,
       items: (itemsByMeal.get(meal.id) ?? []).map((item) => ({
@@ -256,6 +337,9 @@ export async function getTemplateDetail(id: string): Promise<TemplateDetail> {
         quantity: item.quantity,
         unit: item.unit,
         notes: item.notes,
+        food_source: item.food_source ?? null,
+        food_ref_id: item.food_ref_id ?? null,
+        canonical_food_id: item.canonical_food_id ?? null,
       })),
     })),
     substitutions: substitutions.map(({ id: rowId, base_food, option_food, quantity, unit, notes }) => ({
@@ -295,9 +379,9 @@ export async function createTemplate(input: ProtocolTemplateInput): Promise<stri
   const statements: D1Statement[] = [
     {
       sql: `INSERT INTO protocol_templates
-        (id, type, target_group, title, content, notes, is_active, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
-      params: [id, input.type, input.target_group, input.title, input.content ?? "", input.notes ?? null, input.is_active === false ? 0 : 1, now, now],
+        (id, type, target_group, title, content, notes, is_active, template_origin, owner_admin_id, is_default, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
+      params: [id, input.type, input.target_group, input.title, input.content ?? "", input.notes ?? null, input.is_active === false ? 0 : 1, input.template_origin ?? "USER", input.owner_admin_id ?? null, input.is_default ? 1 : 0, now, now],
     },
     ...buildTemplateDetailStatements(id, input, now),
   ];
@@ -337,6 +421,18 @@ export async function updateTemplate(
     updates.push(`is_active = ?${idx++}`);
     params.push(input.is_active ? 1 : 0);
   }
+  if (input.template_origin !== undefined) {
+    updates.push(`template_origin = ?${idx++}`);
+    params.push(input.template_origin);
+  }
+  if (input.owner_admin_id !== undefined) {
+    updates.push(`owner_admin_id = ?${idx++}`);
+    params.push(input.owner_admin_id);
+  }
+  if (input.is_default !== undefined) {
+    updates.push(`is_default = ?${idx++}`);
+    params.push(input.is_default ? 1 : 0);
+  }
 
   const now = new Date().toISOString();
   const statements: D1Statement[] = [];
@@ -364,11 +460,15 @@ export interface TemplateSlotFood {
   food: string;
   quantity: string | null;
   unit: string | null;
+  foodSource: string | null;
+  foodRefId: string | null;
+  canonicalFoodId: string | null;
 }
 export interface TemplateSlot {
   foodGroup: string;
   foodSubgroup: string;
   nutritionalRole: string;
+  exchangeListId: string | null;
   required: boolean;
   exchangeEligible: boolean;
   minItems: number;
@@ -377,6 +477,7 @@ export interface TemplateSlot {
 }
 export interface TemplateMealStructure {
   name: string;
+  mealContext: string | null;
   suggestedTime: string | null;
   slots: TemplateSlot[];
 }
@@ -398,6 +499,7 @@ interface SlotRow {
   food_group: string;
   food_subgroup: string;
   nutritional_role: string;
+  exchange_list_id: string | null;
   required: number;
   exchange_eligible: number;
   min_items: number;
@@ -409,6 +511,9 @@ interface SlotFoodRow {
   food: string;
   quantity: string | null;
   unit: string | null;
+  food_source: string | null;
+  food_ref_id: string | null;
+  canonical_food_id: string | null;
   source_item_id: string | null;
   sort_order: number;
 }
@@ -420,13 +525,22 @@ interface SlotFoodRow {
  * createMealPlanFromTemplates pra carimbar slot_food_group/subgroup/role no
  * meal_plan_item criado a partir desse item de template.
  */
+export interface SlotClassification {
+  slot_id: string;
+  food_group: string;
+  food_subgroup: string;
+  nutritional_role: string;
+  exchange_eligible: boolean;
+  exchange_list_id: string | null;
+}
+
 export async function getSlotClassificationBySourceItemId(
   templateIds: string[]
-): Promise<Map<string, { food_group: string; food_subgroup: string; nutritional_role: string }>> {
-  const result = new Map<string, { food_group: string; food_subgroup: string; nutritional_role: string }>();
+): Promise<Map<string, SlotClassification>> {
+  const result = new Map<string, SlotClassification>();
   if (!templateIds.length) return result;
-  const rows = await d1Query<{ source_item_id: string; food_group: string; food_subgroup: string; nutritional_role: string }>(
-    `SELECT sf.source_item_id as source_item_id, s.food_group as food_group, s.food_subgroup as food_subgroup, s.nutritional_role as nutritional_role
+  const rows = await d1Query<{ source_item_id: string; slot_id: string; food_group: string; food_subgroup: string; nutritional_role: string; exchange_eligible: number; exchange_list_id: string | null }>(
+    `SELECT sf.source_item_id as source_item_id, s.id as slot_id, s.food_group as food_group, s.food_subgroup as food_subgroup, s.nutritional_role as nutritional_role, s.exchange_eligible as exchange_eligible, s.exchange_list_id as exchange_list_id
      FROM diet_template_slot_foods sf
      JOIN diet_template_slots s ON s.id = sf.slot_id
      JOIN diet_template_meals m ON m.id = s.meal_id
@@ -436,7 +550,14 @@ export async function getSlotClassificationBySourceItemId(
   );
   for (const row of rows) {
     if (!row.source_item_id) continue;
-    result.set(row.source_item_id, { food_group: row.food_group, food_subgroup: row.food_subgroup, nutritional_role: row.nutritional_role });
+    result.set(row.source_item_id, {
+      slot_id: row.slot_id,
+      food_group: row.food_group,
+      food_subgroup: row.food_subgroup,
+      nutritional_role: row.nutritional_role,
+      exchange_eligible: Boolean(row.exchange_eligible),
+      exchange_list_id: row.exchange_list_id ?? null,
+    });
   }
   return result;
 }
@@ -481,16 +602,25 @@ export async function getTemplateStructure(id: string): Promise<TemplateStructur
     structureVersion: template.structure_version,
     meals: meals.map((meal) => ({
       name: meal.name,
+      mealContext: meal.meal_context ?? mealContextForTemplateMeal(meal.name),
       suggestedTime: meal.suggested_time ?? null,
       slots: (slotsByMeal.get(meal.id) ?? []).map((slot) => ({
         foodGroup: slot.food_group,
         foodSubgroup: slot.food_subgroup,
         nutritionalRole: slot.nutritional_role,
+        exchangeListId: slot.exchange_list_id ?? null,
         required: Boolean(slot.required),
         exchangeEligible: Boolean(slot.exchange_eligible),
         minItems: slot.min_items,
         maxItems: slot.max_items,
-        suggestedFoods: (foodsBySlot.get(slot.id) ?? []).map((food) => ({ food: food.food, quantity: food.quantity, unit: food.unit })),
+        suggestedFoods: (foodsBySlot.get(slot.id) ?? []).map((food) => ({
+          food: food.food,
+          quantity: food.quantity,
+          unit: food.unit,
+          foodSource: food.food_source ?? null,
+          foodRefId: food.food_ref_id ?? null,
+          canonicalFoodId: food.canonical_food_id ?? null,
+        })),
       })),
     })),
   };

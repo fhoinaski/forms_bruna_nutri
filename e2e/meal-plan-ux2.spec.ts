@@ -35,8 +35,19 @@ async function addMealWithArroz(page: Page, name: string) {
   const foodInput = meal.getByPlaceholder("Buscar alimento").last();
   await foodInput.fill("Arroz");
   const suggestion = page.locator("button", { hasText: /arroz/i }).first();
-  await expect(suggestion).toBeVisible();
+  await expect(async () => {
+    await expect(suggestion).toBeVisible({ timeout: 10_000 });
+  }).toPass({ timeout: 15_000 });
   await suggestion.click();
+  await meal.getByPlaceholder("Qtd.").last().fill("100");
+  return meal;
+}
+
+async function addNamedMealWithFreeTextItem(page: Page, name: string) {
+  await page.getByRole("button", { name: /^refeicao$/i }).click();
+  const meal = page.locator("article").last();
+  await meal.getByPlaceholder("Nome da refeicao").fill(name);
+  await meal.getByPlaceholder("Buscar alimento").last().fill(`Item ${name}`);
   await meal.getByPlaceholder("Qtd.").last().fill("100");
   return meal;
 }
@@ -49,8 +60,8 @@ test.describe("plano alimentar — UX 2.0", () => {
     await page.getByRole("button", { name: /^criar por modelo$/i }).click();
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
-    await addMealWithArroz(page, "Refeicao Um");
-    await addMealWithArroz(page, "Refeicao Dois");
+    await addNamedMealWithFreeTextItem(page, "Refeicao Um");
+    await addNamedMealWithFreeTextItem(page, "Refeicao Dois");
 
     // A ultima refeicao ("Refeicao Dois") sobe uma posicao, trocando de lugar com "Refeicao Um".
     // Titulo do botao de refeicao ("Mover refeicao para cima") e mais especifico que o de item
@@ -95,7 +106,8 @@ test.describe("plano alimentar — UX 2.0", () => {
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
     const meal = await addMealWithArroz(page, "Almoco");
-    await meal.getByRole("button", { name: /^duplicar alimento$/i }).last().click();
+    await meal.getByRole("button", { name: /mais ações do alimento/i }).last().click();
+    await meal.getByRole("button", { name: /^duplicar$/i }).click();
 
     const foodInputs = meal.getByPlaceholder("Buscar alimento");
     await expect(foodInputs).toHaveCount(2);
@@ -203,10 +215,12 @@ test.describe("plano alimentar — UX 2.0", () => {
     expect(box).not.toBeNull();
     expect(box!.width).toBeGreaterThanOrEqual(230);
 
-    // As acoes do item (Substituir/mover/duplicar/excluir) continuam
-    // presentes e clicaveis — nunca escondidas pela correcao de layout.
-    await expect(meal.getByRole("button", { name: /^substituir alimento$/i }).last()).toBeVisible();
-    await expect(meal.getByRole("button", { name: /^remover alimento$/i }).last()).toBeVisible();
+    // Acoes secundarias continuam presentes e clicaveis no menu compacto,
+    // sem competir com a largura do campo de alimento.
+    await expect(meal.getByRole("button", { name: /alternativas/i }).last()).toBeVisible();
+    await meal.getByRole("button", { name: /mais ações do alimento/i }).last().click();
+    await expect(meal.getByRole("button", { name: /^duplicar$/i })).toBeVisible();
+    await expect(meal.getByRole("button", { name: /^excluir$/i })).toBeVisible();
   });
 
   test("nome longo do alimento fica legivel e acessivel via tooltip (title)", async ({ page, request }) => {

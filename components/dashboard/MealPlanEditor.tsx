@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CalendarDays, CheckCircle2, Copy, Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, Copy, Plus, Printer, Save, Sparkles, Trash2, XCircle } from "lucide-react";
 import { MealItemsEditor, cleanMealsForSave, type Meal } from "@/components/dashboard/MealItemsEditor";
 import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
 import { AiMealPlanWizard } from "@/components/dashboard/AiMealPlanWizard";
@@ -29,6 +29,18 @@ type TemplateDraft = {
   targetGroup: ProtocolTemplateTargetGroup;
   error: string;
 };
+type TemplateImportPreview = {
+  template: {
+    title: string;
+    origin: "SYSTEM" | "USER";
+    version: number;
+    targetGroup: ProtocolTemplateTargetGroup;
+    mealCount: number;
+    itemCount: number;
+  };
+  hasConflicts: boolean;
+  conflicts: Array<{ mealName: string; food: string; reason: string }>;
+};
 type MealPlan = {
   id: string;
   title: string;
@@ -44,6 +56,37 @@ type MealPlan = {
   weekly_slots: WeeklySlot[];
   substitutions: Substitution[];
   supplements: Supplement[];
+};
+type PublicationIssue = {
+  code: string;
+  severity: "ERROR" | "WARNING" | "INFO";
+  blockPublishing: boolean;
+  mealName?: string | null;
+  foodName?: string | null;
+  message: string;
+};
+type PublicationReview = {
+  valid: boolean;
+  blockers: PublicationIssue[];
+  warnings: PublicationIssue[];
+  summary: {
+    meals: number;
+    items: number;
+    resolvedItems: number;
+    approvedExchanges: number;
+    staleExchanges: number;
+    blockers: number;
+    warnings: number;
+  };
+  nutritionSummary: {
+    energyKcal: number | null;
+    proteinG: number | null;
+    carbohydrateG: number | null;
+    fatG: number | null;
+    fiberG: number | null;
+    unresolvedItems: number;
+  };
+  mealSummary: Array<{ mealName: string; items: number; blockers: number; warnings: number }>;
 };
 
 function editablePlanSignature(plan: MealPlan): string {
@@ -78,6 +121,10 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   const [conflict, setConflict] = useState("");
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null);
   const [deleteDraft, setDeleteDraft] = useState<{ planId: string; title: string; status: MealPlanStatus } | null>(null);
+  const [publicationReview, setPublicationReview] = useState<PublicationReview | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [warningsAccepted, setWarningsAccepted] = useState(false);
   const [templateSaving, setTemplateSaving] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
@@ -110,7 +157,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   }, []);
 
   useEffect(() => {
-    if (!templateDraft && !deleteDraft) return;
+    if (!templateDraft && !deleteDraft && !reviewOpen) return;
     const previousOverflow = document.body.style.overflow;
     const previousPaddingRight = document.body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -120,7 +167,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       document.body.style.overflow = previousOverflow;
       document.body.style.paddingRight = previousPaddingRight;
     };
-  }, [templateDraft, deleteDraft]);
+  }, [templateDraft, deleteDraft, reviewOpen]);
 
   function selectPlan(id: string) {
     setSelectedPlanId(id);
@@ -138,15 +185,26 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     setMessage("");
     setConflict("");
     try {
+      const previewResponse = await fetch(`/api/admin/clients/${clientId}/meal-plans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetGroup, previewOnly: true }),
+      });
+      const preview = await previewResponse.json() as TemplateImportPreview & { message?: string };
+      if (!previewResponse.ok) throw new Error(preview.message ?? "Nao foi possivel validar o modelo.");
+      if (preview.hasConflicts) {
+        setError(`Este modelo contém ${preview.conflicts.length} item(ns) que precisam ser revisados antes de importar: ${preview.conflicts.slice(0, 3).map((item) => `${item.mealName}: ${item.food}`).join("; ")}.`);
+        return;
+      }
       const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetGroup }),
+        body: JSON.stringify({ targetGroup, confirmed: true }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "Nao foi possivel criar o plano.");
       await loadPlans(data.id);
-      setMessage("Plano criado a partir do modelo. Revise, personalize e ative quando estiver pronto.");
+      setMessage(`Plano criado a partir do modelo ${preview.template.title} (${preview.template.origin}, v${preview.template.version}; ${preview.template.mealCount} refeicao(oes), ${preview.template.itemCount} item(ns)). Revise, personalize e ative quando estiver pronto.`);
       onSaved?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Nao foi possivel criar o plano.");
@@ -337,15 +395,55 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
           setConflict(data.message ?? "O plano alimentar foi atualizado em outra sessao. Recarregue antes de salvar.");
           return;
         }
+        if (data.code === "MEAL_PLAN_PUBLICATION_BLOCKED") {
+          setPublicationReview({
+            valid: false,
+            blockers: data.blockers ?? [],
+            warnings: data.warnings ?? [],
+            summary: data.summary ?? { meals: 0, items: 0, resolvedItems: 0, approvedExchanges: 0, staleExchanges: 0, blockers: data.blockers?.length ?? 0, warnings: data.warnings?.length ?? 0 },
+            nutritionSummary: { energyKcal: null, proteinG: null, carbohydrateG: null, fatG: null, fiberG: null, unresolvedItems: 0 },
+            mealSummary: [],
+          });
+          setReviewOpen(true);
+          throw new Error(data.message ?? "Este plano ainda não pode ser publicado.");
+        }
         throw new Error(data.message ?? "Nao foi possivel salvar o plano.");
       }
       await loadPlans(data.id);
+      if (nextStatus === "active") {
+        setReviewOpen(false);
+        setPublicationReview(null);
+      }
       setMessage(nextStatus === "active" ? "Plano ativado no portal do cliente." : "Plano alimentar salvo.");
       onSaved?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Nao foi possivel salvar o plano.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function reviewPublication() {
+    if (!plan) return;
+    setError("");
+    setMessage("");
+    setConflict("");
+    setWarningsAccepted(false);
+    if (hasUnsavedChanges) {
+      setError("Salve o rascunho antes de revisar a publicação.");
+      return;
+    }
+    setReviewing(true);
+    try {
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/${plan.id}/publication-review`, { cache: "no-store" });
+      const data = await response.json() as PublicationReview & { message?: string };
+      if (!response.ok) throw new Error(data.message ?? "Nao foi possivel revisar o plano.");
+      setPublicationReview(data);
+      setReviewOpen(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Nao foi possivel revisar o plano.");
+    } finally {
+      setReviewing(false);
     }
   }
 
@@ -419,7 +517,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
 
   return (
     <div className="w-full min-w-0 space-y-5">
-      <section className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/70 p-5">
+      {!plan && <section className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/70 p-5">
         <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
             <p className="brand-kicker mb-1">Plano alimentar individual</p>
@@ -453,7 +551,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
             </button>
           </div>
         </div>
-      </section>
+      </section>}
 
       {message && <p className="rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] px-4 py-3 text-sm text-[#607A56]">{message}</p>}
       {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
@@ -496,15 +594,38 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               <p className={`mt-0.5 text-xs font-semibold ${hasUnsavedChanges ? "text-[#9A6B28]" : conflict ? "text-red-700" : "text-[#607A56]"}`}>
                 {plan.status === "active" ? "Ativo" : "Rascunho"} - v{plan.version} · {saveStateLabel}
               </p>
+              {plan.status !== "active" && (
+                <p className="mt-0.5 text-xs text-[#8C6E52]">Portal e impressão oficial continuam usando a versão ativa até este rascunho ser ativado.</p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
-              <button type="button" onClick={() => void save()} disabled={saving || deleting || !hasUnsavedChanges} className="brand-btn-secondary w-full sm:w-auto">
+              <button type="button" onClick={() => void createFromTemplate()} disabled={creating || saving || deleting} className="brand-btn-secondary w-full sm:w-auto">
+                <Plus className="h-4 w-4" />
+                Novo plano
+              </button>
+              <a
+                href={`/dashboard/clients/${clientId}/print?secao=plano-alimentar${plan.status === "active" ? "" : `&planId=${encodeURIComponent(plan.id)}`}`}
+                target="_blank"
+                rel="noreferrer"
+                className="brand-btn-secondary w-full sm:w-auto"
+                title={plan.status === "active" ? "Imprime a versão ativa no portal." : "Abre uma prévia explícita deste rascunho; o portal continua usando o plano ativo."}
+              >
+                <Printer className="h-4 w-4" />
+                {plan.status === "active" ? "Imprimir ativo" : "Prévia do rascunho"}
+              </a>
+              {plan.status === "active" && (
+                <button type="button" onClick={() => void duplicateCurrentPlan()} disabled={saving || deleting || creating || plan.meals.length === 0} className="brand-btn-secondary w-full sm:w-auto">
+                  <Copy className="h-4 w-4" />
+                  Editar
+                </button>
+              )}
+              <button type="button" onClick={() => void save()} disabled={saving || deleting || !hasUnsavedChanges || plan.status === "active"} className="brand-btn-secondary w-full sm:w-auto">
                 <Save className="h-4 w-4" />
                 {saving ? "Salvando..." : "Salvar"}
               </button>
-              <button type="button" onClick={() => void save("active")} disabled={saving || deleting || plan.status === "active"} className="brand-btn-primary w-full sm:w-auto">
+              <button type="button" onClick={() => void reviewPublication()} disabled={saving || deleting || reviewing || plan.status === "active"} className="brand-btn-primary w-full sm:w-auto">
                 <CheckCircle2 className="h-4 w-4" />
-                {plan.status === "active" ? "Ativo" : "Ativar"}
+                {plan.status === "active" ? "Ativo" : reviewing ? "Revisando..." : "Revisar"}
               </button>
             </div>
           </div>
@@ -518,11 +639,11 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
                   <label className="brand-label" htmlFor="meal-plan-title">Titulo do plano</label>
-                  <input id="meal-plan-title" value={plan.title} onChange={(event) => setPlan({ ...plan, title: event.target.value })} className="brand-input" />
+                  <input id="meal-plan-title" value={plan.title} onChange={(event) => setPlan({ ...plan, title: event.target.value })} disabled={plan.status === "active"} className="brand-input disabled:cursor-not-allowed disabled:bg-[#FAF7F2] disabled:text-[#75675E]" />
                 </div>
                 <div>
                   <label className="brand-label" htmlFor="meal-plan-status">Status</label>
-                  <select id="meal-plan-status" value={plan.status} onChange={(event) => setPlan({ ...plan, status: event.target.value as MealPlanStatus })} className="brand-input">
+                  <select id="meal-plan-status" value={plan.status} onChange={(event) => setPlan({ ...plan, status: event.target.value as MealPlanStatus })} disabled={plan.status === "active"} className="brand-input disabled:cursor-not-allowed disabled:bg-[#FAF7F2] disabled:text-[#75675E]">
                     <option value="draft">Rascunho</option>
                     <option value="active">Ativo no portal</option>
                     <option value="archived">Arquivado</option>
@@ -530,19 +651,19 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                 </div>
                 <div className="md:col-span-2">
                   <label className="brand-label" htmlFor="meal-plan-notes">Orientacoes gerais para o cliente</label>
-                  <textarea id="meal-plan-notes" value={plan.notes ?? ""} onChange={(event) => setPlan({ ...plan, notes: event.target.value })} className="brand-input min-h-16 resize-y" />
+                  <textarea id="meal-plan-notes" value={plan.notes ?? ""} onChange={(event) => setPlan({ ...plan, notes: event.target.value })} disabled={plan.status === "active"} className="brand-input min-h-16 resize-y disabled:cursor-not-allowed disabled:bg-[#FAF7F2] disabled:text-[#75675E]" />
                 </div>
               </div>
 
               <div className="rounded-xl border border-[#EDE1D6] bg-[#FAF7F2]/60 p-3">
                 <p className="brand-label mb-2">Meta nutricional do plano (opcional)</p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <NutrientTargetInput id="target-energy-kcal" label="Energia (kcal)" value={plan.target_energy_kcal} onChange={(value) => setPlan({ ...plan, target_energy_kcal: value })} />
-                  <NutrientTargetInput id="target-protein-g" label="Proteína (g)" value={plan.target_protein_g} onChange={(value) => setPlan({ ...plan, target_protein_g: value })} />
-                  <NutrientTargetInput id="target-carbohydrate-g" label="Carboidrato (g)" value={plan.target_carbohydrate_g} onChange={(value) => setPlan({ ...plan, target_carbohydrate_g: value })} />
-                  <NutrientTargetInput id="target-fat-g" label="Gordura (g)" value={plan.target_fat_g} onChange={(value) => setPlan({ ...plan, target_fat_g: value })} />
+                  <NutrientTargetInput id="target-energy-kcal" label="Energia (kcal)" value={plan.target_energy_kcal} disabled={plan.status === "active"} onChange={(value) => setPlan({ ...plan, target_energy_kcal: value })} />
+                  <NutrientTargetInput id="target-protein-g" label="Proteína (g)" value={plan.target_protein_g} disabled={plan.status === "active"} onChange={(value) => setPlan({ ...plan, target_protein_g: value })} />
+                  <NutrientTargetInput id="target-carbohydrate-g" label="Carboidrato (g)" value={plan.target_carbohydrate_g} disabled={plan.status === "active"} onChange={(value) => setPlan({ ...plan, target_carbohydrate_g: value })} />
+                  <NutrientTargetInput id="target-fat-g" label="Gordura (g)" value={plan.target_fat_g} disabled={plan.status === "active"} onChange={(value) => setPlan({ ...plan, target_fat_g: value })} />
                 </div>
-                {plan.target_energy_kcal && (
+                {plan.target_energy_kcal && plan.status !== "active" && (
                   <button
                     type="button"
                     onClick={() => void optimizePlanQuantities()}
@@ -572,6 +693,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                 mealPlanId={plan.id}
                 substitutions={plan.substitutions}
                 onSubstitutionsChange={(substitutions) => setPlan({ ...plan, substitutions })}
+                readOnly={plan.status === "active"}
               />
             </div>
 
@@ -623,21 +745,31 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               {deleting ? "Excluindo..." : "Excluir plano"}
             </button>
             <div className="flex flex-col gap-3 sm:flex-row">
+              <a
+                href={`/dashboard/clients/${clientId}/print?secao=plano-alimentar${plan.status === "active" ? "" : `&planId=${encodeURIComponent(plan.id)}`}`}
+                target="_blank"
+                rel="noreferrer"
+                className="brand-btn-secondary w-full sm:w-auto"
+                title={plan.status === "active" ? "Imprime a versão ativa no portal." : "Abre uma prévia explícita deste rascunho; o portal continua usando o plano ativo."}
+              >
+                <Printer className="h-4 w-4" />
+                {plan.status === "active" ? "Imprimir ativo" : "Prévia do rascunho"}
+              </a>
               <button type="button" onClick={() => void duplicateCurrentPlan()} disabled={saving || deleting || creating || plan.meals.length === 0} className="brand-btn-secondary w-full sm:w-auto">
                 <Copy className="h-4 w-4" />
-                Duplicar este plano
+                {plan.status === "active" ? "Editar como rascunho" : "Duplicar este plano"}
               </button>
               <button type="button" onClick={openSavePlanAsTemplate} disabled={saving || deleting || plan.meals.length === 0} className="brand-btn-secondary w-full sm:w-auto">
                 <Save className="h-4 w-4" />
                 Salvar como modelo
               </button>
-              <button type="button" onClick={() => void save()} disabled={saving || deleting} className="brand-btn-secondary w-full sm:w-auto">
+              <button type="button" onClick={() => void save()} disabled={saving || deleting || plan.status === "active"} className="brand-btn-secondary w-full sm:w-auto">
                 <Save className="h-4 w-4" />
                 {saving ? "Salvando..." : "Salvar rascunho"}
               </button>
-              <button type="button" onClick={() => void save("active")} disabled={saving || deleting || plan.status === "active"} className="brand-btn-primary w-full sm:w-auto">
+              <button type="button" onClick={() => void reviewPublication()} disabled={saving || deleting || reviewing || plan.status === "active"} className="brand-btn-primary w-full sm:w-auto">
                 <CheckCircle2 className="h-4 w-4" />
-                {plan.status === "active" ? "Plano ativo" : "Ativar no portal"}
+                {plan.status === "active" ? "Plano ativo" : reviewing ? "Revisando..." : "Revisar e publicar"}
               </button>
             </div>
           </div>
@@ -721,11 +853,107 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         </div>,
         document.body
       )}
+      {portalReady && reviewOpen && publicationReview && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#3A3028]/45 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="publication-review-title" className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#607A56]">Publicação</p>
+                <h3 id="publication-review-title" className="font-serif text-2xl font-semibold text-[#3A3028]">
+                  Revisão do plano
+                </h3>
+                <p className={`mt-1 text-sm font-semibold ${publicationReview.valid ? "text-[#607A56]" : "text-red-700"}`}>
+                  {publicationReview.valid ? "Plano pronto para publicação." : "Este plano ainda não pode ser publicado."}
+                </p>
+              </div>
+              <button type="button" onClick={() => setReviewOpen(false)} className="rounded-full p-2 text-[#75675E] hover:bg-[#F7F0E8]" aria-label="Fechar revisão">
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-xl border border-[#EAD8C2] bg-[#FAF7F2] p-3"><p className="text-xs text-[#8C6E52]">Refeições</p><strong>{publicationReview.summary.meals}</strong></div>
+              <div className="rounded-xl border border-[#EAD8C2] bg-[#FAF7F2] p-3"><p className="text-xs text-[#8C6E52]">Alimentos</p><strong>{publicationReview.summary.resolvedItems}/{publicationReview.summary.items}</strong></div>
+              <div className="rounded-xl border border-[#EAD8C2] bg-[#FAF7F2] p-3"><p className="text-xs text-[#8C6E52]">Trocas aprovadas</p><strong>{publicationReview.summary.approvedExchanges}</strong></div>
+            </div>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-5">
+              {[
+                ["Energia", publicationReview.nutritionSummary.energyKcal === null ? "-" : `${Math.round(publicationReview.nutritionSummary.energyKcal)} kcal`],
+                ["Proteína", publicationReview.nutritionSummary.proteinG === null ? "-" : `${publicationReview.nutritionSummary.proteinG.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} g`],
+                ["Carboidrato", publicationReview.nutritionSummary.carbohydrateG === null ? "-" : `${publicationReview.nutritionSummary.carbohydrateG.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} g`],
+                ["Gordura", publicationReview.nutritionSummary.fatG === null ? "-" : `${publicationReview.nutritionSummary.fatG.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} g`],
+                ["Fibra", publicationReview.nutritionSummary.fiberG === null ? "-" : `${publicationReview.nutritionSummary.fiberG.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} g`],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-[#EDE1D6] p-2 text-center">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-[#9A8B80]">{label}</p>
+                  <p className="font-semibold text-[#3A3028]">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {publicationReview.blockers.length > 0 && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="mb-2 flex items-center gap-2 font-semibold text-red-700">
+                  <AlertTriangle className="h-4 w-4" />
+                  Problemas que impedem publicação
+                </div>
+                <ul className="space-y-2 text-sm text-red-800">
+                  {publicationReview.blockers.map((item, index) => (
+                    <li key={`${item.code}-${index}`}>{item.mealName ? `${item.mealName}: ` : ""}{item.message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {publicationReview.warnings.length > 0 && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="mb-2 flex items-center gap-2 font-semibold text-amber-800">
+                  <AlertTriangle className="h-4 w-4" />
+                  Avisos para revisão
+                </div>
+                <ul className="space-y-2 text-sm text-amber-900">
+                  {publicationReview.warnings.map((item, index) => (
+                    <li key={`${item.code}-${index}`}>{item.message}</li>
+                  ))}
+                </ul>
+                <label className="mt-3 flex items-center gap-2 text-sm text-amber-900">
+                  <input type="checkbox" checked={warningsAccepted} onChange={(event) => setWarningsAccepted(event.target.checked)} />
+                  Revisei os avisos.
+                </label>
+              </div>
+            )}
+
+            <div className="mt-4 rounded-xl border border-[#EAD8C2] p-4">
+              <p className="mb-2 font-serif text-lg font-semibold">Resumo por refeição</p>
+              <div className="space-y-1 text-sm text-[#75675E]">
+                {publicationReview.mealSummary.map((meal) => (
+                  <p key={meal.mealName}>{meal.mealName}: {meal.blockers > 0 ? `${meal.blockers} problema(s)` : meal.warnings > 0 ? `${meal.warnings} aviso(s)` : "OK"}</p>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setReviewOpen(false)} className="brand-btn-secondary">Voltar e editar</button>
+              <button
+                type="button"
+                onClick={() => void save("active")}
+                disabled={!publicationReview.valid || saving || (publicationReview.warnings.length > 0 && !warningsAccepted)}
+                className="brand-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                {saving ? "Publicando..." : "Publicar plano"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
 
-function NutrientTargetInput({ id, label, value, onChange }: { id: string; label: string; value: number | null | undefined; onChange: (value: number | null) => void }) {
+function NutrientTargetInput({ id, label, value, disabled = false, onChange }: { id: string; label: string; value: number | null | undefined; disabled?: boolean; onChange: (value: number | null) => void }) {
   return (
     <div>
       <label className="brand-label" htmlFor={id}>{label}</label>
@@ -735,11 +963,12 @@ function NutrientTargetInput({ id, label, value, onChange }: { id: string; label
         min={0}
         inputMode="decimal"
         value={value ?? ""}
+        disabled={disabled}
         onChange={(event) => {
           const raw = event.target.value;
           onChange(raw === "" ? null : Number(raw));
         }}
-        className="brand-input"
+        className="brand-input disabled:cursor-not-allowed disabled:bg-[#FAF7F2] disabled:text-[#75675E]"
         placeholder="—"
       />
     </div>
@@ -949,8 +1178,8 @@ function SubstitutionsEditor({ items, onChange }: { items: Substitution[]; onCha
             onChange={(value) => { updateItem(index, { option_food: value }); setQuery(value); }}
             onSelect={(name) => { updateItem(index, { option_food: name }); setActiveField(""); }}
           />
-          <input value={item.quantity ?? ""} onChange={(event) => updateItem(index, { quantity: event.target.value })} className="brand-input" placeholder="Qtd." aria-label="Quantidade da substituicao" />
-          <input value={item.unit ?? ""} onChange={(event) => updateItem(index, { unit: event.target.value })} className="brand-input" placeholder="Un." aria-label="Unidade da substituicao" />
+          <input value={item.quantity ?? ""} onChange={(event) => updateItem(index, { quantity: event.target.value })} className="brand-input" placeholder="Quantidade da troca" aria-label="Quantidade da substituicao" />
+          <input value={item.unit ?? ""} onChange={(event) => updateItem(index, { unit: event.target.value })} className="brand-input" placeholder="Unidade da troca" aria-label="Unidade da substituicao" />
           <button type="button" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))} className="inline-flex h-11 items-center justify-center rounded-xl px-3 text-red-600 hover:bg-red-50" aria-label="Remover substituicao" title="Remover">
             <Trash2 className="h-4 w-4" />
           </button>

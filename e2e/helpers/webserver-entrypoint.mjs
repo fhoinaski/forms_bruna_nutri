@@ -91,17 +91,19 @@ async function seedAiSettings(db) {
   ).run(now);
 }
 
+async function runSeedTemplates(env) {
+  await new Promise((resolve, reject) => {
+    const child = spawn("npm", ["run", "seed:templates"], { cwd: root, env, stdio: "inherit", shell: true });
+    child.on("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`seed:templates falhou com exit code ${code}`));
+    });
+    child.on("error", reject);
+  });
+}
+
 async function main() {
   const shim = await startD1Shim();
-  await seedAdmins(shim.db);
-  await seedAiSettings(shim.db);
-
-  mkdirSync(dirname(fixturesPath), { recursive: true });
-  writeFileSync(
-    fixturesPath,
-    JSON.stringify({ admin: ADMIN, byProject: BY_PROJECT }, null, 2)
-  );
-
   const env = {
     ...process.env,
     CLOUDFLARE_D1_API_BASE_URL: shim.baseUrl,
@@ -130,8 +132,18 @@ async function main() {
     E2E_TEST_MODE: "1",
   };
 
+  await seedAdmins(shim.db);
+  await seedAiSettings(shim.db);
+  await runSeedTemplates(env);
+
+  mkdirSync(dirname(fixturesPath), { recursive: true });
+  writeFileSync(
+    fixturesPath,
+    JSON.stringify({ admin: ADMIN, byProject: BY_PROJECT }, null, 2)
+  );
+
   console.log(`[e2e] D1 shim up on ${shim.baseUrl} (${shim.migrationCount} migrations aplicadas).`);
-  console.log(`[e2e] Admins semeados: ${ADMIN.email}, ${PROJECT_NAMES.map((name) => BY_PROJECT[name].adminMustChange.email).join(", ")}, ${PROJECT_NAMES.map((name) => BY_PROJECT[name].adminMfaCandidate.email).join(", ")}`);
+  console.log(`[e2e] Admins e templates SYSTEM semeados.`);
 
   const child = spawn("npm", ["run", "start"], { cwd: root, env, stdio: "inherit", shell: true });
 

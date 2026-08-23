@@ -14,10 +14,19 @@ const mealItemSchema = z.object({
   quantity: z.string().max(80).nullable().optional(),
   unit: z.string().max(40).nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
+  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA", "TBCA", "IBGE_POF"]).nullable().optional(),
+  food_ref_id: z.string().max(120).nullable().optional(),
+  canonical_food_id: z.string().max(160).nullable().optional(),
+  slot_food_group: z.string().max(40).nullable().optional(),
+  slot_food_subgroup: z.string().max(40).nullable().optional(),
+  slot_nutritional_role: z.string().max(40).nullable().optional(),
+  template_slot_id: z.string().max(120).nullable().optional(),
+  slot_exchange_eligible: z.boolean().nullable().optional(),
 });
 
 const mealSchema = z.object({
   name: z.string().min(1).max(120),
+  meal_context: z.string().max(40).nullable().optional(),
   suggested_time: z.string().max(40).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
   source_recipe_id: z.string().nullable().optional(),
@@ -50,6 +59,9 @@ const updateSchema = z.object({
   substitutions: z.array(substitutionSchema).optional(),
   supplements: z.array(supplementSchema).optional(),
   is_active: z.boolean().optional(),
+  template_origin: z.enum(["SYSTEM", "USER"]).optional(),
+  owner_admin_id: z.string().nullable().optional(),
+  is_default: z.boolean().optional(),
 }).strict();
 
 export async function GET(
@@ -77,6 +89,9 @@ export async function PUT(
   const { id } = await params;
   const current = await getTemplateById(id);
   if (!current) return NextResponse.json({ message: "Modelo nao encontrado." }, { status: 404 });
+  if (current.template_origin === "SYSTEM") {
+    return NextResponse.json({ message: "Modelos SYSTEM nao podem ser editados diretamente. Duplique para um modelo USER antes de personalizar." }, { status: 403 });
+  }
 
   const parsed = updateSchema.safeParse(await req.json());
   if (!parsed.success) {
@@ -106,6 +121,9 @@ export async function DELETE(
   const { id } = await params;
   const current = await getTemplateById(id);
   if (!current) return NextResponse.json({ message: "Modelo nao encontrado." }, { status: 404 });
+  if (current.template_origin === "SYSTEM") {
+    return NextResponse.json({ message: "Modelos SYSTEM nao podem ser removidos diretamente. Desative via migration/seed auditada." }, { status: 403 });
+  }
 
   await deleteTemplate(id);
   await writeAuditLog({

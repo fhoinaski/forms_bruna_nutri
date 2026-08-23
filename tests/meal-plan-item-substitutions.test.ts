@@ -145,7 +145,11 @@ describe("portal do paciente — nunca mostra substituição pendente de aprova�
         { base_food: "Arroz", option_food: "Mandioca", approved_by_professional: false },
       ],
     };
-    vi.doMock("@/lib/repositories/meal-plans", () => ({ getActiveMealPlan: vi.fn().mockResolvedValue(mealPlan) }));
+    vi.doMock("@/lib/repositories/meal-plans", () => ({
+      getActiveMealPlan: vi.fn().mockResolvedValue(mealPlan),
+      getActiveMealPlanVersion: vi.fn().mockResolvedValue(mealPlan),
+      getClientMealPlans: vi.fn().mockResolvedValue([mealPlan]),
+    }));
     vi.doMock("@/lib/repositories/nutrition-records", () => ({ getExistingNutritionRecord: vi.fn().mockResolvedValue(null) }));
     vi.doMock("@/lib/d1/client", () => ({
       d1Query: vi.fn().mockImplementation(async (sql: string) => {

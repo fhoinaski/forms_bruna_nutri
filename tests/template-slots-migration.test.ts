@@ -94,8 +94,8 @@ describe("createMealPlanFromTemplates — proveniência (item 13)", () => {
     expect(rows[0]).toMatchObject({ slotFoodGroup: "CARBOHYDRATE", slotFoodSubgroup: "GRAIN", slotNutritionalRole: "STARCH_SOURCE" });
   });
 
-  it("não carimba template_id quando há mais de um template DIETA ativo pro grupo (ambíguo — provenance fica null)", async () => {
-    const { batchCalls, d1Batch } = mockRelationalTemplate();
+  it("bloqueia importação quando há mais de um template DIETA ativo pro grupo sem default determinístico", async () => {
+    const { d1Batch } = mockRelationalTemplate();
     // segundo template DIETA sem refeições relacionais (cai pro fallback de content vazio) — só testando a ambiguidade da contagem
     d1Batch.mockImplementationOnce(async (statements: Array<{ sql: string; params?: unknown[] }>) => {
       if (statements[0]?.sql.includes("FROM diet_template_meals")) {
@@ -115,13 +115,49 @@ describe("createMealPlanFromTemplates — proveniência (item 13)", () => {
       ]),
       getSlotClassificationBySourceItemId: vi.fn().mockResolvedValue(new Map()),
     }));
+    const { createMealPlanFromTemplates, AmbiguousTemplateForTargetGroupError } = await import("../lib/repositories/meal-plans");
+
+    await expect(createMealPlanFromTemplates({ clientId: "client-1", targetGroup: "SOP" })).rejects.toThrow(AmbiguousTemplateForTargetGroupError);
+  });
+});
+
+describe("createMealPlanFromTemplates — contrato funcional do slot (Fase 8.5, item 2)", () => {
+  it("template_slot_id e slot_exchange_eligible=true chegam no INSERT INTO meal_plan_items", async () => {
+    const { batchCalls } = mockRelationalTemplate();
+    vi.doMock("@/lib/repositories/protocol-templates", () => ({
+      getAllTemplates: vi.fn().mockResolvedValue([
+        { id: "tpl-adulto-dieta-base", type: "DIETA", target_group: "ADULTO_SAUDAVEL", title: "t", content: "{}", notes: null, is_active: 1, created_at: "now", updated_at: "now", clinical_risk_level: "low", requires_professional_review: 0, version: 3, structure_version: "v2" },
+      ]),
+      getSlotClassificationBySourceItemId: vi.fn().mockResolvedValue(new Map([
+        ["item-1", { slot_id: "slot-abc", food_group: "CARBOHYDRATE", food_subgroup: "GRAIN", nutritional_role: "STARCH_SOURCE", exchange_eligible: true }],
+      ])),
+    }));
     const { createMealPlanFromTemplates } = await import("../lib/repositories/meal-plans");
 
-    await createMealPlanFromTemplates({ clientId: "client-1", targetGroup: "SOP" });
+    await createMealPlanFromTemplates({ clientId: "client-1", targetGroup: "ADULTO_SAUDAVEL" });
 
-    const insertPlan = batchCalls.flat().find((s) => s.sql.includes("INSERT INTO meal_plans"));
-    // template_id e template_version são os dois últimos parâmetros antes de created_at/updated_at
-    expect(insertPlan?.params?.slice(-4, -2)).toEqual([null, null]);
+    const insertItems = batchCalls.flat().find((s) => s.sql.includes("INSERT INTO meal_plan_items"));
+    const rows = JSON.parse(insertItems!.params![0] as string) as Array<Record<string, unknown>>;
+    expect(rows[0]).toMatchObject({ templateSlotId: "slot-abc", slotExchangeEligible: 1 });
+  });
+
+  it("slot_exchange_eligible=false (ex.: água/tempero) chega como 0, nunca 1 nem null", async () => {
+    const { batchCalls } = mockRelationalTemplate();
+    vi.doMock("@/lib/repositories/protocol-templates", () => ({
+      getAllTemplates: vi.fn().mockResolvedValue([
+        { id: "tpl-adulto-dieta-base", type: "DIETA", target_group: "ADULTO_SAUDAVEL", title: "t", content: "{}", notes: null, is_active: 1, created_at: "now", updated_at: "now", clinical_risk_level: "low", requires_professional_review: 0, version: 3, structure_version: "v2" },
+      ]),
+      getSlotClassificationBySourceItemId: vi.fn().mockResolvedValue(new Map([
+        ["item-1", { slot_id: "slot-water", food_group: "OTHER", food_subgroup: "OTHER_SUBGROUP", nutritional_role: "MIXED_ROLE", exchange_eligible: false }],
+      ])),
+    }));
+    const { createMealPlanFromTemplates } = await import("../lib/repositories/meal-plans");
+
+    await createMealPlanFromTemplates({ clientId: "client-1", targetGroup: "ADULTO_SAUDAVEL" });
+
+    const insertItems = batchCalls.flat().find((s) => s.sql.includes("INSERT INTO meal_plan_items"));
+    const rows = JSON.parse(insertItems!.params![0] as string) as Array<Record<string, unknown>>;
+    expect(rows[0].slotExchangeEligible).toBe(0);
   });
 });
 
@@ -166,7 +202,7 @@ describe("getTemplateStructure — modelo novo por slot (item 3)", () => {
       required: true,
       exchangeEligible: true,
     });
-    expect(structure?.meals[0].slots[0].suggestedFoods).toEqual([{ food: "Arroz integral cozido", quantity: "120", unit: "g" }]);
+    expect(structure?.meals[0].slots[0].suggestedFoods).toEqual([{ food: "Arroz integral cozido", quantity: "120", unit: "g", foodSource: null, foodRefId: null, canonicalFoodId: null }]);
   });
 
   it("retorna null quando o template não existe", async () => {

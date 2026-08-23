@@ -104,6 +104,7 @@ export function ItemSubstitutionsPanel({
   const [needsReview, setNeedsReview] = useState<{ query: string; reason: string }[]>([]);
   const [simulating, setSimulating] = useState<number | null>(null);
   const [simulationResult, setSimulationResult] = useState<{ index: number; data: SimulationResult } | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
 
   async function simulate(sub: ItemSubstitution, globalIndex: number) {
     if (!currentMeals || !sub.option_food_source || !sub.option_food_ref_id) return;
@@ -273,8 +274,26 @@ export function ItemSubstitutionsPanel({
         <p className="mb-2 text-[#8C5F50]">🔒 Sugestão automática/global desativada para este item. Buscar e adicionar manualmente aqui continua funcionando.</p>
       )}
 
-      {canSuggest && (
+      {canSuggest && !manualOpen && (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setManualOpen(true)} className="brand-btn-secondary h-8 px-2 text-[11px]">
+            + Adicionar alternativa
+          </button>
+          <button type="button" onClick={() => { setManualOpen(true); }} className="brand-btn-secondary h-8 px-2 text-[11px]">
+            <Sparkles className="h-3.5 w-3.5" />
+            Pedir sugestão específica
+          </button>
+        </div>
+      )}
+
+      {canSuggest && manualOpen && (
         <>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-[#8C6E52]">Adicionar alternativa</p>
+            <button type="button" onClick={() => setManualOpen(false)} className="text-[11px] font-semibold text-[#607A56] hover:underline">
+              Fechar
+            </button>
+          </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <select value={mode} onChange={(event) => setMode(event.target.value as "energy" | "nutritional")} className="brand-input h-8 w-auto text-[11px]" aria-label="Modo de equivalência">
               <option value="nutritional">Equivalência nutricional</option>
@@ -292,7 +311,7 @@ export function ItemSubstitutionsPanel({
             </button>
             <button type="button" onClick={() => void suggestWithAi()} disabled={loading} className="brand-btn-secondary h-8 px-2 text-[11px]">
               <Sparkles className="h-3.5 w-3.5" />
-              Sugerir com IA
+              Pedir ajuda à IA
             </button>
           </div>
 

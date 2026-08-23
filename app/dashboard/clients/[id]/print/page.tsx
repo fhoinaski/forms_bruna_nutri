@@ -8,11 +8,19 @@ import { getClientEvolutions } from "@/lib/repositories/client-evolutions";
 import { getClientTimeline } from "@/lib/repositories/client-timeline";
 import { getSubmissionById } from "@/lib/repositories/submissions";
 import { getExistingNutritionRecord } from "@/lib/repositories/nutrition-records";
-import { getActiveMealPlan, type MealPlanMealPayload } from "@/lib/repositories/meal-plans";
+import type { MealPlanMealPayload } from "@/lib/repositories/meal-plans";
 import { calculatePlanNutrients, roundedNutrients, type NutrientValues } from "@/lib/nutrition/nutrients";
+import { formatPrescribedQuantity } from "@/lib/nutrition/prescribed-quantity";
 import { compareTargetVsPrescribed, type NutrientTarget } from "@/lib/nutrition/targets";
 import { resolveMealPlanChangeReferences, buildFoodReferenceLookup } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { getRecipeById } from "@/lib/repositories/recipes";
+import { getApprovedMealPlanAlternatives } from "@/lib/repositories/meal-plan-alternatives";
+import {
+  getActiveMealPlanDelivery,
+  getMealPlanDeliveryPreview,
+  type MealPlanDeliveryPayload,
+  type MealPlanDeliveryResult,
+} from "@/lib/repositories/meal-plan-delivery";
 import { formatHeightDisplay } from "@/lib/clinical/anthropometry";
 import { PrintButton } from "./PrintButton";
 
@@ -36,17 +44,22 @@ function fmtMacro(value: number | null | undefined): string {
 
 /** Quantidade de um item ("37.5" -> "37,5 g") — so formata locale, nunca recalcula o numero. */
 function fmtQuantity(quantity: string | null | undefined, unit: string | null | undefined): string {
-  const raw = (quantity ?? "").trim();
-  if (!raw) return unit?.trim() || "Porção individual";
-  const numeric = Number(raw.replace(",", "."));
-  const display = Number.isFinite(numeric) ? numeric.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : raw;
-  return [display, unit].filter(Boolean).join(" ");
+  return formatPrescribedQuantity({ quantity, unit }) || "Porção individual";
 }
 
 /** Nome amigável só pra exibição ("Ovo, de galinha, cru" -> "Ovo de galinha cru") — nunca usado pra cálculo/identidade, que continua vindo do food_source/food_ref_id real do item. */
 function friendlyFoodName(technicalName: string): string {
   const parts = technicalName.split(",").map((part) => part.trim()).filter(Boolean);
   return parts.length > 1 ? parts.join(" ") : technicalName.trim();
+}
+
+function alternativeLookupKey(foodName: string): string {
+  return friendlyFoodName(foodName)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
 }
 
 /**
@@ -159,6 +172,10 @@ const SUBMISSION_LONG_TEXT_KEYS = new Set([
   "child_breastfeeding",
 ]);
 
+function isDeliveryResult(value: MealPlanDeliveryPayload | MealPlanDeliveryResult | null): value is MealPlanDeliveryResult {
+  return Boolean(value && "delivery" in value);
+}
+
 function hasNutritionRecordContent(record: Awaited<ReturnType<typeof getExistingNutritionRecord>>): boolean {
   if (!record) return false;
   return [
@@ -204,26 +221,41 @@ export default async function ClientPrintPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ secao?: string }>;
+  searchParams: Promise<{ secao?: string; planId?: string }>;
 }) {
   const admin = await getSessionFromCookies();
   if (!admin) notFound();
 
   const { id } = await params;
-  const { secao } = await searchParams;
+  const { secao, planId } = await searchParams;
   const onlyMealPlan = secao === "plano-alimentar";
+  const requestedPlanId = planId?.trim() || null;
 
-  const [client, protocols, tasks, evolutions, timeline, nutritionRecord, activeMealPlan] = await Promise.all([
+  const [client, protocols, tasks, evolutions, timeline, nutritionRecord, deliveryCandidate] = await Promise.all([
     getClientById(id),
     getClientProtocols(id),
     getClientTasks(id),
     getClientEvolutions(id),
     getClientTimeline(id),
     getExistingNutritionRecord(id),
-    getActiveMealPlan(id),
+    requestedPlanId ? getMealPlanDeliveryPreview(requestedPlanId) : getActiveMealPlanDelivery(id),
   ]);
 
   if (!client) notFound();
+  const deliveryPayload: MealPlanDeliveryPayload | null = requestedPlanId
+    ? deliveryCandidate as MealPlanDeliveryPayload | null
+    : isDeliveryResult(deliveryCandidate)
+      ? deliveryCandidate.delivery
+      : null;
+  const deliveryStatus: Pick<MealPlanDeliveryResult, "status" | "reason" | "activeVersionId"> = requestedPlanId
+    ? { status: deliveryPayload ? "valid" : "invalid", reason: deliveryPayload ? null : "PLAN_NOT_FOUND", activeVersionId: deliveryPayload?.activeVersionId ?? null }
+    : isDeliveryResult(deliveryCandidate)
+      ? deliveryCandidate
+      : { status: "invalid", reason: "INVALID_ACTIVE_PLAN", activeVersionId: null };
+  const activeMealPlan = deliveryPayload?.sourcePlan && deliveryPayload.sourcePlan.client_id === id ? deliveryPayload.sourcePlan : null;
+  if (requestedPlanId && !activeMealPlan) notFound();
+  const isDraftPreview = Boolean(requestedPlanId && activeMealPlan?.status !== "active");
+  const mealPlanDeliveryInvalid = onlyMealPlan && !requestedPlanId && deliveryStatus.status === "invalid";
 
   const submission = client.source_submission_id
     ? await getSubmissionById(client.source_submission_id)
@@ -260,16 +292,8 @@ export default async function ClientPrintPage({
       )
     : [];
 
-  const substitutionsByBase = new Map<string, NonNullable<typeof activeMealPlan>["substitutions"]>();
-  // Só substituições aprovadas pela nutricionista aparecem impressas —
-  // sugestões da IA ainda pendentes de revisão nunca chegam ao paciente
-  // (seção 16/20 do pedido: nenhuma sugestão clínica publicada sem revisão).
-  for (const substitution of activeMealPlan?.substitutions ?? []) {
-    if (substitution.approved_by_professional === false) continue;
-    const current = substitutionsByBase.get(substitution.base_food) ?? [];
-    current.push(substitution);
-    substitutionsByBase.set(substitution.base_food, current);
-  }
+  const approvedAlternativeGroups = activeMealPlan ? await getApprovedMealPlanAlternatives(activeMealPlan) : [];
+  const alternativesByBase = new Map(approvedAlternativeGroups.map((group) => [alternativeLookupKey(group.primaryFoodName), group.alternatives]));
 
   const heightDisplay = formatHeightDisplay(nutritionRecord?.height_cm ?? null);
 
@@ -342,7 +366,10 @@ export default async function ClientPrintPage({
       `}</style>
 
       <div className="no-print" style={{ padding: "16px 40px", background: "#FAF7F2", borderBottom: "1px solid #EAD8C2", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <p style={{ fontSize: "13px", color: "#8C6E52" }}>{onlyMealPlan ? "Plano alimentar" : "Relatório do cliente"} — {client.name}</p>
+        <p style={{ fontSize: "13px", color: "#8C6E52" }}>
+          {onlyMealPlan ? (isDraftPreview ? "Prévia do rascunho do plano alimentar" : "Plano alimentar ativo") : "Relatório do cliente"} — {client.name}
+          {activeMealPlan && ` · ${activeMealPlan.status === "active" ? "Ativo" : activeMealPlan.status === "draft" ? "Rascunho" : "Arquivado"} v${activeMealPlan.version}`}
+        </p>
         <PrintButton />
       </div>
 
@@ -484,14 +511,23 @@ export default async function ClientPrintPage({
         )}
 
         {/* CARDAPIO — plano alimentar do paciente (secao=plano-alimentar) */}
-        {onlyMealPlan && !activeMealPlan && (
+        {onlyMealPlan && mealPlanDeliveryInvalid && (
+          <div className="section">
+            <p className="section-title">Plano alimentar</p>
+            <div className="card">
+              <p style={{ fontWeight: 700 }}>Este plano precisa de revisão antes de ser impresso.</p>
+              <p style={{ color: "#8C6E52", marginTop: "4px" }}>Motivo: {deliveryStatus.reason ?? "plano ativo inválido"}</p>
+            </div>
+          </div>
+        )}
+        {onlyMealPlan && !mealPlanDeliveryInvalid && !activeMealPlan && (
           <div className="section">
             <p>Este paciente não tem um plano alimentar ativo no momento.</p>
           </div>
         )}
-        {onlyMealPlan && activeMealPlan && (
+        {onlyMealPlan && activeMealPlan && deliveryPayload && !mealPlanDeliveryInvalid && (
           <>
-            <div className="section summary-card">
+            <div className="section summary-card" data-version-id={deliveryPayload.versionId} data-active-version-id={deliveryPayload.activeVersionId}>
               <p className="section-title">Resumo nutricional</p>
               <div className="macro-grid">
                 <div className="macro"><label>Energia</label><strong>{fmtKcal(planTotals?.energyKcal)} kcal</strong></div>
@@ -554,12 +590,25 @@ export default async function ClientPrintPage({
                     </div>
                     <div className="meal-body">
                       {isPatientFacingNote(meal.notes) && <p style={{ color: "#8C6E52", marginBottom: "6px", whiteSpace: "pre-wrap" }}>{meal.notes}</p>}
-                      {meal.items.map((item, itemIndex) => (
-                        <div key={`${item.food}-${itemIndex}`} className="meal-item">
-                          <span>{friendlyFoodName(item.food)}{isPatientFacingNote(item.notes) ? ` - ${item.notes}` : ""}</span>
-                          <strong>{fmtQuantity(item.quantity, item.unit)}</strong>
-                        </div>
-                      ))}
+                      {meal.items.map((item, itemIndex) => {
+                        const alternatives = alternativesByBase.get(alternativeLookupKey(item.food)) ?? [];
+                        return (
+                          <div key={`${item.food}-${itemIndex}`} style={{ borderBottom: "1px solid #F0E4D8", padding: "5px 0" }}>
+                            <div className="meal-item" style={{ borderBottom: 0, padding: 0 }}>
+                              <span>{friendlyFoodName(item.food)}{isPatientFacingNote(item.notes) ? ` - ${item.notes}` : ""}</span>
+                              <strong>{fmtQuantity(item.quantity, item.unit)}</strong>
+                            </div>
+                            {alternatives.length > 0 && (
+                              <div style={{ marginTop: "4px", paddingLeft: "10px", color: "#75675E", fontSize: "10.5px" }}>
+                                <p style={{ fontWeight: 600 }}>Pode substituir por:</p>
+                                {alternatives.map((alternative, index) => (
+                                  <p key={`${alternative.optionFoodName}-${index}`}>• {friendlyFoodName(alternative.optionFoodName)}{alternative.quantity ? ` — ${fmtQuantity(alternative.quantity, alternative.unit)}` : ""}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                       {recipe?.preparation_steps && (
                         <p style={{ color: "#75675E", marginTop: "6px", whiteSpace: "pre-wrap" }}>
                           <strong>Modo de preparo: </strong>{recipe.preparation_steps}
@@ -578,27 +627,6 @@ export default async function ClientPrintPage({
                 );
               })}
             </div>
-
-            {substitutionsByBase.size > 0 && (
-              <div className="section">
-                <p className="section-title">Opções de substituição</p>
-                <div className="card">
-                  {Array.from(substitutionsByBase.entries()).map(([baseFood, substitutions]) => (
-                    <div key={baseFood} style={{ marginBottom: "8px" }}>
-                      <p style={{ fontWeight: 600, margin: "0 0 2px" }}>{baseFood}</p>
-                      <p style={{ margin: "0 0 4px", fontSize: "0.85em", color: "#75675E" }}>Pode substituir por UMA das opções abaixo:</p>
-                      {substitutions.map((substitution, index) => (
-                        <div key={`${baseFood}-${index}`} className="subst-row">
-                          <span style={{ width: "14px", display: "inline-block" }} />
-                          <span>• {substitution.option_food}{substitution.quantity ? ` — ${fmtQuantity(substitution.quantity, substitution.unit)}` : ""}</span>
-                          {substitution.notes && <span className="subst-note">{substitution.notes}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {activeMealPlan.supplements.length > 0 && (
               <div className="section">

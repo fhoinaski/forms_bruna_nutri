@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/d1/client", () => ({ d1Query: vi.fn().mockResolvedValue([]), d1Execute: vi.fn(), d1Batch: vi.fn().mockResolvedValue([]) }));
+import { getFoodByReference } from "@/lib/nutrition/food-catalog";
+import { classifyFoodExchangeGroup } from "@/lib/nutrition/food-exchange-hierarchy";
 import { resolveFoodCandidate } from "@/lib/nutrition/food-resolver";
 
 /**
@@ -12,7 +14,7 @@ import { resolveFoodCandidate } from "@/lib/nutrition/food-resolver";
  *
  *   QUERY                              ANTES        DEPOIS      SOURCE  RESOLUTION METHOD
  *   café coado sem açúcar              NOT_FOUND    RESOLVED    TACO    ALIAS ("café coado [sem açúcar]"->"café infusão", Food Terminology V1 — auditado: TACO não distingue açúcar pra café)
- *   pão de forma integral              AMBIGUOUS    AMBIGUOUS   —       — (2 candidatos reais: TACO + COMPLEMENTARY, corretamente não escolhido sozinho)
+ *   pão de forma integral              AMBIGUOUS    RESOLVED    TACO    ALIAS seguro para entrada genérica calculável; não captura variante "com fibras"
  *   ovo de galinha cozido              AMBIGUOUS    RESOLVED    TACO    RANKED (único candidato em todo o catálogo)
  *   mamão papaia                       AMBIGUOUS    RESOLVED    TACO    RANKED
  *   arroz branco cozido                NOT_FOUND    RESOLVED    TACO    ALIAS ("arroz branco"->"arroz tipo 1") + RANKED
@@ -37,6 +39,7 @@ import { resolveFoodCandidate } from "@/lib/nutrition/food-resolver";
 describe("Food Resolver V2 — nomes comuns em linguagem natural (matriz real)", () => {
   it.each([
     ["ovo de galinha cozido", "RESOLVED"],
+    ["pão de forma integral", "RESOLVED"],
     ["mamão papaia", "RESOLVED"],
     ["arroz branco cozido", "RESOLVED"],
     ["feijão preto cozido", "RESOLVED"],
@@ -51,10 +54,21 @@ describe("Food Resolver V2 — nomes comuns em linguagem natural (matriz real)",
     expect(resolution.status).toBe(expected);
   });
 
-  it('"pão de forma integral" continua AMBIGUOUS — 2 candidatos reais (TACO + COMPLEMENTARY), nunca escolhido sozinho', async () => {
-    const resolution = await resolveFoodCandidate("pão de forma integral", []);
-    expect(resolution.status).toBe("AMBIGUOUS");
-    expect(resolution.candidates.length).toBeGreaterThanOrEqual(2);
+  it.each([
+    ["pão de forma integral", "Pão, trigo, forma, integral", "CARBOHYDRATE"],
+    ["ovo de galinha inteiro cozido", "Ovo, de galinha, inteiro, cozido/10minutos", "PROTEIN"],
+    ["banana prata", "Banana, prata, crua", "FRUIT"],
+  ] as const)("golden template: %s resolve identidade calculável e grupo %s", async (query, expectedName, expectedGroup) => {
+    const resolution = await resolveFoodCandidate(query, []);
+    expect(resolution.status).toBe("RESOLVED");
+    expect(resolution.name).toBe(expectedName);
+    expect(resolution.ref).toBeTruthy();
+    const details = resolution.ref ? await getFoodByReference(resolution.ref) : null;
+    expect(details?.energyKcal).toBeGreaterThan(0);
+    expect(details?.proteinG).not.toBeNull();
+    expect(details?.carbohydrateG).not.toBeNull();
+    expect(details?.fatG).not.toBeNull();
+    expect(classifyFoodExchangeGroup(details!.macroReference).foodGroup).toBe(expectedGroup);
   });
 
   it.each([

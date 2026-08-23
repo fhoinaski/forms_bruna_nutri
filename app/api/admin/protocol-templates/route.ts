@@ -15,10 +15,19 @@ const mealItemSchema = z.object({
   unit: z.string().max(40).nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
   source_recipe_id: z.string().nullable().optional(),
+  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA", "TBCA", "IBGE_POF"]).nullable().optional(),
+  food_ref_id: z.string().max(120).nullable().optional(),
+  canonical_food_id: z.string().max(160).nullable().optional(),
+  slot_food_group: z.string().max(40).nullable().optional(),
+  slot_food_subgroup: z.string().max(40).nullable().optional(),
+  slot_nutritional_role: z.string().max(40).nullable().optional(),
+  template_slot_id: z.string().max(120).nullable().optional(),
+  slot_exchange_eligible: z.boolean().nullable().optional(),
 });
 
 const mealSchema = z.object({
   name: z.string().min(1).max(120),
+  meal_context: z.string().max(40).nullable().optional(),
   suggested_time: z.string().max(40).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
   source_recipe_id: z.string().nullable().optional(),
@@ -51,6 +60,8 @@ const templateSchema = z.object({
   substitutions: z.array(substitutionSchema).optional(),
   supplements: z.array(supplementSchema).optional(),
   is_active: z.boolean().optional(),
+  template_origin: z.enum(["SYSTEM", "USER"]).optional(),
+  is_default: z.boolean().optional(),
 }).strict();
 
 export async function GET(req: NextRequest) {
@@ -79,8 +90,16 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados invalidos." }, { status: 400 });
   }
+  if (parsed.data.template_origin === "SYSTEM") {
+    return NextResponse.json({ message: "Modelos SYSTEM sao criados somente por seed/migration auditada." }, { status: 403 });
+  }
 
-  const id = await createTemplate({ ...parsed.data, content: parsed.data.content ?? "" });
+  const id = await createTemplate({
+    ...parsed.data,
+    content: parsed.data.content ?? "",
+    template_origin: parsed.data.template_origin ?? "USER",
+    owner_admin_id: admin.sub,
+  });
   await writeAuditLog({
     action: "protocol_template_created",
     adminId: admin.sub,

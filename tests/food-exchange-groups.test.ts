@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TACO_REFERENCES } from "@/lib/nutrition/taco";
 import { classifyFoodExchangeGroup, isCompatibleForExchange } from "@/lib/nutrition/food-exchange-hierarchy";
-import { generateExchangeGroupAlternatives, type ExchangeGroupCandidate } from "@/lib/nutrition/food-exchange-engine";
+import { generateCuratedGlobalRankExchangeAlternatives, generateExchangeGroupAlternatives, generateHybridExchangeAlternatives, type ExchangeGroupCandidate } from "@/lib/nutrition/food-exchange-engine";
 
 function find(descriptionIncludes: string) {
   const food = TACO_REFERENCES.find((f) => f.descricao.toLowerCase().includes(descriptionIncludes.toLowerCase()));
@@ -175,6 +175,392 @@ describe("generateExchangeGroupAlternatives — motor determinístico (item 4/9/
       limit: 2,
     });
     expect(result.alternatives.length).toBeLessThanOrEqual(2);
+  });
+});
+
+/**
+ * CORREÇÃO P0 — bug real observado em produção: "Queijo minas frescal"
+ * gerava "Queijo minas meia cura — 40g" E "Queijo minas meia cura — 45g"
+ * como DUAS alternativas (dados combinados de taco.json + taco-
+ * complementar.json têm uma linha cada pro mesmo alimento real). Testes
+ * contra o dataset TACO real (nunca fixtures sintéticas) — o bug só
+ * aparecia com dados reais, um teste com 2-3 candidatos inventados nunca
+ * teria pegado isso.
+ */
+describe("generateExchangeGroupAlternatives — qualidade das sugestões contra dados reais (CORREÇÃO P0)", () => {
+  function candidateFrom(food: (typeof TACO_REFERENCES)[number]): ExchangeGroupCandidate {
+    return { food, ref: { source: "TACO", sourceId: String(food.numero) } };
+  }
+
+  function allCandidatesExcept(primaryNumero: number | string | undefined) {
+    return TACO_REFERENCES.filter((f) => f.numero !== primaryNumero).map(candidateFrom);
+  }
+
+  function normalizedIdentity(descricao: string): string {
+    return descricao
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/\([^)]*\)/g, " ")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  it("queijo minas frescal: nenhuma duplicata semântica no top 5 (o bug real reportado)", () => {
+    const cheese = find("queijo, minas, frescal");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: cheese,
+      primaryRef: { source: "TACO", sourceId: String(cheese.numero) },
+      primaryGrams: 50,
+      candidates: allCandidatesExcept(cheese.numero),
+      limit: 5,
+    });
+    const identities = result.alternatives.map((a) => normalizedIdentity(a.food.descricao));
+    expect(new Set(identities).size).toBe(identities.length);
+    // "Queijo, minas, meia cura" (numero 462) e "Queijo minas, meia cura"
+    // (numero 1043, TACO complementar) são o MESMO alimento real — só um
+    // dos dois pode aparecer.
+    const minasMeiaCuraCount = result.alternatives.filter((a) => /minas.*meia cura/i.test(a.food.descricao)).length;
+    expect(minasMeiaCuraCount).toBeLessThanOrEqual(1);
+  });
+
+  it("queijo minas frescal: nunca inclui prato composto que só CONTÉM queijo no nome (ex.: 'Pão, de queijo')", () => {
+    const cheese = find("queijo, minas, frescal");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: cheese,
+      primaryRef: { source: "TACO", sourceId: String(cheese.numero) },
+      primaryGrams: 50,
+      candidates: allCandidatesExcept(cheese.numero),
+      limit: 10,
+      allowCrossGroup: true,
+    });
+    expect(result.alternatives.some((a) => /^p[aã]o,?\s*de\s*queijo/i.test(a.food.descricao))).toBe(false);
+  });
+
+  it("queijo minas frescal: todo candidato do top 5 é DAIRY/CHEESE (grupo/subgrupo corretos, nunca por kcal isolado)", () => {
+    const cheese = find("queijo, minas, frescal");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: cheese,
+      primaryRef: { source: "TACO", sourceId: String(cheese.numero) },
+      primaryGrams: 50,
+      candidates: allCandidatesExcept(cheese.numero),
+      limit: 5,
+    });
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    for (const alt of result.alternatives) {
+      expect(classifyFoodExchangeGroup(alt.food).foodGroup).toBe("DAIRY");
+    }
+  });
+
+  it("batata doce: candidatos vêm do grupo de carboidratos/tubérculos, nunca de outro grupo por acaso", () => {
+    const sweetPotato = find("batata, doce, cozida");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: sweetPotato,
+      primaryRef: { source: "TACO", sourceId: String(sweetPotato.numero) },
+      primaryGrams: 150,
+      candidates: allCandidatesExcept(sweetPotato.numero),
+      limit: 5,
+    });
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    for (const alt of result.alternatives) {
+      expect(classifyFoodExchangeGroup(alt.food).foodGroup).toBe("CARBOHYDRATE");
+    }
+  });
+
+  it("tilápia (peixe): candidatos são proteicos, nunca 5 registros do mesmo peixe de fontes diferentes", () => {
+    const fish = TACO_REFERENCES.find((f) => /tilapia/i.test(f.descricao) || /merluza,?\s*fil[eé],?\s*cru/i.test(f.descricao))!;
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: fish,
+      primaryRef: { source: "TACO", sourceId: String(fish.numero) },
+      primaryGrams: 120,
+      candidates: allCandidatesExcept(fish.numero),
+      limit: 5,
+    });
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    for (const alt of result.alternatives) {
+      expect(classifyFoodExchangeGroup(alt.food).foodGroup).toBe("PROTEIN");
+    }
+    const identities = result.alternatives.map((a) => normalizedIdentity(a.food.descricao));
+    expect(new Set(identities).size).toBe(identities.length);
+  });
+
+  it("banana: candidatos são frutas, nunca 5 cultivares de banana ocupando o top 5 inteiro", () => {
+    const banana = find("banana, prata, crua");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: banana,
+      primaryRef: { source: "TACO", sourceId: String(banana.numero) },
+      primaryGrams: 80,
+      candidates: allCandidatesExcept(banana.numero),
+      limit: 5,
+    });
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    for (const alt of result.alternatives) {
+      expect(classifyFoodExchangeGroup(alt.food).foodGroup).toBe("FRUIT");
+    }
+    const bananaVariantCount = result.alternatives.filter((a) => /banana/i.test(a.food.descricao)).length;
+    expect(bananaVariantCount).toBeLessThanOrEqual(2);
+  });
+
+  it("similaridade de nome NUNCA vence incompatibilidade de grupo: 'queijo prato' não substitui arroz mesmo com kcal parecido", () => {
+    const cheesePlate = TACO_REFERENCES.find((f) => /queijo,?\s*prato/i.test(f.descricao))!;
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: rice,
+      primaryRef: { source: "TACO", sourceId: String(rice.numero) },
+      primaryGrams: 100,
+      candidates: [candidateFrom(cheesePlate), candidateFrom(potato)],
+    });
+    expect(result.alternatives.some((a) => a.food.descricao === cheesePlate.descricao)).toBe(false);
+  });
+
+  it("pão integral: same subgroup é evidência, mas não regra absoluta de topo", () => {
+    const bread = find("pão, trigo, forma, integral");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: bread,
+      primaryRef: { source: "TACO", sourceId: String(bread.numero) },
+      primaryGrams: 50,
+      candidates: allCandidatesExcept(bread.numero),
+      limit: 5,
+    });
+    expect(result.alternatives.length).toBeGreaterThan(3);
+    expect(result.alternatives.every((alt) => alt.sameGroup)).toBe(true);
+    expect(new Set(result.alternatives.map((alt) => alt.familyKey)).size).toBe(result.alternatives.length);
+  });
+
+  it("arroz integral no almoço: sugere amidos de refeição principal e bloqueia pão/farinha/cereal infantil", () => {
+    const brownRice = TACO_REFERENCES.find((f) => /arroz,?\s*integral,?\s*cozido/i.test(f.descricao)) ?? rice;
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: brownRice,
+      primaryRef: { source: "TACO", sourceId: String(brownRice.numero) },
+      primaryGrams: 120,
+      candidates: allCandidatesExcept(brownRice.numero),
+      mealName: "Almoço",
+      limit: 5,
+    });
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    const names = result.alternatives.map((a) => a.food.descricao.toLowerCase());
+    expect(names.some((name) => /batata|mandioca|inhame|cuscuz|macarr[aã]o|massa|quinoa|arroz/.test(name))).toBe(true);
+    expect(names.some((name) => /p[aã]o|farinha|cereal infantil|mingau|biscoito|bolo/.test(name))).toBe(false);
+    expect(result.alternatives.every((alt) => alt.contextAppropriate && alt.culinaryRole === "STARCH_MAIN")).toBe(true);
+  });
+
+  it("pão integral no café: diversifica a função de carboidrato, não fica preso a 5 pães", () => {
+    const bread = find("pão, trigo, forma, integral");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: bread,
+      primaryRef: { source: "TACO", sourceId: String(bread.numero) },
+      primaryGrams: 50,
+      candidates: allCandidatesExcept(bread.numero),
+      mealName: "Café da manhã",
+      limit: 5,
+    });
+    expect(result.alternatives.length).toBeGreaterThan(2);
+    const names = result.alternatives.map((a) => a.food.descricao.toLowerCase());
+    const breadCount = names.filter((name) => /p[aã]o/.test(name)).length;
+    expect(breadCount).toBeLessThanOrEqual(2);
+    expect(names.some((name) => /tapioca|cuscuz|aveia|torrada/.test(name))).toBe(true);
+    expect(result.alternatives.every((alt) => alt.contextAppropriate)).toBe(true);
+  });
+
+  it("banana no café/lanche: diversifica frutas e não retorna 5 cultivares de banana", () => {
+    const banana = find("banana, prata, crua");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: banana,
+      primaryRef: { source: "TACO", sourceId: String(banana.numero) },
+      primaryGrams: 80,
+      candidates: allCandidatesExcept(banana.numero),
+      mealName: "Lanche da tarde",
+      limit: 5,
+    });
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    const names = result.alternatives.map((a) => a.food.descricao.toLowerCase());
+    expect(result.alternatives.every((alt) => classifyFoodExchangeGroup(alt.food).foodGroup === "FRUIT")).toBe(true);
+    expect(result.alternatives.every((alt) => !["JUICE", "PRESERVED_FRUIT", "DESSERT"].includes(alt.foodForm))).toBe(true);
+    expect(names.filter((name) => /banana/.test(name)).length).toBeLessThanOrEqual(1);
+    expect(new Set(result.alternatives.map((a) => a.familyKey)).size).toBe(result.alternatives.length);
+  });
+
+  it("frango no almoço: prioriza proteína principal e não sugere ovo/queijo/suplemento", () => {
+    const cookedChicken = TACO_REFERENCES.find((f) => /frango,?\s*peito.*grelhado/i.test(f.descricao)) ?? chicken;
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: cookedChicken,
+      primaryRef: { source: "TACO", sourceId: String(cookedChicken.numero) },
+      primaryGrams: 120,
+      candidates: allCandidatesExcept(cookedChicken.numero),
+      mealName: "Almoço",
+      limit: 5,
+    });
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    const names = result.alternatives.map((a) => a.food.descricao.toLowerCase());
+    expect(names.some((name) => /peixe|til[aá]pia|merluza|pescada|carne|bovina|lombo|frango|peru/.test(name))).toBe(true);
+    expect(names.some((name) => /ovo|queijo|whey|suplemento/.test(name))).toBe(false);
+    expect(result.alternatives.every((alt) => alt.contextAppropriate && alt.culinaryRole === "LEAN_PROTEIN_MAIN")).toBe(true);
+  });
+
+  it("hybrid curated-first: usa candidatos da lista curada antes do fallback automático", () => {
+    const brownRice = TACO_REFERENCES.find((f) => /arroz,?\s*integral,?\s*cozido/i.test(f.descricao)) ?? rice;
+    const curatedFoods = ["arroz, tipo 1, cozido", "batata, doce, cozida", "mandioca, cozida", "cuscuz, de milho, cozido"]
+      .map((name) => candidateFrom(find(name)));
+    const result = generateHybridExchangeAlternatives({
+      primaryFood: brownRice,
+      primaryRef: { source: "TACO", sourceId: String(brownRice.numero) },
+      primaryGrams: 120,
+      curatedCandidates: curatedFoods,
+      automaticCandidates: allCandidatesExcept(brownRice.numero),
+      curatedOrigin: "CURATED_CONTEXT_LIST",
+      mealName: "Almoço",
+      limit: 2,
+    });
+    expect(result.alternatives.length).toBeGreaterThan(0);
+    expect(result.alternatives.every((alt) => alt.candidateOrigin === "CURATED_CONTEXT_LIST")).toBe(true);
+    expect(result.alternatives.some((alt) => /batata|mandioca|cuscuz|arroz/i.test(alt.food.descricao))).toBe(true);
+  });
+
+  it("hybrid fallback: complementa com engine atual quando lista curada tem poucas opções boas", () => {
+    const brownRice = TACO_REFERENCES.find((f) => /arroz,?\s*integral,?\s*cozido/i.test(f.descricao)) ?? rice;
+    const result = generateHybridExchangeAlternatives({
+      primaryFood: brownRice,
+      primaryRef: { source: "TACO", sourceId: String(brownRice.numero) },
+      primaryGrams: 120,
+      curatedCandidates: [candidateFrom(find("batata, inglesa, cozida"))],
+      automaticCandidates: allCandidatesExcept(brownRice.numero),
+      curatedOrigin: "CURATED_TEMPLATE_LIST",
+      mealName: "Almoço",
+      limit: 5,
+    });
+    expect(result.alternatives.some((alt) => alt.candidateOrigin === "CURATED_TEMPLATE_LIST")).toBe(true);
+    expect(result.alternatives.some((alt) => alt.candidateOrigin === "AUTOMATIC_ENGINE")).toBe(true);
+    expect(new Set(result.alternatives.map((alt) => `${alt.ref.source}:${alt.ref.sourceId}`)).size).toBe(result.alternatives.length);
+  });
+
+  it("global rank: candidato curado não vence automaticamente candidato automático com equivalência melhor", () => {
+    const brownRice = TACO_REFERENCES.find((f) => /arroz,?\s*integral,?\s*cozido/i.test(f.descricao)) ?? rice;
+    const result = generateCuratedGlobalRankExchangeAlternatives({
+      primaryFood: brownRice,
+      primaryRef: { source: "TACO", sourceId: String(brownRice.numero) },
+      primaryGrams: 120,
+      curatedCandidates: [candidateFrom(find("cuscuz, de milho, cozido"))],
+      automaticCandidates: allCandidatesExcept(brownRice.numero),
+      curatedOrigin: "CURATED_CONTEXT_LIST",
+      mealName: "Almoço",
+      limit: 5,
+    });
+    expect(result.alternatives[0]?.candidateOrigin).toBe("AUTOMATIC_ENGINE");
+    expect(result.alternatives.some((alt) => alt.candidateOrigin === "CURATED_CONTEXT_LIST")).toBe(true);
+  });
+
+  it("global rank: candidato curado ruim é rejeitado por qualidade/contexto", () => {
+    const brownRice = TACO_REFERENCES.find((f) => /arroz,?\s*integral,?\s*cozido/i.test(f.descricao)) ?? rice;
+    const cake = TACO_REFERENCES.find((f) => /bolo/i.test(f.descricao))!;
+    const result = generateCuratedGlobalRankExchangeAlternatives({
+      primaryFood: brownRice,
+      primaryRef: { source: "TACO", sourceId: String(brownRice.numero) },
+      primaryGrams: 120,
+      curatedCandidates: [candidateFrom(cake)],
+      automaticCandidates: allCandidatesExcept(brownRice.numero),
+      curatedOrigin: "CURATED_CONTEXT_LIST",
+      mealName: "Almoço",
+      limit: 5,
+    });
+    expect(result.alternatives.some((alt) => alt.ref.sourceId === String(cake.numero))).toBe(false);
+    expect(result.alternatives.every((alt) => alt.displayQuality !== "LOW" && alt.quality !== "UNSUITABLE")).toBe(true);
+  });
+
+  it("global rank: contexto muda o resultado de carboidrato entre almoço e café", () => {
+    const bread = find("pão, trigo, forma, integral");
+    const lunch = generateCuratedGlobalRankExchangeAlternatives({
+      primaryFood: bread,
+      primaryRef: { source: "TACO", sourceId: String(bread.numero) },
+      primaryGrams: 50,
+      curatedCandidates: [candidateFrom(find("batata, inglesa, cozida"))],
+      automaticCandidates: allCandidatesExcept(bread.numero),
+      curatedOrigin: "CURATED_CONTEXT_LIST",
+      mealName: "Almoço",
+      limit: 5,
+    });
+    const breakfast = generateCuratedGlobalRankExchangeAlternatives({
+      primaryFood: bread,
+      primaryRef: { source: "TACO", sourceId: String(bread.numero) },
+      primaryGrams: 50,
+      curatedCandidates: [candidateFrom(find("torrada, pão francês")), candidateFrom(find("aveia, flocos, crua"))],
+      automaticCandidates: allCandidatesExcept(bread.numero),
+      curatedOrigin: "CURATED_CONTEXT_LIST",
+      mealName: "Café da manhã",
+      limit: 5,
+    });
+    expect(lunch.alternatives.map((alt) => alt.food.descricao)).not.toEqual(breakfast.alternatives.map((alt) => alt.food.descricao));
+    expect(breakfast.alternatives.every((alt) => alt.contextAppropriate)).toBe(true);
+  });
+
+  it("global rank: aplica diversidade com no máximo 2 alternativas por família e não retorna LOW", () => {
+    const banana = find("banana, prata, crua");
+    const result = generateCuratedGlobalRankExchangeAlternatives({
+      primaryFood: banana,
+      primaryRef: { source: "TACO", sourceId: String(banana.numero) },
+      primaryGrams: 80,
+      curatedCandidates: TACO_REFERENCES.filter((f) => /banana/i.test(f.descricao)).map(candidateFrom),
+      automaticCandidates: allCandidatesExcept(banana.numero),
+      curatedOrigin: "CURATED_CONTEXT_LIST",
+      mealName: "Lanche da tarde",
+      limit: 5,
+    });
+    for (const family of new Set(result.alternatives.map((alt) => alt.familyKey))) {
+      expect(result.alternatives.filter((alt) => alt.familyKey === family).length).toBeLessThanOrEqual(2);
+    }
+    expect(result.alternatives.every((alt) => alt.displayQuality !== "LOW" && alt.quality !== "UNSUITABLE")).toBe(true);
+  });
+
+  it("same subgroup aparece antes de same group quando cross-group é permitido", () => {
+    const bread = find("pão, trigo, forma, integral");
+    const potato = find("batata, inglesa, cozida");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: rice,
+      primaryRef: { source: "TACO", sourceId: String(rice.numero) },
+      primaryGrams: 100,
+      candidates: [candidateFrom(potato), candidateFrom(bread)],
+      allowCrossGroup: true,
+      limit: 2,
+    });
+    expect(result.alternatives.map((alt) => alt.relationCategory)).toEqual(["SAME_SUBGROUP", "SAME_GROUP"]);
+  });
+
+  it("alternativas LOW não aparecem automaticamente", () => {
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: rice,
+      primaryRef: { source: "TACO", sourceId: String(rice.numero) },
+      primaryGrams: 100,
+      candidates: allCandidatesExcept(rice.numero),
+      allowCrossGroup: true,
+      limit: 10,
+    });
+    expect(result.alternatives.every((alt) => alt.displayQuality !== "LOW" && alt.quality !== "UNSUITABLE")).toBe(true);
+  });
+
+  it("top 3 respeita diversidade: no máximo 2 alternativas da mesma família", () => {
+    const banana = find("banana, prata, crua");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: banana,
+      primaryRef: { source: "TACO", sourceId: String(banana.numero) },
+      primaryGrams: 80,
+      candidates: allCandidatesExcept(banana.numero),
+      limit: 5,
+    });
+    const top3Families = result.alternatives.slice(0, 3).map((alt) => alt.familyKey);
+    for (const family of new Set(top3Families)) {
+      expect(top3Families.filter((item) => item === family).length).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("uma alternativa = uma quantidade otimizada (nunca o mesmo candidato aparece 2x com gramaturas diferentes)", () => {
+    const cheese = find("queijo, minas, frescal");
+    const result = generateExchangeGroupAlternatives({
+      primaryFood: cheese,
+      primaryRef: { source: "TACO", sourceId: String(cheese.numero) },
+      primaryGrams: 50,
+      candidates: allCandidatesExcept(cheese.numero),
+      limit: 10,
+    });
+    const refKeys = result.alternatives.map((a) => `${a.ref.source}:${a.ref.sourceId}`);
+    expect(new Set(refKeys).size).toBe(refKeys.length);
   });
 });
 

@@ -5,9 +5,9 @@ import type { Appointment } from "@/lib/repositories/appointments";
 import type { ClientTask } from "@/lib/repositories/client-tasks";
 import { getExistingNutritionRecord, type NutritionRecord } from "@/lib/repositories/nutrition-records";
 import type { Payment } from "@/lib/repositories/payments";
-import { getActiveMealPlan, type MealPlanPayload, type MealPlanMealPayload } from "@/lib/repositories/meal-plans";
+import type { MealPlanPayload, MealPlanMealPayload } from "@/lib/repositories/meal-plans";
 import { getRecipeById } from "@/lib/repositories/recipes";
-import { listApprovedAlternativesForPlan } from "@/lib/repositories/exchange-groups";
+import { getActiveMealPlanDelivery } from "@/lib/repositories/meal-plan-delivery";
 
 export interface ClientPortalAccess {
   id: string;
@@ -56,7 +56,8 @@ export interface ClientPortalSummary {
   tasks: ClientTask[];
   protocols: PortalProtocol[];
   carePlan: Pick<NutritionRecord, "goals" | "care_plan" | "hydration" | "physical_activity" | "sleep_routine"> | null;
-  mealPlan: (Omit<MealPlanPayload, "meals"> & { meals: PortalMealPayload[] }) | null;
+  mealPlan: (Omit<MealPlanPayload, "meals"> & { meals: PortalMealPayload[]; versionId: string; activeVersionId: string }) | null;
+  mealPlanDelivery: { status: string; reason: string | null; activeVersionId: string | null };
   /** FASE 7 (item 22) — só grupos de troca com pelo menos 1 alternativa APPROVED; cada grupo só traz as alternativas aprovadas, nunca SUGGESTED/EDITED/REJECTED. */
   exchangeGroups: Array<{
     id: string;
@@ -187,7 +188,7 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
     ),
     getPortalProtocols(clientId),
     getExistingNutritionRecord(clientId),
-    getActiveMealPlan(clientId),
+    getActiveMealPlanDelivery(clientId),
     d1Query<Pick<Payment, "id" | "description" | "amount_cents" | "due_date" | "status" | "payment_link" | "receipt_url" | "installment_number" | "installment_total">>(
       `SELECT id, description, amount_cents, due_date, status, payment_link, receipt_url, installment_number, installment_total
        FROM payments
@@ -198,18 +199,31 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
     ),
   ]);
 
-  const mealsWithRecipe: PortalMealPayload[] = mealPlan
-    ? await Promise.all(mealPlan.meals.map(async (meal) => ({
-        ...meal,
-        recipe: meal.source_recipe_id
-          ? await getRecipeById(meal.source_recipe_id).then((r) => r ? { title: r.title, preparation_steps: r.preparation_steps } : null)
+  const delivery = mealPlan.status === "valid" ? mealPlan.delivery : null;
+  const sourcePlan = delivery?.sourcePlan ?? null;
+
+  const mealsWithRecipe: PortalMealPayload[] = delivery
+    ? await Promise.all(delivery.meals.map(async (meal) => ({
+        id: meal.id ?? undefined,
+        name: meal.name,
+        suggested_time: meal.time,
+        notes: meal.notes,
+        source_recipe_id: meal.recipeId,
+        items: meal.items.map((item) => ({
+          id: item.id ?? undefined,
+          food: item.displayName,
+          quantity: item.prescribedQuantity,
+          unit: item.prescribedUnit,
+          notes: item.notes,
+          food_source: item.foodRef.source as MealPlanPayload["meals"][number]["items"][number]["food_source"],
+          food_ref_id: item.foodRef.refId,
+          canonical_food_id: item.foodRef.canonicalFoodId,
+        })),
+        recipe: meal.recipeId
+          ? await getRecipeById(meal.recipeId).then((r) => r ? { title: r.title, preparation_steps: r.preparation_steps } : null)
           : null,
       })))
     : [];
-
-  // FASE 7 (item 22) — mesma regra de "só aprovado sai pro portal" já
-  // aplicada acima pras substituições legadas, agora pros grupos de troca.
-  const exchangeGroupsForPortal = mealPlan ? await listApprovedAlternativesForPlan(mealPlan.id) : [];
 
   return {
     client: { id: client.id, name: client.name, email: client.email, phone: client.phone },
@@ -227,13 +241,22 @@ export async function getClientPortalSummary(clientId: string): Promise<ClientPo
     // sugestões pendentes (IA ou manuais ainda não revisadas) nunca saem do
     // servidor pro portal (seção 17/20 do pedido: paciente não aprova nem
     // altera equivalência clínica, e nada sem revisão profissional chega até ele).
-    mealPlan: mealPlan ? { ...mealPlan, meals: mealsWithRecipe, substitutions: mealPlan.substitutions.filter((item) => item.approved_by_professional !== false) } : null,
-    exchangeGroups: exchangeGroupsForPortal.map(({ group, approved }) => ({
-      id: group.id,
-      primaryFoodName: group.primary_food_name,
-      foodGroup: group.food_group,
-      approvedAlternatives: approved.map((a) => ({ id: a.id, foodName: a.food_name, quantityGrams: a.quantity_grams })),
-    })),
+    mealPlan: delivery && sourcePlan ? {
+      ...sourcePlan,
+      versionId: delivery.versionId,
+      activeVersionId: delivery.activeVersionId,
+      meals: mealsWithRecipe,
+      substitutions: sourcePlan.substitutions.filter((item) => item.approved_by_professional !== false),
+    } : null,
+    mealPlanDelivery: { status: mealPlan.status, reason: mealPlan.reason, activeVersionId: mealPlan.activeVersionId },
+    exchangeGroups: delivery ? delivery.meals.flatMap((meal) =>
+      meal.items.filter((item) => item.approvedExchanges.length > 0).map((item) => ({
+        id: item.id ?? `${delivery.planId}-${meal.name}-${item.displayName}`,
+        primaryFoodName: item.displayName,
+        foodGroup: "Trocas",
+        approvedAlternatives: item.approvedExchanges.map((a, index) => ({ id: `${item.id ?? item.displayName}-${index}`, foodName: a.foodName, quantityGrams: Number(a.quantity ?? 0) })),
+      }))
+    ) : [],
     payments,
   };
 }

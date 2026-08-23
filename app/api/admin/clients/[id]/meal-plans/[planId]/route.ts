@@ -7,6 +7,7 @@ import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
 import { getFoodPortionById } from "@/lib/repositories/food-portions";
+import { validateMealPlanForPublication } from "@/lib/repositories/meal-plan-publication";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,10 +35,20 @@ const itemSchema = z.object({
   // automática/global de substituições nunca sugere para este item.
   quantity_locked: z.boolean().optional(),
   substitutions_locked: z.boolean().optional(),
+  // FASE 8.5 (item 2/19) — contrato do slot de origem: precisa sobreviver a
+  // um ciclo de editar+salvar no MealPlanEditor, nunca só existir no
+  // momento da criação por modelo. Sempre proveniência (nunca escrito
+  // manualmente pela nutricionista, só carregado do que já veio do slot).
+  slot_food_group: z.string().max(40).nullable().optional(),
+  slot_food_subgroup: z.string().max(40).nullable().optional(),
+  slot_nutritional_role: z.string().max(40).nullable().optional(),
+  template_slot_id: z.string().max(120).nullable().optional(),
+  slot_exchange_eligible: z.boolean().nullable().optional(),
 }).strict();
 
 const mealSchema = z.object({
   name: z.string().min(1).max(200),
+  meal_context: z.string().max(40).nullable().optional(),
   suggested_time: z.string().max(30).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
   source_recipe_id: z.string().max(80).nullable().optional(),
@@ -139,6 +150,59 @@ export async function PUT(
   }
 
   const previousPlan = (await getClientMealPlans(id)).find((item) => item.id === planId) ?? null;
+  if (parsed.data.status === "active") {
+    if (!previousPlan || previousPlan.status !== "draft") {
+      await writeAuditLog({
+        action: "meal_plan_publication_blocked",
+        adminId: admin.sub,
+        entityType: "meal_plan",
+        entityId: planId,
+        ipHash: getRequestFingerprint(req).ipHash,
+        metadata: { clientId: id, blockerCodes: ["INVALID_STATUS"], blockerCount: 1 },
+      });
+      return NextResponse.json({
+        code: "MEAL_PLAN_PUBLICATION_BLOCKED",
+        message: "Este plano ainda não pode ser publicado.",
+        blockers: [{ code: "INVALID_STATUS", message: "Somente rascunhos podem ser publicados." }],
+        warnings: [],
+      }, { status: 422 });
+    }
+
+    const candidatePlan = {
+      ...previousPlan,
+      ...parsed.data,
+      client_id: id,
+      id: planId,
+      status: "draft" as const,
+      meals: parsed.data.meals,
+      weekly_slots: parsed.data.weekly_slots ?? [],
+      substitutions: parsed.data.substitutions,
+      supplements: parsed.data.supplements,
+    };
+    const review = await validateMealPlanForPublication(candidatePlan);
+    if (!review.valid) {
+      await writeAuditLog({
+        action: "meal_plan_publication_blocked",
+        adminId: admin.sub,
+        entityType: "meal_plan",
+        entityId: planId,
+        ipHash: getRequestFingerprint(req).ipHash,
+        metadata: {
+          clientId: id,
+          blockerCodes: Array.from(new Set(review.blockers.map((item) => item.code))),
+          blockerCount: review.blockers.length,
+          warningCount: review.warnings.length,
+        },
+      });
+      return NextResponse.json({
+        code: "MEAL_PLAN_PUBLICATION_BLOCKED",
+        message: "Este plano ainda não pode ser publicado.",
+        blockers: review.blockers,
+        warnings: review.warnings,
+        summary: review.summary,
+      }, { status: 422 });
+    }
+  }
   const previousRecipeIds = new Set(previousPlan?.meals.map((meal) => meal.source_recipe_id).filter(Boolean) ?? []);
   let plan: Awaited<ReturnType<typeof updateMealPlan>> = null;
   try {
@@ -163,12 +227,12 @@ export async function PUT(
     metadata: { planId, status: parsed.data.status, version: plan.version },
   });
   await writeAuditLog({
-    action: "meal_plan_updated",
+    action: parsed.data.status === "active" ? "meal_plan_published" : "meal_plan_updated",
     adminId: admin.sub,
     entityType: "meal_plan",
     entityId: planId,
     ipHash: getRequestFingerprint(req).ipHash,
-    metadata: { clientId: id, status: parsed.data.status, version: plan.version },
+    metadata: { clientId: id, status: parsed.data.status, version: plan.version, previousActiveVersionId: previousPlan?.status === "active" ? `${previousPlan.id}:v${previousPlan.version}` : null },
   });
 
   const addedRecipeMeals = parsed.data.meals.filter((meal) => meal.source_recipe_id && !previousRecipeIds.has(meal.source_recipe_id));

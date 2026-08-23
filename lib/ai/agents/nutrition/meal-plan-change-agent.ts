@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getMealPlanById, getClientMealPlans, type MealPlanMealPayload, type MealPlanItemPayload, type MealPlanPayload, type MealPlanSubstitutionPayload } from "@/lib/repositories/meal-plans";
 import { findFoodSubstitutes } from "@/lib/nutrition/substitution-engine";
+import { classifyFoodExchangeGroup } from "@/lib/nutrition/food-exchange-hierarchy";
 import { toDisplayFoodName } from "@/lib/nutrition/food-resolver";
 import { searchTacoFoods, getTacoFoodByNumber, findBestTacoFood, TACO_REFERENCES } from "@/lib/nutrition/taco";
 import { resolveFoodItemMacros, roundedMacros, findFoodReferenceByIdentity, findBestFoodReference, type MacroReferenceFood } from "@/lib/nutrition/macros";
@@ -527,6 +528,19 @@ export function applyMealPlanChangesWithPreview(
         const candidateFood = findFoodReferenceByIdentity(references, change.optionFood.source, change.optionFood.refId);
         if (!baseFood || !candidateFood) {
           throw new MealPlanChangeValidationError("Não foi possível revalidar um dos alimentos desta substituição contra o catálogo atual.");
+        }
+        // FASE 8.5 (item 10) — a IA pode ajudar a interpretar o pedido da
+        // nutricionista ("quero algo mais barato"), mas NUNCA pode ignorar o
+        // grupo do slot de origem do item: valida aqui, deterministicamente,
+        // com o MESMO classificador da Fase 7 — nunca confia no julgamento
+        // do modelo sobre o que é "compatível".
+        if (item.slot_food_group) {
+          const candidateGroup = classifyFoodExchangeGroup(candidateFood).foodGroup;
+          if (candidateGroup !== item.slot_food_group) {
+            throw new MealPlanChangeValidationError(
+              `"${change.optionFood.foodName}" não pertence ao grupo alimentar esperado para esta posição (${item.slot_food_group}) — proponha uma alternativa dentro do mesmo grupo, ou peça pra nutricionista trocar o slot manualmente.`
+            );
+          }
         }
         const baseGrams = existingItemMacros(item, references, measuresById).quantity.grams ?? 0;
         if (baseGrams <= 0) {

@@ -1,5 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const e2ePort = Number(process.env.E2E_PORT ?? process.env.PORT ?? 3000);
+const e2eBaseUrl = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${e2ePort}`;
+const reuseExistingServer = process.env.CI
+  ? false
+  : process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1";
+
 // IMPORTANTE (auditoria FASE 1 do prompt mestre): antes desta mudanca, este
 // servidor era subido com `npm run start` puro, herdando qualquer
 // CLOUDFLARE_D1_DATABASE_ID ja presente no ambiente — sem NENHUM isolamento
@@ -31,14 +37,17 @@ export default defineConfig({
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   globalSetup: "./e2e/global-setup.ts",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: e2eBaseUrl,
     trace: "on-first-retry",
   },
   webServer: {
-    command: "node e2e/helpers/webserver-entrypoint.mjs",
-    url: "http://localhost:3000",
-    reuseExistingServer: false,
+    command: `node e2e/helpers/webserver-entrypoint.mjs`,
+    url: e2eBaseUrl,
+    reuseExistingServer,
     timeout: 120_000,
+    env: {
+      PORT: String(e2ePort),
+    },
   },
   projects: [
     {

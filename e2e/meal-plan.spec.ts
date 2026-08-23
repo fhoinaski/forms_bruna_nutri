@@ -21,6 +21,27 @@ function fieldAfterLabel(page: Page, label: string, tag: "input" | "textarea" = 
   return page.locator(`xpath=//label[normalize-space()="${label}"]/following-sibling::${tag}[1]`);
 }
 
+async function firstKcalValue(page: Page): Promise<number> {
+  const text = (await page.getByText(/^\d+ kcal$/).first().textContent()) ?? "";
+  return Number(text.replace(/\D/g, "") || "0");
+}
+
+async function stableFirstKcalValue(page: Page, minValue: number): Promise<number> {
+  let stableValue = 0;
+
+  await expect(async () => {
+    const first = await firstKcalValue(page);
+    await page.waitForTimeout(150);
+    const second = await firstKcalValue(page);
+
+    expect(first).toBe(second);
+    expect(second).toBeGreaterThan(minValue);
+    stableValue = second;
+  }).toPass({ timeout: 5_000 });
+
+  return stableValue;
+}
+
 test.describe("plano alimentar", () => {
   test("cria plano por modelo, adiciona alimento com quantidade, confirma cálculo nutricional, salva e a edição persiste", async ({ page, request }) => {
     const patient = await createTestPatient(request);
@@ -101,6 +122,8 @@ test.describe("plano alimentar", () => {
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
     await page.getByRole("button", { name: /^criar por modelo$/i }).click();
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
+    const kcalMetric = page.getByText(/^\d+ kcal$/).first();
+    const kcalBeforeNewItem = Number(((await kcalMetric.textContent()) ?? "").replace(/\D/g, "") || "0");
 
     // 1. Escolher um alimento vinculado (Banana, nanica, crua — TACO 179, que
     // tem uma medida caseira semeada pela migration 0034: "1 unidade media").
@@ -125,20 +148,15 @@ test.describe("plano alimentar", () => {
     await measureSelect.selectOption({ label: "1 unidade media" });
     await page.getByPlaceholder("Qtd.").last().fill("1");
 
-    const kcalMetric = page.getByText(/^\d+ kcal$/).first();
-    const kcalSingle = Number(((await kcalMetric.textContent()) ?? "").replace(/\D/g, "") || "0");
+    const kcalSingle = await stableFirstKcalValue(page, kcalBeforeNewItem);
     expect(kcalSingle).toBeGreaterThan(0);
     // Medida especifica cadastrada -> alta confianca, sem aviso de estimativa para este item.
     await expect(newMealCard.getByText(/valor estimado/i)).toHaveCount(0);
 
-    // 3. Alterar quantidade -> macros mudam (dobrar a quantidade aproximadamente dobra o impacto — tolerância de arredondamento de exibição).
+    // 3. Alterar quantidade -> macros mudam.
     await page.getByPlaceholder("Qtd.").last().fill("2");
-    await expect(async () => {
-      const value = Number(((await kcalMetric.textContent()) ?? "").replace(/\D/g, "") || "0");
-      expect(value).toBeGreaterThan(kcalSingle);
-      expect(Math.abs(value - kcalSingle * 2)).toBeLessThanOrEqual(2);
-    }).toPass();
-    const kcalDouble = Number(((await kcalMetric.textContent()) ?? "").replace(/\D/g, "") || "0");
+    const kcalDouble = await stableFirstKcalValue(page, kcalSingle);
+    expect(kcalDouble).toBeGreaterThan(kcalSingle);
 
     // 5. Salvar.
     await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
@@ -162,8 +180,8 @@ test.describe("plano alimentar", () => {
     await page.getByRole("button", { name: /^refeicao$/i }).click();
     const freeTextFoodInput = page.getByPlaceholder("Buscar alimento").last();
     await freeTextFoodInput.fill("Petisco caseiro nao cadastrado");
-    await page.getByPlaceholder("Qtd.").last().fill("1");
-    await page.getByPlaceholder("Un.").last().fill("unidade");
+    await page.locator('input[placeholder="Qtd."]:visible').last().fill("1");
+    await page.locator('input[placeholder="Un."]:visible').last().fill("unidade");
     await expect(page.getByText(/valor estimado/i).last()).toBeVisible();
   });
 

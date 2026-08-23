@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PROTOCOL_TEMPLATE_TARGET_GROUPS } from "@/lib/protocol-templates/constants";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
-import { createMealPlanFromTemplates, getClientMealPlans, NoTemplateForTargetGroupError } from "@/lib/repositories/meal-plans";
+import { AmbiguousTemplateForTargetGroupError, createMealPlanFromTemplates, getClientMealPlans, MealTemplateIntegrityError, NoTemplateForTargetGroupError, previewMealPlanTemplateImport } from "@/lib/repositories/meal-plans";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
@@ -14,6 +14,8 @@ export const dynamic = "force-dynamic";
 const CreateFromTemplateSchema = z.object({
   targetGroup: z.enum(PROTOCOL_TEMPLATE_TARGET_GROUPS),
   title: z.string().max(200).optional().nullable(),
+  previewOnly: z.boolean().optional(),
+  confirmed: z.boolean().optional(),
 }).strict();
 
 export async function GET(
@@ -48,14 +50,41 @@ export async function POST(
 
   let plan;
   try {
+    if (parsed.data.previewOnly) {
+      return NextResponse.json(await previewMealPlanTemplateImport({
+        clientId: id,
+        targetGroup: parsed.data.targetGroup,
+      }));
+    }
     plan = await createMealPlanFromTemplates({
       clientId: id,
       targetGroup: parsed.data.targetGroup,
       title: parsed.data.title,
+      confirmed: parsed.data.confirmed,
     });
   } catch (error) {
     if (error instanceof NoTemplateForTargetGroupError) {
       return NextResponse.json({ message: "Ainda não existe um modelo cadastrado para este grupo. Crie o plano manualmente ou cadastre um modelo em Modelos profissionais." }, { status: 422 });
+    }
+    if (error instanceof AmbiguousTemplateForTargetGroupError) {
+      return NextResponse.json({ message: "Há mais de um modelo de dieta ativo para este grupo sem um SYSTEM default claro. Ajuste a biblioteca de modelos antes de importar." }, { status: 409 });
+    }
+    if (error instanceof MealTemplateIntegrityError) {
+      return NextResponse.json({
+        code: "TEMPLATE_INTEGRITY_ERROR",
+        message: "Este modelo possui problemas de integridade e não pode gerar um plano até ser corrigido.",
+        issues: error.issues.map((issue) => ({
+          code: issue.code,
+          severity: issue.severity,
+          mealId: issue.mealId ?? null,
+          slotId: issue.slotId ?? null,
+          foodId: issue.foodId ?? null,
+          message: issue.message,
+        })),
+      }, { status: 409 });
+    }
+    if (error instanceof Error && /precisam ser revisados/.test(error.message)) {
+      return NextResponse.json({ message: error.message }, { status: 409 });
     }
     throw error;
   }

@@ -24,15 +24,37 @@ async function loginRequestAsAdmin(request: import("@playwright/test").APIReques
 
 async function activateMealPlan(request: import("@playwright/test").APIRequestContext, clientId: string) {
   const plan = await (await request.post(`/api/admin/clients/${clientId}/meal-plans`, { data: { targetGroup: "ADULTO_SAUDAVEL" } })).json();
+  const meals = plan.meals.map((meal: { name: string; suggested_time?: string | null; notes?: string | null; items?: Array<{ food: string; quantity?: string | null; unit?: string | null; notes?: string | null; food_source?: string | null; food_ref_id?: string | null; household_measure_id?: string | null; canonical_food_id?: string | null; quantity_locked?: boolean | null; substitutions_locked?: boolean | null; template_slot_id?: string | null; slot_food_group?: string | null; slot_food_subgroup?: string | null; slot_nutritional_role?: string | null; slot_exchange_eligible?: boolean | null }> }) => ({
+    name: meal.name,
+    suggested_time: meal.suggested_time ?? "",
+    notes: meal.notes ?? "",
+    items: (meal.items ?? []).map((item) => ({
+      food: item.food,
+      quantity: item.quantity ?? "",
+      unit: item.unit ?? "g",
+      notes: item.notes ?? "",
+      food_source: item.food_source ?? null,
+      food_ref_id: item.food_ref_id ?? null,
+      household_measure_id: item.household_measure_id ?? null,
+      canonical_food_id: item.canonical_food_id ?? null,
+      quantity_locked: item.quantity_locked ?? false,
+      substitutions_locked: item.substitutions_locked ?? false,
+      template_slot_id: item.template_slot_id ?? null,
+      slot_food_group: item.slot_food_group ?? null,
+      slot_food_subgroup: item.slot_food_subgroup ?? null,
+      slot_nutritional_role: item.slot_nutritional_role ?? null,
+      slot_exchange_eligible: item.slot_exchange_eligible ?? null,
+    })),
+  }));
   const activateResponse = await request.put(`/api/admin/clients/${clientId}/meal-plans/${plan.id}`, {
     data: {
       title: plan.title,
       status: "active",
       notes: plan.notes,
-      meals: plan.meals,
-      weekly_slots: plan.weekly_slots ?? [],
-      substitutions: plan.substitutions ?? [],
-      supplements: plan.supplements ?? [],
+      meals,
+      weekly_slots: [],
+      substitutions: [],
+      supplements: [],
     },
   });
   if (!activateResponse.ok()) throw new Error(`ativar plano falhou (${activateResponse.status()}): ${await activateResponse.text()}`);

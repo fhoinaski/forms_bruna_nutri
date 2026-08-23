@@ -159,3 +159,54 @@ describe("meal_plan_change confirm — stale proposal (409)", () => {
     expect(updateMealPlan).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * FASE 8.5 (item 10) — a IA pode INTERPRETAR o pedido da nutricionista, mas
+ * nunca pode ignorar o grupo alimentar do slot de origem do item ao propor
+ * add_substitution: validado deterministicamente aqui, com o MESMO
+ * classificador da Fase 7, nunca confiando no julgamento do modelo.
+ */
+describe("applyMealPlanChangesWithPreview — add_substitution respeita o grupo do slot", () => {
+  const chicken = TACO_REFERENCES.find((f) => /frango,?\s*peito,?\s*sem pele,?\s*cru/i.test(f.descricao))!;
+  const leanFish = TACO_REFERENCES.find((f) => /merluza,?\s*fil[eé],?\s*cru/i.test(f.descricao))!;
+
+  function buildMealWithSlot(baseFood: typeof rice, slotFoodGroup: string | null): MealPlanMealPayload {
+    return {
+      id: "meal-1",
+      name: "Almoço",
+      suggested_time: null,
+      items: [
+        { id: "item-1", food: baseFood.descricao, quantity: "100", unit: "g", food_source: "TACO", food_ref_id: String(baseFood.numero), slot_food_group: slotFoodGroup },
+      ],
+    };
+  }
+
+  it("rejeita um candidato de grupo diferente do slot (slot=PROTEIN, candidato=batata/CARBOHYDRATE)", () => {
+    const meals = [buildMealWithSlot(chicken, "PROTEIN")];
+    expect(() => applyMealPlanChangesWithPreview(
+      meals,
+      [{ operation: "add_substitution", mealId: "meal-1", itemId: "item-1", optionFood: { foodName: potato.descricao, source: "TACO", refId: String(potato.numero) } }],
+      "Plano", undefined, TACO_REFERENCES, new Map(), []
+    )).toThrow(MealPlanChangeValidationError);
+  });
+
+  it("aceita um candidato do MESMO grupo do slot (slot=PROTEIN, base=frango, candidato=peixe magro)", () => {
+    const meals = [buildMealWithSlot(chicken, "PROTEIN")];
+    const result = applyMealPlanChangesWithPreview(
+      meals,
+      [{ operation: "add_substitution", mealId: "meal-1", itemId: "item-1", optionFood: { foodName: leanFish.descricao, source: "TACO", refId: String(leanFish.numero) } }],
+      "Plano", undefined, TACO_REFERENCES, new Map(), []
+    );
+    expect(result.substitutions).toHaveLength(1);
+  });
+
+  it("item sem slot (slot_food_group null) não restringe grupo — comportamento igual ao de antes da Fase 8.5", () => {
+    const meals = [buildMealWithSlot(rice, null)];
+    const result = applyMealPlanChangesWithPreview(
+      meals,
+      [{ operation: "add_substitution", mealId: "meal-1", itemId: "item-1", optionFood: { foodName: potato.descricao, source: "TACO", refId: String(potato.numero) }, mode: "energy" }],
+      "Plano", undefined, TACO_REFERENCES, new Map(), []
+    );
+    expect(result.substitutions).toHaveLength(1);
+  });
+});

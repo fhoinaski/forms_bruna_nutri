@@ -4,11 +4,15 @@ import { TACO_REFERENCES } from "@/lib/nutrition/taco";
 import { listCustomFoods, toMacroReferenceFood } from "@/lib/repositories/custom-foods";
 import type { FoodReference } from "@/lib/nutrition/food-catalog";
 import {
+  generateCuratedGlobalRankExchangeAlternatives,
   generateExchangeGroupAlternatives,
+  generateHybridExchangeAlternatives,
+  type GenerateExchangeAlternativesResult,
   type ExchangeGroupAlternative,
   type ExchangeGroupCandidate,
 } from "@/lib/nutrition/food-exchange-engine";
-import { classifyFoodExchangeGroup, type FoodClassification } from "@/lib/nutrition/food-exchange-hierarchy";
+import { classifyFoodExchangeGroup, type FoodClassification, type MealContext } from "@/lib/nutrition/food-exchange-hierarchy";
+import { resolveExchangeListForContext, type ResolvedExchangeList } from "@/lib/repositories/curated-exchange-lists";
 
 /**
  * FASE 7 (itens 2/6/13/24) — persistência dos grupos de troca. Único
@@ -38,6 +42,9 @@ export interface ExchangeGroupRow {
   target_fat_g: number | null;
   target_fiber_g: number | null;
   allow_cross_group: number;
+  exchange_list_id: string | null;
+  exchange_list_version: number | null;
+  exchange_generation_mode: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +68,7 @@ export interface ExchangeAlternativeRow {
   same_group: number;
   state: ExchangeAlternativeState;
   ai_suggested: number;
+  candidate_origin: string;
   sort_order: number;
 }
 
@@ -101,6 +109,12 @@ export interface GenerateExchangeGroupInput {
   extraCandidates?: ExchangeGroupCandidate[];
   limit?: number;
   aiSuggested?: boolean;
+  mealName?: string | null;
+  mealContext?: MealContext;
+  templateSlotId?: string | null;
+  explicitExchangeListId?: string | null;
+  ownerAdminId?: string | null;
+  curatedMode?: "off" | "shadow" | "pilot" | "on";
 }
 
 export interface GenerateExchangeGroupResult {
@@ -109,6 +123,101 @@ export interface GenerateExchangeGroupResult {
   classification: FoodClassification;
   excludedByGroup: number;
   excludedByRestriction: number;
+  exchangeList: ResolvedExchangeList["list"] | null;
+  generationMode: "ENGINE_ONLY" | "HYBRID_CURATED_FIRST" | "HYBRID_GLOBAL_RANK" | "SHADOW_ENGINE_ONLY";
+  strategyRequested: "ENGINE_ONLY" | "CURATED_FIRST_HARD" | "CURATED_ELIGIBILITY_GLOBAL_RANK";
+  strategyUsed: "ENGINE_ONLY" | "CURATED_FIRST_HARD" | "CURATED_ELIGIBILITY_GLOBAL_RANK";
+  fallbackReason: "MODE_OFF" | "MODE_SHADOW" | "PILOT_ADMIN_NOT_ALLOWED" | "NO_CURATED_LIST" | "GLOBAL_RANK_ERROR" | "GLOBAL_RANK_EMPTY" | "CURATED_FIRST_ERROR" | "CURATED_FIRST_EMPTY" | null;
+  durationMs: number;
+  shadowComparison?: {
+    engineTop: number;
+    curatedHardTop: number;
+    globalRankTop: number;
+    engineRefs: string[];
+    globalRankRefs: string[];
+    agreement: number;
+    curatedContribution: number;
+    outsideCuratedContribution: number;
+    badCuratedRejected: number;
+    contextMismatch: number;
+    familyDiversity: number;
+  };
+}
+
+export class NoEligibleExchangeAlternativesError extends Error {
+  constructor() {
+    super("Nenhuma alternativa elegível encontrada para este alimento.");
+    this.name = "NoEligibleExchangeAlternativesError";
+  }
+}
+
+let schemaCapabilityCache: { exchangeGroupCuratedColumns: boolean; alternativeCandidateOrigin: boolean } | null = null;
+
+async function exchangeGroupSchemaCapabilities() {
+  if (schemaCapabilityCache) return schemaCapabilityCache;
+  const [groupColumns, alternativeColumns] = await Promise.all([
+    d1Query<{ name: string }>("PRAGMA table_info(exchange_groups)").catch(() => []),
+    d1Query<{ name: string }>("PRAGMA table_info(exchange_group_alternatives)").catch(() => []),
+  ]);
+  const groupNames = new Set(groupColumns.map((column) => column.name));
+  const alternativeNames = new Set(alternativeColumns.map((column) => column.name));
+  schemaCapabilityCache = {
+    exchangeGroupCuratedColumns: groupNames.has("exchange_list_id") && groupNames.has("exchange_list_version") && groupNames.has("exchange_generation_mode"),
+    alternativeCandidateOrigin: alternativeNames.has("candidate_origin"),
+  };
+  return schemaCapabilityCache;
+}
+
+function parseCuratedExchangeListsMode(input?: GenerateExchangeGroupInput["curatedMode"]): "off" | "shadow" | "pilot" | "on" {
+  const raw = String(input ?? process.env.CURATED_EXCHANGE_LISTS_MODE ?? "off").trim().toLowerCase();
+  return raw === "shadow" || raw === "pilot" || raw === "on" ? raw : "off";
+}
+
+function pilotAdminAllowed(adminId?: string | null): boolean {
+  const allowlist = (process.env.CURATED_EXCHANGE_PILOT_ADMIN_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!allowlist.length) return false;
+  return Boolean(adminId && allowlist.includes(adminId));
+}
+
+export function resolveCuratedExchangeRuntimeMode(input: { requestedMode?: GenerateExchangeGroupInput["curatedMode"]; adminId?: string | null }): { mode: "off" | "shadow" | "pilot" | "on"; fallbackReason: GenerateExchangeGroupResult["fallbackReason"] } {
+  const requested = parseCuratedExchangeListsMode(input.requestedMode);
+  if (requested === "pilot" && !pilotAdminAllowed(input.adminId)) return { mode: "shadow", fallbackReason: "PILOT_ADMIN_NOT_ALLOWED" };
+  return { mode: requested, fallbackReason: null };
+}
+
+function curatedExchangeRankingStrategy(): "curated_first" | "global_quality" {
+  return process.env.CURATED_EXCHANGE_RANKING_STRATEGY === "global_quality" ? "global_quality" : "curated_first";
+}
+
+function shadowComparison(input: {
+  engineOnly: ExchangeGroupAlternative[];
+  curatedHard: ExchangeGroupAlternative[] | null;
+  globalRank: ExchangeGroupAlternative[] | null;
+}): GenerateExchangeGroupResult["shadowComparison"] {
+  const engineRefs = new Set(input.engineOnly.map((alt) => `${alt.ref.source}:${alt.ref.sourceId}`));
+  const global = input.globalRank ?? [];
+  const agreement = global.filter((alt) => engineRefs.has(`${alt.ref.source}:${alt.ref.sourceId}`)).length;
+  const curatedContribution = global.filter((alt) => alt.candidateOrigin === "CURATED_CONTEXT_LIST" || alt.candidateOrigin === "CURATED_TEMPLATE_LIST").length;
+  const outsideCuratedContribution = global.filter((alt) => alt.candidateOrigin === "AUTOMATIC_ENGINE").length;
+  const curatedHardRefs = new Set((input.curatedHard ?? []).filter((alt) => alt.candidateOrigin !== "AUTOMATIC_ENGINE").map((alt) => `${alt.ref.source}:${alt.ref.sourceId}`));
+  const globalRefs = new Set(global.map((alt) => `${alt.ref.source}:${alt.ref.sourceId}`));
+  const families = new Set(global.map((alt) => alt.familyKey));
+  return {
+    engineTop: input.engineOnly.length,
+    curatedHardTop: input.curatedHard?.length ?? 0,
+    globalRankTop: global.length,
+    engineRefs: input.engineOnly.map((alt) => `${alt.ref.source}:${alt.ref.sourceId}`),
+    globalRankRefs: global.map((alt) => `${alt.ref.source}:${alt.ref.sourceId}`),
+    agreement,
+    curatedContribution,
+    outsideCuratedContribution,
+    badCuratedRejected: Array.from(curatedHardRefs).filter((ref) => !globalRefs.has(ref)).length,
+    contextMismatch: global.filter((alt) => !alt.contextAppropriate).length,
+    familyDiversity: global.length ? families.size / global.length : 0,
+  };
 }
 
 /**
@@ -118,8 +227,9 @@ export interface GenerateExchangeGroupResult {
  * muda o estado inicial).
  */
 export async function generateAndSaveExchangeGroup(input: GenerateExchangeGroupInput): Promise<GenerateExchangeGroupResult> {
+  const started = performance.now();
   const pool = [...(await defaultCandidatePool()), ...(input.extraCandidates ?? [])];
-  const generated = generateExchangeGroupAlternatives({
+  const engineOnly = generateExchangeGroupAlternatives({
     primaryFood: input.primaryFood,
     primaryRef: input.primaryRef,
     primaryGrams: input.primaryGrams,
@@ -127,44 +237,167 @@ export async function generateAndSaveExchangeGroup(input: GenerateExchangeGroupI
     allowCrossGroup: input.allowCrossGroup,
     isRestricted: input.isRestricted,
     limit: input.limit,
+    mealName: input.mealName,
+    mealContext: input.mealContext,
   });
+
+  const runtimeMode = resolveCuratedExchangeRuntimeMode({ requestedMode: input.curatedMode, adminId: input.ownerAdminId });
+  const mode = runtimeMode.mode;
+  const primaryClassification = classifyFoodExchangeGroup(input.primaryFood);
+  const resolvedList = mode === "off" ? null : await resolveExchangeListForContext({
+    classification: primaryClassification,
+    mealName: input.mealName,
+    mealContext: input.mealContext,
+    templateSlotId: input.templateSlotId,
+    explicitExchangeListId: input.explicitExchangeListId,
+    ownerAdminId: input.ownerAdminId,
+  }).catch(() => null);
+
+  let hybrid: GenerateExchangeAlternativesResult | null = null;
+  let globalRank: GenerateExchangeAlternativesResult | null = null;
+  let fallbackReason = runtimeMode.fallbackReason;
+  if (resolvedList) {
+    try {
+      hybrid = generateHybridExchangeAlternatives({
+          primaryFood: input.primaryFood,
+          primaryRef: input.primaryRef,
+          primaryGrams: input.primaryGrams,
+          curatedCandidates: resolvedList.candidates,
+          automaticCandidates: pool,
+          curatedOrigin: resolvedList.resolution === "TEMPLATE_SLOT" ? "CURATED_TEMPLATE_LIST" : "CURATED_CONTEXT_LIST",
+          allowCrossGroup: true,
+          isRestricted: input.isRestricted,
+          limit: input.limit,
+          mealName: input.mealName,
+          mealContext: input.mealContext,
+        });
+    } catch {
+      fallbackReason ??= "CURATED_FIRST_ERROR";
+    }
+    try {
+      globalRank = generateCuratedGlobalRankExchangeAlternatives({
+          primaryFood: input.primaryFood,
+          primaryRef: input.primaryRef,
+          primaryGrams: input.primaryGrams,
+          curatedCandidates: resolvedList.candidates,
+          automaticCandidates: pool,
+          curatedOrigin: resolvedList.resolution === "TEMPLATE_SLOT" ? "CURATED_TEMPLATE_LIST" : "CURATED_CONTEXT_LIST",
+          allowCrossGroup: true,
+          isRestricted: input.isRestricted,
+          limit: input.limit,
+          mealName: input.mealName,
+          mealContext: input.mealContext,
+        });
+    } catch {
+      fallbackReason ??= "GLOBAL_RANK_ERROR";
+    }
+  } else if (mode !== "off") {
+    fallbackReason ??= "NO_CURATED_LIST";
+  }
+
+  const strategyRequested: GenerateExchangeGroupResult["strategyRequested"] = mode === "pilot" || mode === "on"
+    ? "CURATED_ELIGIBILITY_GLOBAL_RANK"
+    : mode === "shadow"
+      ? (curatedExchangeRankingStrategy() === "global_quality" ? "CURATED_ELIGIBILITY_GLOBAL_RANK" : "CURATED_FIRST_HARD")
+      : "ENGINE_ONLY";
+  const selectedHybrid = strategyRequested === "CURATED_ELIGIBILITY_GLOBAL_RANK" ? globalRank : hybrid;
+  if ((mode === "pilot" || mode === "on") && !selectedHybrid?.alternatives.length) {
+    fallbackReason ??= strategyRequested === "CURATED_ELIGIBILITY_GLOBAL_RANK" ? "GLOBAL_RANK_EMPTY" : "CURATED_FIRST_EMPTY";
+  }
+  if (mode === "off") fallbackReason ??= "MODE_OFF";
+  if (mode === "shadow" && !runtimeMode.fallbackReason) fallbackReason ??= "MODE_SHADOW";
+
+  let generated = mode === "pilot" || mode === "on"
+    ? (selectedHybrid?.alternatives.length ? selectedHybrid : engineOnly)
+    : engineOnly;
+  let strategyUsed: GenerateExchangeGroupResult["strategyUsed"] = generated === globalRank
+    ? "CURATED_ELIGIBILITY_GLOBAL_RANK"
+    : generated === hybrid
+      ? "CURATED_FIRST_HARD"
+      : "ENGINE_ONLY";
+  let generationMode: GenerateExchangeGroupResult["generationMode"] = mode === "shadow" && (hybrid || globalRank)
+    ? "SHADOW_ENGINE_ONLY"
+    : generated === globalRank
+      ? "HYBRID_GLOBAL_RANK"
+      : generated === hybrid
+        ? "HYBRID_CURATED_FIRST"
+        : "ENGINE_ONLY";
+
+  const schemaCapabilities = await exchangeGroupSchemaCapabilities();
+  const canPersistCuratedRuntime = schemaCapabilities.exchangeGroupCuratedColumns && schemaCapabilities.alternativeCandidateOrigin;
+  if (!canPersistCuratedRuntime && strategyUsed !== "ENGINE_ONLY") {
+    generated = engineOnly;
+    strategyUsed = "ENGINE_ONLY";
+    generationMode = "ENGINE_ONLY";
+    fallbackReason ??= "NO_CURATED_LIST";
+  }
+
+  if (!generated.alternatives.length) throw new NoEligibleExchangeAlternativesError();
 
   const groupId = crypto.randomUUID();
   const now = new Date().toISOString();
   const target = { energyKcal: input.primaryFood.energia_kcal, proteinG: input.primaryFood.proteina_g, carbohydrateG: input.primaryFood.carboidrato_g, fatG: input.primaryFood.lipidios_g, fiberG: input.primaryFood.fibra_g ?? null };
 
-  await d1Execute(
-    `INSERT INTO exchange_groups
-      (id, meal_plan_id, primary_food_source, primary_food_ref_id, primary_canonical_food_id, primary_food_name, primary_quantity_grams,
-       food_group, food_subgroup, nutritional_role, target_energy_kcal, target_protein_g, target_carbohydrate_g, target_fat_g, target_fiber_g,
-       allow_cross_group, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)`,
-    [groupId, input.mealPlanId, input.primaryRef.source, input.primaryRef.sourceId, input.primaryRef.canonicalId ?? null, input.primaryFood.descricao, input.primaryGrams,
-      generated.primaryClassification.foodGroup, generated.primaryClassification.foodSubgroup, generated.primaryClassification.nutritionalRole,
-      target.energyKcal ?? null, target.proteinG ?? null, target.carbohydrateG ?? null, target.fatG ?? null, target.fiberG ?? null,
-      input.allowCrossGroup ? 1 : 0, now, now]
-  );
+  if (schemaCapabilities.exchangeGroupCuratedColumns) {
+    await d1Execute(
+      `INSERT INTO exchange_groups
+        (id, meal_plan_id, primary_food_source, primary_food_ref_id, primary_canonical_food_id, primary_food_name, primary_quantity_grams,
+         food_group, food_subgroup, nutritional_role, target_energy_kcal, target_protein_g, target_carbohydrate_g, target_fat_g, target_fiber_g,
+         allow_cross_group, exchange_list_id, exchange_list_version, exchange_generation_mode, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)`,
+      [groupId, input.mealPlanId, input.primaryRef.source, input.primaryRef.sourceId, input.primaryRef.canonicalId ?? null, input.primaryFood.descricao, input.primaryGrams,
+        generated.primaryClassification.foodGroup, generated.primaryClassification.foodSubgroup, generated.primaryClassification.nutritionalRole,
+        target.energyKcal ?? null, target.proteinG ?? null, target.carbohydrateG ?? null, target.fatG ?? null, target.fiberG ?? null,
+        input.allowCrossGroup ? 1 : 0, generated === selectedHybrid ? resolvedList?.list.id ?? null : null, generated === selectedHybrid ? resolvedList?.list.version ?? null : null, generationMode, now, now]
+    );
+  } else {
+    await d1Execute(
+      `INSERT INTO exchange_groups
+        (id, meal_plan_id, primary_food_source, primary_food_ref_id, primary_canonical_food_id, primary_food_name, primary_quantity_grams,
+         food_group, food_subgroup, nutritional_role, target_energy_kcal, target_protein_g, target_carbohydrate_g, target_fat_g, target_fiber_g,
+         allow_cross_group, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)`,
+      [groupId, input.mealPlanId, input.primaryRef.source, input.primaryRef.sourceId, input.primaryRef.canonicalId ?? null, input.primaryFood.descricao, input.primaryGrams,
+        generated.primaryClassification.foodGroup, generated.primaryClassification.foodSubgroup, generated.primaryClassification.nutritionalRole,
+        target.energyKcal ?? null, target.proteinG ?? null, target.carbohydrateG ?? null, target.fatG ?? null, target.fiberG ?? null,
+        input.allowCrossGroup ? 1 : 0, now, now]
+    );
+  }
 
   const alternativeRows: ExchangeAlternativeRow[] = [];
   let order = 0;
   for (const alt of generated.alternatives) {
     const id = crypto.randomUUID();
-    await d1Execute(
-      `INSERT INTO exchange_group_alternatives
-        (id, exchange_group_id, food_source, food_ref_id, canonical_food_id, food_name, quantity_grams,
-         energy_kcal, protein_g, carbohydrate_g, fat_g, fiber_g, score, quality, same_subgroup, same_group,
-         state, ai_suggested, sort_order, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 'SUGGESTED', ?17, ?18, ?19, ?19)`,
-      [id, groupId, alt.ref.source, alt.ref.sourceId, alt.ref.canonicalId ?? null, alt.food.descricao, alt.quantityGrams,
-        alt.nutrition.energyKcal, alt.nutrition.proteinG, alt.nutrition.carbohydrateG, alt.nutrition.fatG, alt.nutrition.fiberG,
-        alt.score, alt.quality, alt.sameSubgroup ? 1 : 0, alt.sameGroup ? 1 : 0,
-        input.aiSuggested ? 1 : 0, order, now]
-    );
+    if (schemaCapabilities.alternativeCandidateOrigin) {
+      await d1Execute(
+        `INSERT INTO exchange_group_alternatives
+          (id, exchange_group_id, food_source, food_ref_id, canonical_food_id, food_name, quantity_grams,
+           energy_kcal, protein_g, carbohydrate_g, fat_g, fiber_g, score, quality, same_subgroup, same_group,
+           state, ai_suggested, candidate_origin, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 'SUGGESTED', ?17, ?18, ?19, ?20, ?20)`,
+        [id, groupId, alt.ref.source, alt.ref.sourceId, alt.ref.canonicalId ?? null, alt.food.descricao, alt.quantityGrams,
+          alt.nutrition.energyKcal, alt.nutrition.proteinG, alt.nutrition.carbohydrateG, alt.nutrition.fatG, alt.nutrition.fiberG,
+          alt.score, alt.quality, alt.sameSubgroup ? 1 : 0, alt.sameGroup ? 1 : 0,
+          input.aiSuggested ? 1 : 0, alt.candidateOrigin, order, now]
+      );
+    } else {
+      await d1Execute(
+        `INSERT INTO exchange_group_alternatives
+          (id, exchange_group_id, food_source, food_ref_id, canonical_food_id, food_name, quantity_grams,
+           energy_kcal, protein_g, carbohydrate_g, fat_g, fiber_g, score, quality, same_subgroup, same_group,
+           state, ai_suggested, sort_order, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, 'SUGGESTED', ?17, ?18, ?19, ?19)`,
+        [id, groupId, alt.ref.source, alt.ref.sourceId, alt.ref.canonicalId ?? null, alt.food.descricao, alt.quantityGrams,
+          alt.nutrition.energyKcal, alt.nutrition.proteinG, alt.nutrition.carbohydrateG, alt.nutrition.fatG, alt.nutrition.fiberG,
+          alt.score, alt.quality, alt.sameSubgroup ? 1 : 0, alt.sameGroup ? 1 : 0,
+          input.aiSuggested ? 1 : 0, order, now]
+      );
+    }
     alternativeRows.push({
       id, exchange_group_id: groupId, food_source: alt.ref.source, food_ref_id: alt.ref.sourceId, canonical_food_id: alt.ref.canonicalId ?? null,
       food_name: alt.food.descricao, quantity_grams: alt.quantityGrams, energy_kcal: alt.nutrition.energyKcal, protein_g: alt.nutrition.proteinG,
       carbohydrate_g: alt.nutrition.carbohydrateG, fat_g: alt.nutrition.fatG, fiber_g: alt.nutrition.fiberG, score: alt.score, quality: alt.quality,
-      same_subgroup: alt.sameSubgroup ? 1 : 0, same_group: alt.sameGroup ? 1 : 0, state: "SUGGESTED", ai_suggested: input.aiSuggested ? 1 : 0, sort_order: order,
+      same_subgroup: alt.sameSubgroup ? 1 : 0, same_group: alt.sameGroup ? 1 : 0, state: "SUGGESTED", ai_suggested: input.aiSuggested ? 1 : 0, candidate_origin: alt.candidateOrigin, sort_order: order,
     });
     order++;
   }
@@ -174,10 +407,29 @@ export async function generateAndSaveExchangeGroup(input: GenerateExchangeGroupI
     primary_canonical_food_id: input.primaryRef.canonicalId ?? null, primary_food_name: input.primaryFood.descricao, primary_quantity_grams: input.primaryGrams,
     food_group: generated.primaryClassification.foodGroup, food_subgroup: generated.primaryClassification.foodSubgroup, nutritional_role: generated.primaryClassification.nutritionalRole,
     target_energy_kcal: target.energyKcal ?? null, target_protein_g: target.proteinG ?? null, target_carbohydrate_g: target.carbohydrateG ?? null,
-    target_fat_g: target.fatG ?? null, target_fiber_g: target.fiberG ?? null, allow_cross_group: input.allowCrossGroup ? 1 : 0, created_at: now, updated_at: now,
+    target_fat_g: target.fatG ?? null, target_fiber_g: target.fiberG ?? null, allow_cross_group: input.allowCrossGroup ? 1 : 0,
+    exchange_list_id: generated === selectedHybrid ? resolvedList?.list.id ?? null : null,
+    exchange_list_version: generated === selectedHybrid ? resolvedList?.list.version ?? null : null,
+    exchange_generation_mode: generationMode,
+    created_at: now, updated_at: now,
   };
 
-  return { group, alternatives: alternativeRows, classification: generated.primaryClassification, excludedByGroup: generated.excludedByGroup, excludedByRestriction: generated.excludedByRestriction };
+  return {
+    group,
+    alternatives: alternativeRows,
+    classification: generated.primaryClassification,
+    excludedByGroup: generated.excludedByGroup,
+    excludedByRestriction: generated.excludedByRestriction,
+    exchangeList: generated === selectedHybrid ? resolvedList?.list ?? null : null,
+    generationMode,
+    strategyRequested,
+    strategyUsed,
+    fallbackReason,
+    durationMs: Math.round((performance.now() - started) * 100) / 100,
+    shadowComparison: (mode === "shadow" || mode === "pilot" || mode === "on") && resolvedList
+      ? shadowComparison({ engineOnly: engineOnly.alternatives, curatedHard: hybrid?.alternatives ?? null, globalRank: globalRank?.alternatives ?? null })
+      : undefined,
+  };
 }
 
 export async function getExchangeGroupById(groupId: string): Promise<{ group: ExchangeGroupRow; alternatives: ExchangeAlternativeRow[] } | null> {

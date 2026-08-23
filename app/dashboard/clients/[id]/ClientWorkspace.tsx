@@ -1664,7 +1664,7 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
               <div className="flex justify-end">
                 <Link href={`/dashboard/clients/${id}/print?secao=plano-alimentar`} target="_blank" className="brand-btn-secondary w-full sm:w-auto">
                   <Printer className="h-4 w-4" />
-                  Imprimir plano alimentar
+                  Imprimir versão ativa
                 </Link>
               </div>
               <MealPlanEditor clientId={id} onSaved={reloadTimeline} />

@@ -17,6 +17,7 @@ import {
 import { getSaoPauloDateKey } from "@/lib/utils/timezone";
 import { PatientAiChatWidget } from "@/components/portal/PatientAiChatWidget";
 import { trackEvent } from "@/lib/analytics/client-tracker";
+import { formatPrescribedQuantity } from "@/lib/nutrition/prescribed-quantity";
 
 type Appointment = {
   id: string;
@@ -80,6 +81,9 @@ type PortalSummary = {
     title: string;
     notes: string | null;
     version: number;
+    versionId: string;
+    activeVersionId: string;
+    updated_at: string;
     meals: Array<{
       name: string;
       suggested_time: string | null;
@@ -97,6 +101,7 @@ type PortalSummary = {
     substitutions: Array<{ base_food: string; option_food: string; quantity: string | null; unit: string | null; notes: string | null }>;
     supplements: Array<{ name: string; dosage: string | null; unit: string | null; instructions: string | null; notes: string | null }>;
   } | null;
+  mealPlanDelivery: { status: string; reason: string | null; activeVersionId: string | null };
   /** FASE 7 (item 22) — só grupos com pelo menos 1 alternativa já aprovada pela nutricionista chegam aqui. */
   exchangeGroups: Array<{
     id: string;
@@ -376,8 +381,22 @@ export default function ClientPortalPage() {
           </div>
         </section>
 
+        {!mealPlan && (
+          <section id="portal-meal-plan-empty" className="mb-5 rounded-2xl border border-[#E6D5C5] bg-white/80 p-5">
+            <div className="mb-2 flex items-center gap-2">
+              <Utensils className="h-5 w-5 text-[#607A56]" />
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#607A56]">Plano alimentar</p>
+            </div>
+            <p className="text-sm text-[#75675E]">
+              {data.mealPlanDelivery.status === "no_active"
+                ? "Seu plano alimentar ainda não foi publicado."
+                : "Não foi possível carregar seu plano agora."}
+            </p>
+          </section>
+        )}
+
         {mealPlan && (
-          <section id="portal-meal-plan" className="mb-5 rounded-2xl border border-[#E6D5C5] bg-white/80 p-5">
+          <section id="portal-meal-plan" data-version-id={mealPlan.versionId} data-active-version-id={mealPlan.activeVersionId} className="mb-5 rounded-2xl border border-[#E6D5C5] bg-white/80 p-5">
             <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="mb-2 flex items-center gap-2">
@@ -385,6 +404,7 @@ export default function ClientPortalPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#607A56]">Plano alimentar</p>
                 </div>
                 <h2 className="font-serif text-2xl font-semibold">{mealPlan.title}</h2>
+                <p className="mt-1 text-xs text-[#9A8B80]">Atualizado em {formatDate(mealPlan.updated_at)}</p>
                 {mealPlan.notes && <p className="mt-2 max-w-3xl text-sm leading-6 text-[#75675E]">{mealPlan.notes}</p>}
               </div>
               <span className="rounded-full bg-[#EEF3EA] px-3 py-1 text-xs font-semibold text-[#607A56]">v{mealPlan.version}</span>
@@ -403,7 +423,7 @@ export default function ClientPortalPage() {
                     {meal.items.map((item, index) => (
                       <li key={`${meal.name}-${item.food}-${index}`} className="flex justify-between gap-3 border-b border-[#EFE2D6] pb-2 last:border-b-0 last:pb-0">
                         <span>{friendlyFoodName(item.food)}</span>
-                        <span className="shrink-0 font-semibold text-[#3A3028]">{[item.quantity, item.unit].filter(Boolean).join(" ")}</span>
+                        <span className="shrink-0 font-semibold text-[#3A3028]">{formatPrescribedQuantity(item)}</span>
                       </li>
                     ))}
                   </ul>
@@ -470,14 +490,13 @@ export default function ClientPortalPage() {
             )}
             {data.exchangeGroups.length > 0 && (
               <div className="mt-5 rounded-xl bg-[#F7F0E8] p-4">
-                <h3 className="font-serif text-lg font-semibold">Grupos de troca aprovados</h3>
-                <p className="mt-1 text-xs text-[#8C6E52]">Escolha 1 opção de cada grupo quando quiser variar — todas foram revisadas pela nutricionista.</p>
+                <h3 className="font-serif text-lg font-semibold">Trocas disponíveis</h3>
+                <p className="mt-1 text-xs text-[#8C6E52]">Escolha 1 opção quando quiser variar. Essas trocas já foram revisadas pela nutricionista.</p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {data.exchangeGroups.map((group) => (
                     <div key={group.id} className="rounded-lg border border-[#EAD8C2] bg-white p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">{group.foodGroup} — escolha 1</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">{friendlyFoodName(group.primaryFoodName)} — escolha 1</p>
                       <ul className="mt-2 space-y-1.5 text-sm text-[#3A3028]">
-                        <li className="flex items-center gap-2"><span className="h-3 w-3 shrink-0 rounded-full border border-[#8C6E52]" aria-hidden />{friendlyFoodName(group.primaryFoodName)}</li>
                         {group.approvedAlternatives.map((alt) => (
                           <li key={alt.id} className="flex items-center gap-2 text-[#607066]">
                             <span className="h-3 w-3 shrink-0 rounded-full border border-[#B7A79A]" aria-hidden />

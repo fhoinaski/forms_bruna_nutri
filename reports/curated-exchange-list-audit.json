@@ -1,0 +1,352 @@
+{
+  "lists": [
+    {
+      "slug": "MAIN_MEAL_STARCHES",
+      "name": "Carboidratos - refeicao principal",
+      "numberOfFoods": 6,
+      "calculableFoods": 6,
+      "timesSelected": 27,
+      "timesProducedCandidate": 17,
+      "averageUsefulCandidates": 1.7778,
+      "duplicateRate": 0,
+      "fallbackRate": 1,
+      "contextMismatchRate": 0,
+      "status": "LOW_VALUE",
+      "itemIdentity": [
+        {
+          "food_source": "TACO",
+          "food_ref_id": "3",
+          "canonical_food_id": null,
+          "displayName": "Arroz, tipo 1, cozido",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "1",
+          "canonical_food_id": null,
+          "displayName": "Arroz, integral, cozido",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "88",
+          "canonical_food_id": null,
+          "displayName": "Batata, doce, cozida",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "91",
+          "canonical_food_id": null,
+          "displayName": "Batata, inglesa, cozida",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "129",
+          "canonical_food_id": null,
+          "displayName": "Mandioca, cozida",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "533",
+          "canonical_food_id": null,
+          "displayName": "Cuscuz, de milho, cozido com sal",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "slug": "BREAKFAST_CARBS",
+      "name": "Carboidratos - cafe/lanche",
+      "numberOfFoods": 6,
+      "calculableFoods": 6,
+      "timesSelected": 4,
+      "timesProducedCandidate": 2,
+      "averageUsefulCandidates": 1.5,
+      "duplicateRate": 0,
+      "fallbackRate": 1,
+      "contextMismatchRate": 0,
+      "status": "LOW_VALUE",
+      "itemIdentity": [
+        {
+          "food_source": "TACO",
+          "food_ref_id": "52",
+          "canonical_food_id": null,
+          "displayName": "Pão, trigo, forma, integral",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "53",
+          "canonical_food_id": null,
+          "displayName": "Pão, trigo, francês",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "551",
+          "canonical_food_id": null,
+          "displayName": "Tapioca, com manteiga",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "533",
+          "canonical_food_id": null,
+          "displayName": "Cuscuz, de milho, cozido com sal",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "7",
+          "canonical_food_id": null,
+          "displayName": "Aveia, flocos, crua",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "63",
+          "canonical_food_id": null,
+          "displayName": "Torrada, pão francês",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "slug": "LEAN_MAIN_PROTEINS",
+      "name": "Proteinas magras - refeicao principal",
+      "numberOfFoods": 3,
+      "calculableFoods": 3,
+      "timesSelected": 20,
+      "timesProducedCandidate": 13,
+      "averageUsefulCandidates": 1.75,
+      "duplicateRate": 0,
+      "fallbackRate": 1,
+      "contextMismatchRate": 0,
+      "status": "UNDERPOPULATED",
+      "itemIdentity": [
+        {
+          "food_source": "TACO",
+          "food_ref_id": "410",
+          "canonical_food_id": null,
+          "displayName": "Frango, peito, sem pele, grelhado",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "312",
+          "canonical_food_id": null,
+          "displayName": "Pintado, cru",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "368",
+          "canonical_food_id": null,
+          "displayName": "Carne, bovina, maminha, grelhada",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "slug": "FRUIT_PORTIONS",
+      "name": "Frutas",
+      "numberOfFoods": 4,
+      "calculableFoods": 4,
+      "timesSelected": 24,
+      "timesProducedCandidate": 21,
+      "averageUsefulCandidates": 2.4583,
+      "duplicateRate": 0,
+      "fallbackRate": 0.125,
+      "contextMismatchRate": 0,
+      "status": "GOOD",
+      "itemIdentity": [
+        {
+          "food_source": "TACO",
+          "food_ref_id": "182",
+          "canonical_food_id": null,
+          "displayName": "Banana, prata, crua",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "226",
+          "canonical_food_id": null,
+          "displayName": "Mamão, Papaia, cru",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "208",
+          "canonical_food_id": null,
+          "displayName": "Laranja, baía, crua",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "164",
+          "canonical_food_id": null,
+          "displayName": "Abacaxi, cru",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "slug": "DAIRY_OPTIONS",
+      "name": "Laticinios",
+      "numberOfFoods": 3,
+      "calculableFoods": 2,
+      "timesSelected": 20,
+      "timesProducedCandidate": 5,
+      "averageUsefulCandidates": 0.25,
+      "duplicateRate": 0.2,
+      "fallbackRate": 1,
+      "contextMismatchRate": 0,
+      "status": "UNDERPOPULATED",
+      "itemIdentity": [
+        {
+          "food_source": "TACO",
+          "food_ref_id": "458",
+          "canonical_food_id": null,
+          "displayName": "Leite, de vaca, integral",
+          "calculable": false,
+          "active": true,
+          "issue": "SOURCE_NOT_CALCULABLE"
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "448",
+          "canonical_food_id": null,
+          "displayName": "Iogurte, natural",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "461",
+          "canonical_food_id": null,
+          "displayName": "Queijo, minas, frescal",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "slug": "LEGUME_OPTIONS",
+      "name": "Leguminosas",
+      "numberOfFoods": 2,
+      "calculableFoods": 2,
+      "timesSelected": 3,
+      "timesProducedCandidate": 1,
+      "averageUsefulCandidates": 0.3333,
+      "duplicateRate": 0,
+      "fallbackRate": 0.6667,
+      "contextMismatchRate": 0,
+      "status": "UNDERPOPULATED",
+      "itemIdentity": [
+        {
+          "food_source": "TACO",
+          "food_ref_id": "561",
+          "canonical_food_id": null,
+          "displayName": "Feijão, carioca, cozido",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "577",
+          "canonical_food_id": null,
+          "displayName": "Lentilha, cozida",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "slug": "VEGETABLE_SIDES",
+      "name": "Vegetais",
+      "numberOfFoods": 3,
+      "calculableFoods": 3,
+      "timesSelected": 20,
+      "timesProducedCandidate": 15,
+      "averageUsefulCandidates": 0.9,
+      "duplicateRate": 0,
+      "fallbackRate": 0.95,
+      "contextMismatchRate": 0,
+      "status": "UNDERPOPULATED",
+      "itemIdentity": [
+        {
+          "food_source": "TACO",
+          "food_ref_id": "100",
+          "canonical_food_id": null,
+          "displayName": "Brócolis, cozido",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "109",
+          "canonical_food_id": null,
+          "displayName": "Cenoura, cozida",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        },
+        {
+          "food_source": "TACO",
+          "food_ref_id": "77",
+          "canonical_food_id": null,
+          "displayName": "Alface, americana, crua",
+          "calculable": true,
+          "active": true,
+          "issue": null
+        }
+      ]
+    }
+  ]
+}

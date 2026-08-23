@@ -100,6 +100,16 @@ const FOOD_QUERY_ALIASES: { pattern: RegExp; replacement: string; audit: string 
     replacement: "café infusão",
     audit: "'Coado' é o método de preparo por infusão — TACO só tem 'Café, infusão 10%', sem distinção de açúcar (não há variante adoçada para confundir).",
   },
+  {
+    // Template Adulto Saudável usa o nome popular "pão de forma integral".
+    // No catálogo calculável, a entrada genérica correspondente é
+    // "Pão, trigo, forma, integral"; a entrada complementar "com fibras"
+    // é mais específica e só deve vencer quando a query trouxer esse
+    // modificador explicitamente.
+    pattern: /\bp[aã]o\s+de\s+forma\s+integral\b/gi,
+    replacement: "Pão, trigo, forma, integral",
+    audit: "Mesmo alimento genérico do TACO ('Pão, trigo, forma, integral'); não reescreve 'com fibras', 'light' ou outra variante específica.",
+  },
 ];
 
 export function applyFoodQueryAliases(query: string): string {

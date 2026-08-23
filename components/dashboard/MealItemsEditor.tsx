@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Beef, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, Plus, RefreshCw, Save, Sparkles, Trash2, Unlock, Utensils, Wheat } from "lucide-react";
+import { AlertTriangle, Beef, Check, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, PanelRightClose, Pencil, Plus, RefreshCw, Save, Sparkles, Trash2, Unlock, Utensils, Wheat, X } from "lucide-react";
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
 import { scaleRecipeIngredientsToPortions } from "@/lib/nutrition/recipes";
 import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
@@ -12,8 +12,11 @@ import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal"
 import { ItemSubstitutionsPanel, type ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
 import { ExchangeGroupPanel, type ExchangeAlternativeView, type ExchangeGroupView } from "@/components/dashboard/ExchangeGroupPanel";
 import type { FoodReference } from "@/lib/nutrition/food-catalog";
+import { classifyFoodExchangeGroup, FOOD_GROUP_LABELS, type FoodGroup } from "@/lib/nutrition/food-exchange-hierarchy";
+import { CLINICAL_ROLE_LABELS, type TemplateClinicalRole } from "@/lib/meal-templates/system-template-contract";
 
 export type MealItem = {
+  id?: string;
   food: string;
   quantity?: string | null;
   unit?: string | null;
@@ -41,6 +44,14 @@ export type MealItem = {
   // substituição continua disponível mesmo com o item bloqueado.
   quantity_locked?: boolean;
   substitutions_locked?: boolean;
+  // FASE 8/8.5 — proveniência do slot de template que originou este item
+  // (posição na refeição), separada do alimento escolhido pra ocupá-la.
+  // NULL = item manual/IA/legado, nunca escrito pela nutricionista direto.
+  slot_food_group?: string | null;
+  slot_food_subgroup?: string | null;
+  slot_nutritional_role?: string | null;
+  template_slot_id?: string | null;
+  slot_exchange_eligible?: boolean | null;
 };
 
 function toMeasureOption(portion: FoodPortion): HouseholdMeasureOption {
@@ -49,6 +60,7 @@ function toMeasureOption(portion: FoodPortion): HouseholdMeasureOption {
 
 export type Meal = {
   name: string;
+  meal_context?: string | null;
   suggested_time?: string | null;
   notes?: string | null;
   source_recipe_id?: string | null;
@@ -111,6 +123,28 @@ export const emptyMeal = (): Meal => ({
   items: [{ food: "", quantity: "", unit: "", notes: "" }],
 });
 
+export function mealPlanItemDisplayQuantity(item: Pick<MealItem, "quantity" | "unit" | "household_measure_id">): string {
+  const quantity = String(item.quantity ?? "").trim();
+  const unit = String(item.unit ?? "").trim();
+  if (quantity && unit) return `${quantity} ${unit}`;
+  if (quantity && item.household_measure_id) return `${quantity} medida`;
+  if (quantity) return quantity;
+  return "Porcao a definir";
+}
+
+export function mealPlanItemAlternativeSummary(approvedCount: number, pendingCount: number): string {
+  if (approvedCount > 0) return `${approvedCount} alternativa${approvedCount === 1 ? "" : "s"}`;
+  if (pendingCount > 0) return `${pendingCount} para revisar`;
+  return "Gerar alternativas";
+}
+
+export function mealPlanExchangeSummary(approvedCount: number, pendingCount: number, stale = false): string {
+  if (stale) return "Atualizar trocas";
+  if (approvedCount > 0) return `${approvedCount} troca${approvedCount === 1 ? "" : "s"}`;
+  if (pendingCount > 0) return `${pendingCount} sugest${pendingCount === 1 ? "ão" : "ões"}`;
+  return "Sem trocas";
+}
+
 /**
  * Reordena um item de posicao movendo-o uma casa na direcao indicada.
  * Fora dos limites, devolve a lista original sem mudanca (nao-op seguro
@@ -154,6 +188,7 @@ export function cleanMealsForSave(meals: Meal[]): Meal[] {
   return meals
     .map((meal) => ({
       name: meal.name,
+      meal_context: meal.meal_context ?? null,
       suggested_time: meal.suggested_time ?? null,
       notes: meal.notes ?? null,
       source_recipe_id: meal.source_recipe_id ?? null,
@@ -173,6 +208,11 @@ export function cleanMealsForSave(meals: Meal[]): Meal[] {
           // nunca sobrevivia a um "Salvar rascunho".
           quantity_locked: item.quantity_locked ?? false,
           substitutions_locked: item.substitutions_locked ?? false,
+          slot_food_group: item.slot_food_group ?? null,
+          slot_food_subgroup: item.slot_food_subgroup ?? null,
+          slot_nutritional_role: item.slot_nutritional_role ?? null,
+          template_slot_id: item.template_slot_id ?? null,
+          slot_exchange_eligible: item.slot_exchange_eligible ?? null,
         })),
     }))
     .filter((meal) => meal.name.trim() && meal.items.length);
@@ -193,6 +233,7 @@ export function MealItemsEditor({
   substitutions,
   onSubstitutionsChange,
   mealPlanId,
+  readOnly = false,
 }: {
   meals: Meal[];
   onChange: (meals: Meal[]) => void;
@@ -204,6 +245,7 @@ export function MealItemsEditor({
   onMessage?: (message: string) => void;
   onError?: (message: string) => void;
   showMacroFooter?: boolean;
+  readOnly?: boolean;
   /** Substituições nutricionais equivalentes (evolução de plan.substitutions) — só disponível no contexto de um cliente real (não em templates/receitas, que não têm substituições por item). */
   clientId?: string;
   substitutions?: ItemSubstitution[];
@@ -213,6 +255,12 @@ export function MealItemsEditor({
 }) {
   const [openSubstitutionsKey, setOpenSubstitutionsKey] = useState("");
   const [openExchangeKey, setOpenExchangeKey] = useState("");
+  const [editingItemKey, setEditingItemKey] = useState("");
+  const [exchangeDrawerKey, setExchangeDrawerKey] = useState("");
+  // FASE 8.5 (item 14) — aviso de incompatibilidade slot x alimento
+  // escolhido, dispensável por item ("Manter mesmo assim"). Nunca bloqueia
+  // a escolha da nutricionista, só avisa.
+  const [dismissedSlotWarnings, setDismissedSlotWarnings] = useState<Record<string, boolean>>({});
   const [exchangeGroups, setExchangeGroups] = useState<Array<{ group: ExchangeGroupView & { primary_food_source: string; primary_food_ref_id: string }; alternatives: ExchangeAlternativeView[] }>>([]);
 
   const loadExchangeGroups = useCallback(async () => {
@@ -235,6 +283,16 @@ export function MealItemsEditor({
   useEffect(() => {
     loadExchangeGroups();
   }, [loadExchangeGroups]);
+
+  useEffect(() => {
+    if (!exchangeDrawerKey) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setExchangeDrawerKey("");
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [exchangeDrawerKey]);
+
   const [activeFoodField, setActiveFoodField] = useState("");
   const [foodSearch, setFoodSearch] = useState<{ key: string; query: string }>({ key: "", query: "" });
   const [foodSuggestions, setFoodSuggestions] = useState<Record<string, FoodSuggestion[]>>({});
@@ -249,16 +307,18 @@ export function MealItemsEditor({
   const [recipeSaving, setRecipeSaving] = useState(false);
   const [aiLoadingMeal, setAiLoadingMeal] = useState<number | null>(null);
   const [aiModalMealIndex, setAiModalMealIndex] = useState<number | null>(null);
+  const [bulkGeneratingAlternatives, setBulkGeneratingAlternatives] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
   const [measuresByFood, setMeasuresByFood] = useState<Record<string, FoodPortion[]>>({});
   const [openMealMenu, setOpenMealMenu] = useState<number | null>(null);
+  const [openItemMenu, setOpenItemMenu] = useState("");
 
   useEffect(() => {
     setPortalReady(true);
   }, []);
 
   useEffect(() => {
-    if (!recipeSelectorOpen && !recipeDraft) return;
+    if (!recipeSelectorOpen && !recipeDraft && !exchangeDrawerKey) return;
     const previousOverflow = document.body.style.overflow;
     const previousPaddingRight = document.body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -268,7 +328,7 @@ export function MealItemsEditor({
       document.body.style.overflow = previousOverflow;
       document.body.style.paddingRight = previousPaddingRight;
     };
-  }, [recipeSelectorOpen, recipeDraft]);
+  }, [recipeSelectorOpen, recipeDraft, exchangeDrawerKey]);
 
   useEffect(() => {
     const foodsToPrime = meals.flatMap((meal, mealIndex) =>
@@ -450,6 +510,26 @@ export function MealItemsEditor({
 
   const planMacros = useMemo(() => roundedMacros(sumMacros(rawMealMacros)), [rawMealMacros]);
 
+  const exchangeDrawerContext = useMemo(() => {
+    if (!exchangeDrawerKey) return null;
+    const [mealIndexText, itemIndexText] = exchangeDrawerKey.split(":");
+    const mealIndex = Number(mealIndexText);
+    const itemIndex = Number(itemIndexText);
+    const meal = meals[mealIndex];
+    const item = meal?.items[itemIndex];
+    if (!meal || !item) return null;
+    const grams = itemResolutions[exchangeDrawerKey]?.quantity.grams;
+    const itemSubstitutions = (substitutions ?? []).filter((sub) =>
+      item.food_ref_id && item.food_source
+        ? sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id
+        : sub.base_food === item.food
+    );
+    const exchangeEntry = [...exchangeGroups].reverse().find(
+      (entry) => entry.group.primary_food_source === item.food_source && entry.group.primary_food_ref_id === item.food_ref_id
+    );
+    return { mealIndex, itemIndex, meal, item, grams, itemSubstitutions, exchangeEntry };
+  }, [exchangeDrawerKey, exchangeGroups, itemResolutions, meals, substitutions]);
+
   function updateMeal(index: number, patch: Partial<Meal>) {
     onChange(meals.map((meal, mealIndex) => mealIndex === index ? { ...meal, ...patch } : meal));
   }
@@ -468,7 +548,29 @@ export function MealItemsEditor({
     window.requestAnimationFrame(() => document.getElementById(`meal-food-${mealIndex}-${itemIndex}`)?.focus());
   }
 
+  // FASE 8.5 (item 6/14) — classifica com o MESMO motor da Fase 7 (nunca
+  // uma segunda logica), a partir só do NOME do alimento — funciona igual
+  // pra uma sugestao recem-buscada (que tem grupo/macros reais) ou pra um
+  // item ja carregado do banco (so tem o texto do nome), sem depender de
+  // cache de busca que não sobrevive a um reload. "Compativel" = mesmo
+  // foodGroup (nunca exige mesmo subgrupo — o slot so define a categoria
+  // ampla esperada; o alimento exato e sempre escolha da nutricionista).
+  function slotFoodGroupOf(food: Pick<FoodSuggestion, "descricao" | "grupo" | "proteina_g" | "carboidrato_g" | "lipidios_g">): FoodGroup {
+    return classifyFoodExchangeGroup(food).foodGroup;
+  }
+
+  function isSuggestionCompatibleWithSlot(item: MealItem, suggestion: FoodSuggestion): boolean {
+    if (!item.slot_food_group) return true;
+    return slotFoodGroupOf(suggestion) === item.slot_food_group;
+  }
+
+  function isItemCompatibleWithSlot(item: MealItem): boolean {
+    if (!item.slot_food_group || !item.food.trim()) return true;
+    return slotFoodGroupOf({ descricao: item.food, grupo: "", proteina_g: 0, carboidrato_g: 0, lipidios_g: 0 }) === item.slot_food_group;
+  }
+
   function selectSuggestion(mealIndex: number, itemIndex: number, suggestion: FoodSuggestion) {
+    const key = `${mealIndex}:${itemIndex}`;
     updateMealItem(mealIndex, itemIndex, {
       food: suggestion.descricao,
       taco_number: suggestion.numero,
@@ -483,7 +585,7 @@ export function MealItemsEditor({
       resolved_grams_snapshot: null,
       quantity_resolution_snapshot: null,
     });
-    setFoodSuggestions((current) => ({ ...current, [`${mealIndex}:${itemIndex}`]: [suggestion] }));
+    setFoodSuggestions((current) => ({ ...current, [key]: [suggestion] }));
     setActiveFoodField("");
   }
 
@@ -678,19 +780,50 @@ export function MealItemsEditor({
     }
   }
 
+  async function generateAlternativesForAll() {
+    if (!clientId || !mealPlanId) return;
+    setBulkGeneratingAlternatives(true);
+    onError?.("");
+    try {
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/exchange-groups`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mealPlanId, generateAll: true, limit: 5 }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? "Nao foi possivel gerar trocas.");
+      await loadExchangeGroups();
+      onMessage?.(`Trocas geradas para ${result.generated ?? 0} alimento(s). Revise e aprove as sugestões antes de ativar para o paciente.`);
+    } catch (cause) {
+      onError?.(cause instanceof Error ? cause.message : "Nao foi possivel gerar trocas.");
+    } finally {
+      setBulkGeneratingAlternatives(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Refeicoes</h3>
         <div className="grid gap-2 sm:flex">
-          <button type="button" onClick={() => onChange([...meals, emptyMeal()])} className="brand-btn-secondary w-full sm:w-auto">
-            <Plus className="h-4 w-4" />
-            Refeicao
-          </button>
-          <button type="button" onClick={() => setRecipeSelectorOpen(true)} className="brand-btn-secondary w-full sm:w-auto">
-            <Utensils className="h-4 w-4" />
-            Inserir receita
-          </button>
+          {clientId && mealPlanId && !readOnly && (
+            <button type="button" onClick={() => void generateAlternativesForAll()} disabled={bulkGeneratingAlternatives} className="brand-btn-secondary w-full sm:w-auto">
+              <Sparkles className="h-4 w-4" />
+              {bulkGeneratingAlternatives ? "Gerando..." : "Gerar trocas para todos"}
+            </button>
+          )}
+          {!readOnly && (
+            <>
+              <button type="button" onClick={() => onChange([...meals, emptyMeal()])} className="brand-btn-secondary w-full sm:w-auto">
+                <Plus className="h-4 w-4" />
+                Refeicao
+              </button>
+              <button type="button" onClick={() => setRecipeSelectorOpen(true)} className="brand-btn-secondary w-full sm:w-auto">
+                <Utensils className="h-4 w-4" />
+                Inserir receita
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -704,7 +837,7 @@ export function MealItemsEditor({
                 <p className="text-xs text-[#75675E]">{meal.items.filter((item) => item.food.trim()).length} alimento(s) - {mealMacros[mealIndex]?.kcal ?? 0} kcal estimadas</p>
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-1.5 self-end sm:self-auto">
+            {!readOnly && <div className="flex shrink-0 flex-wrap items-center gap-1.5 self-end sm:self-auto">
               <button type="button" onClick={() => updateMeal(mealIndex, { items: [...meal.items, { food: "", quantity: "", unit: "", notes: "" }] })} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]">
                 <Plus className="h-4 w-4" />
                 Alimento
@@ -739,17 +872,26 @@ export function MealItemsEditor({
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
           </div>
           <div className="p-3">
-            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_118px]">
-              <label className="sr-only" htmlFor={`meal-name-${mealIndex}`}>Nome da refeição</label>
-              <input id={`meal-name-${mealIndex}`} value={meal.name} onChange={(event) => updateMeal(mealIndex, { name: event.target.value })} className="brand-input h-10" placeholder="Nome da refeicao" />
-              <label className="sr-only" htmlFor={`meal-time-${mealIndex}`}>Horário</label>
-              <input id={`meal-time-${mealIndex}`} value={meal.suggested_time ?? ""} onChange={(event) => updateMeal(mealIndex, { suggested_time: event.target.value })} className="brand-input h-10" placeholder="Horario" />
-            </div>
-            <label className="sr-only" htmlFor={`meal-notes-${mealIndex}`}>Observações da refeição</label>
-            <textarea id={`meal-notes-${mealIndex}`} value={meal.notes ?? ""} onChange={(event) => updateMeal(mealIndex, { notes: event.target.value })} className="brand-input mt-2 min-h-14 resize-y" placeholder="Observacoes da refeicao" />
+            {readOnly ? (
+              <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[#75675E]">
+                {meal.suggested_time && <span className="rounded-full bg-[#FAF7F2] px-2 py-1 font-semibold">{meal.suggested_time}</span>}
+                {meal.notes && <span className="min-w-0 flex-1">{meal.notes}</span>}
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_118px]">
+                  <label className="sr-only" htmlFor={`meal-name-${mealIndex}`}>Nome da refeição</label>
+                  <input id={`meal-name-${mealIndex}`} value={meal.name} onChange={(event) => updateMeal(mealIndex, { name: event.target.value })} className="brand-input h-10" placeholder="Nome da refeicao" />
+                  <label className="sr-only" htmlFor={`meal-time-${mealIndex}`}>Horário</label>
+                  <input id={`meal-time-${mealIndex}`} value={meal.suggested_time ?? ""} onChange={(event) => updateMeal(mealIndex, { suggested_time: event.target.value })} className="brand-input h-10" placeholder="Horario" />
+                </div>
+                <label className="sr-only" htmlFor={`meal-notes-${mealIndex}`}>Observações da refeição</label>
+                <textarea id={`meal-notes-${mealIndex}`} value={meal.notes ?? ""} onChange={(event) => updateMeal(mealIndex, { notes: event.target.value })} className="brand-input mt-2 min-h-14 resize-y" placeholder="Observacoes da refeicao" />
+              </>
+            )}
             <div className="mt-2 space-y-1.5">
               {meal.items.map((item, itemIndex) => {
                 const key = `${mealIndex}:${itemIndex}`;
@@ -757,14 +899,130 @@ export function MealItemsEditor({
                 const quantityInputId = `meal-quantity-${mealIndex}-${itemIndex}`;
                 const measureInputId = `meal-measure-${mealIndex}-${itemIndex}`;
                 const grams = itemResolutions[key]?.quantity.grams;
-                const suggestions = foodSuggestions[key] ?? [];
+                const rawSuggestions = foodSuggestions[key] ?? [];
+                // FASE 8.5 (item 6) — dentro de um slot, nunca deixa um
+                // alimento de outro grupo (ex.: arroz num slot PROTEIN)
+                // aparecer primeiro so por relevancia textual. Nunca EXCLUI
+                // nenhuma opcao — so reordena (sort estavel: preserva a
+                // ordem de relevancia original dentro de cada grupo).
+                const suggestions = item.slot_food_group
+                  ? [...rawSuggestions].sort((a, b) => Number(isSuggestionCompatibleWithSlot(item, b)) - Number(isSuggestionCompatibleWithSlot(item, a)))
+                  : rawSuggestions;
                 const dropdownOpen = activeFoodField === key && suggestions.length > 0;
+                const slotGroupLabel = item.slot_nutritional_role && item.slot_nutritional_role in CLINICAL_ROLE_LABELS
+                  ? CLINICAL_ROLE_LABELS[item.slot_nutritional_role as TemplateClinicalRole]
+                  : item.slot_food_group && item.slot_food_group in FOOD_GROUP_LABELS
+                    ? FOOD_GROUP_LABELS[item.slot_food_group as FoodGroup]
+                    : null;
+                const slotIncompatible = Boolean(slotGroupLabel) && !isItemCompatibleWithSlot(item);
+                const slotWarningKey = `${key}:${item.food}`;
+                const showSlotWarning = slotIncompatible && !dismissedSlotWarnings[slotWarningKey];
                 const showEmptyState = activeFoodField === key && !dropdownOpen && searchLoadingKey !== key && item.food.trim().length >= 2;
                 const showLoading = activeFoodField === key && searchLoadingKey === key;
                 const listboxId = `food-suggestions-${key}`;
+                const itemSubstitutions = (substitutions ?? []).filter((sub) =>
+                  item.food_ref_id && item.food_source
+                    ? sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id
+                    : sub.base_food === item.food
+                );
+                const exchangeEntry = [...exchangeGroups].reverse().find(
+                  (e) => e.group.primary_food_source === item.food_source && e.group.primary_food_ref_id === item.food_ref_id
+                );
+                const visibleExchangeAlternatives = exchangeEntry?.alternatives.filter((alternative) => alternative.state !== "REJECTED") ?? [];
+                const approvedAlternativeCount = itemSubstitutions.filter((sub) => sub.approved_by_professional !== false).length + visibleExchangeAlternatives.filter((alternative) => alternative.state === "APPROVED").length;
+                const pendingAlternativeCount = itemSubstitutions.filter((sub) => sub.approved_by_professional === false).length + visibleExchangeAlternatives.filter((alternative) => alternative.state === "SUGGESTED" || alternative.state === "EDITED").length;
+                const exchangesStale = Boolean(exchangeEntry && typeof grams === "number" && Number.isFinite(grams) && Math.abs((exchangeEntry.group.primary_quantity_grams ?? grams) - grams) >= 0.1);
+                const alternativeSummary = mealPlanExchangeSummary(approvedAlternativeCount, pendingAlternativeCount, exchangesStale);
+                const editingItem = !readOnly && (editingItemKey === key || !item.food.trim());
+                if (!editingItem) {
+                  return (
+                    <div key={itemIndex} className="relative grid min-w-0 gap-2 rounded-lg border border-[#EDE1D6] bg-white px-3 py-2 md:grid-cols-[minmax(0,150px)_minmax(0,1fr)_120px_minmax(140px,190px)_auto] md:items-center">
+                      <div className="min-w-0">
+                        {slotGroupLabel ? (
+                          <span className="block truncate text-[11px] font-bold uppercase tracking-[0.08em] text-[#607A56]">{slotGroupLabel}</span>
+                        ) : (
+                          <span className="block text-[11px] font-bold uppercase tracking-[0.08em] text-[#9A8B80]">Alimento</span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[#3A3028]" title={item.food}>{item.food || "Alimento sem nome"}</p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                          {slotIncompatible && <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF3E9] px-2 py-0.5 text-[10px] font-semibold text-[#9A6B28]"><AlertTriangle className="h-3 w-3" /> revisar grupo</span>}
+                          {item.ai_suggested && <span className="rounded-full bg-[#FFF7F3] px-2 py-0.5 text-[10px] font-semibold text-[#8C5F50]">IA</span>}
+                          {item.quantity_locked && <span className="rounded-full bg-[#FAF7F2] px-2 py-0.5 text-[10px] font-semibold text-[#75675E]">quantidade fixa</span>}
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold text-[#3A3028]">{mealPlanItemDisplayQuantity(item)}</div>
+                      {!readOnly && <input aria-label="Quantidade" tabIndex={-1} readOnly value={item.quantity ?? ""} className="hidden" />}
+                      <div className="flex min-w-0 items-center md:justify-end">
+                        {clientId ? (
+                          <button
+                            type="button"
+                            onClick={() => setExchangeDrawerKey(key)}
+                            className="inline-flex h-9 min-w-0 items-center gap-2 rounded-lg border border-[#DDE8D6] bg-[#F8FBF5] px-2.5 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]"
+                            aria-haspopup="dialog"
+                            aria-label={`Revisar trocas de ${item.food || "alimento"}`}
+                            title="Revisar trocas"
+                          >
+                            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{alternativeSummary}</span>
+                          </button>
+                        ) : (
+                          <span className="text-xs text-[#9A8B80]">Sem trocas</span>
+                        )}
+                      </div>
+                      <div className="relative flex items-center justify-end">
+                        {!readOnly && (
+                          <button type="button" onClick={() => setOpenItemMenu((current) => current === key ? "" : key)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Mais ações do alimento" title="Mais ações">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                        )}
+                        {!readOnly && openItemMenu === key && (
+                          <div className="absolute right-0 top-[calc(100%+4px)] z-20 w-60 rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_16px_40px_rgba(58,48,40,0.14)]">
+                            <button type="button" onClick={() => { setOpenItemMenu(""); setEditingItemKey(key); window.requestAnimationFrame(() => focusFoodField(mealIndex, itemIndex)); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]">
+                              <Pencil className="h-4 w-4" />
+                              Editar
+                            </button>
+                            <button type="button" onClick={() => { setOpenItemMenu(""); updateMealItem(mealIndex, itemIndex, { quantity_locked: !item.quantity_locked }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#75675E] hover:bg-[#FBF7F1]">
+                              {item.quantity_locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                              {item.quantity_locked ? "Desbloquear quantidade" : "Bloquear quantidade"}
+                            </button>
+                            {clientId && (
+                              <button type="button" onClick={() => { setOpenItemMenu(""); updateMealItem(mealIndex, itemIndex, { substitutions_locked: !item.substitutions_locked }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#75675E] hover:bg-[#FBF7F1]">
+                                {item.substitutions_locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                                {item.substitutions_locked ? "Permitir sugestões" : "Pausar sugestões"}
+                              </button>
+                            )}
+                            <button type="button" onClick={() => { setOpenItemMenu(""); updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, -1) }); }} disabled={itemIndex === 0} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-40">
+                              <ChevronUp className="h-4 w-4" />
+                              Mover para cima
+                            </button>
+                            <button type="button" onClick={() => { setOpenItemMenu(""); updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, 1) }); }} disabled={itemIndex === meal.items.length - 1} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-40">
+                              <ChevronDown className="h-4 w-4" />
+                              Mover para baixo
+                            </button>
+                            <button type="button" onClick={() => { setOpenItemMenu(""); updateMeal(mealIndex, { items: duplicateItemAt(meal.items, itemIndex) }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]">
+                              <Copy className="h-4 w-4" />
+                              Duplicar
+                            </button>
+                            <button type="button" onClick={() => { setOpenItemMenu(""); updateMeal(mealIndex, { items: meal.items.filter((_, index) => index !== itemIndex) }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">
+                              <Trash2 className="h-4 w-4" />
+                              Excluir
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
                 return (
-                <div key={itemIndex} className="grid min-w-0 gap-1.5 rounded-lg border border-transparent bg-white/70 p-1.5 md:grid-cols-[minmax(240px,1fr)_210px] md:items-start xl:grid-cols-[minmax(260px,1fr)_210px_auto]">
+                <div key={itemIndex} className="relative grid min-w-0 gap-1.5 rounded-lg border border-transparent bg-white/70 p-1.5 md:grid-cols-[minmax(240px,1fr)_190px] md:items-start xl:grid-cols-[minmax(260px,1fr)_190px_180px_auto]">
                   <div className="relative min-w-0">
+                    {slotGroupLabel && (
+                      <span className="mb-1 block w-fit rounded-full bg-[#EEF3EA] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#607A56]">
+                        {slotGroupLabel}
+                      </span>
+                    )}
                     <label className="sr-only" htmlFor={foodInputId}>Alimento</label>
                     <input
                       id={foodInputId}
@@ -807,9 +1065,21 @@ export function MealItemsEditor({
                         }
                       }}
                       className="brand-input"
-                      placeholder="Buscar alimento..."
+                      placeholder={slotGroupLabel ? `Buscar ${slotGroupLabel.toLowerCase()}...` : "Buscar alimento..."}
                       title={item.food || undefined}
                     />
+                    {showSlotWarning && (
+                      <div className="mt-1 flex flex-wrap items-center gap-2 rounded-lg bg-[#FFF3E9] px-2 py-1.5 text-[11px] text-[#9A6B28]">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        <span>Este alimento não corresponde ao grupo esperado deste slot ({slotGroupLabel}).</span>
+                        <button type="button" onClick={() => setDismissedSlotWarnings((current) => ({ ...current, [slotWarningKey]: true }))} className="font-semibold underline decoration-dotted underline-offset-2 hover:text-[#7A5420]">
+                          Manter mesmo assim
+                        </button>
+                        <button type="button" onClick={() => focusFoodField(mealIndex, itemIndex)} className="font-semibold underline decoration-dotted underline-offset-2 hover:text-[#7A5420]">
+                          Escolher outro
+                        </button>
+                      </div>
+                    )}
                     {item.ai_suggested && (
                       <span className="mt-1 inline-flex rounded-full bg-[#FFF7F3] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50]">
                         sugerido por IA
@@ -906,74 +1176,72 @@ export function MealItemsEditor({
                       <p className="mt-1 text-[10px] font-medium text-[#9A8B80]">≈ {Math.round(grams * 10) / 10} g</p>
                     )}
                   </div>
-                  {/* xl:max-w caps o quanto essa coluna "auto" pode pedir do grid —
-                      sem isso, o track auto tenta chegar no max-content (todos os
-                      botoes numa linha so) ANTES do alimento (1fr) crescer, entao
-                      o alimento fica preso no minimo mesmo com tela larga sobrando.
-                      Com o teto, os botoes que nao cabem quebram linha aqui dentro
-                      (flex-wrap) e o espaco extra vai pro nome do alimento. */}
-                  <div className="flex flex-wrap items-center gap-1 md:col-span-2 md:justify-end xl:col-span-1 xl:max-w-[230px] xl:justify-end">
-                    <button type="button" onClick={() => focusFoodField(mealIndex, itemIndex)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]" aria-label="Substituir alimento" title="Substituir alimento">
-                      <RefreshCw className="h-4 w-4" />
-                      <span>Substituir</span>
-                    </button>
-                    {clientId && (
+                  <div className="flex min-w-0 items-center justify-between gap-2 md:col-span-2 xl:col-span-1 xl:justify-end">
+                    {clientId ? (
                       <button
                         type="button"
-                        onClick={() => setOpenSubstitutionsKey((current) => current === `${mealIndex}:${itemIndex}` ? "" : `${mealIndex}:${itemIndex}`)}
-                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]"
-                        aria-label="Substituições equivalentes"
-                        title="Encontrar alimentos nutricionalmente equivalentes"
+                        onClick={() => {
+                          setExchangeDrawerKey(key);
+                          setOpenSubstitutionsKey("");
+                          setOpenExchangeKey("");
+                        }}
+                        className="inline-flex h-9 min-w-0 items-center gap-2 rounded-lg border border-[#DDE8D6] bg-[#F8FBF5] px-2.5 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]"
+                        aria-haspopup="dialog"
+                        aria-expanded={exchangeDrawerKey === key}
+                        aria-label="Trocas"
+                        title="Ver trocas deste alimento"
                       >
-                        <Sparkles className="h-4 w-4" />
-                        <span>Substituições</span>
+                        <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{alternativeSummary}</span>
                       </button>
+                    ) : (
+                      <span className="text-xs text-[#9A8B80]">Sem trocas</span>
                     )}
-                    {clientId && mealPlanId && (
-                      <button
-                        type="button"
-                        onClick={() => setOpenExchangeKey((current) => current === `${mealIndex}:${itemIndex}` ? "" : `${mealIndex}:${itemIndex}`)}
-                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]"
-                        aria-label="Grupo de troca"
-                        title="Gerar grupo de troca (alternativas organizadas por grupo alimentar, com aprovação obrigatória)"
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                        <span>Grupo de troca</span>
-                      </button>
+                  </div>
+                  <div className="relative flex items-center justify-end gap-1">
+                    <button type="button" onClick={() => setEditingItemKey("")} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#D9E4D3] bg-[#F8FBF5] text-[#607A56] hover:bg-[#EAF0E4]" aria-label="Concluir edição" title="Concluir edição">
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button type="button" onClick={() => setEditingItemKey("")} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar edição" title="Fechar edição">
+                      <X className="h-4 w-4" />
+                    </button>
+                    <button type="button" onClick={() => setOpenItemMenu((current) => current === key ? "" : key)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Mais ações do alimento" title="Mais ações">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                    {openItemMenu === key && (
+                      <div className="absolute right-0 top-[calc(100%+4px)] z-20 w-60 rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_16px_40px_rgba(58,48,40,0.14)]">
+                        <button type="button" onClick={() => { setOpenItemMenu(""); focusFoodField(mealIndex, itemIndex); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]">
+                          <RefreshCw className="h-4 w-4" />
+                          Editar alimento
+                        </button>
+                        <button type="button" onClick={() => { setOpenItemMenu(""); updateMealItem(mealIndex, itemIndex, { quantity_locked: !item.quantity_locked }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#75675E] hover:bg-[#FBF7F1]">
+                          {item.quantity_locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                          {item.quantity_locked ? "Desbloquear quantidade" : "Bloquear quantidade"}
+                        </button>
+                        {clientId && (
+                          <button type="button" onClick={() => { setOpenItemMenu(""); updateMealItem(mealIndex, itemIndex, { substitutions_locked: !item.substitutions_locked }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#75675E] hover:bg-[#FBF7F1]">
+                            {item.substitutions_locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                            {item.substitutions_locked ? "Permitir sugestões" : "Pausar sugestões"}
+                          </button>
+                        )}
+                        <button type="button" onClick={() => { setOpenItemMenu(""); updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, -1) }); }} disabled={itemIndex === 0} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-40">
+                          <ChevronUp className="h-4 w-4" />
+                          Mover para cima
+                        </button>
+                        <button type="button" onClick={() => { setOpenItemMenu(""); updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, 1) }); }} disabled={itemIndex === meal.items.length - 1} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-40">
+                          <ChevronDown className="h-4 w-4" />
+                          Mover para baixo
+                        </button>
+                        <button type="button" onClick={() => { setOpenItemMenu(""); updateMeal(mealIndex, { items: duplicateItemAt(meal.items, itemIndex) }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]">
+                          <Copy className="h-4 w-4" />
+                          Duplicar
+                        </button>
+                        <button type="button" onClick={() => { setOpenItemMenu(""); updateMeal(mealIndex, { items: meal.items.filter((_, index) => index !== itemIndex) }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">
+                          <Trash2 className="h-4 w-4" />
+                          Excluir
+                        </button>
+                      </div>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => updateMealItem(mealIndex, itemIndex, { quantity_locked: !item.quantity_locked })}
-                      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${item.quantity_locked ? "bg-[#F0D4C7] text-[#8C5F50]" : "text-[#75675E] hover:bg-[#FBF7F1]"}`}
-                      aria-label={item.quantity_locked ? "Desbloquear quantidade" : "Manter quantidade (bloquear ajuste automático)"}
-                      title={item.quantity_locked ? "Quantidade bloqueada — clique para desbloquear" : "Manter quantidade — o ajuste automático (Optimizer) nunca muda este item"}
-                    >
-                      {item.quantity_locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-                    </button>
-                    {clientId && (
-                      <button
-                        type="button"
-                        onClick={() => updateMealItem(mealIndex, itemIndex, { substitutions_locked: !item.substitutions_locked })}
-                        className={`inline-flex h-9 items-center justify-center gap-1 rounded-lg px-2 text-[11px] font-semibold ${item.substitutions_locked ? "bg-[#F0D4C7] text-[#8C5F50]" : "text-[#75675E] hover:bg-[#FBF7F1]"}`}
-                        aria-label={item.substitutions_locked ? "Permitir sugestão automática de substituições" : "Não sugerir substituições automaticamente para este item"}
-                        title={item.substitutions_locked ? "Sugestão automática/global de substituições desativada para este item — ainda dá pra adicionar manualmente" : "Bloquear sugestão automática/global de substituições para este item"}
-                      >
-                        {item.substitutions_locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-                        <span>Subst. auto</span>
-                      </button>
-                    )}
-                    <button type="button" onClick={() => updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, -1) })} disabled={itemIndex === 0} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Mover alimento para cima" title="Mover para cima">
-                      <ChevronUp className="h-4 w-4" />
-                    </button>
-                    <button type="button" onClick={() => updateMeal(mealIndex, { items: reorderArray(meal.items, itemIndex, 1) })} disabled={itemIndex === meal.items.length - 1} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Mover alimento para baixo" title="Mover para baixo">
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
-                    <button type="button" onClick={() => updateMeal(mealIndex, { items: duplicateItemAt(meal.items, itemIndex) })} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#607A56] hover:bg-[#EAF0E4]" aria-label="Duplicar alimento" title="Duplicar alimento">
-                      <Copy className="h-4 w-4" />
-                    </button>
-                    <button type="button" onClick={() => updateMeal(mealIndex, { items: meal.items.filter((_, index) => index !== itemIndex) })} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-red-600 hover:bg-red-50" aria-label="Remover alimento" title="Remover alimento">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
                   </div>
                   {clientId && openSubstitutionsKey === key && (
                     <div className="col-span-full">
@@ -988,45 +1256,40 @@ export function MealItemsEditor({
                         itemGrams={typeof grams === "number" && Number.isFinite(grams) ? grams : null}
                         substitutionsLocked={Boolean(item.substitutions_locked)}
                         currentMeals={meals}
-                        substitutions={(substitutions ?? []).filter((sub) =>
-                          item.food_ref_id && item.food_source
-                            ? sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id
-                            : sub.base_food === item.food
-                        )}
+                        substitutions={itemSubstitutions}
                         onAdd={(sub) => onSubstitutionsChange?.([...(substitutions ?? []), sub])}
                         onApprove={(indexInFiltered) => {
                           const list = substitutions ?? [];
-                          const target = list.filter((sub) => item.food_ref_id && item.food_source ? sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id : sub.base_food === item.food)[indexInFiltered];
+                          const target = itemSubstitutions[indexInFiltered];
                           onSubstitutionsChange?.(list.map((sub) => sub === target ? { ...sub, approved_by_professional: true } : sub));
                         }}
                         onRemove={(indexInFiltered) => {
                           const list = substitutions ?? [];
-                          const target = list.filter((sub) => item.food_ref_id && item.food_source ? sub.base_food_source === item.food_source && sub.base_food_ref_id === item.food_ref_id : sub.base_food === item.food)[indexInFiltered];
+                          const target = itemSubstitutions[indexInFiltered];
                           onSubstitutionsChange?.(list.filter((sub) => sub !== target));
                         }}
                       />
                     </div>
                   )}
-                  {clientId && mealPlanId && openExchangeKey === key && (() => {
-                    const entry = exchangeGroups.find(
-                      (e) => e.group.primary_food_source === item.food_source && e.group.primary_food_ref_id === item.food_ref_id
-                    );
-                    return (
+                  {clientId && mealPlanId && openExchangeKey === key && (
                       <div className="col-span-full">
                         <ExchangeGroupPanel
                           clientId={clientId}
                           mealPlanId={mealPlanId}
+                          mealPlanItemId={item.id ?? null}
+                          mealName={meal.name}
+                          primaryFoodName={item.food}
                           primaryFoodSource={item.food_source}
                           primaryFoodRefId={item.food_ref_id}
                           primaryCanonicalFoodId={item.canonical_food_id}
                           primaryGrams={typeof grams === "number" && Number.isFinite(grams) ? grams : null}
-                          group={entry?.group ?? null}
-                          alternatives={entry?.alternatives ?? []}
+                          group={exchangeEntry?.group ?? null}
+                          alternatives={exchangeEntry?.alternatives ?? []}
+                          onResolved={(identity) => updateMealItem(mealIndex, itemIndex, identity)}
                           onRefresh={loadExchangeGroups}
                         />
                       </div>
-                    );
-                  })()}
+                  )}
                 </div>
                 );
               })}
@@ -1054,6 +1317,113 @@ export function MealItemsEditor({
           </div>
           {planMacros.totalItems > 0 && planMacros.recognizedItems < planMacros.totalItems && <p className="mt-2 text-[10px] text-[#8C5F50]">{planMacros.totalItems - planMacros.recognizedItems} alimento(s) ainda nao reconhecido(s) pelo calculo automatico.</p>}
         </div>
+      )}
+
+      {portalReady && exchangeDrawerContext && createPortal(
+        <div role="dialog" aria-modal="true" aria-labelledby="meal-exchange-drawer-title" className="fixed inset-0 z-50 overflow-hidden bg-black/25 backdrop-blur-sm">
+          <button type="button" className="absolute inset-0 h-full w-full cursor-default" aria-hidden="true" tabIndex={-1} onClick={() => setExchangeDrawerKey("")} />
+          <aside className="absolute right-0 top-0 flex h-full w-full max-w-[520px] flex-col border-l border-[#EAD8C2] bg-[#FFFDFC] shadow-[0_24px_80px_rgba(58,48,40,0.28)]">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-4 py-4">
+              <div className="min-w-0">
+                <p className="brand-kicker">Trocas</p>
+                <h2 id="meal-exchange-drawer-title" className="truncate font-serif text-xl font-semibold text-[#3A3028]">{exchangeDrawerContext.item.food || "Alimento"}</h2>
+                <p className="mt-1 text-xs text-[#75675E]">
+                  {exchangeDrawerContext.meal.name || "Refeicao"} - {mealPlanItemDisplayQuantity(exchangeDrawerContext.item)}
+                </p>
+              </div>
+              <button type="button" onClick={() => setExchangeDrawerKey("")} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar trocas" title="Fechar">
+                <PanelRightClose className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {readOnly ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-[#EDE1D6] bg-[#FAF7F2]/60 p-4">
+                    <p className="text-sm font-semibold text-[#3A3028]">Plano ativo publicado</p>
+                    <p className="mt-1 text-xs leading-5 text-[#75675E]">As trocas ficam disponíveis para consulta. Para alterar, edite uma cópia em rascunho.</p>
+                  </div>
+                  {exchangeDrawerContext.exchangeEntry?.alternatives.length ? (
+                    exchangeDrawerContext.exchangeEntry.alternatives
+                      .filter((alternative) => alternative.state !== "REJECTED")
+                      .map((alternative) => (
+                        <div key={alternative.id} className="rounded-lg border border-[#EDE1D6] bg-white p-3">
+                          <p className="text-sm font-semibold text-[#3A3028]">{alternative.food_name}</p>
+                          <p className="mt-1 text-xs text-[#75675E]">{Math.round(alternative.quantity_grams * 10) / 10} g</p>
+                        </div>
+                      ))
+                  ) : (
+                    <p className="rounded-lg border border-[#EDE1D6] bg-white p-3 text-sm text-[#75675E]">Nenhuma troca aprovada para este alimento.</p>
+                  )}
+                </div>
+              ) : !exchangeDrawerContext.item.food_source || !exchangeDrawerContext.item.food_ref_id ? (
+                <div className="rounded-xl border border-[#F0D4B8] bg-[#FFF8F0] p-4">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#9A6B28]" />
+                    <div>
+                      <p className="text-sm font-semibold text-[#7A5420]">Confirme este alimento antes de gerar trocas.</p>
+                      <p className="mt-1 text-xs leading-5 text-[#8C6E52]">Escolha um alimento da busca para que o sistema calcule trocas.</p>
+                    </div>
+                  </div>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const { mealIndex, itemIndex } = exchangeDrawerContext;
+                        const key = `${mealIndex}:${itemIndex}`;
+                        setExchangeDrawerKey("");
+                        setEditingItemKey(key);
+                        window.requestAnimationFrame(() => focusFoodField(mealIndex, itemIndex));
+                      }}
+                      className="brand-btn-secondary mt-3"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Corrigir alimento
+                    </button>
+                  )}
+                </div>
+              ) : clientId && mealPlanId ? (
+                <ExchangeGroupPanel
+                  clientId={clientId}
+                  mealPlanId={mealPlanId}
+                  mealPlanItemId={exchangeDrawerContext.item.id ?? null}
+                  mealName={exchangeDrawerContext.meal.name}
+                  primaryFoodName={exchangeDrawerContext.item.food}
+                  primaryFoodSource={exchangeDrawerContext.item.food_source}
+                  primaryFoodRefId={exchangeDrawerContext.item.food_ref_id}
+                  primaryCanonicalFoodId={exchangeDrawerContext.item.canonical_food_id}
+                  primaryGrams={typeof exchangeDrawerContext.grams === "number" && Number.isFinite(exchangeDrawerContext.grams) ? exchangeDrawerContext.grams : null}
+                  group={exchangeDrawerContext.exchangeEntry?.group ?? null}
+                  alternatives={exchangeDrawerContext.exchangeEntry?.alternatives ?? []}
+                  onResolved={(identity) => updateMealItem(exchangeDrawerContext.mealIndex, exchangeDrawerContext.itemIndex, identity)}
+                  onRefresh={loadExchangeGroups}
+                />
+              ) : (
+                <ItemSubstitutionsPanel
+                  clientId={clientId ?? ""}
+                  itemFood={exchangeDrawerContext.item.food}
+                  itemFoodSource={exchangeDrawerContext.item.food_source === "TBCA" || exchangeDrawerContext.item.food_source === "IBGE_POF" ? null : exchangeDrawerContext.item.food_source}
+                  itemFoodRefId={exchangeDrawerContext.item.food_source === "TBCA" || exchangeDrawerContext.item.food_source === "IBGE_POF" ? null : exchangeDrawerContext.item.food_ref_id}
+                  itemGrams={typeof exchangeDrawerContext.grams === "number" && Number.isFinite(exchangeDrawerContext.grams) ? exchangeDrawerContext.grams : null}
+                  substitutionsLocked={Boolean(exchangeDrawerContext.item.substitutions_locked)}
+                  currentMeals={meals}
+                  substitutions={exchangeDrawerContext.itemSubstitutions}
+                  onAdd={(sub) => onSubstitutionsChange?.([...(substitutions ?? []), sub])}
+                  onApprove={(indexInFiltered) => {
+                    const list = substitutions ?? [];
+                    const target = exchangeDrawerContext.itemSubstitutions[indexInFiltered];
+                    onSubstitutionsChange?.(list.map((sub) => sub === target ? { ...sub, approved_by_professional: true } : sub));
+                  }}
+                  onRemove={(indexInFiltered) => {
+                    const list = substitutions ?? [];
+                    const target = exchangeDrawerContext.itemSubstitutions[indexInFiltered];
+                    onSubstitutionsChange?.(list.filter((sub) => sub !== target));
+                  }}
+                />
+              )}
+            </div>
+          </aside>
+        </div>,
+        document.body
       )}
 
       {portalReady && recipeSelectorOpen && createPortal(

@@ -38,6 +38,19 @@ type ProtocolTemplateDetail = ProtocolTemplate & {
   supplements: Supplement[];
 };
 
+type ExchangeListSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  origin: "SYSTEM" | "USER";
+  food_group: string;
+  meal_context: string | null;
+  culinary_role: string | null;
+  active: number;
+  version: number;
+  item_count: number;
+};
+
 type TemplateForm = {
   id?: string;
   title: string;
@@ -217,6 +230,7 @@ export default function ProtocolTemplatesPage() {
   const [message, setMessage] = useState("");
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiSuggesting, setAiSuggesting] = useState(false);
+  const [exchangeLists, setExchangeLists] = useState<ExchangeListSummary[]>([]);
 
   const stats = useMemo(() => ({
     total: templates.length,
@@ -246,6 +260,13 @@ export default function ProtocolTemplatesPage() {
   useEffect(() => {
     void loadTemplates();
   }, [loadTemplates]);
+
+  useEffect(() => {
+    fetch("/api/admin/exchange-lists", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { items?: ExchangeListSummary[] } | null) => setExchangeLists(data?.items ?? []))
+      .catch(() => setExchangeLists([]));
+  }, []);
 
   useEffect(() => {
     setPortalReady(true);
@@ -443,6 +464,28 @@ export default function ProtocolTemplatesPage() {
 
       {message && <p className="rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] px-4 py-3 text-sm text-[#607A56]">{message}</p>}
       {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
+      <section className="rounded-[1.35rem] border border-[#EDE1D6] bg-[#FFFDFC] p-5 shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="brand-kicker mb-1">Listas de equivalentes</p>
+            <h2 className="font-serif text-xl font-semibold text-[#3A3028]">Biblioteca curada</h2>
+          </div>
+          <span className="w-fit rounded-full border border-[#7F9A74]/30 px-3 py-1 text-xs font-semibold text-[#607A56]">{exchangeLists.length} lista{exchangeLists.length !== 1 ? "s" : ""}</span>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {exchangeLists.slice(0, 6).map((list) => (
+            <article key={list.id} className="rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-[#3A3028]">{list.name}</p>
+                <span className="shrink-0 rounded-full bg-[#EEF3EA] px-2 py-0.5 text-[10px] font-bold text-[#607A56]">{list.origin}</span>
+              </div>
+              <p className="mt-2 text-xs uppercase tracking-[0.08em] text-[#8C6E52]">{list.food_group}{list.culinary_role ? ` - ${list.culinary_role}` : ""}</p>
+              <p className="mt-3 text-sm text-[#75675E]">{list.item_count} alimento{list.item_count !== 1 ? "s" : ""} estruturado{list.item_count !== 1 ? "s" : ""}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className="rounded-[1.35rem] border border-[#EDE1D6] bg-[#FFFDFC] p-5 shadow-[0_18px_45px_rgba(58,48,40,0.055)]">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_220px_220px_auto] lg:items-end">

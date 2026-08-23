@@ -1,0 +1,42 @@
+{
+  "generatedAt": "2026-08-23T00:00:00.000Z",
+  "scope": "active SYSTEM DIETA templates after R2 migration/seed",
+  "summary": {
+    "templates": 1,
+    "valid": 1,
+    "invalid": 0,
+    "issueCount": 0
+  },
+  "templates": [
+    {
+      "templateId": "tpl-adulto_saudavel-dieta-base",
+      "name": "Dieta base - adulto saudável",
+      "targetGroup": "ADULTO_SAUDAVEL",
+      "origin": "SYSTEM",
+      "type": "DIETA",
+      "version": 1,
+      "active": true,
+      "status": "PASS",
+      "stats": {
+        "meals": 3,
+        "slots": 10,
+        "foods": 10,
+        "resolved": 10,
+        "calculable": 10
+      },
+      "issues": []
+    }
+  ],
+  "inactiveSystemDietTemplates": [
+    "tpl-emagrecimento-dieta-base",
+    "tpl-hipertrofia-dieta-base",
+    "tpl-idoso-dieta-base",
+    "tpl-gestante-dieta-base",
+    "tpl-crianca-dieta-base",
+    "tpl-tea-dieta-base",
+    "tpl-sop-dieta-base",
+    "tpl-vegetariano_estrito-dieta-base",
+    "tpl-endurance-dieta-base",
+    "tpl-resistencia_insulina-dieta-base"
+  ]
+}
