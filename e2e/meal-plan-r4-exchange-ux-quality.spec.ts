@@ -118,7 +118,7 @@ test.describe("R4 exchange UX and clinical quality", () => {
     for (const item of visualCases) {
       await page.getByRole("button", { name: item.button }).click();
       await expect(page.getByRole("dialog", { name: item.dialog })).toBeVisible();
-      await page.screenshot({ path: `reports/screenshots/meal-plan-r4-${item.file}-drawer-${testInfo.project.name}.png`, fullPage: true });
+      await page.screenshot({ path: `reports/screenshots/meal-plan-r4-${item.file}-drawer-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
       await page.getByRole("button", { name: /fechar trocas/i }).click();
     }
   });

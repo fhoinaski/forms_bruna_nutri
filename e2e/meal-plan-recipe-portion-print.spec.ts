@@ -1,5 +1,6 @@
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
+import { publishPlan } from "./helpers/meal-plan-editor";
 import { createTestPatient, uniqueSuffix } from "./helpers/test-data";
 
 /**
@@ -75,8 +76,7 @@ test.describe("receita no plano: porcao prescrita, nao o lote inteiro", () => {
 
     await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
     await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
-    await page.getByRole("button", { name: /^ativar no portal$/i }).click();
-    await expect(page.getByText(/^plano ativado no portal do cliente\.$/i)).toBeVisible();
+    await publishPlan(page);
 
     // Impressao (cardapio) mostra EXATAMENTE o mesmo valor do editor —
     // nunca uma formula propria, e nunca o total do lote.

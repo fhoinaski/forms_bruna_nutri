@@ -540,6 +540,20 @@ export function MealItemsEditor({
       : meal));
   }
 
+  function addMealForEditing() {
+    const mealIndex = meals.length;
+    onChange([...meals, emptyMeal()]);
+    setEditingItemKey(`${mealIndex}:0`);
+  }
+
+  function addItemForEditing(mealIndex: number) {
+    const meal = meals[mealIndex];
+    if (!meal) return;
+    const itemIndex = meal.items.length;
+    updateMeal(mealIndex, { items: [...meal.items, { food: "", quantity: "", unit: "", notes: "" }] });
+    setEditingItemKey(`${mealIndex}:${itemIndex}`);
+  }
+
   function focusFoodField(mealIndex: number, itemIndex: number) {
     const key = `${mealIndex}:${itemIndex}`;
     setActiveFoodField(key);
@@ -814,7 +828,7 @@ export function MealItemsEditor({
           )}
           {!readOnly && (
             <>
-              <button type="button" onClick={() => onChange([...meals, emptyMeal()])} className="brand-btn-secondary w-full sm:w-auto">
+              <button type="button" onClick={addMealForEditing} className="brand-btn-secondary w-full sm:w-auto">
                 <Plus className="h-4 w-4" />
                 Refeicao
               </button>
@@ -838,7 +852,7 @@ export function MealItemsEditor({
               </div>
             </div>
             {!readOnly && <div className="flex shrink-0 flex-wrap items-center gap-1.5 self-end sm:self-auto">
-              <button type="button" onClick={() => updateMeal(mealIndex, { items: [...meal.items, { food: "", quantity: "", unit: "", notes: "" }] })} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]">
+              <button type="button" onClick={() => addItemForEditing(mealIndex)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]">
                 <Plus className="h-4 w-4" />
                 Alimento
               </button>
@@ -1293,7 +1307,7 @@ export function MealItemsEditor({
                 </div>
                 );
               })}
-              <button type="button" onClick={() => updateMeal(mealIndex, { items: [...meal.items, { food: "", quantity: "", unit: "", notes: "" }] })} className="text-xs font-semibold text-[#607A56]">
+              <button type="button" onClick={() => addItemForEditing(mealIndex)} className="text-xs font-semibold text-[#607A56]">
                 + adicionar alimento
               </button>
             </div>

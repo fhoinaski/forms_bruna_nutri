@@ -1,5 +1,6 @@
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
+import { publishPlan } from "./helpers/meal-plan-editor";
 import { createTestPatient } from "./helpers/test-data";
 
 /**
@@ -85,8 +86,7 @@ test.describe("wizard Criar com IA — revisão de preparo composto (ovo mexido)
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
     await expect(page.getByText(/^\d+ kcal$/).first()).toHaveText(`${kcalAfter} kcal`);
 
-    await page.getByRole("button", { name: /^ativar no portal$/i }).click();
-    await expect(page.getByText(/^plano ativado no portal do cliente\.$/i)).toBeVisible();
+    await publishPlan(page);
 
     const printPage = await page.context().newPage();
     await printPage.goto(`/dashboard/clients/${patient.id}/print?secao=plano-alimentar`);

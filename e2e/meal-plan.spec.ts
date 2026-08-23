@@ -1,6 +1,7 @@
 import { test, expect } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
+import { addMeal, fieldAfterLabel, openMealPlanTab, publishPlan, saveDraft, selectFood, selectLastGrams, setLastQuantity } from "./helpers/meal-plan-editor";
 import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
 
 /**
@@ -10,16 +11,6 @@ import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
  * motor de medidas caseiras nesta fase — so testa o comportamento atual.
  */
 test.use({ storageState: ADMIN_STORAGE_STATE });
-
-/**
- * Os campos do MealPlanEditor usam <label> sem htmlFor/id (mesmo padrao ja
- * encontrado e corrigido em outro componente nesta fase, mas fora de escopo
- * redesenhar este editor agora) — localiza o input/textarea irmao do label
- * pelo texto exato em vez de getByLabel.
- */
-function fieldAfterLabel(page: Page, label: string, tag: "input" | "textarea" = "input") {
-  return page.locator(`xpath=//label[normalize-space()="${label}"]/following-sibling::${tag}[1]`);
-}
 
 async function firstKcalValue(page: Page): Promise<number> {
   const text = (await page.getByText(/^\d+ kcal$/).first().textContent()) ?? "";
@@ -46,23 +37,18 @@ test.describe("plano alimentar", () => {
   test("cria plano por modelo, adiciona alimento com quantidade, confirma cálculo nutricional, salva e a edição persiste", async ({ page, request }) => {
     const patient = await createTestPatient(request);
 
-    await page.goto(`/dashboard/clients/${patient.id}`);
-    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await openMealPlanTab(page, patient.id);
     await page.getByRole("button", { name: /^criar por modelo$/i }).click();
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
     // Adiciona uma nova refeicao com um alimento reconhecido pela busca TACO.
-    await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const foodInput = page.getByPlaceholder("Buscar alimento").last();
-    await foodInput.fill("Arroz");
-    const suggestion = page.locator("button", { hasText: /arroz/i }).first();
-    await expect(suggestion).toBeVisible();
-    await suggestion.click();
-    await page.getByPlaceholder("Qtd.").last().fill("100");
+    const meal = await addMeal(page);
+    await selectFood(page, meal, "Arroz", /arroz/i);
+    await setLastQuantity(meal, "100");
     // Alimento vinculado (veio da busca TACO): a coluna de unidade agora e um
     // seletor de medida, nunca mais texto livre — "Gramas (g)" ja e o valor
     // padrao, mas seleciona explicitamente para fixar unit="g".
-    await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
+    await selectLastGrams(meal);
 
     // Macros em tempo real no rodape refletem o alimento adicionado (nao fica zerado).
     const kcalMetric = page.getByText(/^\d+ kcal$/).first();
@@ -75,35 +61,36 @@ test.describe("plano alimentar", () => {
     await expect(page.getByRole("heading", { name: "Plano do dia" })).toBeVisible();
     await expect(page.getByText(/resumo nutricional/i).first()).toBeVisible();
 
-    await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
-    await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
+    await saveDraft(page);
 
     await page.reload();
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
-    await expect(page.getByPlaceholder("Buscar alimento").last()).toHaveValue(/arroz/i);
-    await expect(page.getByPlaceholder("Qtd.").last()).toHaveValue("100");
+    await expect(page.locator("article").last()).toContainText(/Arroz[\s\S]*100 g/);
   });
 
   test("ativa o plano no portal, versiona ao editar de novo e mostra a versão ativa no portal do paciente", async ({ page, request }) => {
     const patient = await createTestPatient(request);
     const { code } = await enablePortalAccess(request, patient.id);
 
-    await page.goto(`/dashboard/clients/${patient.id}`);
-    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await openMealPlanTab(page, patient.id);
     await page.getByRole("button", { name: /^criar por modelo$/i }).click();
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /^rascunho - v1$/i })).toBeVisible();
 
-    await page.getByRole("button", { name: /^ativar no portal$/i }).click();
-    await expect(page.getByText(/^plano ativado no portal do cliente\.$/i)).toBeVisible();
+    await publishPlan(page);
     await expect(page.getByRole("button", { name: /^ativo - v2$/i })).toBeVisible();
 
-    // Editar de novo (sem trocar o status) versiona de novo — plano continua ativo.
+    // Active e read-only: editar cria um rascunho separado; portal so muda apos novo review/publicacao.
     const notes = `Orientação atualizada ${Date.now()}`;
+    await page.getByRole("button", { name: /^editar$/i }).click();
+    await expect(page.getByRole("button", { name: /^rascunho - v\d+$/i })).toBeVisible();
     await fieldAfterLabel(page, "Orientacoes gerais para o cliente", "textarea").fill(notes);
-    await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
-    await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /^ativo - v3$/i })).toBeVisible();
+    await saveDraft(page);
+    await publishPlan(page);
+    await expect(page.getByRole("button", { name: /^ativo - v\d+$/i })).toBeVisible();
+    const plans = (await (await request.get(`/api/admin/clients/${patient.id}/meal-plans`)).json()) as { status: string; version: number }[];
+    const activePlan = plans.find((plan) => plan.status === "active");
+    expect(activePlan).toBeTruthy();
 
     // Portal do paciente mostra a versao ativa correta.
     await page.goto("/portal");
@@ -112,14 +99,13 @@ test.describe("plano alimentar", () => {
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
 
     await expect(page.getByRole("heading", { name: "Plano alimentar" })).toBeVisible();
-    await expect(page.getByText("v3", { exact: true })).toBeVisible();
+    await expect(page.getByText(`v${activePlan!.version}`, { exact: true })).toBeVisible();
   });
 
   test("seleciona uma medida caseira específica, altera a quantidade, recarrega e a medida/macro persistem; item sem medida cadastrada é sinalizado como estimativa", async ({ page, request }) => {
     const patient = await createTestPatient(request);
 
-    await page.goto(`/dashboard/clients/${patient.id}`);
-    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await openMealPlanTab(page, patient.id);
     await page.getByRole("button", { name: /^criar por modelo$/i }).click();
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
     const kcalMetric = page.getByText(/^\d+ kcal$/).first();
@@ -131,22 +117,17 @@ test.describe("plano alimentar", () => {
     // generica (ex.: "xicara") sem medida especifica vinculada — por isso a
     // checagem de "sem estimativa" abaixo e escopada so ao card da NOVA
     // refeicao (a ultima da lista), nunca a pagina inteira.
-    await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const newMealCard = page.locator("article").last();
-    const foodInput = page.getByPlaceholder("Buscar alimento").last();
-    await foodInput.fill("Banana, nanica");
+    const newMealCard = await addMeal(page);
     // O dropdown mostra o nome de exibição (sem vírgulas: "Banana nanica
     // crua"), não o nome técnico da fonte ("Banana, nanica, crua") — regex
     // sem vírgula fixa, tolera ambas as formas.
-    const suggestion = page.locator("button", { hasText: /banana[,\s]+nanica/i }).first();
-    await expect(suggestion).toBeVisible();
-    await suggestion.click();
+    await selectFood(page, newMealCard, "Banana, nanica", /banana[,\s]+nanica/i);
 
     // 2. Selecionar a medida especifica (nunca mais um "Un." de texto livre para um alimento vinculado).
-    const measureSelect = page.locator('select[title*="Medida"]').last();
+    const measureSelect = newMealCard.locator('select[aria-label="Medida"]:visible').last();
     await expect(measureSelect).toBeVisible();
     await measureSelect.selectOption({ label: "1 unidade media" });
-    await page.getByPlaceholder("Qtd.").last().fill("1");
+    await setLastQuantity(newMealCard, "1");
 
     const kcalSingle = await stableFirstKcalValue(page, kcalBeforeNewItem);
     expect(kcalSingle).toBeGreaterThan(0);
@@ -154,20 +135,21 @@ test.describe("plano alimentar", () => {
     await expect(newMealCard.getByText(/valor estimado/i)).toHaveCount(0);
 
     // 3. Alterar quantidade -> macros mudam.
-    await page.getByPlaceholder("Qtd.").last().fill("2");
+    await setLastQuantity(newMealCard, "2");
     const kcalDouble = await stableFirstKcalValue(page, kcalSingle);
     expect(kcalDouble).toBeGreaterThan(kcalSingle);
 
     // 5. Salvar.
-    await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
-    await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
+    await saveDraft(page);
 
     // 6. Recarregar.
     await page.reload();
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
 
     // 7. A medida continua selecionada.
-    const measureSelectAfterReload = page.locator('select[title*="Medida"]').last();
+    await page.getByRole("button", { name: /mais ações do alimento/i }).last().click();
+    await page.getByRole("button", { name: /^editar$/i }).click();
+    const measureSelectAfterReload = page.locator('select[aria-label="Medida"]:visible').last();
     await expect(measureSelectAfterReload.locator("option:checked")).toHaveText("1 unidade media");
 
     // 8. Macros permanecem iguais.
@@ -177,11 +159,11 @@ test.describe("plano alimentar", () => {
     // estruturado (mesmo comportamento de plano legado), com unidade
     // generica sem medida cadastrada, e sinalizado como estimativa na UI —
     // nunca silenciosamente tratado como preciso.
-    await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const freeTextFoodInput = page.getByPlaceholder("Buscar alimento").last();
+    const freeMeal = await addMeal(page);
+    const freeTextFoodInput = freeMeal.locator('input[aria-label="Alimento"]').last();
     await freeTextFoodInput.fill("Petisco caseiro nao cadastrado");
-    await page.locator('input[placeholder="Qtd."]:visible').last().fill("1");
-    await page.locator('input[placeholder="Un."]:visible').last().fill("unidade");
+    await freeMeal.locator('input[aria-label="Quantidade"]:visible').last().fill("1");
+    await freeMeal.locator('input[aria-label="Unidade"]:visible').last().fill("unidade");
     await expect(page.getByText(/valor estimado/i).last()).toBeVisible();
   });
 
@@ -207,28 +189,26 @@ test.describe("plano alimentar", () => {
     });
     expect(custom.ok()).toBeTruthy();
 
-    await page.goto(`/dashboard/clients/${patient.id}`);
-    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await openMealPlanTab(page, patient.id);
     await page.getByRole("button", { name: /^criar por modelo$/i }).click();
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
-    await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const foodInput = page.getByPlaceholder("Buscar alimento").last();
+    const meal = await addMeal(page);
+    const foodInput = meal.locator('input[aria-label="Alimento"]').last();
     await foodInput.fill(customName);
-    const suggestion = page.locator("button", { hasText: customName }).first();
+    const suggestion = page.getByRole("option", { name: new RegExp(customName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") }).first();
     await expect(suggestion).toBeVisible();
     await expect(suggestion).toContainText(/Personalizado/i);
     await suggestion.click();
-    await page.getByPlaceholder("Qtd.").last().fill("50");
-    await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
+    await setLastQuantity(meal, "50");
+    await selectLastGrams(meal);
 
-    await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
-    await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
+    await saveDraft(page);
 
     await page.reload();
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
-    await expect(page.getByPlaceholder("Buscar alimento").last()).toHaveValue(customName);
-    await expect(page.getByPlaceholder("Qtd.").last()).toHaveValue("50");
+    await expect(page.locator("article").last()).toContainText(customName);
+    await expect(page.locator("article").last()).toContainText("50 g");
   });
 
   test("busca alimento USDA piloto, salva e recarrega com referencia estavel", async ({ page, request }) => {
@@ -236,28 +216,26 @@ test.describe("plano alimentar", () => {
     expect(seed.ok(), `seed-usda-food falhou (${seed.status()}): ${await seed.text()}`).toBeTruthy();
     const patient = await createTestPatient(request);
 
-    await page.goto(`/dashboard/clients/${patient.id}`);
-    await page.getByRole("tab", { name: "Plano alimentar" }).click();
+    await openMealPlanTab(page, patient.id);
     await page.getByRole("button", { name: /^criar por modelo$/i }).click();
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
-    await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const foodInput = page.getByPlaceholder("Buscar alimento").last();
+    const meal = await addMeal(page);
+    const foodInput = meal.locator('input[aria-label="Alimento"]').last();
     await foodInput.fill("rice pilot e2e");
-    const suggestion = page.locator("button", { hasText: /rice pilot e2e cooked/i }).first();
+    const suggestion = page.getByRole("option", { name: /rice pilot e2e cooked/i }).first();
     await expect(suggestion).toBeVisible();
     await expect(suggestion).toContainText(/USDA/i);
     await suggestion.click();
-    await page.getByPlaceholder("Qtd.").last().fill("100");
-    await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
+    await setLastQuantity(meal, "100");
+    await selectLastGrams(meal);
 
     await expect(page.getByText(/^\d+ kcal$/).first()).toBeVisible();
-    await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
-    await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
+    await saveDraft(page);
 
     await page.reload();
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
-    await expect(page.getByPlaceholder("Buscar alimento").last()).toHaveValue("Rice pilot e2e cooked");
-    await expect(page.getByPlaceholder("Qtd.").last()).toHaveValue("100");
+    await expect(page.locator("article").last()).toContainText("Rice pilot e2e cooked");
+    await expect(page.locator("article").last()).toContainText("100 g");
   });
 });

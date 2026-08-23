@@ -225,12 +225,12 @@ test.describe("R7 final meal plan QA", () => {
     expectQuantitiesInPayload(active, "120");
 
     await openMealPlanTab(page, patient.id);
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-01-active-desktop-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-01-active-desktop-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
     await expect(page.getByRole("button", { name: /^Ativo - v2$/i })).toBeVisible();
     await expect(page.locator('input[aria-label="Quantidade"]')).toHaveCount(0);
     await page.getByRole("button", { name: /^Editar$/i }).click();
     await expect(page.getByRole("button", { name: /^Rascunho - v1$/i })).toBeVisible();
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-02-draft-desktop-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-02-draft-desktop-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
 
     const draftSeed = await createTemplatePlan(request, patient.id, "R7 draft seed");
     const draft = await savePlan(request, patient.id, draftSeed, "draft", "150", "R7 draft golden 150");
@@ -245,7 +245,7 @@ test.describe("R7 final meal plan QA", () => {
       expect(values).toContain("50");
       expect(values).toContain("130");
     }).toPass();
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-03-edit-item-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-03-edit-item-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
 
     await page.getByRole("button", { name: /^Salvar rascunho$/i }).click();
     await expect(page.getByText(/^Plano alimentar salvo\.$/i)).toBeVisible();
@@ -273,7 +273,7 @@ test.describe("R7 final meal plan QA", () => {
     const drawer = page.getByRole("dialog", { name: /arroz integral cozido/i });
     await expect(drawer).toBeVisible();
     await expect(drawer.getByText(/farinha|mingau|cereal infantil|bolo|biscoito/i)).toHaveCount(0);
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-04-exchange-drawer-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-04-exchange-drawer-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
     await page.getByRole("button", { name: /fechar trocas/i }).click();
 
     await openMealPlanTab(page, patient.id);
@@ -282,7 +282,7 @@ test.describe("R7 final meal plan QA", () => {
     await expect(page.getByRole("dialog", { name: /revisão do plano/i })).toBeVisible();
     await expect(page.getByText("Plano pronto para publicação.")).toBeVisible();
     await expect(page.getByText(/Problemas que impedem publicação/i)).toHaveCount(0);
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-05-review-all-good-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-05-review-all-good-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
     await page.getByRole("button", { name: /Publicar plano/i }).click();
     await expect(page.getByText(/^Plano ativado no portal do cliente\.$/i)).toBeVisible();
 
@@ -295,12 +295,12 @@ test.describe("R7 final meal plan QA", () => {
     await page.goto("/portal");
     await expect(page.locator("#portal-meal-plan")).toHaveAttribute("data-version-id", `${draft.id}:v${published!.version}`);
     await expect(page.locator("#portal-meal-plan").getByText("150 g", { exact: true }).first()).toBeVisible();
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-08-portal-desktop-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-08-portal-desktop-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
     for (const width of [375, 390, 430]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/portal");
       await expect(page.locator("#portal-meal-plan")).toBeVisible();
-      await page.screenshot({ path: `reports/screenshots/meal-plan-r7-07-portal-mobile-${width}-${testInfo.project.name}.png`, fullPage: true });
+      await page.screenshot({ path: `reports/screenshots/meal-plan-r7-07-portal-mobile-${width}-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
     }
 
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -308,7 +308,7 @@ test.describe("R7 final meal plan QA", () => {
     await expect(page.locator("[data-version-id]").first()).toHaveAttribute("data-version-id", `${draft.id}:v${published!.version}`);
     await expect(page.getByText("150 g", { exact: true }).first()).toBeVisible();
     await expect(page.getByText(/canonical|resolver|curated|engine|score|APPROVED|SUGGESTED|stale|stack|error code/i)).toHaveCount(0);
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-09-print-a4-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-09-print-a4-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
 
     const current = published!;
     const riceGroup = await generateGroup(request, patient.id, current, /Arroz integral/i, 150, 5);
@@ -343,7 +343,7 @@ test.describe("R7 final meal plan QA", () => {
     await expect(portalPlan.getByText(/SUGGESTED|REJECTED|APPROVED|curated|engine|score|stale|resolver|canonical/i)).toHaveCount(0);
     await page.goto(`/dashboard/clients/${patient.id}/print?secao=plano-alimentar`);
     await expect(page.getByText(suggested[3].food_name)).toHaveCount(0);
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-10-multi-page-print-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-10-multi-page-print-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
 
     const staleSeed = await createTemplatePlan(request, patient.id, "R7 stale seed");
     const staleDraft = await savePlan(request, patient.id, staleSeed, "draft", "120", "R7 stale draft");
@@ -382,7 +382,7 @@ test.describe("R7 final meal plan QA", () => {
     await page.getByRole("button", { name: /^Revisar$/i }).click();
     await expect(page.getByText("Este plano ainda não pode ser publicado.")).toBeVisible();
     await expect(page.getByText(/confirme o alimento/i)).toBeVisible();
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-06-review-blocker-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r7-06-review-blocker-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
 
     const otherPlan = await createTemplatePlan(request, otherPatient.id, "R7 other plan");
     const otherGroup = await generateGroup(request, otherPatient.id, otherPlan, /Arroz integral/i, 120, 5);

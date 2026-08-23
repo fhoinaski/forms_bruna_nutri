@@ -146,7 +146,7 @@ test.describe("command router de substituições — Assistente (determinístico
     const staleRes = await request.put(`/api/admin/clients/${patient.id}/meal-plans/${planId}`, {
       data: {
         title: "Plano assistente (editado manualmente)",
-        status: "active",
+        status: "draft",
         notes: null,
         meals: [
           {

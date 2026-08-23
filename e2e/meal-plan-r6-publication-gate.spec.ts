@@ -137,14 +137,14 @@ test.describe("R6 publication gate", () => {
     await openReview(page, patient.id);
     await expect(page.getByRole("dialog", { name: /revisão do plano/i })).toBeVisible();
     await expect(page.getByText("Plano pronto para publicação.")).toBeVisible();
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-review-all-good-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-review-all-good-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
     await page.getByRole("button", { name: /Publicar plano/i }).click();
     await expect(page.getByRole("button", { name: /^Ativo - v2$/i })).toBeVisible();
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-successful-publish-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-successful-publish-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
 
     await page.goto("/portal");
     await expect(page.locator("#portal-meal-plan")).toHaveAttribute("data-version-id", `${plan.id}:v2`);
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-active-after-publish-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-active-after-publish-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
   });
 
   test("API bloqueia publish direto com quantidade inválida", async ({ request }) => {
@@ -169,13 +169,13 @@ test.describe("R6 publication gate", () => {
     await openReview(page, patient.id);
     await expect(page.getByText("Este plano ainda não pode ser publicado.")).toBeVisible();
     await expect(page.getByText(/confirme o alimento/i)).toBeVisible();
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-unresolved-food-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-unresolved-food-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
 
     const stale = await createTemplatePlan(request, patient.id, "R6 stale");
     await ensureRiceStaleExchange(request, patient.id, stale);
     await openReview(page, patient.id);
     await expect(page.getByText(/trocas precisam ser atualizadas/i)).toBeVisible();
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-stale-exchange-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-stale-exchange-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
   });
 
   test("warning de meta exige confirmação na UI, mas não bloqueia publicação", async ({ page, request }, testInfo) => {
@@ -189,7 +189,7 @@ test.describe("R6 publication gate", () => {
     await expect(page.getByText("Plano pronto para publicação.")).toBeVisible();
     await expect(page.getByText(/Energia do plano difere da meta/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /Publicar plano/i })).toBeDisabled();
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-review-warning-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-review-warning-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
     await page.getByLabel("Revisei os avisos.").check();
     await expect(page.getByRole("button", { name: /Publicar plano/i })).toBeEnabled();
   });
@@ -207,6 +207,6 @@ test.describe("R6 publication gate", () => {
 
     await page.getByRole("button", { name: /Publicar plano/i }).click();
     await expect(page.getByText(/atualizado em outra sessao/i)).toBeVisible();
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-version-conflict-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r6-version-conflict-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
   });
 });

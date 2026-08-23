@@ -93,7 +93,8 @@ test.describe("wizard Criar com IA — resolução inline de ambiguidade", () =>
     await page.reload();
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
     await expect(page.getByText(/^\d+ kcal$/).first()).toHaveText(`${kcalAfterPick} kcal`);
-    await expect(page.getByPlaceholder("Buscar alimento").last()).toBeVisible();
+    const chosenNamePattern = chosenCandidateName.trim().split(/\s+/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[,\\s]+");
+    await expect(page.locator("article").last()).toContainText(new RegExp(chosenNamePattern, "i"));
   });
 
   test("remover um item ambíguo o descarta sem adivinhar — nunca entra no plano salvo", async ({ page, request }) => {

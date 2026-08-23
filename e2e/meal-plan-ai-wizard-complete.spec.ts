@@ -1,5 +1,6 @@
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
+import { publishPlan } from "./helpers/meal-plan-editor";
 import { createTestPatient } from "./helpers/test-data";
 
 /**
@@ -82,10 +83,9 @@ test.describe("wizard Criar com IA — geração completa com provider determin�
     await page.reload();
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
     await expect(page.getByText(/^\d+ kcal$/).first()).toHaveText(`${kcalBefore} kcal`);
-    await expect(page.getByPlaceholder("Buscar alimento").last()).toHaveValue(/arroz,?\s*tipo 1,?\s*cozido/i);
+    await expect(page.locator("article").last()).toContainText(/arroz,?\s*tipo 1,?\s*cozido/i);
 
-    await page.getByRole("button", { name: /^ativar no portal$/i }).click();
-    await expect(page.getByText(/^plano ativado no portal do cliente\.$/i)).toBeVisible();
+    await publishPlan(page);
 
     const printPage = await page.context().newPage();
     await printPage.goto(`/dashboard/clients/${patient.id}/print?secao=plano-alimentar`);

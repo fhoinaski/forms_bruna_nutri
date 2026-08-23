@@ -179,7 +179,7 @@ test.describe("R5 active plan delivery", () => {
     }
     await expect(page.getByText(friendlyFoodName(exchange.approvedName))).toBeVisible();
     await expect(page.getByText(friendlyFoodName(exchange.rejectedName))).toHaveCount(0);
-    await page.screenshot({ path: `reports/screenshots/meal-plan-r5-print-page1-${testInfo.project.name}.png`, fullPage: true });
+    await page.screenshot({ path: `reports/screenshots/meal-plan-r5-print-page1-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });
   });
 
   test("draft não vaza antes da publicação e passa a ser entregue depois de publicar", async ({ page, request }, testInfo) => {

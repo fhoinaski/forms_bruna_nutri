@@ -1,25 +1,7 @@
 import { test, expect } from "./fixtures";
-import type { Page } from "@playwright/test";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
+import { addMeal, publishPlan, selectFood, selectLastGrams, setLastQuantity } from "./helpers/meal-plan-editor";
 import { createTestPatient, seedAiProposal, uniqueSuffix } from "./helpers/test-data";
-
-/**
- * O campo de busca de alimento fecha a lista de sugestoes 140ms apos perder
- * foco (MealItemsEditor.tsx onBlur). Em automacao (bem mais rapida que
- * digitacao humana), o mousedown do clique na sugestao as vezes dispara
- * esse blur antes do click completar, fechando a lista e derrubando o
- * proprio botao que se está clicando. Encapsula busca+selecao com retry
- * (reescreve a busca do zero a cada tentativa) em vez de um clique unico.
- */
-async function searchAndSelectFood(page: Page, input: import("@playwright/test").Locator, query: string, matchRegex: RegExp) {
-  await expect(async () => {
-    await input.fill("");
-    await input.fill(query);
-    const suggestion = page.locator("button", { hasText: matchRegex }).first();
-    await expect(suggestion).toBeVisible({ timeout: 3000 });
-    await suggestion.click({ timeout: 3000 });
-  }).toPass({ timeout: 20000 });
-}
 
 /**
  * Fluxo E2E completo pedido na auditoria do motor nutricional (secao 29):
@@ -65,17 +47,16 @@ test.describe("ciclo completo do plano alimentar: manual + receita + impressao +
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
     // 1. Nova refeicao + arroz (100g).
-    await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const mealCard = page.locator("article").last();
-    await searchAndSelectFood(page, page.getByPlaceholder("Buscar alimento").last(), "Arroz", /arroz/i);
-    await page.getByPlaceholder("Qtd.").last().fill("100");
-    await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
+    const mealCard = await addMeal(page);
+    await selectFood(page, mealCard, "Arroz", /arroz/i);
+    await setLastQuantity(mealCard, "100");
+    await selectLastGrams(mealCard);
 
     // 2. Adiciona um segundo item (proteina) na MESMA refeicao.
     await mealCard.getByRole("button", { name: /^alimento$/i }).click();
-    await searchAndSelectFood(page, page.getByPlaceholder("Buscar alimento").last(), "Peito de frango", /frango/i);
-    await page.getByPlaceholder("Qtd.").last().fill("100");
-    await page.locator('select[title*="Medida"]').last().selectOption("__grams__");
+    await selectFood(page, mealCard, "Peito de frango", /frango/i);
+    await setLastQuantity(mealCard, "100");
+    await selectLastGrams(mealCard);
 
     // 3. Insere a receita semeada (vira uma nova refeicao com os
     // ingredientes copiados — "Inserir receita" no editor).
@@ -97,8 +78,7 @@ test.describe("ciclo completo do plano alimentar: manual + receita + impressao +
     await expect(page.getByText(/^plano alimentar salvo\.$/i)).toBeVisible();
 
     // 6. Ativa (a pagina de impressao so mostra o plano ATIVO).
-    await page.getByRole("button", { name: /^ativar no portal$/i }).click();
-    await expect(page.getByText(/^plano ativado no portal do cliente\.$/i)).toBeVisible();
+    await publishPlan(page);
 
     // 7. Abre a versao imprimivel e confere o MESMO total de energia —
     // prova que impressao e editor usam o mesmo motor (nunca uma formula

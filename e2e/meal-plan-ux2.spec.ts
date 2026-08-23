@@ -1,6 +1,7 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
+import { addMeal, fieldAfterLabel, selectFood, selectLastGrams, setLastQuantity } from "./helpers/meal-plan-editor";
 import { createTestPatient } from "./helpers/test-data";
 
 /**
@@ -16,10 +17,6 @@ import { createTestPatient } from "./helpers/test-data";
  */
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
-function fieldAfterLabel(page: Page, label: string, tag: "input" | "textarea" = "input") {
-  return page.locator(`xpath=//label[normalize-space()="${label}"]/following-sibling::${tag}[1]`);
-}
-
 async function createPlan(request: APIRequestContext, patientId: string, title = "Plano UX2 E2E") {
   const res = await request.post(`/api/admin/clients/${patientId}/meal-plans`, {
     data: { targetGroup: "ADULTO_SAUDAVEL", title },
@@ -29,26 +26,17 @@ async function createPlan(request: APIRequestContext, patientId: string, title =
 }
 
 async function addMealWithArroz(page: Page, name: string) {
-  await page.getByRole("button", { name: /^refeicao$/i }).click();
-  const meal = page.locator("article").last();
-  await meal.getByPlaceholder("Nome da refeicao").fill(name);
-  const foodInput = meal.getByPlaceholder("Buscar alimento").last();
-  await foodInput.fill("Arroz");
-  const suggestion = page.locator("button", { hasText: /arroz/i }).first();
-  await expect(async () => {
-    await expect(suggestion).toBeVisible({ timeout: 10_000 });
-  }).toPass({ timeout: 15_000 });
-  await suggestion.click();
-  await meal.getByPlaceholder("Qtd.").last().fill("100");
+  const meal = await addMeal(page, name);
+  await selectFood(page, meal, "Arroz", /arroz/i);
+  await setLastQuantity(meal, "100");
+  await selectLastGrams(meal);
   return meal;
 }
 
 async function addNamedMealWithFreeTextItem(page: Page, name: string) {
-  await page.getByRole("button", { name: /^refeicao$/i }).click();
-  const meal = page.locator("article").last();
-  await meal.getByPlaceholder("Nome da refeicao").fill(name);
-  await meal.getByPlaceholder("Buscar alimento").last().fill(`Item ${name}`);
-  await meal.getByPlaceholder("Qtd.").last().fill("100");
+  const meal = await addMeal(page, name);
+  await meal.locator('input[aria-label="Alimento"]').last().fill(`Item ${name}`);
+  await meal.locator('input[aria-label="Quantidade"]:visible').last().fill("100");
   return meal;
 }
 
@@ -94,8 +82,7 @@ test.describe("plano alimentar — UX 2.0", () => {
 
     const duplicated = page.locator("article").last();
     await expect(duplicated.getByPlaceholder("Nome da refeicao")).toHaveValue("Lanche da tarde (cópia)");
-    await expect(duplicated.getByPlaceholder("Buscar alimento").last()).toHaveValue(/arroz/i);
-    await expect(duplicated.getByPlaceholder("Qtd.").last()).toHaveValue("100");
+    await expect(duplicated).toContainText(/Arroz[\s\S]*100 g/);
   });
 
   test("duplica um alimento dentro da refeicao", async ({ page, request }) => {
@@ -109,10 +96,10 @@ test.describe("plano alimentar — UX 2.0", () => {
     await meal.getByRole("button", { name: /mais ações do alimento/i }).last().click();
     await meal.getByRole("button", { name: /^duplicar$/i }).click();
 
-    const foodInputs = meal.getByPlaceholder("Buscar alimento");
-    await expect(foodInputs).toHaveCount(2);
-    await expect(foodInputs.last()).toHaveValue(/arroz/i);
-    await expect(meal.getByPlaceholder("Qtd.").last()).toHaveValue("100");
+    await expect(meal.locator('input[aria-label="Alimento"]:visible').last()).toHaveValue(/arroz/i);
+    await expect(meal.locator("p").filter({ hasText: /arroz/i })).toHaveCount(1);
+    await expect(meal.locator('input[aria-label="Quantidade"]').last()).toHaveValue("100");
+    await expect(meal.getByText("100 g", { exact: true })).toHaveCount(1);
   });
 
   test("duplica o plano atual em um novo rascunho, preservando refeicoes e itens", async ({ page, request }) => {
@@ -133,8 +120,10 @@ test.describe("plano alimentar — UX 2.0", () => {
 
     // O plano recem-duplicado (agora selecionado) traz titulo marcado e o conteudo pre-preenchido, sem ter sido salvo ainda.
     await expect(fieldAfterLabel(page, "Titulo do plano")).toHaveValue(/\(cópia\)$/);
-    await expect(page.locator("article", { hasText: "Refeicao Original" })).toBeVisible();
-    await expect(page.getByPlaceholder("Buscar alimento").last()).toHaveValue(/arroz/i);
+    const duplicatedMeal = page.locator("article", { hasText: "Refeicao Original" });
+    await expect(duplicatedMeal).toBeVisible();
+    await expect(duplicatedMeal.locator('input[aria-label="Alimento"]:visible').last()).toHaveValue(/arroz/i);
+    await expect(duplicatedMeal.locator('input[aria-label="Quantidade"]:visible').last()).toHaveValue("100");
 
     // Revisar e salvar o duplicado persiste normalmente, como qualquer plano novo.
     await page.getByRole("button", { name: /^salvar rascunho$/i }).click();
@@ -181,10 +170,10 @@ test.describe("plano alimentar — UX 2.0", () => {
     await page.getByRole("button", { name: /^criar por modelo$/i }).click();
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
-    await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const foodInput = page.locator("article").last().getByPlaceholder("Buscar alimento").last();
+    const meal = await addMeal(page);
+    const foodInput = meal.locator('input[aria-label="Alimento"]').last();
     await foodInput.fill("Arroz");
-    await expect(page.locator("button", { hasText: /arroz/i }).first()).toBeVisible();
+    await expect(page.getByRole("option", { name: /arroz/i }).first()).toBeVisible();
 
     const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(hasOverflow).toBe(false);
@@ -217,7 +206,7 @@ test.describe("plano alimentar — UX 2.0", () => {
 
     // Acoes secundarias continuam presentes e clicaveis no menu compacto,
     // sem competir com a largura do campo de alimento.
-    await expect(meal.getByRole("button", { name: /alternativas/i }).last()).toBeVisible();
+    await expect(meal.getByRole("button", { name: /trocas/i }).last()).toBeVisible();
     await meal.getByRole("button", { name: /mais ações do alimento/i }).last().click();
     await expect(meal.getByRole("button", { name: /^duplicar$/i })).toBeVisible();
     await expect(meal.getByRole("button", { name: /^excluir$/i })).toBeVisible();
@@ -230,9 +219,8 @@ test.describe("plano alimentar — UX 2.0", () => {
     await page.getByRole("button", { name: /^criar por modelo$/i }).click();
     await expect(page.getByText(/plano criado a partir do modelo/i)).toBeVisible();
 
-    await page.getByRole("button", { name: /^refeicao$/i }).click();
-    const meal = page.locator("article").last();
-    const foodInput = meal.getByPlaceholder("Buscar alimento").last();
+    const meal = await addMeal(page);
+    const foodInput = meal.locator('input[aria-label="Alimento"]').last();
     const longName = "Pão integral, forma, tradicional, fatiado, sem casca";
     await foodInput.fill(longName);
 
@@ -257,7 +245,7 @@ test.describe("plano alimentar — UX 2.0", () => {
     // addMealWithArroz seleciona um resultado de busca real -> o item fica
     // RESOLVIDO, e o segundo campo vira o <select> de medida ("Medida"),
     // nao o <input> de unidade livre ("Unidade") do estado nao resolvido.
-    const unitField = meal.getByLabel("Medida").last();
+    const unitField = meal.locator('select[aria-label="Medida"]:visible').last();
 
     // Selecionar a comida dispara um fetch assincrono de medidas caseiras
     // pro <select> de "Medida" — medir a posicao ANTES dele resolver pode
