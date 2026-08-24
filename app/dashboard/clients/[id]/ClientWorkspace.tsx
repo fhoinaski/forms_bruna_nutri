@@ -1,22 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, ArrowDown, Save, Phone, Mail, FileText, Printer,
+  ArrowLeft, Save, FileText, Printer,
   User, BookOpen, CheckSquare, TrendingUp, Clock,
   Plus, Check, X, Trash2, ChevronRight, ChevronDown,
   CalendarDays, WalletCards, KeyRound, ShieldCheck, RefreshCw, ExternalLink,
   Copy, Play,
   Utensils, AlertTriangle, Activity, Stethoscope,
+  MoreHorizontal,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import dynamic from "next/dynamic";
 import { ClinicalEvolutionForm } from "@/components/dashboard/ClinicalEvolutionForm";
 import { NutritionRecordHistory } from "@/components/dashboard/NutritionRecordHistory";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { suggestEducationCardsFromDiagnoses } from "@/lib/clinical/patient-education-suggestions";
+import {
+  ANAMNESIS_SECTIONS,
+  availableAnamnesisLifeStages,
+  countAnsweredAnamnesisFields,
+  formatAnamnesisAnswer,
+  getKeyClinicalInfo,
+  getVisibleAnamnesisFields,
+  hasAnamnesisValue,
+  sanitizeAnamnesisSectionPatch,
+  type AnamnesisFieldDefinition,
+  type AnamnesisFieldKey,
+  type AnamnesisSectionDefinition,
+} from "@/lib/clinical/patient-anamnesis";
 import {
   calculateAgeInYears,
   calculateWaistHeightRatio,
@@ -24,10 +37,11 @@ import {
   classifyWaistHeightRatio,
   classifyWaistHipRatio,
 } from "@/lib/clinical/anthropometry";
-import { PROTOCOL_TEMPLATE_GROUP_LABELS, PROTOCOL_TEMPLATE_TARGET_GROUPS } from "@/lib/protocol-templates/constants";
-import { NUTRITION_TEXT_FIELDS } from "@/lib/clinical/nutrition-record-fields";
+import { PROTOCOL_TEMPLATE_GROUP_LABELS } from "@/lib/protocol-templates/constants";
 import { CLINICAL_MARKER_CODE_LABELS, FOOD_RESTRICTION_CODES } from "@/lib/clinical/structured-markers";
 import type { ClientSnapshot } from "@/lib/clinical/client-snapshot";
+import type { PatientRecordSummaryViewModel } from "@/lib/repositories/patient-record-summary";
+import type { PatientTimelineEvent, PatientTimelineFilter, PatientTimelineResult } from "@/lib/repositories/patient-record-timeline";
 
 const MealPlanEditor = dynamic(() => import("@/components/dashboard/MealPlanEditor").then((mod) => mod.MealPlanEditor));
 const EvolutionChart = dynamic(() => import("@/components/dashboard/EvolutionChart").then((mod) => mod.EvolutionChart));
@@ -81,9 +95,6 @@ interface ClientEvolution {
   adherence_notes: string | null; adherence_score: number | null;
   progress_notes: string | null; conduct_notes: string | null;
   clinical_impression: string | null; next_steps: string | null; created_at: string;
-}
-interface TimelineEvent {
-  id: string; type: string; title: string; description: string | null; created_at: string;
 }
 interface ClientAppointment {
   id: string; title: string; appointment_type: string; starts_at: string;
@@ -143,13 +154,6 @@ interface StructuredRestrictionSuggestion {
   severity: "unknown";
   evidenceText: string;
   confidence: "low" | "medium";
-}
-
-interface PatientEducationCardLite {
-  id: string;
-  slug: string;
-  title: string;
-  summary: string;
 }
 
 interface ClinicalGrowthResponse {
@@ -251,18 +255,14 @@ const STRUCTURED_RESTRICTION_SEVERITY_LABELS: Record<StructuredRestrictionSeveri
   severe: "Grave",
 };
 
-const TIMELINE_ICONS: Record<string, string> = {
-  client_created: "👤", protocol_applied: "📋", protocol_created: "✨",
-  task_completed: "✅", evolution_recorded: "📊", report_generated: "📄",
-  protocol_completed: "🏁",
-};
-
 const TABS = [
   { id: "resumo", label: "Resumo", icon: User },
+  { id: "consultas", label: "Consultas", icon: CalendarDays },
   { id: "anamnese", label: "Anamnese", icon: FileText },
   { id: "antropometria", label: "Antropometria", icon: Activity },
   { id: "plano-alimentar", label: "Plano alimentar", icon: Utensils },
   { id: "evolucao", label: "Evolução", icon: TrendingUp },
+  { id: "mais", label: "Mais", icon: MoreHorizontal },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -276,16 +276,6 @@ function formatMoney(cents: number): string {
     style: "currency",
     currency: "BRL",
   }).format(cents / 100);
-}
-
-function calculateAge(birthDate: string | null): string {
-  if (!birthDate) return "Idade não informada";
-  const date = parseISO(birthDate);
-  if (!isValid(date)) return "Idade não informada";
-  const today = new Date();
-  let age = today.getFullYear() - date.getFullYear();
-  if (today.getMonth() < date.getMonth() || (today.getMonth() === date.getMonth() && today.getDate() < date.getDate())) age--;
-  return `${age} anos`;
 }
 
 // ── Evolution form ─────────────────────────────────────────────────────────
@@ -585,81 +575,6 @@ function ReassessmentTable({ evolutions }: { evolutions: ClientEvolution[] }) {
   );
 }
 
-const isPregnancyRecord = (record: NutritionRecord) => record.life_stage === "Gestacao";
-const isBariatricRecord = (record: NutritionRecord) => record.target_group === "BARIATRICO";
-
-const ANTHROPOMETRY_FIELDS: {
-  key: keyof NutritionRecord;
-  label: string;
-  placeholder: string | ((record: NutritionRecord) => string);
-  type?: string;
-  visibleWhen?: (record: NutritionRecord) => boolean;
-}[] = [
-  { key: "current_weight_kg", label: "Peso atual (kg)", placeholder: "Ex: 68,5" },
-  { key: "height_cm", label: "Altura (cm)", placeholder: "Ex: 165" },
-  {
-    key: "target_weight_kg",
-    label: "Peso/meta clinica",
-    placeholder: (record) => isBariatricRecord(record)
-      ? "Numero em kg — habilita o calculo de %EWL"
-      : "Ex: manter ganho adequado",
-  },
-  // Campos abaixo só fazem sentido para o contexto correspondente — evita
-  // pedir peso pre-gestacional de um homem ou data de cirurgia bariatrica
-  // de quem nao esta nessa categoria de cuidado.
-  { key: "pre_pregnancy_weight_kg", label: "Peso pre-gestacional (kg)", placeholder: "Ex: 62,0", visibleWhen: isPregnancyRecord },
-  { key: "pre_surgery_weight_kg", label: "Peso pre-cirurgico (kg)", placeholder: "Ex: 120", visibleWhen: isBariatricRecord },
-  { key: "bariatric_surgery_date", label: "Data da cirurgia bariatrica", placeholder: "", type: "date", visibleWhen: isBariatricRecord },
-];
-
-const LIFE_STAGE_OPTIONS = ["Gestacao", "Pos-parto", "Lactante", "Bebe", "Crianca", "Adolescente", "Adulto responsavel"];
-const LIFE_STAGES_REQUIRING_GESTATION_CAPACITY = ["Gestacao", "Pos-parto", "Lactante"];
-
-/**
- * Fases de gestacao/pos-parto/lactacao nao se aplicam a pacientes cujo sexo
- * biologico esta registrado como Masculino. Para os demais valores
- * (Feminino, Intersexo, Nao informado ou em branco) nao restringimos nada,
- * para nao presumir algo que a profissional ainda nao registrou.
- */
-function availableLifeStageOptions(biologicalSex: string | null | undefined): string[] {
-  if (biologicalSex === "Masculino") {
-    return LIFE_STAGE_OPTIONS.filter((option) => !LIFE_STAGES_REQUIRING_GESTATION_CAPACITY.includes(option));
-  }
-  return LIFE_STAGE_OPTIONS;
-}
-
-const CLINICAL_PROFILE_FIELDS: { key: keyof NutritionRecord; label: string; options?: string[]; placeholder?: string }[] = [
-  { key: "biological_sex", label: "Sexo biologico", options: ["Feminino", "Masculino", "Intersexo", "Nao informado"] },
-  { key: "life_stage", label: "Fase do cuidado", options: LIFE_STAGE_OPTIONS },
-  { key: "target_group", label: "Categoria de cuidado" },
-  { key: "gestational_weeks", label: "Semanas de gestacao", placeholder: "Ex: 28 semanas" },
-];
-
-function parseDecimalInput(value: string | null): number | null {
-  if (!value) return null;
-  const parsed = Number(value.replace(",", ".").replace(/[^\d.]/g, ""));
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function calculateBmi(weightValue: string | null, heightValue: string | null): string | null {
-  const weight = parseDecimalInput(weightValue);
-  const heightCm = parseDecimalInput(heightValue);
-  if (!weight || !heightCm) return null;
-  const heightM = heightCm / 100;
-  return (weight / (heightM * heightM)).toFixed(1).replace(".", ",");
-}
-
-function classifyBmiLabel(value: string | number | null): string {
-  const bmi = typeof value === "number" ? value : parseDecimalInput(value);
-  if (!bmi) return "Sem classificacao";
-  if (bmi < 18.5) return "Baixo peso";
-  if (bmi < 25) return "Eutrofia";
-  if (bmi < 30) return "Sobrepeso";
-  if (bmi < 35) return "Obesidade grau I";
-  if (bmi < 40) return "Obesidade grau II";
-  return "Obesidade grau III";
-}
-
 function formatDelta(value: number | null): string {
   if (value === null) return "sem comparativo";
   const prefix = value > 0 ? "+" : "";
@@ -671,11 +586,12 @@ function weightDelta(current: ClientEvolution, next?: ClientEvolution): number |
   return Math.round((current.weight - next.weight) * 10) / 10;
 }
 
-function StructuredRestrictionsPanel({ clientId }: { clientId: string }) {
+function StructuredRestrictionsPanel({ clientId, onChanged }: { clientId: string; onChanged: () => void }) {
   const [items, setItems] = useState<StructuredRestriction[]>([]);
   const [suggestions, setSuggestions] = useState<StructuredRestrictionSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState({
@@ -723,6 +639,7 @@ function StructuredRestrictionsPanel({ clientId }: { clientId: string }) {
         throw new Error(body?.message ?? "Nao foi possivel salvar.");
       }
       await loadItems();
+      onChanged();
       setForm((prev) => ({ ...prev, evidenceText: "" }));
       setMessage("Restricao estruturada salva.");
     } catch (cause) {
@@ -742,6 +659,7 @@ function StructuredRestrictionsPanel({ clientId }: { clientId: string }) {
       });
       if (!res.ok) throw new Error();
       await loadItems();
+      onChanged();
       setMessage("Restricao resolvida.");
     } catch {
       setError("Nao foi possivel resolver a restricao.");
@@ -797,9 +715,14 @@ function StructuredRestrictionsPanel({ clientId }: { clientId: string }) {
             Dados normalizados para regras e alertas. O texto completo do prontuario permanece preservado nos campos clinicos.
           </p>
         </div>
-        <button type="button" onClick={loadSuggestions} disabled={saving} className="brand-btn-secondary w-full text-xs md:w-auto">
-          Sugerir a partir do texto
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button type="button" onClick={() => setEditing((prev) => !prev)} disabled={saving} className="brand-btn-secondary w-full text-xs md:w-auto">
+            {editing ? "Fechar edicao" : "Adicionar marcador"}
+          </button>
+          <button type="button" onClick={loadSuggestions} disabled={saving} className="brand-btn-secondary w-full text-xs md:w-auto">
+            Sugerir a partir do texto
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -836,40 +759,44 @@ function StructuredRestrictionsPanel({ clientId }: { clientId: string }) {
         </div>
       )}
 
-      <div className="mt-5 rounded-xl border border-[#D9E4D3] bg-white p-4">
-        <p className="mb-3 text-sm font-semibold text-[#3A3028]">Adicionar marcador</p>
-        <div className="grid gap-3 md:grid-cols-5">
-          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as StructuredRestrictionType })} className="brand-input">
-            {(["ALLERGY", "INTOLERANCE", "DIETARY_RESTRICTION", "FOOD_AVOIDANCE"] as StructuredRestrictionType[]).map((type) => (
-              <option key={type} value={type}>{STRUCTURED_RESTRICTION_TYPE_LABELS[type]}</option>
-            ))}
-          </select>
-          <select value={form.normalizedCode} onChange={(e) => setForm({ ...form, normalizedCode: e.target.value })} className="brand-input">
-            {FOOD_RESTRICTION_CODES.map((code) => (
-              <option key={code} value={code}>{CLINICAL_MARKER_CODE_LABELS[code]}</option>
-            ))}
-          </select>
-          <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Exclude<StructuredRestrictionStatus, "RESOLVED"> })} className="brand-input">
-            <option value="ACTIVE">Ativo</option>
-            <option value="SUSPECTED">Suspeito</option>
-          </select>
-          <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value as StructuredRestrictionSeverity })} className="brand-input">
-            {Object.entries(STRUCTURED_RESTRICTION_SEVERITY_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-          <button type="button" onClick={() => createMarker()} disabled={saving} className="brand-btn-primary">
-            <Plus className="h-4 w-4" />
-            Adicionar
-          </button>
+      {editing && (
+        <div className="mt-5 rounded-xl border border-[#D9E4D3] bg-white p-4">
+          <p className="mb-3 text-sm font-semibold text-[#3A3028]">Adicionar marcador</p>
+          <div className="grid gap-3 md:grid-cols-5">
+            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as StructuredRestrictionType })} className="brand-input" aria-label="Tipo de marcador">
+              {(["ALLERGY", "INTOLERANCE", "DIETARY_RESTRICTION", "FOOD_AVOIDANCE"] as StructuredRestrictionType[]).map((type) => (
+                <option key={type} value={type}>{STRUCTURED_RESTRICTION_TYPE_LABELS[type]}</option>
+              ))}
+            </select>
+            <select value={form.normalizedCode} onChange={(e) => setForm({ ...form, normalizedCode: e.target.value })} className="brand-input" aria-label="Alimento ou marcador">
+              {FOOD_RESTRICTION_CODES.map((code) => (
+                <option key={code} value={code}>{CLINICAL_MARKER_CODE_LABELS[code]}</option>
+              ))}
+            </select>
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Exclude<StructuredRestrictionStatus, "RESOLVED"> })} className="brand-input" aria-label="Status do marcador">
+              <option value="ACTIVE">Ativo</option>
+              <option value="SUSPECTED">Suspeito</option>
+            </select>
+            <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value as StructuredRestrictionSeverity })} className="brand-input" aria-label="Gravidade do marcador">
+              {Object.entries(STRUCTURED_RESTRICTION_SEVERITY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <button type="button" onClick={() => createMarker()} disabled={saving} className="brand-btn-primary">
+              <Plus className="h-4 w-4" />
+              Adicionar
+            </button>
+          </div>
+          <label className="brand-label mt-3" htmlFor="structured-restriction-evidence">Evidencia curta</label>
+          <textarea
+            id="structured-restriction-evidence"
+            value={form.evidenceText}
+            onChange={(e) => setForm({ ...form, evidenceText: e.target.value })}
+            className="brand-input mt-1 min-h-20 resize-y"
+            placeholder="Evidencia curta ou observacao profissional. O texto completo continua no prontuario."
+          />
         </div>
-        <textarea
-          value={form.evidenceText}
-          onChange={(e) => setForm({ ...form, evidenceText: e.target.value })}
-          className="brand-input mt-3 min-h-20 resize-y"
-          placeholder="Evidencia curta ou observacao profissional. O texto completo continua no prontuario."
-        />
-      </div>
+      )}
 
       {suggestions.length > 0 && (
         <div className="mt-5 rounded-xl border border-[#EAD8C2] bg-[#FFFDFC] p-4">
@@ -913,15 +840,17 @@ function StructuredRestrictionsPanel({ clientId }: { clientId: string }) {
 
 function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSaved: () => void }) {
   const [record, setRecord] = useState<NutritionRecord | null>(null);
-  const [educationCards, setEducationCards] = useState<PatientEducationCardLite[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Partial<Record<AnamnesisFieldKey, string>>>({});
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [savedSection, setSavedSection] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const loadRecord = () => {
     setLoading(true);
+    setError("");
     fetch(`/api/admin/clients/${clientId}/nutrition-record`)
       .then((res) => {
         if (!res.ok) throw new Error();
@@ -930,48 +859,87 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
       .then(setRecord)
       .catch(() => setError("Nao foi possivel carregar o prontuario."))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadRecord();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
   useEffect(() => {
-    fetch("/api/admin/patient-education-cards?category=patologia", { cache: "no-store" })
-      .then((res) => res.ok ? res.json() as Promise<{ items: PatientEducationCardLite[] }> : { items: [] })
-      .then((data) => setEducationCards(data.items ?? []))
-      .catch(() => setEducationCards([]));
-  }, []);
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
 
-  const setField = (key: keyof NutritionRecord, value: string) => {
-    setRecord((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, [key]: value };
-      // Se o sexo biologico virar Masculino, uma fase do cuidado
-      // ligada a gestacao/pos-parto/lactacao deixa de fazer sentido —
-      // evita manter uma combinacao clinicamente incoerente salva.
-      if (key === "biological_sex" && value === "Masculino" && next.life_stage && LIFE_STAGES_REQUIRING_GESTATION_CAPACITY.includes(next.life_stage)) {
-        next.life_stage = "";
+  const editingSection = ANAMNESIS_SECTIONS.find((section) => section.id === editingSectionId) ?? null;
+  const answeredTotal = record
+    ? ANAMNESIS_SECTIONS.reduce((total, section) => total + countAnsweredAnamnesisFields(record, section).answered, 0)
+    : 0;
+
+  function guardDirty(action: () => void) {
+    if (dirty && !window.confirm("Existem alteracoes nao salvas nesta secao. Deseja descartar?")) return;
+    action();
+  }
+
+  function startSectionEdit(section: AnamnesisSectionDefinition) {
+    if (!record) return;
+    guardDirty(() => {
+      const sectionDraft: Partial<Record<AnamnesisFieldKey, string>> = {};
+      for (const field of getVisibleAnamnesisFields(record, section)) {
+        sectionDraft[field.key] = String(record[field.key] ?? "");
+      }
+      setDraft(sectionDraft);
+      setEditingSectionId(section.id);
+      setDirty(false);
+      setError("");
+      setSavedSection(null);
+      window.setTimeout(() => document.getElementById(`anamnesis-editor-${section.id}`)?.focus(), 0);
+    });
+  }
+
+  function updateDraft(field: AnamnesisFieldDefinition, value: string) {
+    setDraft((prev) => {
+      const next = { ...prev, [field.key]: value };
+      if (field.key === "biological_sex" && value === "Masculino") {
+        const lifeStage = next.life_stage;
+        if (lifeStage && !availableAnamnesisLifeStages({ ...(record ?? {}), ...next } as NutritionRecord).includes(lifeStage)) {
+          next.life_stage = "";
+        }
       }
       return next;
     });
-  };
+    setDirty(true);
+    setSavedSection(null);
+  }
 
-  const handleSave = async () => {
-    if (!record) return;
-    setSaving(true); setSaved(false); setError("");
-    const recordFields: (keyof NutritionRecord)[] = [
-      ...CLINICAL_PROFILE_FIELDS.map((field) => field.key),
-      ...NUTRITION_TEXT_FIELDS.map((field) => field.key),
-      ...ANTHROPOMETRY_FIELDS.map((field) => field.key),
-      "anthropometry_notes",
-    ];
-    // O IMC nunca e enviado aqui — e sempre calculado no servidor a partir
-    // de peso e altura (nunca aceito como valor digitado pelo usuario).
-    const payload = Object.fromEntries(
-      recordFields.map((key) => [key, String(record[key] ?? "").trim() || null])
-    );
+  function cancelEdit() {
+    guardDirty(() => {
+      setEditingSectionId(null);
+      setDraft({});
+      setDirty(false);
+      setError("");
+    });
+  }
+
+  const handleSaveSection = async () => {
+    if (!record || !editingSection) return;
+    setSaving(true);
+    setError("");
+    const payload = sanitizeAnamnesisSectionPatch(editingSection, draft);
     try {
       const res = await fetch(`/api/admin/clients/${clientId}/nutrition-record`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, expectedVersion: record.version }),
+        body: JSON.stringify({
+          ...payload,
+          expectedVersion: record.version,
+          reason: `Atualizacao da secao ${editingSection.title}`,
+        }),
       });
       if (res.status === 409) {
         const body = await res.json().catch(() => null);
@@ -980,182 +948,280 @@ function NutritionRecordEditor({ clientId, onSaved }: { clientId: string; onSave
       }
       if (!res.ok) throw new Error();
       setRecord(await res.json());
-      setSaved(true);
+      setSavedSection(editingSection.id);
+      setEditingSectionId(null);
+      setDraft({});
+      setDirty(false);
       onSaved();
-      setTimeout(() => setSaved(false), 3000);
+      setTimeout(() => setSavedSection(null), 3000);
     } catch {
-      setError("Nao foi possivel salvar o prontuario.");
+      setError("Nao foi possivel salvar esta secao. As respostas digitadas foram mantidas.");
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <p className="text-sm text-[#A8927D]">Carregando prontuario...</p>;
-  if (!record) return <p className="text-sm text-red-600">{error || "Prontuario indisponivel."}</p>;
-
-  const suggestedEducationCards = suggestEducationCardsFromDiagnoses(record.diagnoses)
-    .map((match) => ({
-      match,
-      card: educationCards.find((card) => card.slug === match.slug),
-    }))
-    .filter((item): item is { match: { slug: string; keywords: string[] }; card: PatientEducationCardLite } => Boolean(item.card))
-    .slice(0, 4);
+  if (loading) return <AnamnesisSkeleton />;
+  if (!record) {
+    return (
+      <section className="rounded-xl border border-[#F1D0C8] bg-[#FFF7F5] p-5">
+        <h2 className="font-serif text-lg font-semibold text-[#3A3028]">Nao foi possivel carregar a anamnese.</h2>
+        <p className="mt-2 text-sm text-[#8C6E52]">{error || "Tente novamente em alguns instantes."}</p>
+        <button type="button" onClick={loadRecord} className="brand-btn-secondary mt-4 w-full sm:w-auto">
+          <RefreshCw className="h-4 w-4" />
+          Tentar novamente
+        </button>
+      </section>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Prontuario nutricional completo</h2>
+          <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Anamnese</h2>
           <p className="mt-1 max-w-2xl text-sm text-[#8C6E52]">
-            Ficha clinica viva do atendimento, com dados essenciais para anamnese, acompanhamento e plano de cuidado.
+            Prontuario estruturado para leitura rapida. Abra apenas a secao que precisa revisar ou atualizar.
           </p>
         </div>
         <div className="flex flex-col items-start gap-2 md:items-end">
           <div className="text-xs text-[#A8927D] md:text-right">
             <p>Atualizado em {formatDateSafe(record.updated_at, "dd/MM/yyyy HH:mm")}</p>
-            <p>Registro unico do paciente</p>
+            <p>Versao {record.version} · {answeredTotal > 0 ? "registro parcial permitido" : "ainda sem respostas"}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => document.getElementById("nutrition-record-save")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[#D9C4B2] px-3 py-1.5 text-xs font-semibold text-[#8C6E52] transition hover:bg-white"
-          >
-            Ir para salvar
-            <ArrowDown className="h-3.5 w-3.5" />
-          </button>
+          <a href="#nutrition-record-history" className="inline-flex items-center gap-1.5 rounded-full border border-[#D9C4B2] px-3 py-1.5 text-xs font-semibold text-[#8C6E52] transition hover:bg-white">
+            Ver historico
+          </a>
         </div>
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-5">
-        <h3 className="font-serif text-base font-semibold text-[#7A9A74]">Perfil clinico e fase de vida</h3>
-        <p className="mt-1 text-xs leading-5 text-[#8C6E52]">As opcoes de fase do cuidado se ajustam ao sexo biologico informado.</p>
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-          {CLINICAL_PROFILE_FIELDS
-            .filter((field) => field.key !== "gestational_weeks" || record.life_stage === "Gestacao")
-            .map((field) => {
-            if (field.key === "target_group") {
+      {answeredTotal === 0 && (
+        <section className="rounded-xl border border-dashed border-[#D9C4B2] bg-[#FFFDFC] p-5">
+          <h3 className="font-serif text-base font-semibold text-[#3A3028]">Anamnese ainda nao preenchida.</h3>
+          <p className="mt-2 text-sm text-[#8C6E52]">Comece pela primeira secao e salve parcialmente quando necessario.</p>
+          <button type="button" onClick={() => startSectionEdit(ANAMNESIS_SECTIONS[0])} className="brand-btn-primary mt-4 w-full sm:w-auto">
+            Comecar anamnese
+          </button>
+        </section>
+      )}
+
+      <section className="rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-4">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h3 className="font-serif text-base font-semibold text-[#3A3028]">Informacoes-chave</h3>
+            <p className="mt-1 text-xs text-[#8C6E52]">Resumo clinico permanente, sem substituir os detalhes das secoes.</p>
+          </div>
+          {savedSection && <p className="text-sm font-semibold text-[#4F6847]" aria-live="polite">Secao salva.</p>}
+        </div>
+        <dl className="mt-4 grid gap-3 md:grid-cols-4">
+          {getKeyClinicalInfo(record).map((item) => (
+            <div key={item.label} className="min-w-0 rounded-lg border border-[#F1E5DA] bg-[#FBF7F1] p-3">
+              <dt className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">{item.label}</dt>
+              <dd className="mt-1 line-clamp-3 text-sm text-[#3A3028]">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <nav aria-label="Secoes da anamnese" className="lg:sticky lg:top-20 lg:self-start">
+          <div className="grid gap-2 rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-2 sm:grid-cols-2 lg:grid-cols-1">
+            {ANAMNESIS_SECTIONS.map((section) => {
+              const stats = countAnsweredAnamnesisFields(record, section);
               return (
-                <div key={field.key}>
-                  <label className="brand-label">{field.label}</label>
-                  <select value={String(record.target_group ?? "")} onChange={(e) => setField("target_group", e.target.value)} className="brand-input">
-                    <option value="">Selecionar</option>
-                    {PROTOCOL_TEMPLATE_TARGET_GROUPS.map((group) => (
-                      <option key={group} value={group}>{PROTOCOL_TEMPLATE_GROUP_LABELS[group]}</option>
-                    ))}
-                  </select>
-                </div>
+                <a key={section.id} href={`#anamnesis-section-${section.id}`} className="rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[#FBF7F1]">
+                  <span className="font-semibold text-[#3A3028]">{section.title}</span>
+                  <span className="mt-0.5 block text-xs text-[#8C6E52]">{stats.answered}/{stats.total} preenchidos</span>
+                </a>
+              );
+            })}
+          </div>
+        </nav>
+
+        <div className="space-y-4">
+          {ANAMNESIS_SECTIONS.map((section) => {
+            if (editingSection?.id === section.id) {
+              return (
+                <AnamnesisSectionEditor
+                  key={section.id}
+                  record={{ ...record, ...draft } as NutritionRecord}
+                  section={section}
+                  draft={draft}
+                  saving={saving}
+                  error={error}
+                  onChange={updateDraft}
+                  onCancel={cancelEdit}
+                  onSave={handleSaveSection}
+                />
               );
             }
-            const options = field.key === "life_stage" ? availableLifeStageOptions(record.biological_sex) : field.options;
             return (
-              <div key={field.key}>
-                <label className="brand-label">{field.label}</label>
-                {options ? (
-                  <select value={String(record[field.key] ?? "")} onChange={(e) => setField(field.key, e.target.value)} className="brand-input">
-                    <option value="">Selecionar</option>
-                    {options.map((option) => <option key={option} value={option}>{option}</option>)}
-                  </select>
-                ) : (
-                  <input value={String(record[field.key] ?? "")} onChange={(e) => setField(field.key, e.target.value)} className="brand-input" placeholder={field.placeholder} />
-                )}
-              </div>
+              <AnamnesisSectionCard
+                key={section.id}
+                record={record}
+                section={section}
+                onEdit={() => startSectionEdit(section)}
+              />
             );
           })}
         </div>
       </div>
 
-      <div className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/70 p-5">
-        <h3 className="font-serif text-base font-semibold text-[#7A9A74]">Antropometria e medidas</h3>
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
-          {ANTHROPOMETRY_FIELDS
-            .filter((field) => !field.visibleWhen || field.visibleWhen(record))
-            .map((field) => (
-            <div key={field.key}>
-              <label className="brand-label">{field.label}</label>
-              <input
-                type={field.type ?? "text"}
-                value={String(record[field.key] ?? "")}
-                onChange={(e) => setField(field.key, e.target.value)}
-                className="brand-input"
-                placeholder={typeof field.placeholder === "function" ? field.placeholder(record) : field.placeholder}
-              />
-            </div>
-          ))}
-        </div>
-        {(() => {
-          const liveBmi = calculateBmi(record.current_weight_kg, record.height_cm) ?? record.bmi;
-          if (!liveBmi) return null;
-          return (
-            <div className="mt-4 rounded-lg border border-[#D9E4D3] bg-[#F4F8F1] p-3 sm:w-64">
-              <p className="brand-label mb-1">IMC calculado</p>
-              <p className="text-sm font-semibold text-[#3A3028]">{liveBmi}</p>
-              <p className="mt-1 text-xs leading-5 text-[#4F6847]">{classifyBmiLabel(liveBmi)} · calculado a partir de peso e altura</p>
-            </div>
-          );
-        })()}
-        <div className="mt-4">
-          <label className="brand-label">Observacoes antropometricas</label>
-          <textarea
-            value={record.anthropometry_notes ?? ""}
-            onChange={(e) => setField("anthropometry_notes", e.target.value)}
-            rows={3}
-            className="brand-input resize-y"
-            placeholder="Composicao corporal, curvas, variacoes relevantes, medidas adicionais e interpretacao profissional."
-          />
-        </div>
-      </div>
+      <StructuredRestrictionsPanel clientId={clientId} onChanged={onSaved} />
+    </div>
+  );
+}
 
-      <StructuredRestrictionsPanel clientId={clientId} />
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {NUTRITION_TEXT_FIELDS.map((field) => (
-          <div key={field.key} className={["clinical_history", "eating_routine", "exams", "assessment", "care_plan"].includes(String(field.key)) ? "lg:col-span-2" : undefined}>
-            <label className="brand-label">{field.label}</label>
-            <textarea
-              value={String(record[field.key] ?? "")}
-              onChange={(e) => setField(field.key, e.target.value)}
-              rows={field.rows ?? 2}
-              className="brand-input resize-y"
-              placeholder={field.placeholder}
-            />
-            {field.key === "diagnoses" && suggestedEducationCards.length > 0 && (
-              <div className="mt-3 rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] p-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-[#607A56]" />
-                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#607A56]">Fichas sugeridas pelo prontuario</p>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {suggestedEducationCards.map(({ card, match }) => (
-                    <Link
-                      key={card.id}
-                      href="/dashboard/templates/educacao"
-                      className="rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] p-3 transition hover:border-[#7F9A74]"
-                    >
-                      <p className="text-sm font-semibold text-[#3A3028]">{card.title}</p>
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#75675E]">{card.summary}</p>
-                      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8C6E52]">
-                        Sinal: {match.keywords.slice(0, 2).join(", ")}
-                      </p>
-                    </Link>
-                  ))}
-                </div>
-                <p className="mt-2 text-[11px] leading-5 text-[#8C6E52]">
-                  Sugestao automatica por palavra-chave. Revise o contexto antes de enviar material ao paciente.
-                </p>
-              </div>
-            )}
+function AnamnesisSkeleton() {
+  return (
+    <div className="space-y-4" aria-label="Carregando anamnese">
+      {[0, 1, 2].map((item) => (
+        <div key={item} className="rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-5">
+          <div className="h-4 w-40 rounded bg-[#F1E5DA]" />
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="h-16 rounded bg-[#FBF7F1]" />
+            <div className="h-16 rounded bg-[#FBF7F1]" />
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <div id="nutrition-record-save" className="flex justify-end">
-        <button onClick={handleSave} disabled={saving} className="brand-btn-primary">
-          <Save className="w-4 h-4" />
-          {saving ? "Salvando..." : saved ? "Prontuario salvo" : "Salvar prontuario"}
+function AnamnesisSectionCard({ record, section, onEdit }: { record: NutritionRecord; section: AnamnesisSectionDefinition; onEdit: () => void }) {
+  const fields = getVisibleAnamnesisFields(record, section);
+  const stats = countAnsweredAnamnesisFields(record, section);
+  const hasAnyAnswer = stats.answered > 0;
+  return (
+    <section id={`anamnesis-section-${section.id}`} className="scroll-mt-24 rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="font-serif text-base font-semibold text-[#3A3028]">{section.title}</h3>
+          <p className="mt-1 text-xs leading-5 text-[#8C6E52]">{section.description}</p>
+        </div>
+        <button type="button" onClick={onEdit} className="brand-btn-secondary w-full text-xs sm:w-auto">
+          {hasAnyAnswer ? "Editar secao" : "Preencher"}
         </button>
       </div>
+      {!hasAnyAnswer ? (
+        <p className="mt-4 rounded-lg border border-dashed border-[#EAD8C2] bg-[#FBF7F1] p-4 text-sm text-[#8C6E52]">Nao preenchido</p>
+      ) : (
+        <dl className="mt-4 grid gap-x-6 gap-y-4 md:grid-cols-2">
+          {fields.map((field) => (
+            <AnamnesisReadField key={field.key} record={record} field={field} />
+          ))}
+        </dl>
+      )}
+    </section>
+  );
+}
+
+function AnamnesisReadField({ record, field }: { record: NutritionRecord; field: AnamnesisFieldDefinition }) {
+  const formatted = formatAnamnesisAnswer(record[field.key], field);
+  const isEmpty = !hasAnamnesisValue(record[field.key]);
+  return (
+    <div className={field.longText ? "md:col-span-2" : undefined}>
+      <dt className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">{field.label}</dt>
+      <dd className={`mt-1 whitespace-pre-wrap text-sm leading-6 ${isEmpty ? "text-[#A8927D]" : "text-[#3A3028]"} ${field.longText ? "line-clamp-4" : ""}`}>
+        {formatted}
+      </dd>
+    </div>
+  );
+}
+
+function AnamnesisSectionEditor({
+  record,
+  section,
+  draft,
+  saving,
+  error,
+  onChange,
+  onCancel,
+  onSave,
+}: {
+  record: NutritionRecord;
+  section: AnamnesisSectionDefinition;
+  draft: Partial<Record<AnamnesisFieldKey, string>>;
+  saving: boolean;
+  error: string;
+  onChange: (field: AnamnesisFieldDefinition, value: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const fields = getVisibleAnamnesisFields(record, section);
+  return (
+    <section
+      id={`anamnesis-section-${section.id}`}
+      className="scroll-mt-24 rounded-xl border border-[#D9E4D3] bg-[#F8FBF5] p-5"
+      tabIndex={-1}
+      aria-labelledby={`anamnesis-editor-title-${section.id}`}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 id={`anamnesis-editor-title-${section.id}`} className="font-serif text-base font-semibold text-[#3A3028]">
+            Editar {section.title}
+          </h3>
+          <p className="mt-1 text-xs leading-5 text-[#607A56]">Somente esta secao esta em edicao. Cancelar restaura o estado salvo.</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={onCancel} disabled={saving} className="brand-btn-secondary text-xs">
+            Cancelar
+          </button>
+          <button type="button" onClick={onSave} disabled={saving} className="brand-btn-primary text-xs">
+            <Save className="h-4 w-4" />
+            {saving ? "Salvando..." : "Salvar secao"}
+          </button>
+        </div>
+      </div>
+
+      {error && <p className="mt-3 rounded-lg border border-red-200 bg-white p-3 text-sm text-red-600" role="alert">{error}</p>}
+
+      <fieldset className="mt-4 grid gap-4 md:grid-cols-2">
+        <legend className="sr-only">{section.title}</legend>
+        {fields.map((field) => (
+          <AnamnesisInput key={field.key} record={record} field={field} value={draft[field.key] ?? ""} onChange={(value) => onChange(field, value)} />
+        ))}
+      </fieldset>
+    </section>
+  );
+}
+
+function AnamnesisInput({ record, field, value, onChange }: { record: NutritionRecord; field: AnamnesisFieldDefinition; value: string; onChange: (value: string) => void }) {
+  const inputId = `anamnesis-${field.key}`;
+  const wrapperClassName = field.inputType === "textarea" || field.longText ? "md:col-span-2" : undefined;
+  const options = field.key === "life_stage" ? availableAnamnesisLifeStages(record) : field.options;
+
+  return (
+    <div className={wrapperClassName}>
+      <label htmlFor={inputId} className="brand-label">{field.label}</label>
+      {field.inputType === "select" ? (
+        <select id={inputId} value={value} onChange={(event) => onChange(event.target.value)} className="brand-input">
+          <option value="">Nao informado</option>
+          {(options ?? []).map((option) => (
+            <option key={option} value={option}>
+              {field.key === "target_group" ? PROTOCOL_TEMPLATE_GROUP_LABELS[option as keyof typeof PROTOCOL_TEMPLATE_GROUP_LABELS] ?? option : option}
+            </option>
+          ))}
+        </select>
+      ) : field.inputType === "textarea" ? (
+        <textarea
+          id={inputId}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          rows={field.rows ?? 2}
+          className="brand-input resize-y"
+          placeholder={field.placeholder ?? "Registrar resposta clinica."}
+        />
+      ) : (
+        <input
+          id={inputId}
+          type={field.inputType === "date" ? "date" : "text"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="brand-input"
+          placeholder={field.placeholder ?? "Nao informado"}
+        />
+      )}
     </div>
   );
 }
@@ -1178,7 +1244,462 @@ function SecondaryNavigation({ items, value, onChange }: {
   );
 }
 
-export default function ClientWorkspace({ initialData }: { initialData: ClientSnapshot }) {
+function formatDateTime(value: string | null): string {
+  return formatDateSafe(value, "dd/MM/yyyy HH:mm");
+}
+
+function formatAgeLabel(ageYears: number | null): string {
+  return ageYears === null ? "Idade não informada" : `${ageYears} anos`;
+}
+
+function formatWeight(value: number | null | undefined): string | null {
+  return typeof value === "number" ? `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg` : null;
+}
+
+function formatTrend(trend: PatientRecordSummaryViewModel["weightTrend"]): string | null {
+  if (!trend) return null;
+  if (trend.direction === "stable") return "Sem variação desde a última avaliação";
+  const arrow = trend.direction === "down" ? "↓" : "↑";
+  return `${arrow} ${Math.abs(trend.absoluteChangeKg).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg desde a última avaliação`;
+}
+
+function SummaryCard({
+  title,
+  value,
+  detail,
+  action,
+}: {
+  title: string;
+  value: string;
+  detail?: string | null;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-4">
+      <div className="flex min-h-28 flex-col justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">{title}</p>
+          <p className="mt-2 text-lg font-semibold leading-tight text-[#3A3028]">{value}</p>
+          {detail && <p className="mt-1 text-xs leading-5 text-[#75675E]">{detail}</p>}
+        </div>
+        {action}
+      </div>
+    </section>
+  );
+}
+
+function WeightSparkline({ series }: { series: PatientRecordSummaryViewModel["weightSeries"] }) {
+  if (series.length < 2) return null;
+  const values = series.map((point) => point.weightKg);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const points = series.map((point, index) => {
+    const x = series.length === 1 ? 0 : (index / (series.length - 1)) * 100;
+    const y = 36 - ((point.weightKg - min) / span) * 28;
+    return `${x},${y}`;
+  }).join(" ");
+  return (
+    <svg viewBox="0 0 100 40" role="img" aria-label="Evolução recente de peso" className="h-16 w-full">
+      <polyline points={points} fill="none" stroke="#607A56" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      {series.map((point, index) => {
+        const x = series.length === 1 ? 0 : (index / (series.length - 1)) * 100;
+        const y = 36 - ((point.weightKg - min) / span) * 28;
+        return <circle key={`${point.date}-${index}`} cx={x} cy={y} r="2.6" fill="#B47F6A" />;
+      })}
+    </svg>
+  );
+}
+
+const TIMELINE_FILTERS: Array<{ id: PatientTimelineFilter; label: string }> = [
+  { id: "all", label: "Todos" },
+  { id: "consultations", label: "Consultas" },
+  { id: "anthropometry", label: "Avaliações" },
+  { id: "meal_plans", label: "Planos" },
+  { id: "protocols", label: "Protocolos" },
+];
+
+function timelineIcon(event: PatientTimelineEvent) {
+  if (event.type === "CONSULTATION_COMPLETED") return Stethoscope;
+  if (event.type === "ANTHROPOMETRY_RECORDED") return Activity;
+  if (event.type === "MEAL_PLAN_PUBLISHED") return Utensils;
+  return BookOpen;
+}
+
+function formatTimelineDate(value: string, fmt = "dd MMM yyyy"): string {
+  return formatDateSafe(value, fmt).replace(".", "");
+}
+
+function TimelineEventList({ events, compact = false }: { events: PatientTimelineEvent[]; compact?: boolean }) {
+  return (
+    <div className="relative">
+      <div className="absolute bottom-0 left-4 top-0 w-px bg-[#EAD8C2]" aria-hidden="true" />
+      <ul className="space-y-3 pl-10" aria-label={compact ? "Atividade clinica recente" : "Timeline clinica"}>
+        {events.map((event) => {
+          const Icon = timelineIcon(event);
+          return (
+            <li key={event.id} className="relative">
+              <span className="absolute -left-[2.35rem] top-1 flex h-8 w-8 items-center justify-center rounded-full border border-[#EAD8C2] bg-[#FFFDFC] text-[#607A56]">
+                <Icon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-4">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <time dateTime={event.occurredAt} className="text-xs font-semibold uppercase text-[#8C6E52]">
+                      {formatTimelineDate(event.occurredAt, compact ? "dd MMM" : "dd MMM yyyy")}
+                    </time>
+                    <p className="mt-1 font-semibold text-[#3A3028]">{event.title}</p>
+                  </div>
+                  <span className="w-fit rounded-full bg-[#FBF7F1] px-2.5 py-1 text-[11px] font-semibold text-[#75675E]">
+                    {event.type.replaceAll("_", " ").toLowerCase()}
+                  </span>
+                </div>
+                {event.summary.length > 0 && (
+                  <ul className="mt-3 space-y-1 text-sm text-[#75675E]">
+                    {event.summary.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                )}
+                {event.href && (
+                  <Link href={event.href} className="mt-3 inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">
+                    {event.type === "MEAL_PLAN_PUBLISHED" ? "Abrir plano" : event.type === "ANTHROPOMETRY_RECORDED" ? "Ver avaliação" : event.type === "CONSULTATION_COMPLETED" ? "Ver consulta" : "Abrir"}
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Link>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function RecentActivity({
+  events,
+  onOpenTimeline,
+  onStartConsultation,
+  onNewAnthropometry,
+  archived,
+}: {
+  events: PatientTimelineEvent[];
+  onOpenTimeline: () => void;
+  onStartConsultation: () => void;
+  onNewAnthropometry: () => void;
+  archived: boolean;
+}) {
+  return (
+    <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="brand-kicker">Atividade clínica recente</p>
+          <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Linha do tempo</h3>
+        </div>
+        <button type="button" onClick={onOpenTimeline} className="brand-btn-secondary w-full sm:w-auto">
+          <Clock className="h-4 w-4" />
+          Ver histórico completo
+        </button>
+      </div>
+      {events.length ? (
+        <div className="mt-5">
+          <TimelineEventList events={events.slice(0, 5)} compact />
+        </div>
+      ) : (
+        <div className="mt-4 rounded-lg border border-dashed border-[#D9C4B2] p-5 text-sm text-[#75675E]">
+          <p>Ainda não há eventos clínicos registrados.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={onStartConsultation} disabled={archived} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">Iniciar consulta</button>
+            <button type="button" onClick={onNewAnthropometry} disabled={archived} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">Registrar avaliação</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TimelineSkeleton() {
+  return (
+    <div className="space-y-3" aria-label="Carregando histórico clínico">
+      {[0, 1, 2].map((item) => (
+        <div key={item} className="h-24 animate-pulse rounded-lg border border-[#EDE1D6] bg-[#FBF7F1]" />
+      ))}
+    </div>
+  );
+}
+
+function PatientClinicalTimeline({
+  result,
+  filter,
+  loading,
+  error,
+  onFilterChange,
+  onLoadMore,
+  onRetry,
+  onStartConsultation,
+  onNewAnthropometry,
+  archived,
+}: {
+  result: PatientTimelineResult | null;
+  filter: PatientTimelineFilter;
+  loading: boolean;
+  error: string;
+  onFilterChange: (filter: PatientTimelineFilter) => void;
+  onLoadMore: () => void;
+  onRetry: () => void;
+  onStartConsultation: () => void;
+  onNewAnthropometry: () => void;
+  archived: boolean;
+}) {
+  const events = result?.events ?? [];
+  return (
+    <div className="space-y-5" data-testid="patient-clinical-timeline">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="brand-kicker">Histórico clínico</p>
+          <h2 className="mt-1 font-serif text-2xl font-semibold text-[#3A3028]">Timeline clínica</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-[#75675E]">
+            Sequência de consultas finalizadas, avaliações, planos publicados e protocolos.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filtros da timeline">
+          {TIMELINE_FILTERS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onFilterChange(item.id)}
+              className={`min-h-9 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                filter === item.id
+                  ? "border-[#607A56] bg-[#607A56] text-white"
+                  : "border-[#EAD8C2] bg-[#FFFDFC] text-[#8C6E52] hover:bg-[#FBF7F1]"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading && !result ? (
+        <TimelineSkeleton />
+      ) : error ? (
+        <div className="rounded-lg border border-[#E8C3BA] bg-[#FFF7F5] p-5 text-sm text-[#9A5C4E]">
+          <p>Não foi possível carregar o histórico.</p>
+          <button type="button" onClick={onRetry} className="mt-3 text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Tentar novamente</button>
+        </div>
+      ) : events.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-[#D9C4B2] bg-[#FFFDFC] p-8 text-center">
+          <Clock className="mx-auto mb-3 h-9 w-9 text-[#D9C4B2]" aria-hidden="true" />
+          <p className="text-sm font-semibold text-[#3A3028]">Ainda não há eventos clínicos registrados.</p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <button type="button" onClick={onStartConsultation} disabled={archived} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">Iniciar consulta</button>
+            <button type="button" onClick={onNewAnthropometry} disabled={archived} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">Registrar avaliação</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <TimelineEventList events={events} />
+          {result?.hasMore && (
+            <div className="flex justify-center">
+              <button type="button" onClick={onLoadMore} disabled={loading} className="brand-btn-secondary">
+                {loading ? "Carregando..." : "Carregar mais"}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PatientOverview({
+  summary,
+  recentActivity,
+  onStartConsultation,
+  onOpenPlan,
+  onNewAnthropometry,
+  onOpenTimeline,
+}: {
+  summary: PatientRecordSummaryViewModel;
+  recentActivity: PatientTimelineEvent[];
+  onStartConsultation: () => void;
+  onOpenPlan: () => void;
+  onNewAnthropometry: () => void;
+  onOpenTimeline: () => void;
+}) {
+  const archived = summary.patient.status === "arquivado";
+  const weightValue = formatWeight(summary.latestAnthropometry?.weightKg);
+  const trend = formatTrend(summary.weightTrend);
+  const bmi = summary.latestAnthropometry?.bmi;
+
+  return (
+    <div className="space-y-6" data-testid="patient-record-overview">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-4">
+          <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="brand-kicker">Estado clínico atual</p>
+                <h2 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">Resumo do prontuário</h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={onStartConsultation} disabled={archived} className="brand-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+                  <Stethoscope className="h-4 w-4" />
+                  {summary.activeConsultation ? "Retomar consulta" : "Iniciar consulta"}
+                </button>
+                <button type="button" onClick={onNewAnthropometry} disabled={archived} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">
+                  <Activity className="h-4 w-4" />
+                  Nova avaliação
+                </button>
+                <button type="button" onClick={onOpenPlan} className="brand-btn-secondary">
+                  <Utensils className="h-4 w-4" />
+                  Abrir plano
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              title="Última consulta"
+              value={summary.latestConsultation ? formatDateSafe(summary.latestConsultation.date) : "Nenhuma consulta registrada"}
+              detail={summary.latestConsultation ? `Status: ${summary.latestConsultation.status}` : "Comece o primeiro atendimento pelo Modo Consulta."}
+              action={!summary.latestConsultation ? (
+                <button type="button" onClick={onStartConsultation} disabled={archived} className="text-left text-xs font-semibold text-[#607A56] hover:text-[#3A3028] disabled:opacity-50">Iniciar primeira consulta</button>
+              ) : null}
+            />
+            <SummaryCard
+              title="Próxima consulta"
+              value={summary.nextAppointment ? formatDateTime(summary.nextAppointment.date) : "Nenhum retorno agendado"}
+              detail={summary.nextAppointment?.title ?? "Agenda completa permanece no módulo de agenda."}
+              action={!summary.nextAppointment ? (
+                <Link href="/dashboard/agenda" className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Agendar retorno</Link>
+              ) : null}
+            />
+            <SummaryCard
+              title="Peso atual"
+              value={weightValue ?? "Nenhuma avaliação registrada"}
+              detail={trend ?? (summary.latestAnthropometry?.date ? formatDateSafe(summary.latestAnthropometry.date) : "Registre a primeira avaliação para acompanhar evolução.")}
+              action={!weightValue ? (
+                <button type="button" onClick={onNewAnthropometry} disabled={archived} className="text-left text-xs font-semibold text-[#607A56] hover:text-[#3A3028] disabled:opacity-50">Registrar avaliação</button>
+              ) : null}
+            />
+            <SummaryCard
+              title="Plano alimentar"
+              value={summary.activeMealPlan ? `Ativo · v${summary.activeMealPlan.version}` : "Nenhum plano ativo"}
+              detail={summary.activeMealPlan ? `${summary.activeMealPlan.title} · atualizado em ${formatDateSafe(summary.activeMealPlan.updatedAt)}` : "Crie ou publique um plano antes de entregar ao portal."}
+              action={<button type="button" onClick={onOpenPlan} className="text-left text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">{summary.activeMealPlan ? "Abrir plano" : "Criar plano"}</button>}
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.65fr)]">
+            <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="brand-kicker">Evolução corporal</p>
+                  <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Peso e indicadores recentes</h3>
+                </div>
+                {bmi !== null && bmi !== undefined && (
+                  <span className="w-fit rounded-full bg-[#EAF0E4] px-3 py-1 text-xs font-semibold text-[#4F6847]">IMC {bmi.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</span>
+                )}
+              </div>
+              {summary.latestAnthropometry ? (
+                <div className="mt-4 grid gap-4 sm:grid-cols-[0.9fr_1.1fr]">
+                  <div className="space-y-3 text-sm">
+                    <p className="flex justify-between gap-3"><span className="text-[#75675E]">Data</span><strong className="text-[#3A3028]">{formatDateSafe(summary.latestAnthropometry.date)}</strong></p>
+                    <p className="flex justify-between gap-3"><span className="text-[#75675E]">Cintura</span><strong className="text-[#3A3028]">{summary.latestAnthropometry.waistCm ?? "—"}</strong></p>
+                    <p className="flex justify-between gap-3"><span className="text-[#75675E]">% gordura</span><strong className="text-[#3A3028]">{summary.latestAnthropometry.bodyFatPercent ?? "—"}</strong></p>
+                  </div>
+                  <div className="rounded-lg bg-[#FBF7F1] p-3">
+                    <WeightSparkline series={summary.weightSeries} />
+                    {summary.weightSeries.length < 2 && <p className="text-sm text-[#75675E]">Registre ao menos duas avaliações para ver tendência.</p>}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-lg border border-dashed border-[#D9C4B2] p-5 text-sm text-[#75675E]">
+                  Nenhuma avaliação antropométrica registrada.
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
+              <p className="brand-kicker">Pendências objetivas</p>
+              <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Próximas ações</h3>
+              {summary.pendingActions.length ? (
+                <ul className="mt-4 space-y-2">
+                  {summary.pendingActions.map((action) => (
+                    <li key={action.id} className="rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-3 text-sm">
+                      <p className="font-semibold text-[#3A3028]">{action.title}</p>
+                      {action.href && <Link href={action.href} className="mt-1 inline-block text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir</Link>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4 text-sm text-[#75675E]">Nenhuma pendência objetiva no resumo.</p>
+              )}
+            </section>
+          </div>
+
+          <RecentActivity
+            events={recentActivity}
+            onOpenTimeline={onOpenTimeline}
+            onStartConsultation={onStartConsultation}
+            onNewAnthropometry={onNewAnthropometry}
+            archived={archived}
+          />
+        </div>
+
+        <aside className="space-y-4">
+          <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
+            <p className="brand-kicker">Informações importantes</p>
+            <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Restrições e alertas</h3>
+            {summary.keyRestrictions.length ? (
+              <ul className="mt-4 space-y-2">
+                {summary.keyRestrictions.map((restriction) => (
+                  <li key={restriction.id} className="rounded-lg bg-[#FBEAE4] px-3 py-2 text-sm text-[#7D3D2A]">
+                    <span className="font-semibold">{restriction.label}</span>
+                    <span className="ml-2 text-xs opacity-80">{restriction.type}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-[#75675E]">Nenhuma restrição estruturada ativa registrada.</p>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
+            <p className="brand-kicker">Plano e protocolos</p>
+            <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Acompanhamento ativo</h3>
+            <div className="mt-4 space-y-3 text-sm">
+              {summary.draftMealPlan && (
+                <div className="rounded-lg border border-[#EAD8C2] bg-[#FBF7F1] p-3">
+                  <p className="font-semibold text-[#3A3028]">Rascunho v{summary.draftMealPlan.version} em andamento</p>
+                  <button type="button" onClick={onOpenPlan} className="mt-1 text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Continuar edição</button>
+                </div>
+              )}
+              {summary.activeProtocols.length ? summary.activeProtocols.map((protocol) => (
+                <div key={protocol.id} className="rounded-lg border border-[#D9E4D3] bg-[#F4F8F1] p-3">
+                  <p className="font-semibold text-[#3A3028]">{protocol.title ?? "Protocolo ativo"}</p>
+                  <p className="text-xs text-[#75675E]">Iniciado em {formatDateSafe(protocol.startedAt)}</p>
+                </div>
+              )) : <p className="text-sm text-[#75675E]">Nenhum protocolo ativo vinculado.</p>}
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+export default function ClientWorkspace({
+  initialData,
+  initialSummary,
+  initialRecentActivity,
+}: {
+  initialData: ClientSnapshot;
+  initialSummary: PatientRecordSummaryViewModel;
+  initialRecentActivity: PatientTimelineResult;
+}) {
   const id = initialData.client.id;
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1189,11 +1710,17 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
     setActiveTab(resolveTabFromParam(searchParams.get("tab")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.get("tab")]);
-  const [summaryView, setSummaryView] = useState<"dados" | "portal">("dados");
   const [planView, setPlanView] = useState<"dieta" | "protocolos">("dieta");
   const [evolutionView, setEvolutionView] = useState<"timeline" | "agenda" | "tarefas" | "financeiro" | "relatorios">("timeline");
+  const [moreView, setMoreView] = useState<"cadastro" | "portal" | "administrativo">("cadastro");
   const data = initialData.client;
   const clinicalSummary = initialData.clinicalSummary;
+  const [patientSummary, setPatientSummary] = useState(initialSummary);
+  const [recentActivity, setRecentActivity] = useState(initialRecentActivity.events);
+  const [clinicalTimeline, setClinicalTimeline] = useState<PatientTimelineResult | null>(null);
+  const [timelineFilter, setTimelineFilter] = useState<PatientTimelineFilter>("all");
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState("");
 
 
   // Resumo edit state
@@ -1211,11 +1738,64 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
   const [deleteError, setDeleteError] = useState("");
 
   async function startConsultation() {
+    if (patientSummary.patient.status === "arquivado") return;
     try {
       await fetch(`/api/admin/clients/${id}/consultation`, { method: "POST" });
     } finally {
       router.push(`/dashboard/clients/${id}/consulta`);
     }
+  }
+
+  async function reloadPatientSummary() {
+    const response = await fetch(`/api/admin/clients/${id}/record-summary`, { cache: "no-store" });
+    if (response.ok) setPatientSummary(await response.json() as PatientRecordSummaryViewModel);
+  }
+
+  async function loadRecentActivity() {
+    const response = await fetch(`/api/admin/clients/${id}/record-timeline?limit=5`, { cache: "no-store" });
+    if (response.ok) {
+      const result = await response.json() as PatientTimelineResult;
+      setRecentActivity(result.events);
+    }
+  }
+
+  async function loadClinicalTimeline(options: { filter?: PatientTimelineFilter; offset?: number; append?: boolean } = {}) {
+    const nextFilter = options.filter ?? timelineFilter;
+    const nextOffset = options.offset ?? 0;
+    setTimelineLoading(true);
+    setTimelineError("");
+    try {
+      const params = new URLSearchParams({
+        limit: "20",
+        offset: String(nextOffset),
+        filter: nextFilter,
+      });
+      const response = await fetch(`/api/admin/clients/${id}/record-timeline?${params}`, { cache: "no-store" });
+      if (!response.ok) throw new Error();
+      const result = await response.json() as PatientTimelineResult;
+      setClinicalTimeline((current) => options.append && current
+        ? { ...result, events: [...current.events, ...result.events] }
+        : result);
+    } catch {
+      setTimelineError("Não foi possível carregar o histórico.");
+    } finally {
+      setTimelineLoading(false);
+    }
+  }
+
+  function openPlanTab() {
+    setActiveTab("plano-alimentar");
+    setPlanView("dieta");
+  }
+
+  function openTimelineTab() {
+    setActiveTab("evolucao");
+  }
+
+  function openNewAnthropometry() {
+    if (patientSummary.patient.status === "arquivado") return;
+    setActiveTab("antropometria");
+    setShowEvolutionForm(true);
   }
 
   // Protocols
@@ -1244,10 +1824,6 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
   const [clinicalGrowth, setClinicalGrowth] = useState<ClinicalGrowthResponse | null>(null);
   const [clinicalGrowthLoading, setClinicalGrowthLoading] = useState(false);
 
-  // Timeline
-  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
-  const [timelineLoading, setTimelineLoading] = useState(false);
-
   // Agenda and finance
   const [appointments, setAppointments] = useState<ClientAppointment[]>([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
@@ -1273,22 +1849,22 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
         })
         .catch(() => null).finally(() => setProtocolsLoading(false));
     }
-    if (activeTab === "resumo" && summaryView === "portal" && !portalAccess) {
+    if (activeTab === "mais" && moreView === "portal" && !portalAccess) {
       reloadPortalAccess();
     }
-    if (activeTab === "evolucao" && evolutionView === "agenda" && appointments.length === 0) {
+    if ((activeTab === "consultas" || (activeTab === "evolucao" && evolutionView === "agenda")) && appointments.length === 0) {
       setAppointmentsLoading(true);
       fetch(`/api/admin/appointments?clientId=${id}`)
         .then((r) => r.json()).then((d: { items: ClientAppointment[] }) => setAppointments(d.items ?? []))
         .catch(() => null).finally(() => setAppointmentsLoading(false));
     }
-    if (activeTab === "evolucao" && evolutionView === "financeiro" && payments.length === 0) {
+    if (((activeTab === "mais" && moreView === "administrativo") || (activeTab === "evolucao" && evolutionView === "financeiro")) && payments.length === 0) {
       setPaymentsLoading(true);
       fetch(`/api/admin/payments?clientId=${id}`)
         .then((r) => r.json()).then((d: { items: ClientPayment[] }) => setPayments(d.items ?? []))
         .catch(() => null).finally(() => setPaymentsLoading(false));
     }
-    if ((activeTab === "antropometria" || activeTab === "evolucao") && evolutions.length === 0) {
+    if (activeTab === "antropometria" && evolutions.length === 0) {
       setEvolutionsLoading(true);
       fetch(`/api/admin/clients/${id}/evolutions`)
         .then((r) => r.json()).then((d: ClientEvolution[]) => setEvolutions(d ?? []))
@@ -1301,14 +1877,11 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
         .then((result) => result && setClinicalGrowth(result))
         .catch(() => null).finally(() => setClinicalGrowthLoading(false));
     }
-    if (activeTab === "evolucao" && evolutionView === "timeline" && timeline.length === 0) {
-      setTimelineLoading(true);
-      fetch(`/api/admin/clients/${id}/timeline`)
-        .then((r) => r.json()).then((d: TimelineEvent[]) => setTimeline(d ?? []))
-        .catch(() => null).finally(() => setTimelineLoading(false));
+    if (activeTab === "evolucao" && !clinicalTimeline && !timelineLoading) {
+      void loadClinicalTimeline({ filter: timelineFilter, offset: 0 });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, id, summaryView, planView, evolutionView]);
+  }, [activeTab, id, moreView, planView, evolutionView, timelineFilter]);
 
   useEffect(() => {
     if (activeTab === "evolucao" && evolutionView === "tarefas") {
@@ -1419,6 +1992,7 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
         body: JSON.stringify({ name: name || undefined, email: email || null, phone: phone || null, birth_date: birthDate || null, status, notes: notes || null }),
       });
       if (!res.ok) throw new Error();
+      await reloadPatientSummary();
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch {
       setSaveError("Não foi possível salvar. Tente novamente.");
@@ -1449,12 +2023,15 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
       .catch(() => null).finally(() => setEvolutionsLoading(false));
     setClinicalGrowth(null);
     setShowEvolutionForm(false);
+    void reloadPatientSummary();
   };
 
   const reloadTimeline = () => {
-    fetch(`/api/admin/clients/${id}/timeline`)
-      .then((r) => r.json()).then((d: TimelineEvent[]) => setTimeline(d ?? []))
-      .catch(() => null);
+    void loadRecentActivity();
+    if (activeTab === "evolucao") {
+      void loadClinicalTimeline({ filter: timelineFilter, offset: 0 });
+    }
+    void reloadPatientSummary();
   };
 
   async function reloadPortalAccess() {
@@ -1510,52 +2087,53 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-16 animate-fade-up">
-      {/* Top bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link href="/dashboard/clients"
           className="inline-flex items-center gap-2 text-sm text-[#7A9A74] hover:text-[#B47F6A] transition-colors font-medium">
           <ArrowLeft className="w-4 h-4" />
-          Clientes
+          Pacientes
         </Link>
-        <Link href={`/dashboard/clients/${id}/print`} target="_blank"
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#EAD8C2] px-4 py-2 text-xs font-medium text-[#8C6E52] transition-colors hover:bg-[#EAD8C2]/40 sm:w-auto">
+        <Link href={`/dashboard/clients/${id}/print`} target="_blank" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[#EAD8C2] px-4 py-2 text-xs font-medium text-[#8C6E52] transition-colors hover:bg-[#EAD8C2]/40 sm:w-auto">
           <Printer className="w-3.5 h-3.5" />
           Relatório imprimível
         </Link>
-        <button
-          type="button"
-          onClick={() => void startConsultation()}
-          className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-full bg-[#7F9A74] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#607A56] sm:w-auto"
-        >
-          <Stethoscope className="w-3.5 h-3.5" />
-          Iniciar consulta
-        </button>
-        <button
-          type="button"
-          onClick={() => setDeleteDialogOpen(true)}
-          className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-full border border-[#E8C3BA] px-4 py-2 text-xs font-semibold text-[#9A5C4E] transition-colors hover:bg-[#F6E6E0] sm:w-auto"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Excluir paciente
-        </button>
       </div>
 
       {/* Patient workspace */}
       <div className="brand-card w-full min-w-0 overflow-hidden">
-        <div className="flex min-w-0 flex-col gap-5 border-b border-[#EAD8C2] bg-[#FAF7F2] p-5 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-[#EAD8C2] text-[#8C6E52]"><User className="h-7 w-7" /></div>
+        <header className="border-b border-[#EAD8C2] bg-[#FAF7F2] p-5 sm:p-6">
+          <div className="flex min-w-0 flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2"><h1 className="min-w-0 break-words font-serif text-2xl font-semibold leading-tight text-[#3A2B1F] sm:truncate">{data.name}</h1><span className={STATUS_BADGE[data.status] ?? "brand-badge brand-badge-arquivado"}>{STATUS_LABEL[data.status] ?? data.status}</span></div>
-              <p className="mt-1 text-sm text-[#75675E]">{calculateAge(data.birth_date)} · Paciente desde {formatDateSafe(data.created_at)}</p>
-              <div className="mt-2 grid min-w-0 gap-1 text-xs text-[#8C6E52] sm:flex sm:flex-wrap sm:gap-x-4 sm:gap-y-1">{data.phone && <span className="flex min-w-0 items-center gap-1.5"><Phone className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 break-all">{data.phone}</span></span>}{data.email && <span className="flex min-w-0 items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 break-all">{data.email}</span></span>}</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="min-w-0 break-words font-serif text-3xl font-semibold leading-tight text-[#3A2B1F] sm:truncate">{patientSummary.patient.name}</h1>
+                <span className={STATUS_BADGE[patientSummary.patient.status] ?? "brand-badge brand-badge-arquivado"}>{patientSummary.patient.statusLabel}</span>
+              </div>
+              <p className="mt-1 text-sm text-[#75675E]">{formatAgeLabel(patientSummary.patient.ageYears)} · Paciente desde {formatDateSafe(data.created_at)}</p>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[#3A3028]">
+                <span className="font-semibold text-[#8C6E52]">Objetivo: </span>
+                {patientSummary.patient.primaryGoal || "Defina o objetivo principal na anamnese."}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-[#75675E]">
+                <span>Última consulta: {patientSummary.latestConsultation ? formatDateSafe(patientSummary.latestConsultation.date) : "não registrada"}</span>
+                <span>Próxima: {patientSummary.nextAppointment ? formatDateTime(patientSummary.nextAppointment.date) : "não agendada"}</span>
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3 xl:w-[34rem] xl:shrink-0">
+              <button type="button" onClick={() => void startConsultation()} disabled={patientSummary.patient.status === "arquivado"} className="brand-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+                <Stethoscope className="h-4 w-4" />
+                {patientSummary.activeConsultation ? "Retomar consulta" : "Iniciar consulta"}
+              </button>
+              <button type="button" onClick={openPlanTab} className="brand-btn-secondary">
+                <Utensils className="h-4 w-4" />
+                Plano alimentar
+              </button>
+              <button type="button" onClick={openNewAnthropometry} disabled={patientSummary.patient.status === "arquivado"} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">
+                <Activity className="h-4 w-4" />
+                Nova avaliação
+              </button>
             </div>
           </div>
-          <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:w-[34rem] xl:shrink-0">
-            <div className="rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] p-3"><p className="text-[9px] font-bold uppercase tracking-[0.1em] text-[#607A56]">Objetivo principal</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-[#3A3028]">{clinicalSummary?.goals || "Defina o objetivo clínico na anamnese."}</p></div>
-            <div className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-3"><p className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.1em] text-[#8C5F50]"><AlertTriangle className="h-3 w-3" />Alertas de saúde</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-[#3A3028]">{clinicalSummary?.risk_flags || clinicalSummary?.allergies || clinicalSummary?.diagnoses || "Nenhum alerta registrado."}</p></div>
-          </div>
-        </div>
+        </header>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)} className="min-w-0">
         {/* Tabs */}
@@ -1575,30 +2153,62 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
 
         {/* Tab content */}
         <div className="min-w-0 p-4 sm:p-6 xl:p-8">
-          {activeTab === "resumo" && <SecondaryNavigation items={[{ id: "dados", label: "Dados principais" }, { id: "portal", label: "Portal do cliente" }]} value={summaryView} onChange={(value) => setSummaryView(value as typeof summaryView)} />}
           {activeTab === "plano-alimentar" && <SecondaryNavigation items={[{ id: "dieta", label: "Plano alimentar" }, { id: "protocolos", label: "Protocolos de cuidado" }]} value={planView} onChange={(value) => setPlanView(value as typeof planView)} />}
-          {activeTab === "evolucao" && <SecondaryNavigation items={[{ id: "timeline", label: "Linha do tempo" }, { id: "agenda", label: "Consultas" }, { id: "tarefas", label: "Tarefas" }, { id: "financeiro", label: "Financeiro" }, { id: "relatorios", label: "Relatórios" }]} value={evolutionView} onChange={(value) => setEvolutionView(value as typeof evolutionView)} />}
+          {activeTab === "evolucao" && <SecondaryNavigation items={[{ id: "timeline", label: "Histórico clínico" }]} value={evolutionView} onChange={(value) => setEvolutionView(value as typeof evolutionView)} />}
+          {activeTab === "mais" && <SecondaryNavigation items={[{ id: "cadastro", label: "Dados cadastrais" }, { id: "portal", label: "Portal" }, { id: "administrativo", label: "Administrativo" }]} value={moreView} onChange={(value) => setMoreView(value as typeof moreView)} />}
 
           {/* ── Resumo ─────────────────────────────────────────── */}
-          {activeTab === "resumo" && summaryView === "dados" && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#8C6E52]">Ultima evolucao</p>
-                  <p className="mt-1 text-sm font-semibold text-[#3A3028]">{initialData.latestEvolution?.weight != null ? `${initialData.latestEvolution.weight} kg` : "Sem registro"}</p>
-                  {initialData.latestEvolution?.measured_at ? <p className="text-xs text-[#8A7B70]">{formatDateSafe(initialData.latestEvolution.measured_at)}</p> : null}
+          {activeTab === "resumo" && (
+            <PatientOverview
+              summary={patientSummary}
+              recentActivity={recentActivity}
+              onStartConsultation={() => void startConsultation()}
+              onOpenPlan={openPlanTab}
+              onNewAnthropometry={openNewAnthropometry}
+              onOpenTimeline={openTimelineTab}
+            />
+          )}
+
+          {activeTab === "consultas" && (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="brand-kicker">Consultas</p>
+                  <h2 className="font-serif text-xl font-semibold text-[#3A3028]">Agenda deste paciente</h2>
                 </div>
-                <div className="rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#8C6E52]">Proxima consulta</p>
-                  <p className="mt-1 text-sm font-semibold text-[#3A3028]">{initialData.nextAppointment?.title ?? "Sem consulta"}</p>
-                  {initialData.nextAppointment ? <p className="text-xs text-[#8A7B70]">{formatDateSafe(initialData.nextAppointment.starts_at, "dd/MM/yyyy HH:mm")}</p> : null}
-                </div>
-                <div className="rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#8C6E52]">Pendencias</p>
-                  <p className="mt-1 text-sm font-semibold text-[#3A3028]">{initialData.pendingTasksCount} tarefa(s)</p>
-                  <p className="text-xs text-[#8A7B70]">{initialData.pendingPaymentsCount} pagamento(s)</p>
-                </div>
+                <Link href="/dashboard/agenda" className="brand-btn-secondary w-full sm:w-auto">
+                  <CalendarDays className="h-4 w-4" />
+                  Agendar retorno
+                </Link>
               </div>
+              {appointmentsLoading ? (
+                <p className="text-sm text-[#A8927D]">Carregando consultas...</p>
+              ) : appointments.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[#D9C4B2] bg-[#FFFDFC] p-8 text-center">
+                  <CalendarDays className="mx-auto mb-3 h-9 w-9 text-[#D9C4B2]" />
+                  <p className="text-sm font-semibold text-[#3A3028]">Nenhuma consulta registrada na agenda.</p>
+                  <p className="mt-1 text-xs text-[#75675E]">Use a agenda para marcar o próximo atendimento.</p>
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {appointments.map((appointment) => (
+                    <li key={appointment.id} className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-[#3A3028]">{appointment.title}</p>
+                          <p className="mt-1 text-xs text-[#75675E]">{formatDateTime(appointment.starts_at)} · {APPOINTMENT_STATUS_LABELS[appointment.status] ?? appointment.status}</p>
+                        </div>
+                        <span className="w-fit rounded-full bg-[#EAF0E4] px-3 py-1 text-xs font-semibold text-[#4F6847]">{appointment.appointment_type}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {activeTab === "mais" && moreView === "cadastro" && (
+            <div className="space-y-6">
               <div className="rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] p-4 shadow-[0_14px_35px_rgba(58,48,40,0.04)] sm:p-5">
                 <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
@@ -1671,7 +2281,7 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
             </div>
           )}
 
-          {activeTab === "resumo" && summaryView === "portal" && (
+          {activeTab === "mais" && moreView === "portal" && (
             <div className="space-y-6">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -1758,6 +2368,43 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === "mais" && moreView === "administrativo" && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="brand-kicker">Financeiro</p>
+                    <h2 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Cobranças vinculadas</h2>
+                  </div>
+                  <Link href="/dashboard/financeiro" className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir financeiro</Link>
+                </div>
+                {paymentsLoading ? (
+                  <p className="mt-4 text-sm text-[#A8927D]">Carregando...</p>
+                ) : payments.length === 0 ? (
+                  <p className="mt-4 text-sm text-[#75675E]">Nenhuma cobrança vinculada.</p>
+                ) : (
+                  <ul className="mt-4 space-y-2">
+                    {payments.slice(0, 5).map((payment) => (
+                      <li key={payment.id} className="flex items-center justify-between gap-3 rounded-lg bg-[#FBF7F1] p-3 text-sm">
+                        <span className="min-w-0 truncate text-[#3A3028]">{payment.description}</span>
+                        <span className="shrink-0 font-semibold text-[#8C6E52]">{formatMoney(payment.amount_cents)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+              <section className="rounded-lg border border-[#E8C3BA] bg-[#FFFDFC] p-5">
+                <p className="brand-kicker text-[#9A5C4E]">Administração</p>
+                <h2 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Ações sensíveis</h2>
+                <p className="mt-2 text-sm leading-6 text-[#75675E]">Estas ações ficam fora do resumo clínico para evitar ruído durante atendimento.</p>
+                <button type="button" onClick={() => setDeleteDialogOpen(true)} className="mt-4 inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-full border border-[#E8C3BA] px-4 py-2 text-xs font-semibold text-[#9A5C4E] transition-colors hover:bg-[#F6E6E0]">
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir paciente
+                </button>
+              </section>
             </div>
           )}
 
@@ -2208,39 +2855,22 @@ export default function ClientWorkspace({ initialData }: { initialData: ClientSn
           )}
 
           {activeTab === "evolucao" && evolutionView === "timeline" && (
-            <div className="space-y-4">
-              <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Timeline do paciente</h2>
-              {timelineLoading ? (
-                <p className="text-sm text-[#A8927D]">Carregando...</p>
-              ) : timeline.length === 0 ? (
-                <div className="text-center py-10">
-                  <Clock className="w-10 h-10 text-[#EAD8C2] mx-auto mb-3" />
-                  <p className="text-[#A8927D] text-sm">Nenhum evento na timeline ainda.</p>
-                </div>
-              ) : (
-                <div className="relative">
-                  <div className="absolute left-5 top-0 bottom-0 w-px bg-[#EAD8C2]" />
-                  <ul className="space-y-4 pl-12">
-                    {timeline.map((event) => (
-                      <li key={event.id} className="relative">
-                        <div className="absolute -left-7 w-5 h-5 rounded-full bg-[#EAD8C2] flex items-center justify-center text-xs">
-                          {TIMELINE_ICONS[event.type] ?? "•"}
-                        </div>
-                        <div className="bg-[#FAF7F2] border border-[#EAD8C2]/60 rounded-xl p-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="font-medium text-sm text-[#3A2B1F]">{event.title}</p>
-                            <p className="text-xs text-[#A8927D] shrink-0">{formatDateSafe(event.created_at, "dd/MM HH:mm")}</p>
-                          </div>
-                          {event.description && (
-                            <p className="text-xs text-[#8C6E52] mt-1">{event.description}</p>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            <PatientClinicalTimeline
+              result={clinicalTimeline}
+              filter={timelineFilter}
+              loading={timelineLoading}
+              error={timelineError}
+              onFilterChange={(nextFilter) => {
+                setTimelineFilter(nextFilter);
+                setClinicalTimeline(null);
+                void loadClinicalTimeline({ filter: nextFilter, offset: 0 });
+              }}
+              onLoadMore={() => void loadClinicalTimeline({ filter: timelineFilter, offset: clinicalTimeline?.events.length ?? 0, append: true })}
+              onRetry={() => void loadClinicalTimeline({ filter: timelineFilter, offset: 0 })}
+              onStartConsultation={() => void startConsultation()}
+              onNewAnthropometry={openNewAnthropometry}
+              archived={patientSummary.patient.status === "arquivado"}
+            />
           )}
 
           {/* ── Relatórios ─────────────────────────────────────── */}

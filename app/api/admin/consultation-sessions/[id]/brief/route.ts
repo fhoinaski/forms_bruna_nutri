@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
 import { getConsultationSessionById, saveConsultationAiBrief } from "@/lib/repositories/consultation-sessions";
@@ -8,6 +9,10 @@ import { getRequestFingerprint } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const briefSchema = z.object({
+  clientId: z.string().min(1).max(100),
+}).strict();
 
 /**
  * "Preparar consulta com IA" (secao 5 do pedido) — monta o briefing
@@ -25,6 +30,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const session = await getConsultationSessionById(id);
   if (!session) return NextResponse.json({ message: "Sessão de consulta não encontrada." }, { status: 404 });
+
+  const parsed = briefSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
+  }
+  if (session.client_id !== parsed.data.clientId) {
+    return NextResponse.json({ message: "Sessão de consulta não encontrada para este paciente." }, { status: 404 });
+  }
   if (session.status !== "in_progress") {
     return NextResponse.json({ message: "Esta consulta já foi finalizada ou cancelada." }, { status: 409 });
   }

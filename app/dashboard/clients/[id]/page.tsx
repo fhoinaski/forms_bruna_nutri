@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { loadClientSnapshot } from "@/lib/clinical/client-snapshot";
+import { getPatientRecordSummary } from "@/lib/repositories/patient-record-summary";
+import { getPatientClinicalTimeline } from "@/lib/repositories/patient-record-timeline";
 import ClientWorkspace from "./ClientWorkspace";
 
 /**
@@ -17,8 +19,12 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   if (!session) redirect("/login");
 
   const { id } = await params;
-  const snapshot = await loadClientSnapshot(id);
-  if (!snapshot) redirect("/dashboard/clients");
+  const [snapshot, patientRecordSummary, recentActivity] = await Promise.all([
+    loadClientSnapshot(id),
+    getPatientRecordSummary(id),
+    getPatientClinicalTimeline(id, { limit: 5 }),
+  ]);
+  if (!snapshot || !patientRecordSummary || !recentActivity) redirect("/dashboard/clients");
 
-  return <ClientWorkspace initialData={snapshot} />;
+  return <ClientWorkspace initialData={snapshot} initialSummary={patientRecordSummary} initialRecentActivity={recentActivity} />;
 }

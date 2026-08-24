@@ -27,6 +27,16 @@ function mockAudit() {
   vi.doMock("@/lib/repositories/client-timeline", () => ({ addTimelineEvent: vi.fn().mockResolvedValue("event-1") }));
 }
 
+function mockWorkspace(session: Record<string, unknown> = { id: "session-1", patientId: "c1", status: "in_progress" }) {
+  vi.doMock("@/lib/repositories/patient-consultation-workspace", () => ({
+    getConsultationWorkspace: vi.fn().mockResolvedValue({
+      patient: { id: "c1", name: "Maria" },
+      consultation: session,
+    }),
+    saveConsultationWorkspaceDraft: vi.fn().mockResolvedValue(true),
+  }));
+}
+
 describe("POST /api/admin/clients/[id]/consultation — iniciar", () => {
   it("401 sem sessao de admin", async () => {
     mockAuth(false);
@@ -46,6 +56,7 @@ describe("POST /api/admin/clients/[id]/consultation — iniciar", () => {
   it("cria a sessao e registra timeline/audit", async () => {
     mockAuth();
     mockAudit();
+    mockWorkspace();
     vi.doMock("@/lib/repositories/clients", () => ({ getClientById: vi.fn().mockResolvedValue({ id: "c1", name: "Maria" }) }));
     const startConsultationSession = vi.fn().mockResolvedValue({ id: "session-1", client_id: "c1", status: "in_progress" });
     vi.doMock("@/lib/repositories/consultation-sessions", () => ({
@@ -65,6 +76,7 @@ describe("POST /api/admin/clients/[id]/consultation — iniciar", () => {
     vi.doMock("@/lib/repositories/clients", () => ({ getClientById: vi.fn().mockResolvedValue({ id: "c1", name: "Maria" }) }));
     class FakeAlreadyActive extends Error {}
     const existingSession = { id: "session-existing", client_id: "c1", status: "in_progress" };
+    mockWorkspace(existingSession);
     vi.doMock("@/lib/repositories/consultation-sessions", () => ({
       startConsultationSession: vi.fn().mockRejectedValue(new FakeAlreadyActive()),
       getActiveConsultationSession: vi.fn().mockResolvedValue(existingSession),
@@ -86,7 +98,7 @@ describe("PATCH /api/admin/consultation-sessions/[id] — notas", () => {
       updateConsultationNotes: vi.fn(),
     }));
     const { PATCH } = await import("../app/api/admin/consultation-sessions/[id]/route");
-    const response = await PATCH(new NextRequest(new URL("/api/admin/consultation-sessions/s1", BASE_URL), { method: "PATCH", body: JSON.stringify({ notes: "x" }) }), { params: Promise.resolve({ id: "s1" }) });
+    const response = await PATCH(new NextRequest(new URL("/api/admin/consultation-sessions/s1", BASE_URL), { method: "PATCH", body: JSON.stringify({ clientId: "c1", notes: "x" }) }), { params: Promise.resolve({ id: "s1" }) });
     expect(response.status).toBe(409);
   });
 
@@ -98,9 +110,23 @@ describe("PATCH /api/admin/consultation-sessions/[id] — notas", () => {
       updateConsultationNotes,
     }));
     const { PATCH } = await import("../app/api/admin/consultation-sessions/[id]/route");
-    const response = await PATCH(new NextRequest(new URL("/api/admin/consultation-sessions/s1", BASE_URL), { method: "PATCH", body: JSON.stringify({ notes: "Paciente relata fome à noite." }) }), { params: Promise.resolve({ id: "s1" }) });
+    const response = await PATCH(new NextRequest(new URL("/api/admin/consultation-sessions/s1", BASE_URL), { method: "PATCH", body: JSON.stringify({ clientId: "c1", notes: "Paciente relata fome à noite." }) }), { params: Promise.resolve({ id: "s1" }) });
     expect(response.status).toBe(200);
     expect(updateConsultationNotes).toHaveBeenCalledWith("s1", "Paciente relata fome à noite.");
+  });
+
+  it("404 quando a sessao pertence a outro paciente", async () => {
+    mockAuth();
+    vi.doMock("@/lib/repositories/consultation-sessions", () => ({
+      getConsultationSessionById: vi.fn().mockResolvedValue({ id: "s1", client_id: "c2", status: "in_progress" }),
+      updateConsultationNotes: vi.fn(),
+    }));
+    vi.doMock("@/lib/repositories/patient-consultation-workspace", () => ({
+      saveConsultationWorkspaceDraft: vi.fn(),
+    }));
+    const { PATCH } = await import("../app/api/admin/consultation-sessions/[id]/route");
+    const response = await PATCH(new NextRequest(new URL("/api/admin/consultation-sessions/s1", BASE_URL), { method: "PATCH", body: JSON.stringify({ clientId: "c1", notes: "x" }) }), { params: Promise.resolve({ id: "s1" }) });
+    expect(response.status).toBe(404);
   });
 });
 
@@ -113,7 +139,7 @@ describe("POST /api/admin/consultation-sessions/[id]/complete — finalizar", ()
       completeConsultationSession: vi.fn().mockResolvedValue(true),
     }));
     const { POST } = await import("../app/api/admin/consultation-sessions/[id]/complete/route");
-    const response = await POST(new NextRequest(new URL("/api/admin/consultation-sessions/s1/complete", BASE_URL), { method: "POST", body: JSON.stringify({ checklist: {} }) }), { params: Promise.resolve({ id: "s1" }) });
+    const response = await POST(new NextRequest(new URL("/api/admin/consultation-sessions/s1/complete", BASE_URL), { method: "POST", body: JSON.stringify({ clientId: "c1", checklist: {} }) }), { params: Promise.resolve({ id: "s1" }) });
     expect(response.status).toBe(200);
   });
 
@@ -124,7 +150,7 @@ describe("POST /api/admin/consultation-sessions/[id]/complete — finalizar", ()
       completeConsultationSession: vi.fn().mockResolvedValue(false),
     }));
     const { POST } = await import("../app/api/admin/consultation-sessions/[id]/complete/route");
-    const response = await POST(new NextRequest(new URL("/api/admin/consultation-sessions/s1/complete", BASE_URL), { method: "POST", body: "{}" }), { params: Promise.resolve({ id: "s1" }) });
+    const response = await POST(new NextRequest(new URL("/api/admin/consultation-sessions/s1/complete", BASE_URL), { method: "POST", body: JSON.stringify({ clientId: "c1" }) }), { params: Promise.resolve({ id: "s1" }) });
     expect(response.status).toBe(409);
   });
 });
@@ -138,7 +164,7 @@ describe("POST /api/admin/consultation-sessions/[id]/cancel", () => {
       cancelConsultationSession: vi.fn().mockResolvedValue(true),
     }));
     const { POST } = await import("../app/api/admin/consultation-sessions/[id]/cancel/route");
-    const response = await POST(new NextRequest(new URL("/api/admin/consultation-sessions/s1/cancel", BASE_URL), { method: "POST" }), { params: Promise.resolve({ id: "s1" }) });
+    const response = await POST(new NextRequest(new URL("/api/admin/consultation-sessions/s1/cancel", BASE_URL), { method: "POST", body: JSON.stringify({ clientId: "c1" }) }), { params: Promise.resolve({ id: "s1" }) });
     expect(response.status).toBe(200);
   });
 });
@@ -151,7 +177,7 @@ describe("POST /api/admin/consultation-sessions/[id]/brief", () => {
       saveConsultationAiBrief: vi.fn(),
     }));
     const { POST } = await import("../app/api/admin/consultation-sessions/[id]/brief/route");
-    const response = await POST(new NextRequest(new URL("/api/admin/consultation-sessions/s1/brief", BASE_URL), { method: "POST" }), { params: Promise.resolve({ id: "s1" }) });
+    const response = await POST(new NextRequest(new URL("/api/admin/consultation-sessions/s1/brief", BASE_URL), { method: "POST", body: JSON.stringify({ clientId: "c1" }) }), { params: Promise.resolve({ id: "s1" }) });
     expect(response.status).toBe(409);
   });
 
@@ -169,7 +195,7 @@ describe("POST /api/admin/consultation-sessions/[id]/brief", () => {
       generateConsultationAiBrief: vi.fn().mockResolvedValue(null),
     }));
     const { POST } = await import("../app/api/admin/consultation-sessions/[id]/brief/route");
-    const response = await POST(new NextRequest(new URL("/api/admin/consultation-sessions/s1/brief", BASE_URL), { method: "POST" }), { params: Promise.resolve({ id: "s1" }) });
+    const response = await POST(new NextRequest(new URL("/api/admin/consultation-sessions/s1/brief", BASE_URL), { method: "POST", body: JSON.stringify({ clientId: "c1" }) }), { params: Promise.resolve({ id: "s1" }) });
     expect(response.status).toBe(200);
     expect(saveConsultationAiBrief).toHaveBeenCalledWith("s1", expect.objectContaining({ aiBrief: null }));
   });

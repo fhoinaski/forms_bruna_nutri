@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
  * confirmada (completeConsultationSession preserva o que ja estiver la).
  */
 const completeSchema = z.object({
+  clientId: z.string().min(1).max(100),
   checklist: z.object({
     anthropometryUpdated: z.boolean().optional(),
     evolutionRecorded: z.boolean().optional(),
@@ -37,6 +38,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const parsed = completeSchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
+  }
+  if (existing.client_id !== parsed.data.clientId) {
+    return NextResponse.json({ message: "Sessão de consulta não encontrada para este paciente." }, { status: 404 });
   }
 
   const completed = await completeConsultationSession(id);

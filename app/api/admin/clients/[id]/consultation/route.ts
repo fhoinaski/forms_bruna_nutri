@@ -7,6 +7,7 @@ import {
   startConsultationSession,
   ConsultationSessionAlreadyActiveError,
 } from "@/lib/repositories/consultation-sessions";
+import { getConsultationWorkspace } from "@/lib/repositories/patient-consultation-workspace";
 import { getAppointmentBriefState } from "@/lib/clinical/appointment-briefing";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { writeAuditLog } from "@/lib/security/audit";
@@ -15,14 +16,19 @@ import { getRequestFingerprint } from "@/lib/security/request";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Le a sessao de consulta em andamento do cliente (ou null se nenhuma). */
+/** Le o workspace de consulta do paciente, por sessionId explicito ou sessao ativa. */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
 
   const { id } = await params;
-  const session = await getActiveConsultationSession(id);
-  return NextResponse.json({ session });
+  const sessionId = req.nextUrl.searchParams.get("sessionId");
+  const workspace = await getConsultationWorkspace(id, sessionId);
+  if (!workspace) return NextResponse.json({ message: "Paciente não encontrado." }, { status: 404 });
+  if (sessionId && !workspace.consultation) {
+    return NextResponse.json({ message: "Sessão de consulta não encontrada para este paciente." }, { status: 404 });
+  }
+  return NextResponse.json({ workspace, session: workspace.consultation });
 }
 
 /**
@@ -39,6 +45,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const client = await getClientById(id);
   if (!client) return NextResponse.json({ message: "Paciente não encontrado." }, { status: 404 });
+  if (client.status === "arquivado") {
+    return NextResponse.json({ message: "Reative o paciente antes de iniciar uma consulta." }, { status: 409 });
+  }
 
   const body = await req.json().catch(() => ({}));
   const appointmentId = typeof body?.appointmentId === "string" ? body.appointmentId : null;
@@ -93,5 +102,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
   }
 
-  return NextResponse.json({ session }, { status: created ? 201 : 200 });
+  const workspace = await getConsultationWorkspace(id, session.id);
+  return NextResponse.json({ session, workspace }, { status: created ? 201 : 200 });
 }

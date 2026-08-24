@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { History } from "lucide-react";
+import { ANAMNESIS_FIELD_LABELS, type AnamnesisFieldKey } from "@/lib/clinical/patient-anamnesis";
 
 interface VersionMeta {
   id: string;
@@ -148,7 +149,9 @@ function VersionModal({ version, onClose }: { version: VersionDetail; onClose: (
           {entries.length === 0 && <p className="text-sm text-[#A8927D]">Sem dados clínicos nesta versão.</p>}
           {entries.map(([key, value]) => (
             <div key={key} className="border-b border-[#F5ECE4] pb-2">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-[#A9978A]">{key}</dt>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-[#A9978A]">
+                {ANAMNESIS_FIELD_LABELS[key as AnamnesisFieldKey] ?? key}
+              </dt>
               <dd className="whitespace-pre-wrap text-sm text-[#3A3028]">{String(value)}</dd>
             </div>
           ))}

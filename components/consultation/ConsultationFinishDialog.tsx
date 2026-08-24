@@ -24,11 +24,18 @@ const DEFAULT_CHECKLIST: ConsultationChecklistState = {
 export function ConsultationFinishDialog({
   consultationSessionId,
   clientId,
+  summary,
   onClose,
   onFinished,
 }: {
   consultationSessionId: string;
   clientId: string;
+  summary?: {
+    patientName: string;
+    startedAt: string;
+    status: string;
+    hasUnsavedChanges: boolean;
+  };
   onClose: () => void;
   onFinished: () => void;
 }) {
@@ -43,7 +50,7 @@ export function ConsultationFinishDialog({
       const response = await fetch(`/api/admin/consultation-sessions/${consultationSessionId}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ checklist }),
+        body: JSON.stringify({ clientId, checklist }),
       });
       if (!response.ok) throw new Error();
       onFinished();
@@ -63,6 +70,14 @@ export function ConsultationFinishDialog({
         <p className="mb-3 text-xs text-[#75675E]">
           Checklist só para lembrar — nada aqui impede finalizar. Se quiser gerar o resumo estruturado da consulta ou criar tarefas em lote, peça ao copiloto antes de fechar.
         </p>
+        {summary && (
+          <div className="mb-3 rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-3 text-xs text-[#3A3028]">
+            <p><span className="font-semibold">Paciente:</span> {summary.patientName}</p>
+            <p><span className="font-semibold">Início:</span> {new Date(summary.startedAt).toLocaleString("pt-BR")}</p>
+            <p><span className="font-semibold">Status:</span> {summary.status}</p>
+            {summary.hasUnsavedChanges && <p className="mt-1 font-semibold text-[#9A5C4E]">Salve as alterações antes de finalizar.</p>}
+          </div>
+        )}
         <ConsultationChecklist state={checklist} onChange={setChecklist} />
         {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
