@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useAssistantPageContext } from "@/lib/ai/context/assistant-page-context";
 import {
   CalendarDays,
@@ -248,7 +249,18 @@ function moveDate(value: string, amount: number) {
 }
 
 export default function AgendaPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-[#75675E]">Carregando agenda...</div>}>
+      <AgendaPageContent />
+    </Suspense>
+  );
+}
+
+function AgendaPageContent() {
   const { setExtra: setAssistantContextExtra } = useAssistantPageContext();
+  const searchParams = useSearchParams();
+  const requestedPatientId = searchParams.get("patientId") ?? "";
+  const requestedType = searchParams.get("type") === "retorno" ? "retorno" : "consulta";
   const [selectedDate, setSelectedDate] = useState(todayInputDate());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -259,9 +271,9 @@ export default function AgendaPage() {
   const [message, setMessage] = useState("");
   const [briefings, setBriefings] = useState<Record<string, BriefingState>>({});
   const [form, setForm] = useState<FormState>({
-    client_id: "",
+    client_id: requestedPatientId,
     title: "",
-    appointment_type: "consulta",
+    appointment_type: requestedType,
     starts_at: nextHourInput(),
     ends_at: "",
     status: "agendado",
@@ -340,6 +352,11 @@ export default function AgendaPage() {
     void loadAgenda();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (!requestedPatientId) return;
+    setForm((current) => ({ ...current, client_id: requestedPatientId, appointment_type: requestedType }));
+  }, [requestedPatientId, requestedType]);
 
   function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -1011,8 +1028,9 @@ function NewAppointmentForm({
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
-          <label className="brand-label">Paciente</label>
+          <label htmlFor="appointment-client" className="brand-label">Paciente</label>
           <select
+            id="appointment-client"
             value={form.client_id}
             onChange={(event) => onChange("client_id", event.target.value)}
             className="brand-input"
@@ -1027,8 +1045,9 @@ function NewAppointmentForm({
         </div>
 
         <div>
-          <label className="brand-label">Titulo</label>
+          <label htmlFor="appointment-title" className="brand-label">Titulo</label>
           <input
+            id="appointment-title"
             value={form.title}
             onChange={(event) => onChange("title", event.target.value)}
             className="brand-input"
@@ -1039,8 +1058,9 @@ function NewAppointmentForm({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="brand-label">Tipo</label>
+            <label htmlFor="appointment-type" className="brand-label">Tipo</label>
             <select
+              id="appointment-type"
               value={form.appointment_type}
               onChange={(event) => onChange("appointment_type", event.target.value as AppointmentType)}
               className="brand-input"
@@ -1053,8 +1073,9 @@ function NewAppointmentForm({
             </select>
           </div>
           <div>
-            <label className="brand-label">Status</label>
+            <label htmlFor="appointment-status" className="brand-label">Status</label>
             <select
+              id="appointment-status"
               value={form.status}
               onChange={(event) => onChange("status", event.target.value as AppointmentStatus)}
               className="brand-input"

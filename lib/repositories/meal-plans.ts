@@ -412,7 +412,7 @@ export async function getClientMealPlans(clientId: string): Promise<MealPlanPayl
 
 export async function getActiveMealPlan(clientId: string): Promise<MealPlanPayload | null> {
   const rows = await d1Query<MealPlanRow>(
-    "SELECT * FROM meal_plans WHERE client_id = ?1 AND status = 'active' ORDER BY updated_at DESC LIMIT 1",
+    "SELECT * FROM meal_plans WHERE client_id = ?1 AND status = 'active' ORDER BY version DESC, created_at DESC LIMIT 1",
     [clientId]
   );
   return rows[0] ? (await hydrateMealPlans(rows))[0] : null;

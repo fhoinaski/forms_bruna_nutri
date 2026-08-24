@@ -58,14 +58,14 @@ export interface PatientRecordSummaryViewModel {
     versionId: string;
     version: number;
     title: string;
-    updatedAt: string | null;
+    publishedAt: string | null;
   } | null;
   draftMealPlan: {
     planId: string;
     versionId: string;
     version: number;
     title: string;
-    updatedAt: string | null;
+    versionedAt: string | null;
   } | null;
   keyRestrictions: Array<{
     id: string;
@@ -80,6 +80,14 @@ export interface PatientRecordSummaryViewModel {
     title: string | null;
     status: string;
     startedAt: string;
+    reviewDate: string | null;
+    phaseCount: number;
+  }>;
+  activeSupplements: Array<{
+    id: string;
+    name: string;
+    dosage: string | null;
+    unit: string | null;
   }>;
   pendingActions: Array<{
     id: string;
@@ -137,7 +145,7 @@ interface MealPlanRow {
   title: string;
   status: "active" | "draft";
   version: number;
-  updated_at: string | null;
+  versioned_at: string | null;
 }
 
 interface MarkerRow {
@@ -155,6 +163,15 @@ interface ProtocolRow {
   status: string;
   started_at: string;
   protocol_title: string | null;
+  review_date: string | null;
+  phase_count: number;
+}
+
+interface SupplementRow {
+  id: string;
+  name: string;
+  dosage: string | null;
+  unit: string | null;
 }
 
 interface CountRow {
@@ -251,18 +268,20 @@ export async function getPatientRecordSummary(clientId: string): Promise<Patient
       params: [clientId],
     },
     {
-      sql: `SELECT id, title, status, version, updated_at
-            FROM meal_plans
-            WHERE client_id = ?1 AND status = 'active'
-            ORDER BY updated_at DESC
+      sql: `SELECT mp.id, mp.title, mp.status, mp.version, mpv.created_at AS versioned_at
+            FROM meal_plans mp
+            LEFT JOIN meal_plan_versions mpv ON mpv.meal_plan_id = mp.id AND mpv.version = mp.version
+            WHERE mp.client_id = ?1 AND mp.status = 'active'
+            ORDER BY mp.version DESC, mp.created_at DESC
             LIMIT 1`,
       params: [clientId],
     },
     {
-      sql: `SELECT id, title, status, version, updated_at
-            FROM meal_plans
-            WHERE client_id = ?1 AND status = 'draft'
-            ORDER BY updated_at DESC
+      sql: `SELECT mp.id, mp.title, mp.status, mp.version, mpv.created_at AS versioned_at
+            FROM meal_plans mp
+            LEFT JOIN meal_plan_versions mpv ON mpv.meal_plan_id = mp.id AND mpv.version = mp.version
+            WHERE mp.client_id = ?1 AND mp.status = 'draft'
+            ORDER BY mp.version DESC, mp.created_at DESC
             LIMIT 1`,
       params: [clientId],
     },
@@ -275,7 +294,8 @@ export async function getPatientRecordSummary(clientId: string): Promise<Patient
       params: [clientId],
     },
     {
-      sql: `SELECT cp.id, cp.protocol_id, cp.status, cp.started_at, p.title AS protocol_title
+      sql: `SELECT cp.id, cp.protocol_id, cp.status, cp.started_at, cp.review_date, p.title AS protocol_title,
+                   (SELECT COUNT(*) FROM protocol_phases pp WHERE pp.protocol_id = cp.protocol_id) AS phase_count
             FROM client_protocols cp
             LEFT JOIN protocols p ON p.id = cp.protocol_id
             WHERE cp.client_id = ?1 AND cp.status = 'ativo'
@@ -285,6 +305,15 @@ export async function getPatientRecordSummary(clientId: string): Promise<Patient
     },
     { sql: "SELECT COUNT(*) AS c FROM client_tasks WHERE client_id = ?1 AND status = 'pendente'", params: [clientId] },
     { sql: "SELECT COUNT(*) AS c FROM payments WHERE client_id = ?1 AND status IN ('pendente', 'vencido')", params: [clientId] },
+    {
+      sql: `SELECT s.id, s.name, s.dosage, s.unit
+            FROM meal_plan_supplements s
+            INNER JOIN meal_plans mp ON mp.id = s.meal_plan_id
+            WHERE mp.client_id = ?1 AND mp.status = 'active'
+            ORDER BY s.sort_order ASC
+            LIMIT 4`,
+      params: [clientId],
+    },
   ]);
 
   const client = batch[0]?.results[0] as ClientRow | undefined;
@@ -301,6 +330,7 @@ export async function getPatientRecordSummary(clientId: string): Promise<Patient
   const protocolRows = (batch[9]?.results ?? []) as ProtocolRow[];
   const pendingTasks = ((batch[10]?.results[0] as CountRow | undefined)?.c ?? 0);
   const pendingPayments = ((batch[11]?.results[0] as CountRow | undefined)?.c ?? 0);
+  const supplementRows = (batch[12]?.results ?? []) as SupplementRow[];
 
   const decodedEvolutions = evolutionRows.map(decodeEvolution);
   const latestAnthropometry = decodedEvolutions[0] ?? null;
@@ -396,7 +426,7 @@ export async function getPatientRecordSummary(clientId: string): Promise<Patient
           versionId: versionId(activePlan),
           version: activePlan.version,
           title: activePlan.title,
-          updatedAt: activePlan.updated_at,
+          publishedAt: activePlan.versioned_at,
         }
       : null,
     draftMealPlan: draftPlan
@@ -405,7 +435,7 @@ export async function getPatientRecordSummary(clientId: string): Promise<Patient
           versionId: versionId(draftPlan),
           version: draftPlan.version,
           title: draftPlan.title,
-          updatedAt: draftPlan.updated_at,
+          versionedAt: draftPlan.versioned_at,
         }
       : null,
     keyRestrictions: markerRows.map((marker) => ({
@@ -421,6 +451,14 @@ export async function getPatientRecordSummary(clientId: string): Promise<Patient
       title: protocol.protocol_title,
       status: protocol.status,
       startedAt: protocol.started_at,
+      reviewDate: protocol.review_date,
+      phaseCount: protocol.phase_count,
+    })),
+    activeSupplements: supplementRows.map((supplement) => ({
+      id: supplement.id,
+      name: supplement.name,
+      dosage: supplement.dosage,
+      unit: supplement.unit,
     })),
     pendingActions,
   };

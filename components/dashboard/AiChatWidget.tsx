@@ -16,6 +16,7 @@ import { getQuickActionsForContext, resolveQuickActionDate, type QuickAction } f
 import { FactsCard, formatDateTimeBR } from "@/components/dashboard/ai-facts";
 import type { AssistantFactsPayload, AssistantOption } from "@/lib/ai/core/ai-response";
 import { getSaoPauloDateKey } from "@/lib/utils/timezone";
+import { shouldAutoOpenDailyBriefing } from "@/lib/ai/presentation/assistant-widget-policy";
 
 const INTRO_SHOWN_KEY = "bruna_nutri_ai_chat_intro_shown";
 const DAILY_BRIEFING_SHOWN_KEY_PREFIX = "bruna_nutri_daily_briefing_shown_";
@@ -411,6 +412,7 @@ export function AiChatWidget() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previousClientIdRef = useRef<string | undefined>(context.clientId);
+  const autoOpenedRef = useRef(false);
   // Guarda sincrona contra envio concorrente — `sending` (estado React) so
   // atualiza no proximo render, entao duas chamadas de sendMessage/quick
   // action disparadas no mesmo tick (duplo clique, Enter + clique, etc.)
@@ -442,10 +444,20 @@ export function AiChatWidget() {
   const quickActions = getQuickActionsForContext(context);
 
   useEffect(() => {
+    let cancelled = false;
+    if (!shouldAutoOpenDailyBriefing(context.currentPage)) {
+      if (autoOpenedRef.current) {
+        autoOpenedRef.current = false;
+        setOpen(false);
+      }
+      return;
+    }
+
     const dailyKey = `${DAILY_BRIEFING_SHOWN_KEY_PREFIX}${todaySaoPauloKey()}`;
     if (window.localStorage.getItem(dailyKey)) {
       if (!window.localStorage.getItem(INTRO_SHOWN_KEY)) {
         window.localStorage.setItem(INTRO_SHOWN_KEY, "1");
+        autoOpenedRef.current = true;
         setOpen(true);
       }
       return;
@@ -455,15 +467,22 @@ export function AiChatWidget() {
     fetch("/api/admin/dashboard-metrics", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
       .then((data: { hoje?: DailyBriefing } | null) => {
-        if (!data?.hoje) return;
+        if (cancelled || !data?.hoje) return;
         setMessages([{ id: createMessageId(), role: "assistant", content: buildDailyBriefingMarkdown(data.hoje) }]);
+        autoOpenedRef.current = true;
         setOpen(true);
       })
       .catch(() => {});
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [context.currentPage]);
 
   useEffect(() => {
-    const handleOpenRequest = () => setOpen(true);
+    const handleOpenRequest = () => {
+      autoOpenedRef.current = false;
+      setOpen(true);
+    };
     window.addEventListener("bruna-nutri:open-ai-chat", handleOpenRequest);
     return () => window.removeEventListener("bruna-nutri:open-ai-chat", handleOpenRequest);
   }, []);
@@ -507,10 +526,16 @@ export function AiChatWidget() {
   useEffect(() => {
     if (!open) return;
     const closeOnOutsideClick = (event: MouseEvent) => {
-      if (!panelRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!panelRef.current?.contains(event.target as Node)) {
+        autoOpenedRef.current = false;
+        setOpen(false);
+      }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        autoOpenedRef.current = false;
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", closeOnOutsideClick);
     document.addEventListener("keydown", closeOnEscape);
@@ -792,8 +817,12 @@ export function AiChatWidget() {
     <>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          autoOpenedRef.current = false;
+          setOpen((value) => !value);
+        }}
         aria-label="Assistente do sistema"
+        aria-expanded={open}
         className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#7F9A74] text-white shadow-[0_12px_32px_rgba(127,154,116,0.4)] transition hover:bg-[#607A56] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3A3028] print:hidden"
       >
         {open ? <X className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
@@ -802,6 +831,9 @@ export function AiChatWidget() {
       {open && (
         <div
           ref={panelRef}
+          role="dialog"
+          aria-modal="false"
+          aria-label="Assistente do sistema"
           className="fixed bottom-24 right-5 z-40 flex h-[min(34rem,75vh)] w-[calc(100vw-2.5rem)] max-w-96 flex-col overflow-hidden rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] shadow-2xl md:max-w-[26rem]"
         >
           <div className="flex items-center justify-between gap-3 border-b border-[#EDE1D6] bg-[#FBF7F1] px-4 py-3">
@@ -823,7 +855,7 @@ export function AiChatWidget() {
               >
                 <MessageSquarePlus className="h-4 w-4" />
               </button>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Fechar" className="rounded-full p-1.5 text-[#8C6E52] hover:bg-white">
+              <button type="button" onClick={() => { autoOpenedRef.current = false; setOpen(false); }} aria-label="Fechar" className="rounded-full p-1.5 text-[#8C6E52] hover:bg-white">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1010,6 +1042,7 @@ export function AiChatWidget() {
             <input
               value={input}
               onChange={(event) => setInput(event.target.value)}
+              aria-label="Mensagem para o assistente"
               placeholder="Digite sua dúvida sobre o sistema..."
               className="flex-1 rounded-full border border-[#EDE1D6] bg-white px-4 py-2 text-sm text-[#3A3028] outline-none focus:border-[#7F9A74]"
               disabled={sending}

@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE, suppressDailyBriefingPopup } from "./helpers/auth";
@@ -14,7 +14,12 @@ async function expectOk(response: { ok(): boolean; status(): number; text(): Pro
 
 async function screenshot(page: Page, name: string, projectName: string, retry: number) {
   mkdirSync(SCREENSHOT_DIR, { recursive: true });
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/${name}-${projectName}-r${retry}.png`, fullPage: true });
+  const path = `${SCREENSHOT_DIR}/${name}-${projectName}-r${retry}.png`;
+  // Playwright/Chromium can fail replacing an already-open PNG on Windows.
+  // These are deterministic E2E review artifacts, so remove only this test's
+  // exact previous output before creating the new file.
+  rmSync(path, { force: true });
+  await page.screenshot({ path, fullPage: true });
 }
 
 async function openAnamnesis(page: Page, patientId: string) {
@@ -85,6 +90,10 @@ async function seedPreConsultationPatient(request: APIRequestContext) {
 }
 
 test.describe("Patient Record P4 anamnesis", () => {
+  // Full-page captures on this long clinical form are unstable when several
+  // P4 pages capture concurrently on Windows. Keep the test cases intact,
+  // but serialize this artifact-producing spec within each browser project.
+  test.describe.configure({ mode: "serial" });
   test("read mode opens as structured record without section inputs", async ({ page, request }, testInfo) => {
     const patient = await seedAnamnesis(request);
     await openAnamnesis(page, patient.id);

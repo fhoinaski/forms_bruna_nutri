@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth/session";
-import { getClientEvolutions, createClientEvolution } from "@/lib/repositories/client-evolutions";
-import { addTimelineEvent } from "@/lib/repositories/client-timeline";
+import { calculateAgeInYears } from "@/lib/clinical/anthropometry";
+import {
+  deleteClientEvolution,
+  getClientEvolutionById,
+  updateClientEvolution,
+} from "@/lib/repositories/client-evolutions";
 import { getClientById } from "@/lib/repositories/clients";
 import { getNutritionRecord } from "@/lib/repositories/nutrition-records";
-import { calculateAgeInYears } from "@/lib/clinical/anthropometry";
+import { getPatientAnthropometryAssessment } from "@/lib/repositories/patient-anthropometry-progress";
 import { z } from "zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const createSchema = z.object({
-  client_protocol_id: z.string().optional().nullable(),
+const patchSchema = z.object({
   measured_at: z.string().datetime().optional().nullable(),
   weight: z.number().positive().optional().nullable(),
   height: z.number().positive().optional().nullable(),
@@ -42,60 +45,65 @@ const createSchema = z.object({
   next_steps: z.string().max(5000).optional().nullable(),
 });
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
-
-  const { id } = await params;
-  const client = await getClientById(id);
-  if (!client) return NextResponse.json({ message: "Cliente não encontrado." }, { status: 404 });
-
-  const evolutions = await getClientEvolutions(id);
-  return NextResponse.json(evolutions, {
-    headers: { "Cache-Control": "private, no-store" },
-  });
+async function resolveOwnedEvolution(clientId: string, evolutionId: string) {
+  const client = await getClientById(clientId);
+  if (!client) return { client: null, evolution: null };
+  const evolution = await getClientEvolutionById(evolutionId);
+  if (!evolution || evolution.client_id !== clientId) return { client, evolution: null };
+  return { client, evolution };
 }
 
-export async function POST(
+export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string; evolutionId: string }> }
 ) {
   const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
 
-  const { id } = await params;
+  const { id, evolutionId } = await params;
+  const assessment = await getPatientAnthropometryAssessment(id, evolutionId);
+  if (!assessment) return NextResponse.json({ message: "Avaliação não encontrada." }, { status: 404 });
+  return NextResponse.json({ assessment }, { headers: { "Cache-Control": "private, no-store" } });
+}
 
-  const client = await getClientById(id);
-  if (!client) return NextResponse.json({ message: "Cliente não encontrado." }, { status: 404 });
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; evolutionId: string }> }
+) {
+  const admin = await getAdminFromRequest(req);
+  if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = createSchema.safeParse(body);
+  const { id, evolutionId } = await params;
+  const { client, evolution } = await resolveOwnedEvolution(id, evolutionId);
+  if (!client || !evolution) return NextResponse.json({ message: "Avaliação não encontrada." }, { status: 404 });
+
+  const parsed = patchSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Dados inválidos." }, { status: 400 });
   }
 
   const nutritionRecord = await getNutritionRecord(id);
-  const measurementDate = parsed.data.measured_at ? new Date(parsed.data.measured_at) : new Date();
-  const ageYears = calculateAgeInYears(client.birth_date, measurementDate);
-
-  const evolutionId = await createClientEvolution({
-    client_id: id,
+  const measurementDate = parsed.data.measured_at ? new Date(parsed.data.measured_at) : new Date(evolution.measured_at ?? evolution.created_at);
+  await updateClientEvolution(evolutionId, {
     ...parsed.data,
-    age_years: ageYears,
+    age_years: calculateAgeInYears(client.birth_date, measurementDate),
     biological_sex: nutritionRecord?.biological_sex ?? null,
   });
 
-  const weightNote = parsed.data.weight ? ` | Peso: ${parsed.data.weight}kg` : "";
-  await addTimelineEvent({
-    client_id: id,
-    type: "evolution_recorded",
-    title: "Evolução registrada",
-    description: `Registro de evolução clínica${weightNote}`,
-    metadata: { evolutionId },
-  });
+  return NextResponse.json({ success: true });
+}
 
-  return NextResponse.json({ success: true, evolutionId }, { status: 201 });
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; evolutionId: string }> }
+) {
+  const admin = await getAdminFromRequest(req);
+  if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
+
+  const { id, evolutionId } = await params;
+  const { client, evolution } = await resolveOwnedEvolution(id, evolutionId);
+  if (!client || !evolution) return NextResponse.json({ message: "Avaliação não encontrada." }, { status: 404 });
+
+  await deleteClientEvolution(evolutionId);
+  return NextResponse.json({ success: true });
 }

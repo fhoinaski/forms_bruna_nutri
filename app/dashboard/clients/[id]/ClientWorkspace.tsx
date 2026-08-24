@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import dynamic from "next/dynamic";
-import { ClinicalEvolutionForm } from "@/components/dashboard/ClinicalEvolutionForm";
+import { AnthropometryProgressPanel } from "@/components/dashboard/AnthropometryProgressPanel";
 import { NutritionRecordHistory } from "@/components/dashboard/NutritionRecordHistory";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -42,9 +42,9 @@ import { CLINICAL_MARKER_CODE_LABELS, FOOD_RESTRICTION_CODES } from "@/lib/clini
 import type { ClientSnapshot } from "@/lib/clinical/client-snapshot";
 import type { PatientRecordSummaryViewModel } from "@/lib/repositories/patient-record-summary";
 import type { PatientTimelineEvent, PatientTimelineFilter, PatientTimelineResult } from "@/lib/repositories/patient-record-timeline";
+import { getConsultationHref, getPatientRecordHref, getScheduleReturnHref } from "@/lib/patient-record/navigation";
 
 const MealPlanEditor = dynamic(() => import("@/components/dashboard/MealPlanEditor").then((mod) => mod.MealPlanEditor));
-const EvolutionChart = dynamic(() => import("@/components/dashboard/EvolutionChart").then((mod) => mod.EvolutionChart));
 
 function formatDateSafe(value: string | null, fmt = "dd/MM/yyyy"): string {
   if (!value) return "—";
@@ -1517,6 +1517,7 @@ function PatientOverview({
   recentActivity,
   onStartConsultation,
   onOpenPlan,
+  onOpenProtocols,
   onNewAnthropometry,
   onOpenTimeline,
 }: {
@@ -1524,6 +1525,7 @@ function PatientOverview({
   recentActivity: PatientTimelineEvent[];
   onStartConsultation: () => void;
   onOpenPlan: () => void;
+  onOpenProtocols: () => void;
   onNewAnthropometry: () => void;
   onOpenTimeline: () => void;
 }) {
@@ -1555,6 +1557,15 @@ function PatientOverview({
                   <Utensils className="h-4 w-4" />
                   Abrir plano
                 </button>
+                <details className="relative">
+                  <summary className="brand-btn-secondary cursor-pointer list-none">Mais ações</summary>
+                  <div className="absolute right-0 z-10 mt-2 grid min-w-48 gap-1 rounded-lg border border-[#EDE1D6] bg-white p-2 shadow-lg">
+                    <Link href={getPatientRecordHref(summary.patient.id, "anamnese")} className="rounded px-3 py-2 text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Anamnese</Link>
+                    <button type="button" onClick={onOpenProtocols} className="rounded px-3 py-2 text-left text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Protocolos</button>
+                    <button type="button" onClick={onOpenPlan} className="rounded px-3 py-2 text-left text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Suplementação</button>
+                    <Link href={getScheduleReturnHref(summary.patient.id)} className="rounded px-3 py-2 text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Agendar retorno</Link>
+                  </div>
+                </details>
               </div>
             </div>
           </section>
@@ -1573,7 +1584,7 @@ function PatientOverview({
               value={summary.nextAppointment ? formatDateTime(summary.nextAppointment.date) : "Nenhum retorno agendado"}
               detail={summary.nextAppointment?.title ?? "Agenda completa permanece no módulo de agenda."}
               action={!summary.nextAppointment ? (
-                <Link href="/dashboard/agenda" className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Agendar retorno</Link>
+                <Link href={getScheduleReturnHref(summary.patient.id)} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Agendar retorno</Link>
               ) : null}
             />
             <SummaryCard
@@ -1587,7 +1598,7 @@ function PatientOverview({
             <SummaryCard
               title="Plano alimentar"
               value={summary.activeMealPlan ? `Ativo · v${summary.activeMealPlan.version}` : "Nenhum plano ativo"}
-              detail={summary.activeMealPlan ? `${summary.activeMealPlan.title} · atualizado em ${formatDateSafe(summary.activeMealPlan.updatedAt)}` : "Crie ou publique um plano antes de entregar ao portal."}
+              detail={summary.activeMealPlan ? `${summary.activeMealPlan.title} · publicado em ${formatDateSafe(summary.activeMealPlan.publishedAt)}` : "Crie ou publique um plano antes de entregar ao portal."}
               action={<button type="button" onClick={onOpenPlan} className="text-left text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">{summary.activeMealPlan ? "Abrir plano" : "Criar plano"}</button>}
             />
           </div>
@@ -1680,9 +1691,21 @@ function PatientOverview({
               {summary.activeProtocols.length ? summary.activeProtocols.map((protocol) => (
                 <div key={protocol.id} className="rounded-lg border border-[#D9E4D3] bg-[#F4F8F1] p-3">
                   <p className="font-semibold text-[#3A3028]">{protocol.title ?? "Protocolo ativo"}</p>
-                  <p className="text-xs text-[#75675E]">Iniciado em {formatDateSafe(protocol.startedAt)}</p>
+                  <p className="text-xs text-[#75675E]">{protocol.phaseCount ? `${protocol.phaseCount} fase(s)` : "Em acompanhamento"}{protocol.reviewDate ? ` · revisão ${formatDateSafe(protocol.reviewDate)}` : ""}</p>
+                  <button type="button" onClick={onOpenProtocols} className="mt-2 text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir protocolo</button>
                 </div>
               )) : <p className="text-sm text-[#75675E]">Nenhum protocolo ativo vinculado.</p>}
+              <div className="border-t border-[#EDE1D6] pt-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">Suplementação ativa</p>
+                {summary.activeSupplements.length ? (
+                  <ul className="mt-2 space-y-1.5">
+                    {summary.activeSupplements.map((supplement) => (
+                      <li key={supplement.id} className="text-sm text-[#3A3028]"><span className="font-semibold">{supplement.name}</span>{supplement.dosage ? ` · ${supplement.dosage}${supplement.unit ? ` ${supplement.unit}` : ""}` : ""}</li>
+                    ))}
+                  </ul>
+                ) : <p className="mt-2 text-sm text-[#75675E]">Nenhuma suplementação ativa registrada.</p>}
+                <button type="button" onClick={onOpenPlan} className="mt-2 text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir suplementação</button>
+              </div>
             </div>
           </section>
         </aside>
@@ -1703,14 +1726,18 @@ export default function ClientWorkspace({
   const id = initialData.client.id;
   const router = useRouter();
   const searchParams = useSearchParams();
+  const navigationQuery = searchParams.toString();
 
   const [activeTab, setActiveTab] = useState<TabId>(() => resolveTabFromParam(searchParams.get("tab")));
+  const [planView, setPlanView] = useState<"dieta" | "protocolos">(() => searchParams.get("view") === "protocolos" ? "protocolos" : "dieta");
+  const [returnConsultationId, setReturnConsultationId] = useState<string | null>(() => searchParams.get("consultationId"));
 
   useEffect(() => {
     setActiveTab(resolveTabFromParam(searchParams.get("tab")));
+    setPlanView(searchParams.get("view") === "protocolos" ? "protocolos" : "dieta");
+    setReturnConsultationId(searchParams.get("consultationId"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams.get("tab")]);
-  const [planView, setPlanView] = useState<"dieta" | "protocolos">("dieta");
+  }, [navigationQuery]);
   const [evolutionView, setEvolutionView] = useState<"timeline" | "agenda" | "tarefas" | "financeiro" | "relatorios">("timeline");
   const [moreView, setMoreView] = useState<"cadastro" | "portal" | "administrativo">("cadastro");
   const data = initialData.client;
@@ -1788,6 +1815,11 @@ export default function ClientWorkspace({
     setPlanView("dieta");
   }
 
+  function openProtocolsTab() {
+    setActiveTab("plano-alimentar");
+    setPlanView("protocolos");
+  }
+
   function openTimelineTab() {
     setActiveTab("evolucao");
   }
@@ -1818,11 +1850,7 @@ export default function ClientWorkspace({
   const [taskStatusFilter, setTaskStatusFilter] = useState("");
 
   // Evolutions
-  const [evolutions, setEvolutions] = useState<ClientEvolution[]>([]);
-  const [evolutionsLoading, setEvolutionsLoading] = useState(false);
   const [showEvolutionForm, setShowEvolutionForm] = useState(false);
-  const [clinicalGrowth, setClinicalGrowth] = useState<ClinicalGrowthResponse | null>(null);
-  const [clinicalGrowthLoading, setClinicalGrowthLoading] = useState(false);
 
   // Agenda and finance
   const [appointments, setAppointments] = useState<ClientAppointment[]>([]);
@@ -1863,19 +1891,6 @@ export default function ClientWorkspace({
       fetch(`/api/admin/payments?clientId=${id}`)
         .then((r) => r.json()).then((d: { items: ClientPayment[] }) => setPayments(d.items ?? []))
         .catch(() => null).finally(() => setPaymentsLoading(false));
-    }
-    if (activeTab === "antropometria" && evolutions.length === 0) {
-      setEvolutionsLoading(true);
-      fetch(`/api/admin/clients/${id}/evolutions`)
-        .then((r) => r.json()).then((d: ClientEvolution[]) => setEvolutions(d ?? []))
-        .catch(() => null).finally(() => setEvolutionsLoading(false));
-    }
-    if (activeTab === "antropometria" && !clinicalGrowth) {
-      setClinicalGrowthLoading(true);
-      fetch(`/api/admin/clients/${id}/clinical-growth`)
-        .then((r) => r.ok ? r.json() as Promise<ClinicalGrowthResponse> : null)
-        .then((result) => result && setClinicalGrowth(result))
-        .catch(() => null).finally(() => setClinicalGrowthLoading(false));
     }
     if (activeTab === "evolucao" && !clinicalTimeline && !timelineLoading) {
       void loadClinicalTimeline({ filter: timelineFilter, offset: 0 });
@@ -2009,19 +2024,7 @@ export default function ClientWorkspace({
     setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t));
   };
 
-  const handleDeleteEvolution = async (evolutionId: string) => {
-    if (!confirm("Remover este registro de evolução?")) return;
-    await fetch(`/api/admin/client-evolutions/${evolutionId}`, { method: "DELETE" });
-    setEvolutions((prev) => prev.filter((e) => e.id !== evolutionId));
-    setClinicalGrowth(null);
-  };
-
   const reloadEvolutions = () => {
-    setEvolutionsLoading(true);
-    fetch(`/api/admin/clients/${id}/evolutions`)
-      .then((r) => r.json()).then((d: ClientEvolution[]) => setEvolutions(d ?? []))
-      .catch(() => null).finally(() => setEvolutionsLoading(false));
-    setClinicalGrowth(null);
     setShowEvolutionForm(false);
     void reloadPatientSummary();
   };
@@ -2079,11 +2082,6 @@ export default function ClientWorkspace({
     }
   };
 
-
-  const hasClinicalGrowth =
-    Boolean(clinicalGrowth?.pediatric.applicable && clinicalGrowth.pediatric.results.length) ||
-    Boolean(clinicalGrowth?.gestational.applicable) ||
-    Boolean(clinicalGrowth?.bariatric.applicable);
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-16 animate-fade-up">
@@ -2164,6 +2162,7 @@ export default function ClientWorkspace({
               recentActivity={recentActivity}
               onStartConsultation={() => void startConsultation()}
               onOpenPlan={openPlanTab}
+              onOpenProtocols={openProtocolsTab}
               onNewAnthropometry={openNewAnthropometry}
               onOpenTimeline={openTimelineTab}
             />
@@ -2176,7 +2175,7 @@ export default function ClientWorkspace({
                   <p className="brand-kicker">Consultas</p>
                   <h2 className="font-serif text-xl font-semibold text-[#3A3028]">Agenda deste paciente</h2>
                 </div>
-                <Link href="/dashboard/agenda" className="brand-btn-secondary w-full sm:w-auto">
+                <Link href={getScheduleReturnHref(id)} className="brand-btn-secondary w-full sm:w-auto">
                   <CalendarDays className="h-4 w-4" />
                   Agendar retorno
                 </Link>
@@ -2271,13 +2270,18 @@ export default function ClientWorkspace({
 
           {activeTab === "plano-alimentar" && planView === "dieta" && (
             <div className="space-y-4">
-              <div className="flex justify-end">
+              <div className="flex flex-wrap justify-end gap-2">
+                {returnConsultationId && (
+                  <Link href={getConsultationHref(id, returnConsultationId)} className="brand-btn-secondary w-full sm:w-auto">
+                    <ArrowLeft className="h-4 w-4" /> Voltar à consulta
+                  </Link>
+                )}
                 <Link href={`/dashboard/clients/${id}/print?secao=plano-alimentar`} target="_blank" className="brand-btn-secondary w-full sm:w-auto">
                   <Printer className="h-4 w-4" />
                   Imprimir versão ativa
                 </Link>
               </div>
-              <MealPlanEditor clientId={id} onSaved={reloadTimeline} />
+              <MealPlanEditor clientId={id} onSaved={() => { void reloadPatientSummary(); void reloadTimeline(); }} />
             </div>
           )}
 
@@ -2659,147 +2663,17 @@ export default function ClientWorkspace({
             </div>
           )}
 
-          {/* ── Evoluções ──────────────────────────────────────── */}
+          {/* ── Antropometria ──────────────────────────────────── */}
           {activeTab === "antropometria" && (
-            <div className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="font-serif font-semibold text-lg text-[#B47F6A]">Evoluções clínicas</h2>
-                <button onClick={() => setShowEvolutionForm((v) => !v)}
-                  className="brand-btn-primary w-full text-sm sm:w-auto">
-                  <Plus className="w-4 h-4" />
-                  Nova evolução
-                </button>
-              </div>
-
-              <section className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-4 sm:p-5">
-                <div className="mb-4"><p className="brand-kicker">Histórico antropométrico</p><h3 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">Curva de evolução corporal</h3></div>
-                {(clinicalGrowthLoading || hasClinicalGrowth) && (
-                  <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                    {clinicalGrowthLoading && (
-                      <div className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-4 text-sm text-[#8C6E52]">
-                        Calculando referencias clinicas...
-                      </div>
-                    )}
-
-                    {clinicalGrowth?.pediatric.applicable && clinicalGrowth.pediatric.results.length > 0 && (
-                      <div className="rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] p-4">
-                        <p className="brand-kicker">Crescimento pediatrico OMS</p>
-                        <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Z-scores e pontos de atencao</h3>
-                        <div className="mt-3 space-y-2">
-                          {clinicalGrowth.pediatric.results.map((result) => (
-                            <div key={result.indicator} className="rounded-lg bg-[#FBF7F1] p-3">
-                              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                <p className="text-sm font-semibold text-[#3A3028]">{result.label}</p>
-                                <span className="w-fit rounded-full bg-[#E8F0E3] px-2.5 py-1 text-xs font-semibold text-[#607A56]">
-                                  Z {result.zScore.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                              </div>
-                              <p className="mt-1 text-xs leading-5 text-[#75675E]">{result.cautionLabel}</p>
-                              {result.technicalRule && (
-                                <p className="mt-1 text-[11px] text-[#A8927D]">Regra tecnica: {result.technicalRule}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {clinicalGrowth?.gestational.applicable && (
-                      <div className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-4">
-                        <p className="brand-kicker">Ganho gestacional IOM/OMS</p>
-                        <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Monitoramento da gestacao</h3>
-                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <div className="rounded-lg bg-[#FBF7F1] p-3">
-                            <p className="brand-label mb-1">IMC pre-gestacional</p>
-                            <p className="text-sm font-semibold text-[#3A3028]">
-                              {clinicalGrowth.gestational.prePregnancyBmi?.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) ?? "Nao calculado"}
-                            </p>
-                            <p className="mt-1 text-xs text-[#75675E]">{clinicalGrowth.gestational.prePregnancyClassification?.label ?? "Informe peso pre-gestacional e altura."}</p>
-                          </div>
-                          <div className="rounded-lg bg-[#FBF7F1] p-3">
-                            <p className="brand-label mb-1">Ganho total recomendado</p>
-                            <p className="text-sm font-semibold text-[#3A3028]">
-                              {clinicalGrowth.gestational.recommendedTotalGain
-                                ? `${clinicalGrowth.gestational.recommendedTotalGain.ganho_min_kg}-${clinicalGrowth.gestational.recommendedTotalGain.ganho_max_kg} kg`
-                                : "Sem faixa calculada"}
-                            </p>
-                          </div>
-                          <div className="rounded-lg bg-[#FBF7F1] p-3 sm:col-span-2">
-                            <p className="brand-label mb-1">Taxa semanal observada</p>
-                            <p className="text-sm font-semibold text-[#3A3028]">
-                              {clinicalGrowth.gestational.weeklyGainRate !== null ? `${clinicalGrowth.gestational.weeklyGainRate} kg/semana` : "Registre ao menos duas evolucoes com peso."}
-                            </p>
-                            <p className="mt-1 text-xs text-[#75675E]">{clinicalGrowth.gestational.weeklyGainClassification?.label ?? clinicalGrowth.gestational.referenceNote}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {clinicalGrowth?.bariatric.applicable && (
-                      <div className="rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-4">
-                        <p className="brand-kicker">Acompanhamento bariatrico</p>
-                        <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Perda de peso pos-cirurgica</h3>
-                        {clinicalGrowth.bariatric.progress ? (
-                          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <div className="rounded-lg bg-[#FBF7F1] p-3">
-                              <p className="brand-label mb-1">%TWL (perda de peso total)</p>
-                              <p className="text-sm font-semibold text-[#3A3028]">
-                                {clinicalGrowth.bariatric.progress.percentTotalWeightLoss.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
-                              </p>
-                            </div>
-                            <div className="rounded-lg bg-[#FBF7F1] p-3">
-                              <p className="brand-label mb-1">%EWL (excesso de peso perdido)</p>
-                              <p className="text-sm font-semibold text-[#3A3028]">
-                                {clinicalGrowth.bariatric.progress.percentExcessWeightLoss !== null
-                                  ? `${clinicalGrowth.bariatric.progress.percentExcessWeightLoss.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
-                                  : "Defina o peso/meta clinica"}
-                              </p>
-                            </div>
-                            <div className="rounded-lg bg-[#FBF7F1] p-3 sm:col-span-2">
-                              <p className="brand-label mb-1">Peso perdido desde a cirurgia</p>
-                              <p className="text-sm font-semibold text-[#3A3028]">
-                                {clinicalGrowth.bariatric.progress.weightLostKg.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="mt-2 text-xs leading-5 text-[#75675E]">
-                            Informe o peso pre-cirurgico na Antropometria e registre uma evolucao com o peso atual para calcular o progresso.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <EvolutionChart history={evolutions} referenceLines={clinicalGrowth?.pediatric.chartReferenceLines ?? []} />
-              </section>
-
-              <ReassessmentTable evolutions={evolutions} />
-
-              {showEvolutionForm && (
-                <ClinicalEvolutionForm
-                  clientId={id}
-                  onSuccess={() => { reloadEvolutions(); reloadTimeline(); }}
-                  biologicalSex={clinicalSummary?.biological_sex ?? null}
-                  ageYears={calculateAgeInYears(birthDate || null)}
-                />
-              )}
-
-              {evolutionsLoading ? (
-                <p className="text-sm text-[#A8927D]">Carregando...</p>
-              ) : evolutions.length === 0 && !showEvolutionForm ? (
-                <div className="text-center py-10">
-                  <TrendingUp className="w-10 h-10 text-[#EAD8C2] mx-auto mb-3" />
-                  <p className="text-[#A8927D] text-sm">Nenhuma evolução registrada ainda.</p>
-                </div>
-              ) : (
-                <ul className="space-y-4">
-                  {evolutions.map((ev) => (
-                    <EvolutionHistoryItem key={ev.id} evolution={ev} onDelete={handleDeleteEvolution} />
-                  ))}
-                </ul>
-              )}
-            </div>
+            <AnthropometryProgressPanel
+              clientId={id}
+              biologicalSex={clinicalSummary?.biological_sex ?? null}
+              ageYears={calculateAgeInYears(birthDate || null)}
+              archived={patientSummary.patient.status === "arquivado"}
+              showForm={showEvolutionForm}
+              onShowFormChange={setShowEvolutionForm}
+              onChanged={() => { reloadEvolutions(); reloadTimeline(); }}
+            />
           )}
 
           {/* ── Timeline ───────────────────────────────────────── */}

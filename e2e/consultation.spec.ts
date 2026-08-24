@@ -21,17 +21,17 @@ test.describe("Modo Consulta", () => {
     await suppressDailyBriefingPopup(page);
 
     await page.goto(`/dashboard/clients/${patient.id}`);
-    await page.getByRole("button", { name: /iniciar consulta/i }).click();
+    await page.getByTestId("patient-record-overview").getByRole("button", { name: "Iniciar consulta" }).first().click();
 
     await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta$`));
     await expect(page.getByRole("heading", { level: 1, name: patient.name })).toBeVisible();
-    await expect(page.getByText(/consulta em andamento/i)).toBeVisible();
+    await expect(page.getByText(/em atendimento/i)).toBeVisible();
 
     const activeSessionResponse = await page.request.get(`/api/admin/clients/${patient.id}/consultation`);
     const activeSessionId = (await activeSessionResponse.json()).session.id as string;
 
-    // Briefing (dados determinísticos do sistema, sempre disponíveis).
-    await expect(page.getByRole("heading", { name: "Resumo para consulta" })).toBeVisible();
+    // O contexto clínico é determinístico; o briefing de IA é opcional.
+    await expect(page.getByRole("complementary", { name: "Contexto do paciente" })).toBeVisible();
 
     // Antropometria.
     await page.getByRole("tab", { name: "Antropometria" }).click();
@@ -91,7 +91,7 @@ test.describe("Modo Consulta", () => {
     await suppressDailyBriefingPopup(page);
 
     await page.goto(`/dashboard/clients/${patient.id}`);
-    await page.getByRole("button", { name: /iniciar consulta/i }).click();
+    await page.getByTestId("patient-record-overview").getByRole("button", { name: "Iniciar consulta" }).first().click();
     await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta$`));
 
     const firstResponse = await page.request.get(`/api/admin/clients/${patient.id}/consultation`);
@@ -99,7 +99,7 @@ test.describe("Modo Consulta", () => {
 
     // Sai e tenta iniciar de novo — nunca cria uma segunda sessão in_progress.
     await page.goto(`/dashboard/clients/${patient.id}`);
-    await page.getByRole("button", { name: /iniciar consulta/i }).click();
+    await page.getByTestId("patient-record-overview").getByRole("button", { name: "Iniciar consulta" }).first().click();
     await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta$`));
 
     const secondResponse = await page.request.get(`/api/admin/clients/${patient.id}/consultation`);

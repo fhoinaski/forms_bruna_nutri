@@ -28,12 +28,13 @@ const completeBatch = [
     { id: "ev-latest", measured_at: "2026-08-20T12:00:00.000Z", created_at: "2026-08-20T12:00:00.000Z", encrypted_payload: JSON.stringify({ weight: 68.4, bmi: 24.1, waist_cm: 78, body_fat_percentage: 29 }) },
     { id: "ev-previous", measured_at: "2026-08-01T12:00:00.000Z", created_at: "2026-08-01T12:00:00.000Z", encrypted_payload: JSON.stringify({ weight: 70.0, bmi: 24.7 }) },
   ],
-  [{ id: "active-plan", title: "Plano atual", status: "active", version: 3, updated_at: "2026-08-18T14:00:00.000Z" }],
-  [{ id: "draft-plan", title: "Plano em ajuste", status: "draft", version: 4, updated_at: "2026-08-22T14:00:00.000Z" }],
+  [{ id: "active-plan", title: "Plano atual", status: "active", version: 3, versioned_at: "2026-08-18T14:00:00.000Z" }],
+  [{ id: "draft-plan", title: "Plano em ajuste", status: "draft", version: 4, versioned_at: "2026-08-22T14:00:00.000Z" }],
   [{ id: "marker-1", type: "ALLERGY", normalized_code: "MILK", label_encrypted: "Alergia ao leite", severity: "severe", source: "manual" }],
-  [{ id: "cp-1", protocol_id: "protocol-1", status: "ativo", started_at: "2026-08-10", protocol_title: "Reeducação alimentar" }],
+  [{ id: "cp-1", protocol_id: "protocol-1", status: "ativo", started_at: "2026-08-10", review_date: "2026-09-10", phase_count: 2, protocol_title: "Reeducação alimentar" }],
   [{ c: 2 }],
   [{ c: 1 }],
+  [{ id: "supplement-1", name: "Vitamina D", dosage: "2000", unit: "UI/dia" }],
 ];
 
 describe("PatientRecordSummaryViewModel", () => {
@@ -50,9 +51,12 @@ describe("PatientRecordSummaryViewModel", () => {
     expect(summary?.latestAnthropometry?.weightKg).toBe(68.4);
     expect(summary?.weightTrend).toEqual({ absoluteChangeKg: -1.6, direction: "down" });
     expect(summary?.activeMealPlan?.versionId).toBe("active-plan:v3");
+    expect(summary?.activeMealPlan?.publishedAt).toBe("2026-08-18T14:00:00.000Z");
     expect(summary?.draftMealPlan?.versionId).toBe("draft-plan:v4");
     expect(summary?.pendingActions.map((action) => action.kind)).toContain("DRAFT_MEAL_PLAN");
     expect(summary?.keyRestrictions[0].label).toBe("Alergia ao leite");
+    expect(summary?.activeProtocols[0]).toMatchObject({ phaseCount: 2, reviewDate: "2026-09-10" });
+    expect(summary?.activeSupplements).toEqual([{ id: "supplement-1", name: "Vitamina D", dosage: "2000", unit: "UI/dia" }]);
   });
 
   it("normaliza paciente vazio sem zeros falsos", async () => {

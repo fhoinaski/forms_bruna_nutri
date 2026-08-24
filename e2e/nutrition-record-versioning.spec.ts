@@ -47,7 +47,9 @@ test.describe("versionamento do prontuário", () => {
     await expect(page.getByText("Queixa inicial E2E")).toBeVisible();
     // O snapshot da v2 não pode conter o conteúdo mais novo (v3), que só existe
     // no editor atual (atrás do modal) — escopa a checagem ao <dl> do snapshot.
-    await expect(page.locator("dl")).not.toContainText("Queixa nova E2E");
+    const historicalSnapshot = page.locator("dl").filter({ hasText: "Queixa inicial E2E" });
+    await expect(historicalSnapshot).toContainText("Queixa inicial E2E");
+    await expect(historicalSnapshot).not.toContainText("Queixa nova E2E");
   });
 
   test("CENÁRIO B: expectedVersion obsoleto retorna 409 e não sobrescreve", async ({ request }) => {

@@ -280,8 +280,8 @@ export async function getConsultationWorkspace(
             LIMIT 3`,
       params: [patientId],
     },
-    { sql: "SELECT id, title, version, updated_at FROM meal_plans WHERE client_id = ?1 AND status = 'active' ORDER BY updated_at DESC LIMIT 1", params: [patientId] },
-    { sql: "SELECT id, title, version, updated_at FROM meal_plans WHERE client_id = ?1 AND status = 'draft' ORDER BY updated_at DESC LIMIT 1", params: [patientId] },
+    { sql: "SELECT id, title, version, updated_at FROM meal_plans WHERE client_id = ?1 AND status = 'active' ORDER BY version DESC, created_at DESC LIMIT 1", params: [patientId] },
+    { sql: "SELECT id, title, version, updated_at FROM meal_plans WHERE client_id = ?1 AND status = 'draft' ORDER BY version DESC, created_at DESC LIMIT 1", params: [patientId] },
     {
       sql: `SELECT id, normalized_code, label_encrypted, severity, source
             FROM patient_clinical_markers

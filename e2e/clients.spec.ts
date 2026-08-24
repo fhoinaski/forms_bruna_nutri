@@ -52,11 +52,13 @@ test.describe("pacientes", () => {
     await page.goto(`/dashboard/clients/${patient.id}`);
     await expect(page.getByRole("heading", { level: 1, name: patient.name })).toBeVisible();
 
+    await page.getByRole("tab", { name: "Mais" }).click();
     await page.getByPlaceholder(/Observações sobre a paciente/i).fill(note);
     await page.getByRole("button", { name: /salvar alterações/i }).click();
     await expect(page.getByRole("button", { name: /salvo!/i })).toBeVisible();
 
     await page.reload();
+    await page.getByRole("tab", { name: "Mais" }).click();
     await expect(page.getByPlaceholder(/Observações sobre a paciente/i)).toHaveValue(note);
   });
 

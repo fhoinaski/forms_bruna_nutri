@@ -22,6 +22,7 @@ import type {
   ConsultationWorkspaceDraft,
   PatientConsultationWorkspaceViewModel,
 } from "@/lib/repositories/patient-consultation-workspace";
+import { getAnthropometryHref, getMealPlanHref, getProtocolHref, getScheduleReturnHref } from "@/lib/patient-record/navigation";
 
 const DRAFT_FIELDS: Array<{ key: keyof ConsultationWorkspaceDraft; label: string; hint: string; rows: number }> = [
   { key: "evolution", label: "Evolução desde a última consulta", hint: "Mudanças clínicas, rotina, apetite, energia, evolução do objetivo.", rows: 4 },
@@ -280,14 +281,14 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
             label="Peso atual"
             value={formatWeight(workspace.latestAnthropometry?.weightKg)}
             detail={workspace.weightDelta ? `Variação desde a anterior: ${workspace.weightDelta.label}` : workspace.previousAnthropometry ? null : "Sem comparação anterior"}
-            action={<button type="button" onClick={() => guardNavigation(() => router.push(`/dashboard/clients/${clientId}?tab=antropometria`))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Registrar avaliação</button>}
+            action={<button type="button" onClick={() => guardNavigation(() => router.push(getAnthropometryHref(clientId, consultation.id)))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Registrar avaliação</button>}
           />
           <ContextCard label="Última consulta" value={workspace.previousConsultation ? formatDate(workspace.previousConsultation.date) : "Sem consulta anterior"} detail={workspace.previousConsultation?.type ?? null} />
           <ContextCard
             label="Plano alimentar"
             value={workspace.activeMealPlan ? `Ativo v${workspace.activeMealPlan.version}` : "Nenhum plano ativo"}
             detail={workspace.draftMealPlan ? `Rascunho v${workspace.draftMealPlan.version} em andamento` : workspace.activeMealPlan?.title ?? null}
-            action={<button type="button" onClick={() => guardNavigation(() => router.push(`/dashboard/clients/${clientId}?tab=plano-alimentar`))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">{workspace.activeMealPlan ? "Abrir plano" : "Criar plano"}</button>}
+            action={<button type="button" onClick={() => guardNavigation(() => router.push(getMealPlanHref(clientId, { consultationId: consultation.id, draft: Boolean(workspace.draftMealPlan) })))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">{workspace.activeMealPlan ? "Abrir plano" : "Criar plano"}</button>}
           />
           <div className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">Restrições importantes</p>
@@ -311,9 +312,9 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
             label="Protocolos"
             value={workspace.activeProtocols[0]?.title ?? "Nenhum protocolo ativo"}
             detail={workspace.activeProtocols.length > 1 ? `${workspace.activeProtocols.length} protocolos ativos/pausados` : null}
-            action={<button type="button" onClick={() => guardNavigation(() => router.push(`/dashboard/clients/${clientId}?tab=plano-alimentar&view=protocolos`))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir protocolos</button>}
+            action={<button type="button" onClick={() => guardNavigation(() => router.push(getProtocolHref(clientId, consultation.id)))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir protocolos</button>}
           />
-          <button type="button" onClick={() => guardNavigation(() => router.push("/dashboard/agenda"))} className="brand-btn-secondary w-full">
+          <button type="button" onClick={() => guardNavigation(() => router.push(getScheduleReturnHref(clientId, consultation.id)))} className="brand-btn-secondary w-full">
             <CalendarDays className="h-4 w-4" /> Agendar retorno
           </button>
         </aside>
@@ -353,12 +354,12 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
           </section>
 
           <section className="grid gap-3 md:grid-cols-3">
-            <button type="button" onClick={() => guardNavigation(() => router.push(`/dashboard/clients/${clientId}?tab=antropometria`))} className="rounded-lg border border-[#EDE1D6] bg-white p-4 text-left hover:bg-[#FBF7F1]">
+            <button type="button" onClick={() => guardNavigation(() => router.push(getAnthropometryHref(clientId, consultation.id)))} className="rounded-lg border border-[#EDE1D6] bg-white p-4 text-left hover:bg-[#FBF7F1]">
               <Activity className="mb-2 h-5 w-5 text-[#607A56]" />
               <p className="text-sm font-semibold text-[#3A3028]">Nova avaliação</p>
               <p className="mt-1 text-xs text-[#75675E]">Reutiliza antropometria existente.</p>
             </button>
-            <button type="button" onClick={() => guardNavigation(() => router.push(`/dashboard/clients/${clientId}?tab=plano-alimentar`))} className="rounded-lg border border-[#EDE1D6] bg-white p-4 text-left hover:bg-[#FBF7F1]">
+            <button type="button" onClick={() => guardNavigation(() => router.push(getMealPlanHref(clientId, { consultationId: consultation.id, draft: Boolean(workspace.draftMealPlan) })))} className="rounded-lg border border-[#EDE1D6] bg-white p-4 text-left hover:bg-[#FBF7F1]">
               <Utensils className="mb-2 h-5 w-5 text-[#607A56]" />
               <p className="text-sm font-semibold text-[#3A3028]">Abrir plano alimentar</p>
               <p className="mt-1 text-xs text-[#75675E]">Sem renderizar o editor dentro da consulta.</p>

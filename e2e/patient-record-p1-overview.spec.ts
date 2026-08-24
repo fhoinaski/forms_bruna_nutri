@@ -215,8 +215,8 @@ test.describe("Patient Record P1 overview", () => {
 
     await page.goto(`/dashboard/clients/${patient.id}`);
     await page.getByRole("button", { name: "Nova avaliação" }).first().click();
-    await expect(page.getByRole("heading", { name: /Evoluções clínicas/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Nova evolução/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Antropometria e progresso/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Registrar primeira avaliação/i })).toBeVisible();
 
     await page.getByRole("tab", { name: "Resumo" }).click();
     await page.getByRole("button", { name: "Abrir plano" }).first().click();
