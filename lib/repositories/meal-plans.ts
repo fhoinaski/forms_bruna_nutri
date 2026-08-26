@@ -932,6 +932,15 @@ function buildQuantitySnapshots(item: MealPlanItemPayload, portionsById: Map<str
   if (!item.household_measure_id) {
     return { resolved_grams_snapshot: null, quantity_resolution_snapshot: null };
   }
+  // Canonical TBCA/IBGE portions live in canonical_food_portions rather than
+  // the legacy food_portions table. The editor resolves them through the same
+  // quantity contract and sends an immutable snapshot; preserve that snapshot
+  // here so save/reload cannot discard an official selected measure.
+  if ((item.food_source === "TBCA" || item.food_source === "IBGE_POF")
+    && typeof item.resolved_grams_snapshot === "number" && item.resolved_grams_snapshot > 0
+    && item.quantity_resolution_snapshot) {
+    return { resolved_grams_snapshot: item.resolved_grams_snapshot, quantity_resolution_snapshot: item.quantity_resolution_snapshot };
+  }
   const portion = portionsById.get(item.household_measure_id);
   if (!portion || !portionMatchesItem(portion, item)) {
     return { resolved_grams_snapshot: null, quantity_resolution_snapshot: null };

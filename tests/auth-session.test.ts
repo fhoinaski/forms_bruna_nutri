@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Regressao: proxy.ts (Edge) e as rotas de API admin (Node.js runtime) sao
@@ -12,11 +12,13 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
  * (achado real ao rodar o E2E de "troca obrigatoria de senha").
  */
 
-beforeAll(() => {
-  process.env.AUTH_SECRET = "test-auth-secret-with-at-least-thirty-two-characters";
+beforeEach(() => {
+  vi.stubEnv("AUTH_SECRET", "test-auth-secret-with-at-least-thirty-two-characters");
 });
 
 afterEach(() => {
+  vi.doUnmock("@/lib/d1/client");
+  vi.unstubAllEnvs();
   vi.resetModules();
   vi.clearAllMocks();
 });

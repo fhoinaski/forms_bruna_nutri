@@ -3,6 +3,7 @@ import { getAdminFromRequest } from "@/lib/auth/session";
 import { normalize } from "@/lib/nutrition/macros";
 import { searchFoods, toLegacyFoodSearchResponseItem, type RuntimeFoodCatalogSource } from "@/lib/nutrition/food-catalog";
 import { annotateAdminFoodSearchWithCanonicalPilot } from "@/lib/nutrition/canonical-food-admin-search";
+import { buildMultiSourceFoodSearch } from "@/lib/nutrition/food-search-view-model";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   const sourceParam = request.nextUrl.searchParams.get("source");
   const source = VALID_SOURCES.find((item) => item === sourceParam);
   const limitParam = Number(request.nextUrl.searchParams.get("limit") ?? 20);
-  const limit = Number.isFinite(limitParam) ? limitParam : 20;
+  const limit = Math.max(1, Math.min(50, Number.isFinite(limitParam) ? Math.trunc(limitParam) : 20));
 
   // Evita consultar D1 para custom/manufacturer quando a busca e curta demais.
   if (normalize(query).length < 2) {
@@ -29,12 +30,16 @@ export async function GET(request: NextRequest) {
   // latencia, ~700ms vs ~350ms de cada lado). O piloto so precisa da
   // lista base no fim, pra reordenar; a resolucao canonica em si nao
   // depende dela.
-  const baselineItemsPromise = searchFoods({ query, limit, sources: source ? [source] : undefined }).then((results) => results.map(toLegacyFoodSearchResponseItem));
-  const { items, canonicalPilot } = await annotateAdminFoodSearchWithCanonicalPilot(query, baselineItemsPromise);
+  const retrievalLimit = Math.min(50, Math.max(limit * 3, 40));
+  const baselineItemsPromise = searchFoods({ query, limit: retrievalLimit, sources: source ? [source] : undefined }).then((results) => results.map(toLegacyFoodSearchResponseItem));
+  const annotated = await annotateAdminFoodSearchWithCanonicalPilot(query, baselineItemsPromise);
+  const items = annotated.items.slice(0, limit);
+  const multiSourceItems = await buildMultiSourceFoodSearch(query, annotated.items, Math.min(24, limit));
   const durationMs = Math.round((performance.now() - startedAt) * 10) / 10;
   return NextResponse.json({
     items,
-    canonicalPilot,
-    meta: { durationMs, limit: Math.max(1, Math.min(50, Math.trunc(limit))) },
+    multiSourceItems,
+    canonicalPilot: annotated.canonicalPilot,
+    meta: { durationMs, limit },
   });
 }

@@ -3,12 +3,14 @@ import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { createFoodPortion, listFoodPortions } from "@/lib/repositories/food-portions";
 import { getFoodByReference } from "@/lib/nutrition/food-catalog";
+import { getPortionsBySourceIdentity } from "@/lib/repositories/canonical-foods";
 import { writeAuditLog } from "@/lib/security/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const sourceSchema = z.enum(["TACO", "CUSTOM", "MANUFACTURER"]);
+const readSourceSchema = z.enum(["TACO", "CUSTOM", "MANUFACTURER", "TBCA", "IBGE_POF"]);
 
 const CreateSchema = z.object({
   food_source: sourceSchema,
@@ -25,10 +27,19 @@ export async function GET(req: NextRequest) {
   const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
 
-  const source = sourceSchema.safeParse(req.nextUrl.searchParams.get("source"));
+  const source = readSourceSchema.safeParse(req.nextUrl.searchParams.get("source"));
   const refId = req.nextUrl.searchParams.get("refId")?.trim();
   if (!source.success || !refId) {
-    return NextResponse.json({ message: "Informe source (TACO|CUSTOM|MANUFACTURER) e refId." }, { status: 400 });
+    return NextResponse.json({ message: "Informe source e refId validos." }, { status: 400 });
+  }
+
+  if (source.data === "TBCA" || source.data === "IBGE_POF") {
+    const portions = await getPortionsBySourceIdentity(source.data, refId);
+    return NextResponse.json({ items: portions.map((portion) => ({
+      id: portion.id, food_source: source.data, food_ref_id: refId, description: portion.label,
+      gram_equivalent: portion.gramWeight ?? portion.parsedLabelGrams, source: source.data === "IBGE_POF" ? "IBGE" : "TBCA",
+      source_version: null, confidence: portion.confidence, is_active: 1, created_at: "",
+    })).filter((portion) => typeof portion.gram_equivalent === "number" && portion.gram_equivalent > 0) });
   }
 
   const items = await listFoodPortions(source.data, refId);

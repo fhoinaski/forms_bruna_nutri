@@ -1,11 +1,12 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-beforeAll(() => {
-  process.env.AUTH_SECRET = "test-auth-secret-with-at-least-thirty-two-characters";
-  process.env.MFA_ENCRYPTION_KEY = "test-mfa-secret-with-at-least-thirty-two-characters";
+beforeEach(() => {
+  vi.stubEnv("AUTH_SECRET", "test-auth-secret-with-at-least-thirty-two-characters");
+  vi.stubEnv("MFA_ENCRYPTION_KEY", "test-mfa-secret-with-at-least-thirty-two-characters");
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.resetModules();
   vi.clearAllMocks();
 });

@@ -104,6 +104,11 @@ export async function getPortions(foodId: string, db: CanonicalDbExecutor = defa
   return getPortionsUncached(foodId, db);
 }
 
+export async function getPortionsBySourceIdentity(source: CanonicalFoodSource, sourceFoodId: string, db: CanonicalDbExecutor = defaultExecutor): Promise<CanonicalPortionSummary[]> {
+  const rows = await db("SELECT id FROM canonical_foods WHERE source = ? AND source_food_id = ? LIMIT 1", [source, sourceFoodId]);
+  return rows[0]?.id ? getPortions(String(rows[0].id), db) : [];
+}
+
 async function getPortionsUncached(foodId: string, db: CanonicalDbExecutor): Promise<CanonicalPortionSummary[]> {
   const rows = await db(
     `SELECT id, label, gram_weight, ml_weight, parsed_label_grams, weight_source, confidence
@@ -133,6 +138,51 @@ export async function getNutrients(foodId: string, db: CanonicalDbExecutor = def
   return getNutrientsUncached(foodId, db);
 }
 
+/**
+ * Compact search-list projection. Portions and macro rows are fetched in two
+ * queries for the entire result page, avoiding a per-result D1 round trip.
+ */
+export async function getSearchPreviews(foodIds: string[], db: CanonicalDbExecutor = defaultExecutor): Promise<{
+  portionsByFoodId: Map<string, CanonicalPortionSummary[]>;
+  nutrientsByFoodId: Map<string, CanonicalNutrientValue[]>;
+}> {
+  const ids = [...new Set(foodIds.filter(Boolean))];
+  const portionsByFoodId = new Map<string, CanonicalPortionSummary[]>();
+  const nutrientsByFoodId = new Map<string, CanonicalNutrientValue[]>();
+  if (!ids.length) return { portionsByFoodId, nutrientsByFoodId };
+  const placeholders = ids.map(() => "?").join(", ");
+  const [portionRows, nutrientRows] = await Promise.all([
+    db(`SELECT canonical_food_id, id, label, gram_weight, ml_weight, parsed_label_grams, weight_source, confidence
+          FROM canonical_food_portions WHERE canonical_food_id IN (${placeholders}) ORDER BY label`, ids),
+    db(`SELECT canonical_food_id, nutrient_code, value, unit, basis, status, source, source_food_id, source_nutrient_id
+          FROM food_nutrient_values WHERE portion_id IS NULL AND canonical_food_id IN (${placeholders})`, ids),
+  ]);
+  for (const row of portionRows) {
+    const foodId = String(row.canonical_food_id);
+    const values = portionsByFoodId.get(foodId) ?? [];
+    values.push({
+      id: String(row.id), label: String(row.label),
+      gramWeight: row.gram_weight === null ? null : Number(row.gram_weight),
+      mlWeight: row.ml_weight === null ? null : Number(row.ml_weight),
+      parsedLabelGrams: row.parsed_label_grams === null ? null : Number(row.parsed_label_grams),
+      weightSource: row.weight_source as CanonicalPortionSummary["weightSource"], confidence: row.confidence as CanonicalPortionSummary["confidence"],
+    });
+    portionsByFoodId.set(foodId, values);
+  }
+  for (const row of nutrientRows) {
+    const foodId = String(row.canonical_food_id);
+    const values = nutrientsByFoodId.get(foodId) ?? [];
+    values.push({
+      nutrientCode: (row.nutrient_code as NutrientCode | null) ?? null,
+      value: row.value === null ? null : Number(row.value), unit: String(row.unit), basis: String(row.basis),
+      status: row.status as CanonicalNutrientValue["status"], source: row.source as CanonicalFoodSource,
+      sourceFoodId: String(row.source_food_id), sourceNutrientId: String(row.source_nutrient_id),
+    });
+    nutrientsByFoodId.set(foodId, values);
+  }
+  return { portionsByFoodId, nutrientsByFoodId };
+}
+
 async function getNutrientsUncached(foodId: string, db: CanonicalDbExecutor): Promise<CanonicalNutrientValue[]> {
   const rows = await db(
     `SELECT nutrient_code, value, unit, basis, status, source, source_food_id, source_nutrient_id
@@ -154,4 +204,4 @@ async function getNutrientsUncached(foodId: string, db: CanonicalDbExecutor): Pr
 /** Alias documentado pelo nome exato pedido no item 11 do pedido da Fase 4. */
 export const getCanonicalFoodNutrition = getNutrients;
 
-export const CanonicalFoodRepository = { search, getById, getPortions, getNutrients, getCanonicalFoodNutrition };
+export const CanonicalFoodRepository = { search, getById, getPortions, getNutrients, getSearchPreviews, getCanonicalFoodNutrition };

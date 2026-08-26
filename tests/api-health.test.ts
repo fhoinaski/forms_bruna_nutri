@@ -1,17 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("GET /api/health", () => {
   it("reports missing required environment variables", async () => {
-    const original = {
-      AUTH_SECRET: process.env.AUTH_SECRET,
-      CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
-      CLOUDFLARE_D1_DATABASE_ID: process.env.CLOUDFLARE_D1_DATABASE_ID,
-      CLOUDFLARE_D1_API_TOKEN: process.env.CLOUDFLARE_D1_API_TOKEN,
-    };
-    delete process.env.AUTH_SECRET;
-    delete process.env.CLOUDFLARE_ACCOUNT_ID;
-    delete process.env.CLOUDFLARE_D1_DATABASE_ID;
-    delete process.env.CLOUDFLARE_D1_API_TOKEN;
+    vi.stubEnv("AUTH_SECRET", undefined);
+    vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", undefined);
+    vi.stubEnv("CLOUDFLARE_D1_DATABASE_ID", undefined);
+    vi.stubEnv("CLOUDFLARE_D1_API_TOKEN", undefined);
 
     const { GET } = await import("../app/api/health/route");
     const response = await GET();
@@ -21,17 +19,13 @@ describe("GET /api/health", () => {
     expect(json.ok).toBe(false);
     expect(json.checks.environment.missing).toContain("AUTH_SECRET");
 
-    Object.entries(original).forEach(([key, value]) => {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    });
   });
 
   it("reports healthy when required environment variables are present", async () => {
-    process.env.AUTH_SECRET = "test-auth-secret-with-at-least-thirty-two-characters";
-    process.env.CLOUDFLARE_ACCOUNT_ID = "account";
-    process.env.CLOUDFLARE_D1_DATABASE_ID = "database";
-    process.env.CLOUDFLARE_D1_API_TOKEN = "token";
+    vi.stubEnv("AUTH_SECRET", "test-auth-secret-with-at-least-thirty-two-characters");
+    vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "account");
+    vi.stubEnv("CLOUDFLARE_D1_DATABASE_ID", "database");
+    vi.stubEnv("CLOUDFLARE_D1_API_TOKEN", "token");
 
     const { GET } = await import("../app/api/health/route");
     const response = await GET();

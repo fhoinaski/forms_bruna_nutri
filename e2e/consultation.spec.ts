@@ -5,8 +5,8 @@ import { createTestPatient } from "./helpers/test-data";
 /**
  * Modo Consulta — o fluxo E2E mais importante do sistema (secao 7 do
  * pedido). Cobre: abrir paciente, iniciar consulta, carregar
- * ConsultationWorkspace, briefing, antropometria, notas, plano, protocolo,
- * pendencias, finalizar, recarregar e confirmar persistencia.
+ * ConsultationWorkspace, registro clínico, ações para antropometria/plano,
+ * protocolo, finalizar, recarregar e confirmar persistencia.
  *
  * Nao depende de LLM real: o briefing de IA e opcional/gracioso (sem
  * provedor configurado, o systemData deterministico continua util —
@@ -14,6 +14,10 @@ import { createTestPatient } from "./helpers/test-data";
  * finalizacao da consulta nunca depende de IA (checklist nao bloqueante).
  */
 test.use({ storageState: ADMIN_STORAGE_STATE });
+
+function clinicalField(page: import("@playwright/test").Page, label: string) {
+  return page.locator("label").filter({ has: page.locator("span:first-child").filter({ hasText: label }) }).locator("textarea");
+}
 
 test.describe("Modo Consulta", () => {
   test("fluxo completo: iniciar, preencher, finalizar e persistir", async ({ page, request }) => {
@@ -30,41 +34,42 @@ test.describe("Modo Consulta", () => {
     const activeSessionResponse = await page.request.get(`/api/admin/clients/${patient.id}/consultation`);
     const activeSessionId = (await activeSessionResponse.json()).session.id as string;
 
-    // O contexto clínico é determinístico; o briefing de IA é opcional.
+    // P6 consolidou a consulta em um registro clínico e ações de navegação;
+    // as tabs antigas de antropometria, consulta, plano e protocolo não são
+    // mais parte do contrato.
     await expect(page.getByRole("complementary", { name: "Contexto do paciente" })).toBeVisible();
+    await expect(page.getByText("Registro clínico")).toBeVisible();
+    await expect(page.getByText("Sem avaliação registrada")).toBeVisible();
+    await expect(page.getByText("Nenhum plano ativo")).toBeVisible();
+    await expect(page.getByText("Nenhum protocolo ativo")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Nova avaliação" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Abrir plano alimentar" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ver anamnese" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Abrir protocolos" })).toBeVisible();
 
-    // Antropometria.
-    await page.getByRole("tab", { name: "Antropometria" }).click();
-    await page.getByRole("button", { name: /registrar medidas/i }).click();
-    await page.getByPlaceholder("Ex: 68.5").fill("70.5");
-    await page.getByPlaceholder("Ex: 165").fill("165");
-    await page.getByRole("button", { name: /^registrar evolu[cç][aã]o$/i }).click();
-    // Sucesso fecha o formulário e atualiza o resumo com a nova medida.
-    await expect(page.getByRole("button", { name: /registrar medidas/i })).toBeVisible();
-    await expect(page.getByText("70.5").first()).toBeVisible();
+    // O registro clínico substitui a antiga aba Consulta e persiste todos os
+    // campos explicitamente na sessão atual.
+    await clinicalField(page, "Evolução desde a última consulta").fill("Paciente relata boa adesão ao plano.");
+    await clinicalField(page, "Adesão").fill("Sem intercorrências.");
+    await clinicalField(page, "Conduta").fill("Manter organização das refeições.");
+    await expect(page.getByText("Alterações não salvas").first()).toBeVisible();
+    await page.getByRole("button", { name: "Salvar" }).first().click();
+    await expect(page.getByText("Salvo").first()).toBeVisible();
+    await page.reload();
+    await expect(clinicalField(page, "Evolução desde a última consulta")).toHaveValue("Paciente relata boa adesão ao plano.");
+    await expect(clinicalField(page, "Conduta")).toHaveValue("Manter organização das refeições.");
 
-    // Notas da consulta (aba Consulta).
-    await page.getByRole("tab", { name: "Consulta" }).click();
-    const notes = page.getByPlaceholder(/Escreva livremente durante o atendimento/i);
-    await notes.fill("Paciente relata boa adesão ao plano. Sem intercorrências.");
-    await expect(page.getByText(/^salvo$/i)).toBeVisible({ timeout: 10_000 });
+    // Ações P6 substituem as tabs e preservam o vínculo de retorno da sessão.
+    await page.getByRole("button", { name: "Nova avaliação" }).click();
+    await expect(page).toHaveURL(new RegExp(`tab=antropometria.*consultationId=${activeSessionId}`));
+    await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${activeSessionId}`);
+    await expect(page.getByText("Registro clínico")).toBeVisible();
 
-    // Plano alimentar (reaproveita o MealPlanEditor real).
-    await page.getByRole("tab", { name: "Plano" }).click();
-    await expect(page.getByRole("button", { name: /criar por modelo/i })).toBeVisible();
-
-    // Protocolo (read-only nesta fase).
-    await page.getByRole("tab", { name: "Protocolo" }).click();
-    await expect(page.getByText(/nenhum protocolo ativo/i)).toBeVisible();
-
-    // Pendências visíveis no cabeçalho/resumo (paciente novo: tudo zerado).
-    // {exact:true} evita colidir com o "0" que aparece como substring dentro
-    // de um id de cliente (uuid) em outro lugar da página — achado real ao
-    // rodar a suíte em viewport mobile, onde a ordem/composição do DOM
-    // muda o suficiente para esse falso-positivo aparecer no primeiro match.
-    await page.getByRole("tab", { name: "Consulta" }).click();
-    await expect(page.getByText("Tarefas pendentes")).toBeVisible();
-    await expect(page.getByText("0", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Abrir plano alimentar" }).click();
+    await expect(page).toHaveURL(new RegExp(`tab=plano-alimentar.*consultationId=${activeSessionId}`));
+    await expect(page.getByRole("link", { name: "Voltar à consulta" })).toBeVisible();
+    await page.getByRole("link", { name: "Voltar à consulta" }).click();
+    await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta\\?sessionId=${activeSessionId}`));
 
     // Finalizar consulta.
     await page.getByRole("button", { name: /^finalizar consulta$/i }).click();
@@ -74,7 +79,7 @@ test.describe("Modo Consulta", () => {
     // Persistência: a sessão de consulta real ficou marcada como concluída.
     // (GET /api/admin/clients/[id]/consultation só retorna sessão 'in_progress' —
     // usa-se aqui o endpoint por id, que retorna a sessão em qualquer status.)
-    const sessionResponse = await page.request.get(`/api/admin/consultation-sessions/${activeSessionId}`);
+    const sessionResponse = await page.request.get(`/api/admin/consultation-sessions/${activeSessionId}?clientId=${patient.id}`);
     expect(sessionResponse.ok()).toBe(true);
     const sessionBody = await sessionResponse.json();
     expect(sessionBody.session?.status).toBe("completed");

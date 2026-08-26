@@ -1,11 +1,15 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { decryptValue, encryptValue, generateRecoveryCodes, hashRecoveryCode } from "../lib/security/crypto";
 import { createMfaSecret, createTotp, verifyMfaCode } from "../lib/security/mfa";
 import { createInternalSessionAssertion, verifyInternalSessionAssertion } from "../lib/auth/session";
 
-beforeAll(() => {
-  process.env.AUTH_SECRET = "test-auth-secret-with-at-least-thirty-two-characters";
-  process.env.MFA_ENCRYPTION_KEY = "test-mfa-secret-with-at-least-thirty-two-characters";
+beforeEach(() => {
+  vi.stubEnv("AUTH_SECRET", "test-auth-secret-with-at-least-thirty-two-characters");
+  vi.stubEnv("MFA_ENCRYPTION_KEY", "test-mfa-secret-with-at-least-thirty-two-characters");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("security primitives", () => {

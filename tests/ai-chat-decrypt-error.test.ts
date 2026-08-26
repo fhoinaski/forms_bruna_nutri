@@ -12,9 +12,7 @@ import { encryptValue, decryptValue, DataDecryptionError } from "@/lib/security/
 afterEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
-  delete process.env.CLINICAL_DATA_ENCRYPTION_KEY;
-  delete process.env.MFA_ENCRYPTION_KEY;
-  delete process.env.AUTH_SECRET;
+  vi.unstubAllEnvs();
 });
 
 function makeChatRequest(body: unknown): NextRequest {
@@ -28,13 +26,13 @@ function makeChatRequest(body: unknown): NextRequest {
 describe("DataDecryptionError — primitiva sanitizada", () => {
   it("decrypt com chave errada lança DataDecryptionError, nunca o erro cru do Node", () => {
     // Cifra com a "chave antiga".
-    process.env.CLINICAL_DATA_ENCRYPTION_KEY = "chave-antiga-que-cifrou-o-dado";
+    vi.stubEnv("CLINICAL_DATA_ENCRYPTION_KEY", "chave-antiga-que-cifrou-o-dado");
     const encrypted = encryptValue("dado clinico sensivel", "clinical");
 
     // A chave foi rotacionada: a cadeia atual não tem mais a chave antiga.
-    process.env.CLINICAL_DATA_ENCRYPTION_KEY = "chave-nova-completamente-diferente";
-    delete process.env.MFA_ENCRYPTION_KEY;
-    delete process.env.AUTH_SECRET;
+    vi.stubEnv("CLINICAL_DATA_ENCRYPTION_KEY", "chave-nova-completamente-diferente");
+    vi.stubEnv("MFA_ENCRYPTION_KEY", undefined);
+    vi.stubEnv("AUTH_SECRET", undefined);
 
     let thrown: unknown;
     try {
@@ -52,7 +50,7 @@ describe("DataDecryptionError — primitiva sanitizada", () => {
   });
 
   it("payload malformado lança DataDecryptionError sanitizado (não vaza 'Invalid encrypted payload')", () => {
-    process.env.CLINICAL_DATA_ENCRYPTION_KEY = "qualquer-chave";
+    vi.stubEnv("CLINICAL_DATA_ENCRYPTION_KEY", "qualquer-chave");
     let thrown: unknown;
     try {
       decryptValue("não-é-um-payload-válido", "clinical");
@@ -64,7 +62,7 @@ describe("DataDecryptionError — primitiva sanitizada", () => {
   });
 
   it("roundtrip continua funcionando com a chave atual", () => {
-    process.env.CLINICAL_DATA_ENCRYPTION_KEY = "chave-atual";
+    vi.stubEnv("CLINICAL_DATA_ENCRYPTION_KEY", "chave-atual");
     const encrypted = encryptValue("dado clinico", "clinical");
     expect(decryptValue(encrypted, "clinical")).toBe("dado clinico");
   });

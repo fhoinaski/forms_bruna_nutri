@@ -1,0 +1,24 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { createRequire } from "node:module";
+import { IBGE_ARTIFACT_PATH, assertArtifact, buildImportPlan, importPlan, openTestDb, readIbgePortions } from "./food-data/ibge-portion-import.mjs";
+
+const require = createRequire(import.meta.url); const { DatabaseSync } = require("node:sqlite");
+const mode = process.argv[2] ?? "dry-run";
+if (!['dry-run', 'import:test'].includes(mode)) throw new Error("Usage: node scripts/ibge-portion-import.mjs <dry-run|import:test>");
+const baseline = resolve("reports/canonical-nutrition-local.sqlite");
+const testDb = resolve("reports/food-database-f3-3-ibge-test.sqlite");
+const source = assertArtifact(IBGE_ARTIFACT_PATH); const portions = readIbgePortions();
+const db = mode === "import:test" ? openTestDb(testDb, baseline) : new DatabaseSync(baseline, { readOnly: true });
+const canonicalRows = db.prepare("SELECT id, source_food_id FROM canonical_foods WHERE source = 'IBGE_POF'").all();
+const existingRows = db.prepare("SELECT canonical_food_id, source, source_portion_id, label, gram_weight FROM canonical_food_portions").all();
+const { counts, plan } = buildImportPlan(portions, canonicalRows, existingRows);
+let importResult = { inserted: 0, planned: 0 };
+if (mode === "import:test" && counts.CONFLICTS === 0) importResult = importPlan(db, plan, `IBGE_POF_PORTIONS_TEST_${Date.now()}`);
+db.close();
+mkdirSync("reports", { recursive: true });
+const blocked = plan.filter((row) => row.status.includes("BLOCKED") || row.status === "INVALID");
+writeFileSync("reports/food-database-f3-3-ibge-portion-dry-run.json", `${JSON.stringify({ mode, artifact: source, counts, importResult, testDb: mode === "import:test" ? testDb : null }, null, 2)}\n`);
+writeFileSync("reports/food-database-f3-3-blocked-portions.csv", ["sourceFoodId,preparationCode,sourcePortionId,measure,grams,reason", ...blocked.map((row) => [row.foodCode, row.preparationCode, row.sourcePortionId, row.measure, row.grams, row.status].map((v) => `\"${String(v ?? "").replace(/\"/g, '\"\"')}\"`).join(","))].join("\n"));
+writeFileSync("reports/food-database-f3-3-conflicts.csv", ["sourceFoodId,preparationCode,sourcePortionId,measure,grams,reason", ...plan.filter((row) => row.status === "SOURCE_PORTION_CONFLICT").map((row) => [row.foodCode, row.preparationCode, row.sourcePortionId, row.measure, row.grams, row.status].map((v) => `\"${String(v ?? "").replace(/\"/g, '\"\"')}\"`).join(","))].join("\n"));
+console.log(JSON.stringify({ mode, ...counts, inserted: importResult.inserted, productionWrites: 0, migrations: 0 }, null, 2));

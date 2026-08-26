@@ -5,8 +5,8 @@ import { createPortal } from "react-dom";
 import { AlertTriangle, Beef, Check, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, PanelRightClose, Pencil, Plus, RefreshCw, Save, Sparkles, Trash2, Unlock, Utensils, Wheat, X } from "lucide-react";
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
 import { scaleRecipeIngredientsToPortions } from "@/lib/nutrition/recipes";
-import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
-import type { FoodPortion } from "@/lib/repositories/food-portions";
+import { resolveQuantity, type HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
+import type { FoodSearchResultViewModel } from "@/lib/nutrition/food-search-view-model";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
 import { ItemSubstitutionsPanel, type ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
@@ -54,7 +54,17 @@ export type MealItem = {
   slot_exchange_eligible?: boolean | null;
 };
 
-function toMeasureOption(portion: FoodPortion): HouseholdMeasureOption {
+type MealMeasure = {
+  id: string;
+  food_source: string;
+  food_ref_id: string;
+  description: string;
+  gram_equivalent: number;
+  source: string | null;
+  confidence: "high" | "medium" | "low";
+};
+
+function toMeasureOption(portion: MealMeasure): HouseholdMeasureOption {
   return { id: portion.id, description: portion.description, gramEquivalent: portion.gram_equivalent, source: portion.source, confidence: portion.confidence };
 }
 
@@ -130,6 +140,16 @@ export function mealPlanItemDisplayQuantity(item: Pick<MealItem, "quantity" | "u
   if (quantity && item.household_measure_id) return `${quantity} medida`;
   if (quantity) return quantity;
   return "Porcao a definir";
+}
+
+function snapshotForMeasure(quantity: string | null | undefined, measure: MealMeasure | null): Pick<MealItem, "resolved_grams_snapshot" | "quantity_resolution_snapshot"> {
+  if (!measure) return { resolved_grams_snapshot: null, quantity_resolution_snapshot: null };
+  const resolution = resolveQuantity({ quantity, householdMeasure: toMeasureOption(measure) });
+  if (!resolution.grams) return { resolved_grams_snapshot: null, quantity_resolution_snapshot: null };
+  return {
+    resolved_grams_snapshot: resolution.grams,
+    quantity_resolution_snapshot: JSON.stringify({ grams: resolution.grams, method: resolution.method, confidence: resolution.confidence, source: resolution.source ?? null, measureId: resolution.measureId ?? null, warning: resolution.warning ?? null }),
+  };
 }
 
 export function mealPlanItemAlternativeSummary(approvedCount: number, pendingCount: number): string {
@@ -296,6 +316,7 @@ export function MealItemsEditor({
   const [activeFoodField, setActiveFoodField] = useState("");
   const [foodSearch, setFoodSearch] = useState<{ key: string; query: string }>({ key: "", query: "" });
   const [foodSuggestions, setFoodSuggestions] = useState<Record<string, FoodSuggestion[]>>({});
+  const [multiSourceResults, setMultiSourceResults] = useState<Record<string, FoodSearchResultViewModel[]>>({});
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [searchLoadingKey, setSearchLoadingKey] = useState("");
   const [recipeSelectorOpen, setRecipeSelectorOpen] = useState(false);
@@ -309,7 +330,7 @@ export function MealItemsEditor({
   const [aiModalMealIndex, setAiModalMealIndex] = useState<number | null>(null);
   const [bulkGeneratingAlternatives, setBulkGeneratingAlternatives] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
-  const [measuresByFood, setMeasuresByFood] = useState<Record<string, FoodPortion[]>>({});
+  const [measuresByFood, setMeasuresByFood] = useState<Record<string, MealMeasure[]>>({});
   const [openMealMenu, setOpenMealMenu] = useState<number | null>(null);
   const [openItemMenu, setOpenItemMenu] = useState("");
 
@@ -366,7 +387,7 @@ export function MealItemsEditor({
       new Set(
         meals
           .flatMap((meal) => meal.items)
-          .filter((item) => item.food_ref_id && (item.food_source === "TACO" || item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER"))
+          .filter((item) => item.food_ref_id && (item.food_source === "TACO" || item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER" || item.food_source === "TBCA" || item.food_source === "IBGE_POF"))
           .map((item) => `${item.food_source}:${item.food_ref_id}`)
           .filter((pair) => !measuresByFood[pair])
       )
@@ -377,11 +398,11 @@ export function MealItemsEditor({
       const [source, refId] = pair.split(":");
       try {
         const response = await fetch(`/api/admin/foods/portions?source=${source}&refId=${encodeURIComponent(refId)}`, { cache: "no-store", signal: controller.signal });
-        const data = response.ok ? await response.json() as { items?: FoodPortion[] } : { items: [] as FoodPortion[] };
+        const data = response.ok ? await response.json() as { items?: MealMeasure[] } : { items: [] as MealMeasure[] };
         return [pair, data.items ?? []] as const;
       } catch (cause) {
         if (cause instanceof Error && cause.name === "AbortError") return null;
-        return [pair, [] as FoodPortion[]] as const;
+        return [pair, [] as MealMeasure[]] as const;
       }
     })).then((entries) => {
       setMeasuresByFood((current) => {
@@ -409,13 +430,15 @@ export function MealItemsEditor({
     const timer = window.setTimeout(() => {
       fetch(`/api/admin/foods/search?q=${encodeURIComponent(query)}`, { cache: "no-store", signal: controller.signal })
         .then((response) => response.ok ? response.json() : { items: [] })
-        .then((data: { items?: FoodSuggestion[] }) => {
+        .then((data: { items?: FoodSuggestion[]; multiSourceItems?: FoodSearchResultViewModel[] }) => {
           setFoodSuggestions((current) => ({ ...current, [foodSearch.key]: data.items ?? [] }));
+          setMultiSourceResults((current) => ({ ...current, [foodSearch.key]: data.multiSourceItems ?? [] }));
           setHighlightedIndex(0);
         })
         .catch((cause) => {
           if (cause instanceof Error && cause.name === "AbortError") return;
           setFoodSuggestions((current) => ({ ...current, [foodSearch.key]: [] }));
+          setMultiSourceResults((current) => ({ ...current, [foodSearch.key]: [] }));
         })
         .finally(() => {
           setSearchLoadingKey((current) => current === foodSearch.key ? "" : current);
@@ -459,8 +482,8 @@ export function MealItemsEditor({
     return Array.from(byKey.values());
   }, [foodSuggestions]);
 
-  function measureOptionsFor(item: MealItem): FoodPortion[] {
-    if (!item.food_ref_id || (item.food_source !== "TACO" && item.food_source !== "CUSTOM" && item.food_source !== "MANUFACTURER")) return [];
+  function measureOptionsFor(item: MealItem): MealMeasure[] {
+    if (!item.food_ref_id || (item.food_source !== "TACO" && item.food_source !== "CUSTOM" && item.food_source !== "MANUFACTURER" && item.food_source !== "TBCA" && item.food_source !== "IBGE_POF")) return [];
     return measuresByFood[`${item.food_source}:${item.food_ref_id}`] ?? [];
   }
 
@@ -600,6 +623,26 @@ export function MealItemsEditor({
       quantity_resolution_snapshot: null,
     });
     setFoodSuggestions((current) => ({ ...current, [key]: [suggestion] }));
+    setActiveFoodField("");
+  }
+
+  function selectMultiSourceResult(mealIndex: number, itemIndex: number, result: FoodSearchResultViewModel) {
+    const key = `${mealIndex}:${itemIndex}`;
+    const portion = result.defaultPortion;
+    const source = result.sourceCode === "COMPLEMENTARY" ? "TACO" : result.sourceCode;
+    const quantity = meals[mealIndex]?.items[itemIndex]?.quantity?.trim() || "1";
+    const measure: MealMeasure | null = portion.id && portion.gramWeight ? { id: portion.id, food_source: source, food_ref_id: result.sourceFoodId, description: portion.label, gram_equivalent: portion.gramWeight, source: result.sourceName, confidence: "high" } : null;
+    updateMealItem(mealIndex, itemIndex, {
+      food: result.displayName,
+      taco_number: result.sourceFoodId,
+      food_source: source,
+      food_ref_id: result.sourceFoodId,
+      canonical_food_id: result.canonicalFoodId,
+      household_measure_id: portion.isFallback ? null : portion.id,
+      quantity,
+      unit: portion.isFallback ? "g" : null,
+      ...snapshotForMeasure(quantity, measure),
+    });
     setActiveFoodField("");
   }
 
@@ -914,6 +957,7 @@ export function MealItemsEditor({
                 const measureInputId = `meal-measure-${mealIndex}-${itemIndex}`;
                 const grams = itemResolutions[key]?.quantity.grams;
                 const rawSuggestions = foodSuggestions[key] ?? [];
+                const searchResults = multiSourceResults[key] ?? [];
                 // FASE 8.5 (item 6) — dentro de um slot, nunca deixa um
                 // alimento de outro grupo (ex.: arroz num slot PROTEIN)
                 // aparecer primeiro so por relevancia textual. Nunca EXCLUI
@@ -922,7 +966,7 @@ export function MealItemsEditor({
                 const suggestions = item.slot_food_group
                   ? [...rawSuggestions].sort((a, b) => Number(isSuggestionCompatibleWithSlot(item, b)) - Number(isSuggestionCompatibleWithSlot(item, a)))
                   : rawSuggestions;
-                const dropdownOpen = activeFoodField === key && suggestions.length > 0;
+                const dropdownOpen = activeFoodField === key && searchResults.length > 0;
                 const slotGroupLabel = item.slot_nutritional_role && item.slot_nutritional_role in CLINICAL_ROLE_LABELS
                   ? CLINICAL_ROLE_LABELS[item.slot_nutritional_role as TemplateClinicalRole]
                   : item.slot_food_group && item.slot_food_group in FOOD_GROUP_LABELS
@@ -1060,18 +1104,18 @@ export function MealItemsEditor({
                       }}
                       onBlur={() => window.setTimeout(() => setActiveFoodField(""), 140)}
                       onKeyDown={(event) => {
-                        if (activeFoodField !== key || !suggestions.length) return;
+                        if (activeFoodField !== key || !searchResults.length) return;
                         if (event.key === "ArrowDown") {
                           event.preventDefault();
-                          setHighlightedIndex((current) => (current + 1) % suggestions.length);
+                          setHighlightedIndex((current) => (current + 1) % searchResults.length);
                         } else if (event.key === "ArrowUp") {
                           event.preventDefault();
-                          setHighlightedIndex((current) => (current - 1 + suggestions.length) % suggestions.length);
+                          setHighlightedIndex((current) => (current - 1 + searchResults.length) % searchResults.length);
                         } else if (event.key === "Enter") {
-                          const suggestion = suggestions[highlightedIndex];
-                          if (suggestion) {
+                          const result = searchResults[highlightedIndex];
+                          if (result) {
                             event.preventDefault();
-                            selectSuggestion(mealIndex, itemIndex, suggestion);
+                            selectMultiSourceResult(mealIndex, itemIndex, result);
                           }
                         } else if (event.key === "Escape") {
                           event.preventDefault();
@@ -1121,23 +1165,21 @@ export function MealItemsEditor({
                     })()}
                     {dropdownOpen && (
                       <div id={listboxId} role="listbox" aria-label="Sugestoes de alimentos" className="absolute left-0 top-[calc(100%+6px)] z-30 max-h-64 w-full min-w-[280px] max-w-[min(92vw,480px)] overflow-y-auto rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_18px_44px_rgba(58,48,40,0.16)] sm:min-w-[340px]">
-                        {suggestions.map((suggestion, suggestionIndex) => (
+                        {searchResults.map((result, suggestionIndex) => (
                           <button
-                            key={suggestion.numero}
+                            key={`${result.sourceCode}:${result.sourceFoodId}`}
                             type="button"
                             id={`${listboxId}-option-${suggestionIndex}`}
                             role="option"
                             aria-selected={suggestionIndex === highlightedIndex}
                             onMouseDown={(event) => event.preventDefault()}
                             onMouseEnter={() => setHighlightedIndex(suggestionIndex)}
-                            onClick={() => selectSuggestion(mealIndex, itemIndex, suggestion)}
+                            onClick={() => selectMultiSourceResult(mealIndex, itemIndex, result)}
                             className={`block w-full rounded-lg px-3 py-2 text-left transition-colors ${suggestionIndex === highlightedIndex ? "bg-[#FAF7F2]" : "hover:bg-[#FAF7F2]"}`}
                           >
-                            <span className="block text-sm font-medium text-[#3A3028]">{suggestion.displayName ?? suggestion.descricao}</span>
-                            <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">
-                              {suggestion.grupo || "Alimento personalizado"} - {Math.round(suggestion.energia_kcal)} kcal/100g
-                              {" - "}{suggestion.sourceLabel ?? (suggestion.fonte === "complementar" ? "Complementar" : suggestion.fonte === "custom" ? "Personalizado" : suggestion.fonte === "manufacturer" ? "Fabricante" : "TACO")}
-                            </span>
+                            <span className="block text-sm font-medium text-[#3A3028]">{result.displayName}</span>
+                            <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">{result.preparation ?? result.group ?? "Alimento"} · {result.sourceName}</span>
+                            <span className="mt-1 block text-xs text-[#75675E]">{result.defaultPortion.label} = {result.defaultPortion.gramWeight ?? "—"} g · kcal {result.nutrientsPreview.energyKcal ?? "—"} · P {result.nutrientsPreview.proteinG ?? "—"} · C {result.nutrientsPreview.carbohydrateG ?? "—"} · G {result.nutrientsPreview.fatG ?? "—"}</span>
                           </button>
                         ))}
                       </div>
@@ -1156,7 +1198,10 @@ export function MealItemsEditor({
                   <div>
                     <div className="grid grid-cols-[82px_minmax(0,1fr)] gap-1.5">
                       <label className="sr-only" htmlFor={quantityInputId}>Quantidade</label>
-                      <input id={quantityInputId} aria-label="Quantidade" value={item.quantity ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { quantity: event.target.value, resolved_grams_snapshot: null, quantity_resolution_snapshot: null })} className="brand-input h-10" placeholder="Qtd." />
+                      <input id={quantityInputId} aria-label="Quantidade" value={item.quantity ?? ""} onChange={(event) => {
+                        const measure = (item.food_source === "TBCA" || item.food_source === "IBGE_POF") ? measureOptionsFor(item).find((candidate) => candidate.id === item.household_measure_id) ?? null : null;
+                        updateMealItem(mealIndex, itemIndex, { quantity: event.target.value, ...snapshotForMeasure(event.target.value, measure) });
+                      }} className="brand-input h-10" placeholder="Qtd." />
                       {item.food_ref_id ? (
                         <>
                           <label className="sr-only" htmlFor={measureInputId}>Medida</label>
@@ -1166,9 +1211,10 @@ export function MealItemsEditor({
                             value={item.household_measure_id ?? "__grams__"}
                             onChange={(event) => {
                               const value = event.target.value;
+                              const measure = measureOptionsFor(item).find((candidate) => candidate.id === value) ?? null;
                               updateMealItem(mealIndex, itemIndex, value === "__grams__"
                                 ? { household_measure_id: null, unit: "g", resolved_grams_snapshot: null, quantity_resolution_snapshot: null }
-                                : { household_measure_id: value, unit: null, resolved_grams_snapshot: null, quantity_resolution_snapshot: null });
+                                : { household_measure_id: value, unit: null, ...snapshotForMeasure(item.quantity, measure) });
                             }}
                             className="brand-input h-10"
                             title="Medida especifica do alimento — quando disponivel, o calculo usa o peso exato cadastrado em vez de uma aproximacao generica."
