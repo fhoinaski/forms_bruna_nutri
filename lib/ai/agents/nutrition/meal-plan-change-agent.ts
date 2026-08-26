@@ -123,7 +123,8 @@ export async function resolveMealPlanChangeReferences(
   // match por texto em vez do vinculo exato), tanto no preview de "antes"
   // quanto no calculo de totalVsTarget.
   for (const meal of plan.meals) {
-    for (const item of meal.items) {
+    const structuredItems = [meal.items, ...(meal.options ?? []).map((option) => option.items), ...(meal.choice_groups ?? []).map((group) => group.items)].flat();
+    for (const item of structuredItems) {
       if ((item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER") && item.food_ref_id) {
         customRefIds.add(item.food_ref_id);
       }

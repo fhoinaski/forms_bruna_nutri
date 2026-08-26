@@ -1,5 +1,6 @@
 import type { MealPlanPayload, MealPlanSubstitutionPayload } from "@/lib/repositories/meal-plans";
 import { listApprovedAlternativesForPlan } from "@/lib/repositories/exchange-groups";
+import { getMealStructureItems } from "@/lib/meal-plans/flexible-structure";
 
 export interface ApprovedMealPlanAlternative {
   source: "exchange_group" | "legacy_substitution";
@@ -37,7 +38,7 @@ function legacyAlternative(substitution: MealPlanSubstitutionPayload): ApprovedM
 export function currentItemGramsForExchangeGroup(plan: MealPlanPayload, group: { primary_food_source: string; primary_food_ref_id: string; primary_food_name: string }): number | null {
   if (!Array.isArray(plan.meals)) return null;
   for (const meal of plan.meals) {
-    for (const item of meal.items) {
+    for (const item of getMealStructureItems(meal)) {
       const identityMatches = item.food_source === group.primary_food_source && item.food_ref_id === group.primary_food_ref_id;
       const nameMatches = normalize(item.food) === normalize(group.primary_food_name);
       if (!identityMatches && !nameMatches) continue;
