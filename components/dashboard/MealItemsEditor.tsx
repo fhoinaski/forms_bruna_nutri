@@ -317,6 +317,7 @@ export function MealItemsEditor({
   const [foodSearch, setFoodSearch] = useState<{ key: string; query: string }>({ key: "", query: "" });
   const [foodSuggestions, setFoodSuggestions] = useState<Record<string, FoodSuggestion[]>>({});
   const [multiSourceResults, setMultiSourceResults] = useState<Record<string, FoodSearchResultViewModel[]>>({});
+  const [searchTelemetrySessions, setSearchTelemetrySessions] = useState<Record<string, string>>({});
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [searchLoadingKey, setSearchLoadingKey] = useState("");
   const [recipeSelectorOpen, setRecipeSelectorOpen] = useState(false);
@@ -430,9 +431,10 @@ export function MealItemsEditor({
     const timer = window.setTimeout(() => {
       fetch(`/api/admin/foods/search?q=${encodeURIComponent(query)}`, { cache: "no-store", signal: controller.signal })
         .then((response) => response.ok ? response.json() : { items: [] })
-        .then((data: { items?: FoodSuggestion[]; multiSourceItems?: FoodSearchResultViewModel[] }) => {
+        .then((data: { items?: FoodSuggestion[]; multiSourceItems?: FoodSearchResultViewModel[]; meta?: { telemetrySearchSessionId?: string | null } }) => {
           setFoodSuggestions((current) => ({ ...current, [foodSearch.key]: data.items ?? [] }));
           setMultiSourceResults((current) => ({ ...current, [foodSearch.key]: data.multiSourceItems ?? [] }));
+          if (data.meta?.telemetrySearchSessionId) setSearchTelemetrySessions((current) => ({ ...current, [foodSearch.key]: data.meta?.telemetrySearchSessionId as string }));
           setHighlightedIndex(0);
         })
         .catch((cause) => {
@@ -643,6 +645,15 @@ export function MealItemsEditor({
       unit: portion.isFallback ? "g" : null,
       ...snapshotForMeasure(quantity, measure),
     });
+    const sessionSearchId = searchTelemetrySessions[key];
+    const selectedRank = (multiSourceResults[key] ?? []).findIndex((candidate) => candidate.sourceCode === result.sourceCode && candidate.sourceFoodId === result.sourceFoodId) + 1;
+    if (sessionSearchId && selectedRank > 0) {
+      void fetch("/api/admin/foods/search-telemetry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schemaVersion: 1, type: "FOOD_SEARCH_RESULT_SELECTED", sessionSearchId, selectedRank, canonicalFoodId: result.canonicalFoodId, source: result.sourceCode, preparationCode: result.preparation?.slice(0, 32) ?? null, resultCount: (multiSourceResults[key] ?? []).length }),
+      }).catch(() => undefined);
+    }
     setActiveFoodField("");
   }
 
