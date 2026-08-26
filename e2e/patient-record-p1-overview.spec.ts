@@ -187,7 +187,9 @@ test.describe("Patient Record P1 overview", () => {
     await expect(page.getByText("68,4 kg", { exact: true }).first()).toBeVisible();
     await expect(page.getByText(/0,?8 kg desde a última avaliação/i)).toBeVisible();
     await expect(page.getByText("Ativo · v2")).toBeVisible();
-    await expect(page.getByText("Rascunho v2 em andamento")).toBeVisible();
+    await expect(page.getByText("Rascunho v2 em andamento.").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continuar plano" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /Criar plano|Abrir plano/ })).toHaveCount(0);
     await expect(page.getByText("Alergia ao leite")).toBeVisible();
     await expect(page.getByText("Reeducação alimentar P1").first()).toBeVisible();
     await screenshot(page, "P1-01-patient-overview-complete-desktop", testInfo.project.name, testInfo.retry);
@@ -204,8 +206,12 @@ test.describe("Patient Record P1 overview", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Patient Record P1 Empty" })).toBeVisible();
     await expect(page.getByText("Nenhuma consulta registrada")).toBeVisible();
     await expect(page.getByText("Nenhuma avaliação registrada")).toBeVisible();
-    await expect(page.getByText("Nenhum plano ativo")).toBeVisible();
+    await expect(page.getByText("Nenhum plano", { exact: true })).toBeVisible();
     await expect(page.getByText("0 kg")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Iniciar primeira consulta" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Nova avaliação" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Criar plano" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /Abrir plano|Continuar plano/ })).toHaveCount(0);
     await screenshot(page, "P1-02-patient-overview-empty-desktop", testInfo.project.name, testInfo.retry);
   });
 
@@ -219,7 +225,7 @@ test.describe("Patient Record P1 overview", () => {
     await expect(page.getByRole("button", { name: /Registrar primeira avaliação/i })).toBeVisible();
 
     await page.getByRole("tab", { name: "Resumo" }).click();
-    await page.getByRole("button", { name: "Abrir plano" }).first().click();
+    await page.getByRole("button", { name: "Criar plano" }).click();
     await expect(page.getByRole("button", { name: /criar por modelo/i })).toBeVisible();
   });
 
@@ -244,7 +250,7 @@ test.describe("Patient Record P1 overview", () => {
 
     await expect(page.getByRole("heading", { level: 1, name: "Patient Record P1 Archived" })).toBeVisible();
     await expect(page.getByText("Arquivado")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Iniciar consulta/i }).first()).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Iniciar primeira consulta" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Nova avaliação" }).first()).toBeDisabled();
     await screenshot(page, "P1-05-archived-patient-shell", testInfo.project.name, testInfo.retry);
   });

@@ -43,6 +43,7 @@ import type { ClientSnapshot } from "@/lib/clinical/client-snapshot";
 import type { PatientRecordSummaryViewModel } from "@/lib/repositories/patient-record-summary";
 import type { PatientTimelineEvent, PatientTimelineFilter, PatientTimelineResult } from "@/lib/repositories/patient-record-timeline";
 import { getConsultationHref, getPatientRecordHref, getScheduleReturnHref } from "@/lib/patient-record/navigation";
+import { getPatientWorkspaceState, type PatientWorkspaceAction } from "@/lib/patient-record/workspace-state";
 
 const MealPlanEditor = dynamic(() => import("@/components/dashboard/MealPlanEditor").then((mod) => mod.MealPlanEditor));
 
@@ -1379,15 +1380,9 @@ function TimelineEventList({ events, compact = false }: { events: PatientTimelin
 function RecentActivity({
   events,
   onOpenTimeline,
-  onStartConsultation,
-  onNewAnthropometry,
-  archived,
 }: {
   events: PatientTimelineEvent[];
   onOpenTimeline: () => void;
-  onStartConsultation: () => void;
-  onNewAnthropometry: () => void;
-  archived: boolean;
 }) {
   return (
     <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
@@ -1407,11 +1402,7 @@ function RecentActivity({
         </div>
       ) : (
         <div className="mt-4 rounded-lg border border-dashed border-[#D9C4B2] p-5 text-sm text-[#75675E]">
-          <p>Ainda não há eventos clínicos registrados.</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={onStartConsultation} disabled={archived} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">Iniciar consulta</button>
-            <button type="button" onClick={onNewAnthropometry} disabled={archived} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">Registrar avaliação</button>
-          </div>
+          <p>Ainda não há eventos clínicos registrados. A próxima ação recomendada está indicada acima.</p>
         </div>
       )}
     </section>
@@ -1515,59 +1506,27 @@ function PatientClinicalTimeline({
 function PatientOverview({
   summary,
   recentActivity,
-  onStartConsultation,
-  onOpenPlan,
   onOpenProtocols,
-  onNewAnthropometry,
   onOpenTimeline,
 }: {
   summary: PatientRecordSummaryViewModel;
   recentActivity: PatientTimelineEvent[];
-  onStartConsultation: () => void;
-  onOpenPlan: () => void;
   onOpenProtocols: () => void;
-  onNewAnthropometry: () => void;
   onOpenTimeline: () => void;
 }) {
-  const archived = summary.patient.status === "arquivado";
   const weightValue = formatWeight(summary.latestAnthropometry?.weightKg);
   const trend = formatTrend(summary.weightTrend);
   const bmi = summary.latestAnthropometry?.bmi;
+  const workspace = getPatientWorkspaceState(summary);
 
   return (
     <div className="space-y-6" data-testid="patient-record-overview">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-4">
           <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="brand-kicker">Estado clínico atual</p>
-                <h2 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">Resumo do prontuário</h2>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={onStartConsultation} disabled={archived} className="brand-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
-                  <Stethoscope className="h-4 w-4" />
-                  {summary.activeConsultation ? "Retomar consulta" : "Iniciar consulta"}
-                </button>
-                <button type="button" onClick={onNewAnthropometry} disabled={archived} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">
-                  <Activity className="h-4 w-4" />
-                  Nova avaliação
-                </button>
-                <button type="button" onClick={onOpenPlan} className="brand-btn-secondary">
-                  <Utensils className="h-4 w-4" />
-                  Abrir plano
-                </button>
-                <details className="relative">
-                  <summary className="brand-btn-secondary cursor-pointer list-none">Mais ações</summary>
-                  <div className="absolute right-0 z-10 mt-2 grid min-w-48 gap-1 rounded-lg border border-[#EDE1D6] bg-white p-2 shadow-lg">
-                    <Link href={getPatientRecordHref(summary.patient.id, "anamnese")} className="rounded px-3 py-2 text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Anamnese</Link>
-                    <button type="button" onClick={onOpenProtocols} className="rounded px-3 py-2 text-left text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Protocolos</button>
-                    <button type="button" onClick={onOpenPlan} className="rounded px-3 py-2 text-left text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Suplementação</button>
-                    <Link href={getScheduleReturnHref(summary.patient.id)} className="rounded px-3 py-2 text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Agendar retorno</Link>
-                  </div>
-                </details>
-              </div>
-            </div>
+            <p className="brand-kicker">Visão clínica</p>
+            <h2 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">Resumo do prontuário</h2>
+            <p className="mt-2 text-sm text-[#75675E]">Indicadores essenciais para orientar o atendimento, sem repetir ações já disponíveis no cabeçalho.</p>
           </section>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -1575,9 +1534,7 @@ function PatientOverview({
               title="Última consulta"
               value={summary.latestConsultation ? formatDateSafe(summary.latestConsultation.date) : "Nenhuma consulta registrada"}
               detail={summary.latestConsultation ? `Status: ${summary.latestConsultation.status}` : "Comece o primeiro atendimento pelo Modo Consulta."}
-              action={!summary.latestConsultation ? (
-                <button type="button" onClick={onStartConsultation} disabled={archived} className="text-left text-xs font-semibold text-[#607A56] hover:text-[#3A3028] disabled:opacity-50">Iniciar primeira consulta</button>
-              ) : null}
+              action={summary.latestConsultation ? <Link href={summary.latestConsultation.href} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Ver consulta</Link> : null}
             />
             <SummaryCard
               title="Próxima consulta"
@@ -1591,15 +1548,13 @@ function PatientOverview({
               title="Peso atual"
               value={weightValue ?? "Nenhuma avaliação registrada"}
               detail={trend ?? (summary.latestAnthropometry?.date ? formatDateSafe(summary.latestAnthropometry.date) : "Registre a primeira avaliação para acompanhar evolução.")}
-              action={!weightValue ? (
-                <button type="button" onClick={onNewAnthropometry} disabled={archived} className="text-left text-xs font-semibold text-[#607A56] hover:text-[#3A3028] disabled:opacity-50">Registrar avaliação</button>
-              ) : null}
+              action={summary.latestAnthropometry ? <Link href={getPatientRecordHref(summary.patient.id, "antropometria")} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Ver avaliações</Link> : null}
             />
             <SummaryCard
               title="Plano alimentar"
-              value={summary.activeMealPlan ? `Ativo · v${summary.activeMealPlan.version}` : "Nenhum plano ativo"}
-              detail={summary.activeMealPlan ? `${summary.activeMealPlan.title} · publicado em ${formatDateSafe(summary.activeMealPlan.publishedAt)}` : "Crie ou publique um plano antes de entregar ao portal."}
-              action={<button type="button" onClick={onOpenPlan} className="text-left text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">{summary.activeMealPlan ? "Abrir plano" : "Criar plano"}</button>}
+              value={summary.activeMealPlan ? `Ativo · v${summary.activeMealPlan.version}` : summary.draftMealPlan ? `Rascunho · v${summary.draftMealPlan.version}` : "Nenhum plano"}
+              detail={workspace.mealPlan.description}
+              action={null}
             />
           </div>
 
@@ -1634,29 +1589,16 @@ function PatientOverview({
             </section>
 
             <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
-              <p className="brand-kicker">Pendências objetivas</p>
-              <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Próximas ações</h3>
-              {summary.pendingActions.length ? (
-                <ul className="mt-4 space-y-2">
-                  {summary.pendingActions.map((action) => (
-                    <li key={action.id} className="rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-3 text-sm">
-                      <p className="font-semibold text-[#3A3028]">{action.title}</p>
-                      {action.href && <Link href={action.href} className="mt-1 inline-block text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir</Link>}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-4 text-sm text-[#75675E]">Nenhuma pendência objetiva no resumo.</p>
-              )}
+              <p className="brand-kicker">Próxima ação</p>
+              <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">{workspace.nextBestAction.label}</h3>
+              <p className="mt-2 text-sm leading-6 text-[#75675E]">{workspace.nextBestAction.description}</p>
+              <p className="mt-4 text-xs font-medium text-[#607A56]">A ação está disponível no cabeçalho do paciente.</p>
             </section>
           </div>
 
           <RecentActivity
             events={recentActivity}
             onOpenTimeline={onOpenTimeline}
-            onStartConsultation={onStartConsultation}
-            onNewAnthropometry={onNewAnthropometry}
-            archived={archived}
           />
         </div>
 
@@ -1682,12 +1624,7 @@ function PatientOverview({
             <p className="brand-kicker">Plano e protocolos</p>
             <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Acompanhamento ativo</h3>
             <div className="mt-4 space-y-3 text-sm">
-              {summary.draftMealPlan && (
-                <div className="rounded-lg border border-[#EAD8C2] bg-[#FBF7F1] p-3">
-                  <p className="font-semibold text-[#3A3028]">Rascunho v{summary.draftMealPlan.version} em andamento</p>
-                  <button type="button" onClick={onOpenPlan} className="mt-1 text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Continuar edição</button>
-                </div>
-              )}
+              {summary.draftMealPlan && <p className="rounded-lg border border-[#EAD8C2] bg-[#FBF7F1] p-3 text-sm text-[#3A3028]">Rascunho v{summary.draftMealPlan.version} em andamento.</p>}
               {summary.activeProtocols.length ? summary.activeProtocols.map((protocol) => (
                 <div key={protocol.id} className="rounded-lg border border-[#D9E4D3] bg-[#F4F8F1] p-3">
                   <p className="font-semibold text-[#3A3028]">{protocol.title ?? "Protocolo ativo"}</p>
@@ -1704,7 +1641,6 @@ function PatientOverview({
                     ))}
                   </ul>
                 ) : <p className="mt-2 text-sm text-[#75675E]">Nenhuma suplementação ativa registrada.</p>}
-                <button type="button" onClick={onOpenPlan} className="mt-2 text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir suplementação</button>
               </div>
             </div>
           </section>
@@ -1828,6 +1764,18 @@ export default function ClientWorkspace({
     if (patientSummary.patient.status === "arquivado") return;
     setActiveTab("antropometria");
     setShowEvolutionForm(true);
+  }
+
+  function runWorkspaceAction(action: PatientWorkspaceAction) {
+    if (action.kind === "consultation") {
+      void startConsultation();
+    } else if (action.kind === "assessment") {
+      openNewAnthropometry();
+    } else if (action.kind === "meal-plan") {
+      openPlanTab();
+    } else {
+      router.push(getScheduleReturnHref(id));
+    }
   }
 
   // Protocols
@@ -2083,6 +2031,8 @@ export default function ClientWorkspace({
   };
 
 
+  const workspaceState = getPatientWorkspaceState(patientSummary);
+
   return (
     <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-16 animate-fade-up">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2116,19 +2066,26 @@ export default function ClientWorkspace({
                 <span>Próxima: {patientSummary.nextAppointment ? formatDateTime(patientSummary.nextAppointment.date) : "não agendada"}</span>
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-3 xl:w-[34rem] xl:shrink-0">
-              <button type="button" onClick={() => void startConsultation()} disabled={patientSummary.patient.status === "arquivado"} className="brand-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
-                <Stethoscope className="h-4 w-4" />
-                {patientSummary.activeConsultation ? "Retomar consulta" : "Iniciar consulta"}
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end xl:shrink-0">
+              <button type="button" onClick={() => runWorkspaceAction(workspaceState.nextBestAction)} disabled={patientSummary.patient.status === "arquivado" && workspaceState.nextBestAction.kind !== "meal-plan" && workspaceState.nextBestAction.kind !== "appointment"} className="brand-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+                {workspaceState.nextBestAction.kind === "consultation" ? <Stethoscope className="h-4 w-4" /> : workspaceState.nextBestAction.kind === "assessment" ? <Activity className="h-4 w-4" /> : workspaceState.nextBestAction.kind === "meal-plan" ? <Utensils className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
+                {workspaceState.nextBestAction.label}
               </button>
-              <button type="button" onClick={openPlanTab} className="brand-btn-secondary">
-                <Utensils className="h-4 w-4" />
-                Plano alimentar
-              </button>
-              <button type="button" onClick={openNewAnthropometry} disabled={patientSummary.patient.status === "arquivado"} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">
-                <Activity className="h-4 w-4" />
-                Nova avaliação
-              </button>
+              {workspaceState.secondaryActions.map((action) => (
+                <button key={action.kind} type="button" onClick={() => runWorkspaceAction(action)} disabled={patientSummary.patient.status === "arquivado" && action.kind !== "meal-plan" && action.kind !== "appointment"} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50" aria-label={action.kind === "meal-plan" ? `${action.label}: plano alimentar` : undefined}>
+                  {action.kind === "meal-plan" ? <Utensils className="h-4 w-4" /> : <Activity className="h-4 w-4" />}
+                  {action.label}
+                </button>
+              ))}
+              <details className="relative">
+                <summary className="brand-btn-secondary cursor-pointer list-none" aria-label="Mais ações do paciente">Mais ações</summary>
+                <div className="absolute right-0 z-10 mt-2 grid min-w-48 gap-1 rounded-lg border border-[#EDE1D6] bg-white p-2 shadow-lg">
+                  <button type="button" onClick={() => void startConsultation()} className="rounded px-3 py-2 text-left text-sm text-[#3A3028] hover:bg-[#FBF7F1]">{workspaceState.consultation.label}</button>
+                  <Link href={getPatientRecordHref(id, "anamnese")} className="rounded px-3 py-2 text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Anamnese</Link>
+                  <button type="button" onClick={openProtocolsTab} className="rounded px-3 py-2 text-left text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Protocolos</button>
+                  <Link href={getScheduleReturnHref(id)} className="rounded px-3 py-2 text-sm text-[#3A3028] hover:bg-[#FBF7F1]">Agendar retorno</Link>
+                </div>
+              </details>
             </div>
           </div>
         </header>
@@ -2160,10 +2117,7 @@ export default function ClientWorkspace({
             <PatientOverview
               summary={patientSummary}
               recentActivity={recentActivity}
-              onStartConsultation={() => void startConsultation()}
-              onOpenPlan={openPlanTab}
               onOpenProtocols={openProtocolsTab}
-              onNewAnthropometry={openNewAnthropometry}
               onOpenTimeline={openTimelineTab}
             />
           )}
