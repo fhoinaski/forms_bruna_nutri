@@ -21,6 +21,7 @@ export type MealItem = {
   quantity?: string | null;
   unit?: string | null;
   notes?: string | null;
+  is_optional?: boolean;
   ai_suggested?: boolean;
   taco_number?: number | string | null;
   // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2. So
@@ -74,7 +75,11 @@ export type Meal = {
   suggested_time?: string | null;
   notes?: string | null;
   source_recipe_id?: string | null;
+  meal_structure?: "SIMPLE" | "OPTIONS" | "COMBINATION" | null;
+  patient_instruction?: string | null;
   items: MealItem[];
+  options?: Array<{ id?: string; label: string; description?: string | null; items: MealItem[] }>;
+  choice_groups?: Array<{ id?: string; title: string; description?: string | null; min_selections: number; max_selections: number; items: MealItem[] }>;
 };
 
 type FoodSuggestion = MacroReferenceFood & {
@@ -130,6 +135,8 @@ export const emptyMeal = (): Meal => ({
   suggested_time: "",
   notes: "",
   source_recipe_id: null,
+  meal_structure: "SIMPLE",
+  patient_instruction: "",
   items: [{ food: "", quantity: "", unit: "", notes: "" }],
 });
 
@@ -205,6 +212,24 @@ export function duplicateItemAt(items: MealItem[], index: number): MealItem[] {
 }
 
 export function cleanMealsForSave(meals: Meal[]): Meal[] {
+  const cleanItem = (item: MealItem) => ({
+    food: item.food,
+    quantity: item.quantity ?? null,
+    unit: item.unit ?? null,
+    notes: item.notes ?? null,
+    is_optional: Boolean(item.is_optional),
+    food_source: item.food_source ?? null,
+    food_ref_id: item.food_ref_id ?? null,
+    canonical_food_id: item.canonical_food_id ?? null,
+    household_measure_id: item.household_measure_id ?? null,
+    quantity_locked: item.quantity_locked ?? false,
+    substitutions_locked: item.substitutions_locked ?? false,
+    slot_food_group: item.slot_food_group ?? null,
+    slot_food_subgroup: item.slot_food_subgroup ?? null,
+    slot_nutritional_role: item.slot_nutritional_role ?? null,
+    template_slot_id: item.template_slot_id ?? null,
+    slot_exchange_eligible: item.slot_exchange_eligible ?? null,
+  });
   return meals
     .map((meal) => ({
       name: meal.name,
@@ -212,30 +237,21 @@ export function cleanMealsForSave(meals: Meal[]): Meal[] {
       suggested_time: meal.suggested_time ?? null,
       notes: meal.notes ?? null,
       source_recipe_id: meal.source_recipe_id ?? null,
+      meal_structure: meal.meal_structure ?? "SIMPLE",
+      patient_instruction: meal.patient_instruction ?? null,
       items: meal.items
         .filter((item) => item.food.trim())
-        .map((item) => ({
-          food: item.food,
-          quantity: item.quantity ?? null,
-          unit: item.unit ?? null,
-          notes: item.notes ?? null,
-          food_source: item.food_source ?? null,
-          food_ref_id: item.food_ref_id ?? null,
-          canonical_food_id: item.canonical_food_id ?? null,
-          household_measure_id: item.household_measure_id ?? null,
-          // Locks persistidos (Optimizer V2 sobre plano salvo + geração
-          // automática de substituições) — sem isso, o toggle 🔒 na UI
-          // nunca sobrevivia a um "Salvar rascunho".
-          quantity_locked: item.quantity_locked ?? false,
-          substitutions_locked: item.substitutions_locked ?? false,
-          slot_food_group: item.slot_food_group ?? null,
-          slot_food_subgroup: item.slot_food_subgroup ?? null,
-          slot_nutritional_role: item.slot_nutritional_role ?? null,
-          template_slot_id: item.template_slot_id ?? null,
-          slot_exchange_eligible: item.slot_exchange_eligible ?? null,
-        })),
+        .map(cleanItem),
+      options: (meal.options ?? []).map((option) => ({
+        label: option.label, description: option.description ?? null,
+        items: option.items.filter((item) => item.food.trim()).map(cleanItem),
+      })),
+      choice_groups: (meal.choice_groups ?? []).map((group) => ({
+        title: group.title, description: group.description ?? null, min_selections: group.min_selections, max_selections: group.max_selections,
+        items: group.items.filter((item) => item.food.trim()).map(cleanItem),
+      })),
     }))
-    .filter((meal) => meal.name.trim() && meal.items.length);
+    .filter((meal) => meal.name.trim() && (meal.items.length > 0 || meal.options.some((option) => option.items.length > 0) || meal.choice_groups.some((group) => group.items.length > 0)));
 }
 
 export function MealItemsEditor({
@@ -931,6 +947,49 @@ export function MealItemsEditor({
               )}
             </div>}
           </div>
+          {!readOnly && (
+            <div className="border-b border-[#EDE1D6] bg-white px-3 py-3">
+              <div className="grid gap-2 md:grid-cols-[180px_minmax(0,1fr)]">
+                <label className="text-xs font-semibold text-[#75675E]">Tipo da refeição
+                  <select
+                    value={meal.meal_structure ?? "SIMPLE"}
+                    onChange={(event) => {
+                      const meal_structure = event.target.value as "SIMPLE" | "OPTIONS" | "COMBINATION";
+                      updateMeal(mealIndex, {
+                        meal_structure,
+                        options: meal_structure === "OPTIONS" && !(meal.options?.length) ? [{ label: "Opção 1", items: [{ food: "", quantity: "", unit: "", notes: "" }] }] : meal.options,
+                        choice_groups: meal_structure === "COMBINATION" && !(meal.choice_groups?.length) ? [{ title: "Grupo 1", min_selections: 1, max_selections: 1, items: [{ food: "", quantity: "", unit: "", notes: "" }] }] : meal.choice_groups,
+                      });
+                    }}
+                    className="brand-input mt-1"
+                  >
+                    <option value="SIMPLE">Simples</option>
+                    <option value="OPTIONS">Opções</option>
+                    <option value="COMBINATION">Monte sua refeição</option>
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-[#75675E]">Instrução para a paciente
+                  <input value={meal.patient_instruction ?? ""} onChange={(event) => updateMeal(mealIndex, { patient_instruction: event.target.value })} className="brand-input mt-1" placeholder="Ex.: Escolha uma opção." />
+                </label>
+              </div>
+              {meal.meal_structure === "OPTIONS" && <div className="mt-3 space-y-2">
+                {(meal.options ?? []).map((option, optionIndex) => <div key={optionIndex} className="flex gap-2 rounded-lg bg-[#FBF7F1] p-2">
+                  <input value={option.label} onChange={(event) => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, label: event.target.value } : value) })} className="brand-input" aria-label={`Nome da opção ${optionIndex + 1}`} />
+                  <input value={option.items[0]?.food ?? ""} onChange={(event) => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, items: [{ ...(value.items[0] ?? { quantity: "", unit: "", notes: "" }), food: event.target.value }] } : value) })} className="brand-input" placeholder="Primeiro alimento" aria-label={`Primeiro alimento da opção ${optionIndex + 1}`} />
+                  <button type="button" onClick={() => updateMeal(mealIndex, { options: [...(meal.options ?? []), { label: `Opção ${(meal.options?.length ?? 0) + 1}`, items: [{ food: "", quantity: "", unit: "", notes: "" }] }] })} className="brand-btn-secondary shrink-0">+ Opção</button>
+                </div>)}
+              </div>}
+              {meal.meal_structure === "COMBINATION" && <div className="mt-3 space-y-2">
+                {(meal.choice_groups ?? []).map((group, groupIndex) => <div key={groupIndex} className="grid gap-2 rounded-lg bg-[#FBF7F1] p-2 md:grid-cols-[minmax(0,1fr)_90px_90px]">
+                  <input value={group.title} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, title: event.target.value } : value) })} className="brand-input" aria-label={`Nome do grupo ${groupIndex + 1}`} />
+                  <input type="number" min="1" value={group.min_selections} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, min_selections: Number(event.target.value) } : value) })} className="brand-input" aria-label="Mínimo de escolhas" />
+                  <input type="number" min="1" value={group.max_selections} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, max_selections: Number(event.target.value) } : value) })} className="brand-input" aria-label="Máximo de escolhas" />
+                  <input value={group.items[0]?.food ?? ""} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, items: [{ ...(value.items[0] ?? { quantity: "", unit: "", notes: "" }), food: event.target.value }] } : value) })} className="brand-input md:col-span-3" placeholder="Primeiro alimento do grupo" aria-label={`Primeiro alimento do grupo ${groupIndex + 1}`} />
+                </div>)}
+                <button type="button" onClick={() => updateMeal(mealIndex, { choice_groups: [...(meal.choice_groups ?? []), { title: `Grupo ${(meal.choice_groups?.length ?? 0) + 1}`, min_selections: 1, max_selections: 1, items: [{ food: "", quantity: "", unit: "", notes: "" }] }] })} className="brand-btn-secondary">+ Adicionar grupo</button>
+              </div>}
+            </div>
+          )}
           <div className="p-3">
             {readOnly ? (
               <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[#75675E]">

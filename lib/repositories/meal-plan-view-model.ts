@@ -7,6 +7,7 @@ import { getFoodPortionById, toHouseholdMeasureOption } from "@/lib/repositories
 import { getApprovedMealPlanAlternatives, type ApprovedMealPlanAlternative } from "@/lib/repositories/meal-plan-alternatives";
 import { getActiveMealPlanVersion, getMealPlanVersionById, type MealPlanItemPayload, type MealPlanPayload } from "@/lib/repositories/meal-plans";
 import { buildFoodReferenceLookup, resolveMealPlanChangeReferences } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
+import { calculateMealNutritionRange } from "@/lib/meal-plans/flexible-structure";
 
 export type MealPlanViewModelStatus = "draft" | "active" | "archived";
 export type MealPlanFoodIdentityStatus = "RESOLVED" | "NEEDS_CONFIRMATION" | "UNRESOLVED";
@@ -26,6 +27,7 @@ export interface MealPlanViewModel {
     fatG: number | null;
     fiberG: number | null;
     unresolvedItems: number;
+    range: { minEnergyKcal: number; maxEnergyKcal: number; varies: boolean };
   };
   meals: MealPlanMealViewModel[];
   itemResolutionIssues: Array<{ itemId: string | null; food: string; status: MealPlanFoodIdentityStatus; reason: string }>;
@@ -159,8 +161,16 @@ export async function buildMealPlanViewModel(plan: MealPlanPayload): Promise<Mea
   }
 
   const { references, measuresById } = await resolveMealPlanChangeReferences(plan);
-  const nutrition = calculatePlanNutrients(plan, buildFoodReferenceLookup(references, measuresById));
+  const lookup = buildFoodReferenceLookup(references, measuresById);
+  const nutrition = calculatePlanNutrients(plan, lookup);
   const totals = roundedNutrients(nutrition.total.values);
+  const range = plan.meals.reduce((total, meal) => {
+    const mealRange = calculateMealNutritionRange(meal, (item) => {
+      const values = roundedNutrients(calculatePlanNutrients({ meals: [{ ...meal, items: [item] }] }, lookup).total.values);
+      return { energyKcal: values.energyKcal ?? 0, proteinG: values.proteinG ?? 0, carbohydrateG: values.carbohydrateG ?? 0, fatG: values.fatG ?? 0, fiberG: values.fiberG ?? 0 };
+    });
+    return { min: total.min + mealRange.min.energyKcal, max: total.max + mealRange.max.energyKcal, varies: total.varies || mealRange.varies };
+  }, { min: 0, max: 0, varies: false });
 
   return {
     planId: plan.id,
@@ -177,6 +187,7 @@ export async function buildMealPlanViewModel(plan: MealPlanPayload): Promise<Mea
       fatG: totals.fatG,
       fiberG: totals.fiberG,
       unresolvedItems: nutrition.quality.unresolved,
+      range: { minEnergyKcal: range.min, maxEnergyKcal: range.max, varies: range.varies },
     },
     meals,
     itemResolutionIssues,
