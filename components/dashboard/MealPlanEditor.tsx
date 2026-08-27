@@ -298,6 +298,40 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     }
   }
 
+  /**
+   * R5 (seções 23-31) — "Usar plano anterior como base": clona o plano de
+   * origem como um NOVO draft (mesmo princípio de `duplicateCurrentPlan`,
+   * R4 — o plano de origem nunca é alterado) e substitui `meals` pelo
+   * resultado já MESCLADO do changeset (KEEP/MODIFY/ADD calculado pelo
+   * wizard) — nunca o draft inteiro do zero. Continua sem auto-save: só
+   * "Salvar rascunho"/"Ativar" persiste de verdade.
+   */
+  async function applyAiChangeset(sourcePlanId: string, mergedMeals: Meal[]) {
+    const source = plans.find((item) => item.id === sourcePlanId) ?? null;
+    setCreating(true);
+    setError("");
+    setMessage("");
+    setConflict("");
+    try {
+      const group = PROTOCOL_TEMPLATE_TARGET_GROUPS.find((item) => item === source?.target_group) ?? targetGroup;
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetGroup: group, title: source ? `${source.title} (Copilot)` : undefined }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Não foi possível aplicar a proposta.");
+      await loadPlans(data.id);
+      setPlan((current) => current && current.id === data.id ? { ...current, meals: mergedMeals } : current);
+      setMessage("Proposta do Copilot aplicada com base no plano anterior. Revise e salve — nada foi ativado.");
+      onSaved?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível aplicar a proposta.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   // "✨ Ajustar quantidades" no plano SALVO (seção 4 do pedido de
   // fechamento de gaps) — reaproveita o Optimizer V2 via rota dedicada, que
   // já deriva os locks automaticamente do que está persistido em cada item.
@@ -609,6 +643,16 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                 <Plus className="h-4 w-4" />
                 Novo plano
               </button>
+              <button
+                type="button"
+                onClick={() => setAiWizardOpen(true)}
+                disabled={creating || saving || deleting}
+                title={aiEnabled ? undefined : "Configure a chave de IA em Configurações para usar este recurso."}
+                className="brand-btn-secondary w-full sm:w-auto"
+              >
+                <Sparkles className="h-4 w-4" />
+                Criar com IA
+              </button>
               <a
                 href={`/dashboard/clients/${clientId}/print?secao=plano-alimentar${plan.status === "active" ? "" : `&planId=${encodeURIComponent(plan.id)}`}`}
                 target="_blank"
@@ -788,6 +832,8 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
           defaultTargetGroup={plan?.target_group && PROTOCOL_TEMPLATE_TARGET_GROUPS.includes(plan.target_group as ProtocolTemplateTargetGroup) ? plan.target_group as ProtocolTemplateTargetGroup : targetGroup}
           onClose={() => setAiWizardOpen(false)}
           onApply={applyAiDraft}
+          onApplyChangeset={applyAiChangeset}
+          previousPlans={plans}
         />
       )}
 

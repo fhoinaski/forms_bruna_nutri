@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Sparkles, X, Loader2, AlertTriangle, Wand2, RefreshCw, Target, Info, Trash2, Check } from "lucide-react";
 import {
@@ -10,6 +10,15 @@ import {
 } from "@/lib/protocol-templates/constants";
 import type { Meal } from "@/components/dashboard/MealItemsEditor";
 import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
+import { computeMealPlanReadiness } from "@/lib/ai/agents/nutrition/meal-plan-readiness";
+import {
+  selectableMealKeys,
+  computeMealPlanChangeset,
+  mergeChangesetIntoMeals,
+  describeMealPlanChangeset,
+  type ExistingPlanMeal,
+  type MealPlanChangeset,
+} from "@/lib/ai/agents/nutrition/meal-plan-changeset";
 
 const MEAL_KEYS = ["cafe_da_manha", "lanche_manha", "almoco", "lanche_tarde", "jantar", "ceia"] as const;
 type MealKey = (typeof MEAL_KEYS)[number];
@@ -72,6 +81,8 @@ interface DraftContext {
   heightDisplay: string | null;
   bmi: string | null;
   lifeStage: string | null;
+  /** Já presente na resposta real de `/draft/context` (MealPlanDraftContext) — só usado aqui pra readiness (R5), nunca exibido nesta etapa. */
+  goals: string | null;
   allergies: string | null;
   restrictions: string | null;
   clinicalMarkers: { type: string; label: string; severity: string; status: string }[];
@@ -171,9 +182,10 @@ interface DraftResult {
   critic?: CriticFinding[];
 }
 
-type WizardStep = "context" | "goals" | "meals" | "preferences" | "generating" | "review";
-const STEP_ORDER: WizardStep[] = ["context", "goals", "meals", "preferences", "generating", "review"];
+type WizardStep = "source" | "context" | "goals" | "meals" | "preferences" | "generating" | "review";
+const STEP_ORDER: WizardStep[] = ["source", "context", "goals", "meals", "preferences", "generating", "review"];
 const STEP_LABELS: Record<WizardStep, string> = {
+  source: "Novo ou plano anterior",
   context: "Dados do paciente",
   goals: "Objetivo e meta",
   meals: "Refeições e horários",
@@ -252,18 +264,43 @@ const CRITIC_STYLE: Record<CriticFinding["severity"], string> = {
   WARNING: "border-[#F0D4C7] bg-[#FFF1E6] text-[#B5762F]",
 };
 
+interface PreviousPlanSummary {
+  id: string;
+  title: string;
+  status: string;
+  target_group: string | null;
+  meals: Meal[];
+}
+
 export function AiMealPlanWizard({
   clientId,
   defaultTargetGroup,
   onClose,
   onApply,
+  onApplyChangeset,
+  previousPlans,
 }: {
   clientId: string;
   defaultTargetGroup: ProtocolTemplateTargetGroup;
   onClose: () => void;
   onApply: (targetGroup: ProtocolTemplateTargetGroup, meals: Meal[], substitutions?: ItemSubstitution[]) => Promise<void>;
+  /** R5 (seções 23-31) — "Usar plano anterior como base": aplica o resultado já MESCLADO (KEEP/MODIFY/ADD) sobre um clone do plano de origem, nunca o draft do zero. */
+  onApplyChangeset?: (sourcePlanId: string, mergedMeals: Meal[]) => Promise<void>;
+  /** Planos já existentes do paciente (qualquer status) — usado só pra oferecer "Usar plano anterior como base" quando fizer sentido. */
+  previousPlans?: PreviousPlanSummary[];
 }) {
-  const [step, setStep] = useState<WizardStep>("context");
+  // R5 (seções 23-24) — só planos com pelo menos 1 refeição fazem sentido
+  // como base (um plano vazio não tem nada pra manter/alterar).
+  const eligiblePreviousPlans = (previousPlans ?? []).filter((item) => item.meals.length > 0);
+  const [sourceMode, setSourceMode] = useState<"new" | "previous">("new");
+  const [sourcePlanId, setSourcePlanId] = useState<string>(eligiblePreviousPlans[0]?.id ?? "");
+  const sourcePlan = eligiblePreviousPlans.find((item) => item.id === sourcePlanId) ?? null;
+  const existingPlanMeals: ExistingPlanMeal[] = (sourcePlan?.meals ?? []).map((meal) => ({
+    name: meal.name,
+    items: meal.items.map((item) => ({ food: item.food, quantity: item.quantity ?? null, food_ref_id: item.food_ref_id ?? null, quantity_locked: item.quantity_locked ?? null, substitutions_locked: item.substitutions_locked ?? null })),
+  }));
+
+  const [step, setStep] = useState<WizardStep>(eligiblePreviousPlans.length ? "source" : "context");
   const [portalReady, setPortalReady] = useState(false);
   useEffect(() => setPortalReady(true), []);
 
@@ -350,10 +387,21 @@ export function AiMealPlanWizard({
 
   const [applying, setApplying] = useState(false);
 
-  const stepIndex = STEP_ORDER.indexOf(step);
+  // "source" só existe de verdade quando há plano anterior elegível — sem
+  // isso, o wizard nunca mostra/reserva espaço pra uma etapa vazia.
+  const activeStepOrder = eligiblePreviousPlans.length ? STEP_ORDER : STEP_ORDER.filter((entry) => entry !== "source");
+  const stepIndex = activeStepOrder.indexOf(step);
   const requestedMeals = Array.from(selectedMeals).map((key) => ({ key, suggestedTime: mealTimes[key]?.trim() || null }));
 
+  // R5 (seção 27) — refeições da fonte atual (nova ou plano anterior) que o
+  // Copilot pode oferecer pra seleção; bloqueadas nunca aparecem marcáveis.
+  const mealKeyOptions = selectableMealKeys(sourceMode === "previous" ? existingPlanMeals : [], [...MEAL_KEYS]);
+
   function toggleMeal(key: MealKey) {
+    // R5 (seção 27) — nunca permite marcar uma refeição bloqueada pra
+    // regeneração, mesmo por um clique direto no checkbox (defesa em
+    // profundidade além do atributo `disabled`).
+    if (sourceMode === "previous" && mealKeyOptions.find((option) => option.key === key)?.locked) return;
     setSelectedMeals((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key); else next.add(key);
@@ -361,15 +409,60 @@ export function AiMealPlanWizard({
     });
   }
 
+  // R5 — ao entrar em "modo plano anterior", nunca deixa uma refeição
+  // bloqueada pré-selecionada (mesmo que estivesse nos padrões de "criar
+  // novo"): garante a exclusão real, não só visual.
+  useEffect(() => {
+    if (sourceMode !== "previous") return;
+    setSelectedMeals((current) => {
+      const lockedKeys = new Set(mealKeyOptions.filter((option) => option.locked).map((option) => option.key));
+      if (![...current].some((key) => lockedKeys.has(key))) return current;
+      const next = new Set(current);
+      lockedKeys.forEach((key) => next.delete(key));
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceMode, sourcePlanId]);
+
+  // R5 (seções 42/43) — idempotência/segurança contra resposta obsoleta:
+  // um contador de geração garante que (a) um duplo clique nunca dispara
+  // duas chamadas simultâneas de verdade, e (b) se o wizard for fechado e
+  // reaberto (ou o paciente/rascunho mudar) antes de uma geração em
+  // andamento terminar, a resposta antiga nunca sobrescreve o estado mais
+  // novo — só o resultado da chamada MAIS recente é aplicado.
+  const generationRequestRef = useRef(0);
+  const generationInFlightRef = useRef(false);
+
   // Objetivo/meta/refeições/horários/preferências ficam no state do
   // próprio componente — um retry (ou o botão "Gerar refeição por
   // refeição") nunca perde esses valores, só repete a chamada (seção 21 do
   // pedido de robustez: "preservar o wizard").
   async function generateDraft(options?: { forceMealByMeal?: boolean }) {
+    if (generationInFlightRef.current) return;
+    generationInFlightRef.current = true;
+    const requestId = ++generationRequestRef.current;
     setStep("generating");
     setGenerateError("");
     setGenerateErrorReason(null);
     try {
+      // R5 (seção 24) — em "modo plano anterior", as refeições NÃO
+      // selecionadas (mantidas como estão) entram como contexto de
+      // variedade pro Copilot, igual ao que `regenerateMealInDraft` já faz
+      // internamente — nunca usadas pra decidir o que persistir, só pra
+      // evitar repetir os mesmos alimentos.
+      const otherMealsContext = sourceMode === "previous"
+        ? existingPlanMeals
+            .filter((meal) => !selectableMealKeys(existingPlanMeals, [...MEAL_KEYS]).some((option) => option.existingName === meal.name && selectedMeals.has(option.key)))
+            .map((meal) => ({
+              mealKey: "ceia" as MealKey, // placeholder — só o texto (nome/itens) importa pro prompt de variedade, nunca usado pra casar identidade
+              name: meal.name,
+              suggested_time: null,
+              source_recipe_id: null,
+              items: meal.items.map((item) => ({ food: item.food, displayName: item.food, quantity: item.quantity ?? "", unit: "g", food_source: null, food_ref_id: item.food_ref_id ?? null, ai_suggested: true as const })),
+              needsReview: [],
+            }))
+        : undefined;
+
       const response = await fetch(`/api/admin/clients/${clientId}/meal-plans/draft`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -381,9 +474,11 @@ export function AiMealPlanWizard({
           avoidFoods: avoidFoods.trim() || null,
           useRecipes,
           forceMealByMeal: options?.forceMealByMeal ?? false,
+          ...(otherMealsContext?.length ? { otherMealsContext } : {}),
         }),
       });
       const data = await response.json();
+      if (requestId !== generationRequestRef.current) return; // resposta obsoleta — descartada silenciosamente
       if (!response.ok) {
         setGenerateErrorReason(typeof data.reason === "string" ? data.reason : null);
         throw new Error(data.message ?? "Não foi possível gerar o pré-plano.");
@@ -393,8 +488,11 @@ export function AiMealPlanWizard({
       setOptimizerSummary(null);
       setStep("review");
     } catch (cause) {
+      if (requestId !== generationRequestRef.current) return;
       setGenerateError(cause instanceof Error ? cause.message : "Não foi possível gerar o pré-plano.");
       setStep("review");
+    } finally {
+      if (requestId === generationRequestRef.current) generationInFlightRef.current = false;
     }
   }
 
@@ -778,7 +876,21 @@ export function AiMealPlanWizard({
       const approvedSubstitutions = substitutionSuggestions
         .filter((sub) => sub.approved_by_professional)
         .map(({ mealKey: _mealKey, ...rest }) => rest);
-      await onApply(objectiveGroup, draft.meals.map(draftMealToEditorMeal), approvedSubstitutions);
+      if (sourceMode === "previous" && sourcePlan && onApplyChangeset) {
+        // R5 (seções 24/30) — nunca troca o plano inteiro: mescla só as
+        // refeições regeneradas sobre um clone do plano de origem.
+        const regeneratedKeys = draft.meals.map((meal) => meal.mealKey);
+        const merged = mergeChangesetIntoMeals<Meal, DraftMeal, Meal>(
+          sourcePlan.meals,
+          draft.meals,
+          regeneratedKeys,
+          draftMealToEditorMeal,
+          (meal) => meal
+        );
+        await onApplyChangeset(sourcePlan.id, merged);
+      } else {
+        await onApply(objectiveGroup, draft.meals.map(draftMealToEditorMeal), approvedSubstitutions);
+      }
       onClose();
     } finally {
       setApplying(false);
@@ -786,6 +898,12 @@ export function AiMealPlanWizard({
   }
 
   const canGenerate = selectedMeals.size > 0;
+  // R5 (seções 25/26/29) — changeset SÓ pra exibição/preview: nunca decide
+  // sozinho o que aplicar, só resume o que o Copilot está propondo em cima
+  // do plano de origem antes da nutricionista confirmar.
+  const changeset: MealPlanChangeset | null = sourceMode === "previous" && draft
+    ? computeMealPlanChangeset(existingPlanMeals, draft.meals, draft.meals.map((meal) => meal.mealKey))
+    : null;
   const totalNeedsReview = draft?.meals.reduce((sum, meal) => sum + meal.needsReview.length, 0) ?? 0;
   const hasEnergyTarget = target.targetEnergyKcal !== null;
 
@@ -796,7 +914,7 @@ export function AiMealPlanWizard({
           <div>
             <p className="brand-kicker flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Assistente guiado</p>
             <h2 id="ai-wizard-title" className="font-serif text-2xl font-semibold text-[#3A3028]">Criar plano com IA</h2>
-            <p className="mt-1 text-xs text-[#8C6E52]">Etapa {Math.min(stepIndex + 1, 5)} de 5 · {STEP_LABELS[step]}</p>
+            <p className="mt-1 text-xs text-[#8C6E52]">Etapa {Math.min(stepIndex + 1, activeStepOrder.length - 1)} de {activeStepOrder.length - 1} · {STEP_LABELS[step]}</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar">
             <X className="h-4 w-4" />
@@ -804,11 +922,66 @@ export function AiMealPlanWizard({
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-5">
+          {step === "source" && (
+            <div className="space-y-4">
+              <p className="text-sm text-[#75675E]">Este paciente já tem plano(s) cadastrado(s). Como você quer começar?</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setSourceMode("new")}
+                  className={`rounded-xl border p-4 text-left transition ${sourceMode === "new" ? "border-[#7A9A74] bg-[#F5FAF0]" : "border-[#EAD8C2] bg-[#FFFDFC] hover:bg-[#FBF7F1]"}`}
+                >
+                  <p className="text-sm font-semibold text-[#3A3028]">Criar novo</p>
+                  <p className="mt-1 text-xs text-[#75675E]">O Copilot propõe uma estrutura do zero.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSourceMode("previous")}
+                  className={`rounded-xl border p-4 text-left transition ${sourceMode === "previous" ? "border-[#7A9A74] bg-[#F5FAF0]" : "border-[#EAD8C2] bg-[#FFFDFC] hover:bg-[#FBF7F1]"}`}
+                >
+                  <p className="text-sm font-semibold text-[#3A3028]">Usar plano anterior como base</p>
+                  <p className="mt-1 text-xs text-[#75675E]">O Copilot propõe mudanças sobre um plano já existente — refeições bloqueadas nunca são alteradas.</p>
+                </button>
+              </div>
+              {sourceMode === "previous" && (
+                <div>
+                  <label className="brand-label" htmlFor="wizard-source-plan">Qual plano usar como base?</label>
+                  <select id="wizard-source-plan" value={sourcePlanId} onChange={(event) => setSourcePlanId(event.target.value)} className="brand-input">
+                    {eligiblePreviousPlans.map((item) => (
+                      <option key={item.id} value={item.id}>{item.title} ({item.status === "active" ? "Ativo" : "Rascunho"})</option>
+                    ))}
+                  </select>
+                  <p className="mt-2 text-xs text-[#8C6E52]">O plano original nunca é alterado — a proposta vira um novo rascunho independente.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {step === "context" && (
             <div className="space-y-4">
               <p className="text-sm text-[#75675E]">Vou usar os dados clínicos já cadastrados e perguntar só o que faltar. Confira se o contexto abaixo está correto.</p>
               {contextLoading && <p className="text-sm text-[#8C6E52]">Carregando contexto do paciente...</p>}
               {contextError && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{contextError}</p>}
+              {context && !contextLoading && (() => {
+                const readiness = computeMealPlanReadiness({
+                  ageYears: context.ageYears,
+                  weightKg: context.weightKg,
+                  heightDisplay: context.heightDisplay,
+                  goals: context.goals,
+                  allergies: context.allergies,
+                  restrictions: context.restrictions,
+                });
+                if (readiness.status === "READY") return null;
+                const isBlocking = readiness.status === "NOT_READY";
+                return (
+                  <div className={`rounded-xl border p-3 text-xs leading-5 ${isBlocking ? "border-red-200 bg-red-50 text-red-700" : "border-[#F0D4C7] bg-[#FFF7F3] text-[#8C5F50]"}`}>
+                    <p className="font-semibold">{readiness.reasons[0]}</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                      {readiness.reasons.slice(isBlocking ? 1 : 0).map((reason, index) => <li key={index}>{reason}</li>)}
+                    </ul>
+                  </div>
+                );
+              })()}
               {context && (
                 <div className="rounded-xl border border-[#EAD8C2] bg-[#FAF7F2] p-4">
                   <p className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-[#A8927D]">Dados considerados</p>
@@ -869,23 +1042,29 @@ export function AiMealPlanWizard({
 
           {step === "meals" && (
             <div className="space-y-4">
-              <p className="brand-label">Quais refeições este plano deve ter?</p>
+              <p className="brand-label">{sourceMode === "previous" ? "Quais refeições o Copilot deve (re)propor?" : "Quais refeições este plano deve ter?"}</p>
+              {sourceMode === "previous" && <p className="text-xs text-[#8C6E52]">Refeições bloqueadas (🔒) já têm um item com quantidade ou trocas travadas no plano de origem — o Copilot nunca altera essas.</p>}
               <div className="space-y-2">
-                {MEAL_KEYS.map((key) => (
-                  <div key={key} className="flex items-center gap-3 rounded-xl border border-[#EAD8C2] bg-[#FFFDFC] p-3">
+                {mealKeyOptions.map(({ key, locked, existingName }) => (
+                  <div key={key} className={`flex items-center gap-3 rounded-xl border p-3 ${locked ? "border-[#EAD8C2] bg-[#FAF7F2] opacity-60" : "border-[#EAD8C2] bg-[#FFFDFC]"}`}>
                     <input
                       type="checkbox"
                       id={`meal-toggle-${key}`}
                       checked={selectedMeals.has(key)}
                       onChange={() => toggleMeal(key)}
+                      disabled={locked}
                       className="h-4 w-4 accent-[#7A9A74]"
                     />
-                    <label htmlFor={`meal-toggle-${key}`} className="flex-1 text-sm font-semibold text-[#3A3028]">{MEAL_KEY_LABELS[key]}</label>
+                    <label htmlFor={`meal-toggle-${key}`} className="flex-1 text-sm font-semibold text-[#3A3028]">
+                      {MEAL_KEY_LABELS[key]}
+                      {existingName && existingName !== MEAL_KEY_LABELS[key] && <span className="ml-1.5 font-normal text-[#8C6E52]">({existingName})</span>}
+                      {locked && <span className="ml-1.5" aria-label="Bloqueada pelo profissional" title="Bloqueada pelo profissional">🔒</span>}
+                    </label>
                     <input
                       type="time"
                       value={mealTimes[key] ?? ""}
                       onChange={(event) => setMealTimes((current) => ({ ...current, [key]: event.target.value }))}
-                      disabled={!selectedMeals.has(key)}
+                      disabled={!selectedMeals.has(key) || locked}
                       className="brand-input h-9 w-28 disabled:opacity-40"
                       aria-label={`Horário de ${MEAL_KEY_LABELS[key]}`}
                     />
@@ -944,6 +1123,19 @@ export function AiMealPlanWizard({
 
               {draft && (
                 <>
+                  {changeset && (
+                    <div className="rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] p-4">
+                      <p className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.08em] text-[#4F7D45]">Alterações propostas sobre &ldquo;{sourcePlan?.title}&rdquo;</p>
+                      <p className="text-sm text-[#3A3028]">{describeMealPlanChangeset(changeset)}</p>
+                      {(changeset.modify.length > 0 || changeset.add.length > 0) && (
+                        <ul className="mt-2 space-y-0.5 text-xs text-[#4F7D45]">
+                          {changeset.modify.map((name) => <li key={`modify-${name}`}>✎ Alterada: {name}</li>)}
+                          {changeset.add.map((name) => <li key={`add-${name}`}>+ Adicionada: {name}</li>)}
+                        </ul>
+                      )}
+                      <p className="mt-2 text-xs text-[#4F7D45]">O plano original nunca é alterado — esta proposta vira um novo rascunho independente ao aplicar.</p>
+                    </div>
+                  )}
                   {/* Resumo nutricional + meta — calculado pela MESMA engine do editor, ANTES de aplicar */}
                   {draft.nutrition && (
                     <div className="rounded-xl border border-[#EAD8C2] bg-[#FAF7F2] p-4">
@@ -1331,7 +1523,7 @@ export function AiMealPlanWizard({
         <div className="grid shrink-0 gap-3 border-t border-[#EDE1D6] px-5 py-3 sm:flex sm:justify-between">
           <button
             type="button"
-            onClick={() => setStep(STEP_ORDER[Math.max(0, stepIndex - 1)])}
+            onClick={() => setStep(activeStepOrder[Math.max(0, stepIndex - 1)])}
             disabled={stepIndex === 0 || step === "generating"}
             className="brand-btn-secondary w-full sm:w-auto"
           >
@@ -1342,7 +1534,7 @@ export function AiMealPlanWizard({
             {step !== "review" && step !== "generating" && (
               <button
                 type="button"
-                onClick={() => step === "preferences" ? void generateDraft() : setStep(STEP_ORDER[stepIndex + 1])}
+                onClick={() => step === "preferences" ? void generateDraft() : setStep(activeStepOrder[stepIndex + 1])}
                 disabled={step === "meals" && !canGenerate}
                 className="brand-btn-primary w-full sm:w-auto"
               >
