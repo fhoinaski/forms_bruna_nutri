@@ -87,8 +87,12 @@ test.describe("Patient Record P5 anthropometry progress", () => {
   test("first comparison shows current versus first golden deltas", async ({ page, request }) => {
     const patient = await seedP5Patient(request);
     await openAnthropometry(page, patient.id);
+    const panel = page.getByTestId("anthropometry-progress-panel");
 
-    await page.getByRole("button", { name: "Primeira" }).click();
+    // Sem escopo ao painel, esse nome bate por substring em "Iniciar
+    // primeira consulta" também — bug de seletor pré-existente, não
+    // relacionado ao Clinical Copilot.
+    await panel.getByRole("button", { name: "Primeira" }).click();
 
     await expect(page.getByRole("heading", { name: "Atual vs primeira avaliação" })).toBeVisible();
     await expect(page.getByRole("row", { name: /Peso 72 kg 68,4 kg -3,6 kg/i })).toBeVisible();
