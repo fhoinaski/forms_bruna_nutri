@@ -425,6 +425,19 @@ async function getRelationalDietTemplates(templateIds: string[]): Promise<Map<st
   return grouped;
 }
 
+/**
+ * R4 (seções 8-9/30-31) — refeições prescritas de UM modelo específico,
+ * já no formato `MealPlanMealPayload` (mesma estrutura de meal_plans.meals),
+ * pra "Modelos de planos" na biblioteca de reuso poder mostrar preview e
+ * aplicar no draft local — reaproveita 100% `getRelationalDietTemplates`
+ * (a mesma fonte usada por `createMealPlanFromTemplates`), nunca uma
+ * segunda leitura de diet_template_meals/items.
+ */
+export async function getTemplateFlatMeals(templateId: string): Promise<MealPlanMealPayload[]> {
+  const grouped = await getRelationalDietTemplates([templateId]);
+  return grouped.get(templateId)?.meals ?? [];
+}
+
 export interface MealPlanMetrics {
   total: number;
   active: number;

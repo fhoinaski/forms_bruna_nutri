@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CalendarDays, CheckCircle2, Copy, Plus, Printer, Save, Sparkles, Trash2, XCircle } from "lucide-react";
-import { MealItemsEditor, cleanMealsForSave, type Meal } from "@/components/dashboard/MealItemsEditor";
+import { MealItemsEditor, cleanMealsForSave, sanitizeMealForPlanClone, type Meal } from "@/components/dashboard/MealItemsEditor";
 import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
 import { AiMealPlanWizard } from "@/components/dashboard/AiMealPlanWizard";
 import { MealPlanNutritionWorkspacePanel } from "@/components/nutrition/MealPlanNutritionSummary";
@@ -220,6 +220,12 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
    * novo: o backend sempre gera ids novos a cada save (meal-plans.ts), entao
    * duplicar e so uma copia estrutural em memoria que a nutricionista revisa
    * antes de persistir.
+   *
+   * R4 (seções 17-19) — cada refeição copiada passa por
+   * `sanitizeMealForPlanClone`: nunca reaproveita `nutrition_snapshot`
+   * antigo (mesmo que o objeto de origem o carregue em runtime), forçando
+   * o preview de nutrição a recalcular pela identidade canônica atual já a
+   * partir do instante da duplicação — não só no primeiro save.
    */
   async function duplicateCurrentPlan() {
     if (!plan) return;
@@ -242,7 +248,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
         ? {
             ...current,
             title: `${source.title} (cópia)`,
-            meals: source.meals.map((meal) => ({ ...meal, items: meal.items.map((item) => ({ ...item })) })),
+            meals: source.meals.map(sanitizeMealForPlanClone),
             weekly_slots: (source.weekly_slots ?? []).map((slot) => ({ ...slot })),
             substitutions: source.substitutions.map((item) => ({ ...item })),
             supplements: source.supplements.map((item) => ({ ...item })),

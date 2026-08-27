@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Beef, Check, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, PanelRightClose, Pencil, Plus, RefreshCw, Save, Sparkles, Trash2, Unlock, Utensils, Wheat, X } from "lucide-react";
+import { AlertTriangle, Beef, Check, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, PanelRightClose, Pencil, Plus, RefreshCw, Save, Sparkles, Star, Trash2, Unlock, Utensils, Wheat, X } from "lucide-react";
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
 import { scaleRecipeIngredientsToPortions } from "@/lib/nutrition/recipes";
 import { resolveQuantity, type HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
@@ -11,6 +11,7 @@ import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } fr
 import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
 import { ItemSubstitutionsPanel, type ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
 import { ExchangeGroupPanel, type ExchangeAlternativeView, type ExchangeGroupView } from "@/components/dashboard/ExchangeGroupPanel";
+import { ReuseLibraryDrawer } from "@/components/dashboard/ReuseLibraryDrawer";
 import type { FoodReference } from "@/lib/nutrition/food-catalog";
 import { classifyFoodExchangeGroup, FOOD_GROUP_LABELS, type FoodGroup } from "@/lib/nutrition/food-exchange-hierarchy";
 import { CLINICAL_ROLE_LABELS, type TemplateClinicalRole } from "@/lib/meal-templates/system-template-contract";
@@ -92,6 +93,23 @@ type FoodSuggestion = MacroReferenceFood & {
   // usada pra resolver identidade — so a apresentação muda.
   displayName?: string;
 };
+
+const RECORDABLE_FOOD_USAGE_SOURCES = new Set(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]);
+
+/**
+ * R4 (seções 6-7) — registra o alimento como "recentemente usado" pelo
+ * profissional autenticado quando ele é EFETIVAMENTE selecionado (nunca a
+ * cada tecla digitada). Fire-and-forget: nunca bloqueia nem falha a
+ * seleção do alimento em si se a chamada falhar.
+ */
+function recordFoodUsageForReuse(source: string, refId: string | null | undefined) {
+  if (!refId || !RECORDABLE_FOOD_USAGE_SOURCES.has(source)) return;
+  void fetch("/api/admin/foods/recent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source, refId }),
+  }).catch(() => {});
+}
 
 function toMealPlanFoodSource(suggestion: FoodSuggestion): "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" {
   // FASE 6.5 (item 5) — TBCA/IBGE_POF vem so do piloto canonico (nunca de
@@ -189,14 +207,23 @@ export function reorderArray<T>(list: T[], index: number, direction: -1 | 1): T[
 }
 
 /**
- * Duplica uma refeicao inteira (com seus itens) logo apos a original.
- * O backend sempre gera um id novo por linha no save (meal-plans.ts),
- * entao nao ha risco de colisao mesmo sem remover nenhum campo aqui.
+ * Duplica uma refeicao inteira (itens + opções + grupos de escolha) logo
+ * apos a original — nunca compartilha array/objeto por referência com o
+ * original (R4, seção 12/50): cada item, opção e grupo de escolha ganha
+ * seu próprio objeto novo em memória. O backend sempre gera um id novo por
+ * linha no save (meal-plans.ts), entao nao ha risco de colisao mesmo sem
+ * remover nenhum campo aqui.
  */
 export function duplicateMealAt(meals: Meal[], index: number): Meal[] {
   const source = meals[index];
   if (!source) return meals;
-  const copy: Meal = { ...source, name: `${source.name} (cópia)`, items: source.items.map((item) => ({ ...item })) };
+  const copy: Meal = {
+    ...source,
+    name: `${source.name} (cópia)`,
+    items: source.items.map((item) => ({ ...item })),
+    options: source.options?.map((option) => ({ ...option, items: option.items.map((item) => ({ ...item })) })),
+    choice_groups: source.choice_groups?.map((group) => ({ ...group, items: group.items.map((item) => ({ ...item })) })),
+  };
   const next = [...meals];
   next.splice(index + 1, 0, copy);
   return next;
@@ -218,6 +245,47 @@ export function duplicateMealOptionAt(options: NonNullable<Meal["options"]>, ind
   const next = [...options];
   next.splice(index + 1, 0, { ...source, label: `${source.label || `Opção ${index + 1}`} (cópia)`, items: source.items.map((item) => ({ ...item })) });
   return next;
+}
+
+/**
+ * R4 (seções 17-19) — reaproveita a ESTRUTURA de uma refeição (identidade
+ * canônica, quantidade, tipo) ao clonar um plano inteiro como novo
+ * rascunho, mas NUNCA a nutrição congelada: limpa todo campo de snapshot,
+ * forçando a Nutrition Engine a recalcular pela identidade canônica atual
+ * (food_source/food_ref_id) no momento da clonagem — nunca confia num
+ * nutrition_snapshot antigo, mesmo que o plano de origem seja recente.
+ * Também nunca compartilha array/objeto por referência com o plano original
+ * (mesma garantia de duplicateMealAt).
+ */
+export function sanitizeMealForPlanClone(meal: Meal): Meal {
+  // Reconstrói cada item a partir de uma lista explícita de campos (nunca
+  // um spread do original) — o objeto vindo da API pode carregar
+  // `food_name_snapshot`/`nutrition_snapshot` em runtime (campos do
+  // servidor, fora do tipo `MealItem` local); reconstruir explicitamente
+  // garante que eles nunca sobrevivem à clonagem, mesmo antes do primeiro
+  // save (quando o preview de nutrição no navegador ainda lê o estado
+  // local direto).
+  const stripItem = (item: MealItem): MealItem => ({
+    food: item.food,
+    quantity: item.quantity ?? null,
+    unit: item.unit ?? null,
+    notes: item.notes ?? null,
+    is_optional: item.is_optional ?? false,
+    food_source: item.food_source ?? null,
+    food_ref_id: item.food_ref_id ?? null,
+    canonical_food_id: item.canonical_food_id ?? null,
+    household_measure_id: item.household_measure_id ?? null,
+    resolved_grams_snapshot: null,
+    quantity_resolution_snapshot: null,
+    quantity_locked: false,
+    substitutions_locked: false,
+  });
+  return {
+    ...meal,
+    items: meal.items.map(stripItem),
+    options: meal.options?.map((option) => ({ ...option, items: option.items.map(stripItem) })),
+    choice_groups: meal.choice_groups?.map((group) => ({ ...group, items: group.items.map(stripItem) })),
+  };
 }
 
 export function cleanMealsForSave(meals: Meal[]): Meal[] {
@@ -377,6 +445,12 @@ export function MealItemsEditor({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [searchLoadingKey, setSearchLoadingKey] = useState("");
   const [recipeSelectorOpen, setRecipeSelectorOpen] = useState(false);
+  // R4 — biblioteca de reuso (recentes/favoritos/refeições salvas/planos
+  // anteriores/modelos de plano), reaproveitando o mesmo padrão de
+  // "inserir receita" já existente: insere no estado LOCAL, nunca auto-save.
+  const [reuseLibraryOpen, setReuseLibraryOpen] = useState(false);
+  const reuseLibraryTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [savedMealDraft, setSavedMealDraft] = useState<{ mealIndex: number; name: string; saving: boolean; error: string } | null>(null);
   const [recipeSearch, setRecipeSearch] = useState("");
   const [recipeMealGroup, setRecipeMealGroup] = useState("");
   const [recipes, setRecipes] = useState<RecipeLibraryItem[]>([]);
@@ -695,12 +769,14 @@ export function MealItemsEditor({
     });
     setFoodSuggestions((current) => ({ ...current, [key]: [suggestion] }));
     setActiveFoodField("");
+    recordFoodUsageForReuse(toMealPlanFoodSource(suggestion), suggestion.ref?.sourceId ?? String(suggestion.numero));
   }
 
   function selectMultiSourceResult(mealIndex: number, itemIndex: number, result: FoodSearchResultViewModel) {
     const key = `${mealIndex}:${itemIndex}`;
     const portion = result.defaultPortion;
     const source = result.sourceCode === "COMPLEMENTARY" ? "TACO" : result.sourceCode;
+    recordFoodUsageForReuse(source, result.sourceFoodId);
     const quantity = meals[mealIndex]?.items[itemIndex]?.quantity?.trim() || "1";
     const measure: MealMeasure | null = portion.id && portion.gramWeight ? { id: portion.id, food_source: source, food_ref_id: result.sourceFoodId, description: portion.label, gram_equivalent: portion.gramWeight, source: result.sourceName, confidence: "high" } : null;
     updateMealItem(mealIndex, itemIndex, {
@@ -950,6 +1026,12 @@ export function MealItemsEditor({
                 <Utensils className="h-4 w-4" />
                 Inserir receita
               </button>
+              {clientId && (
+                <button ref={reuseLibraryTriggerRef} type="button" onClick={() => setReuseLibraryOpen(true)} className="brand-btn-secondary w-full sm:w-auto">
+                  <Save className="h-4 w-4" />
+                  Usar modelo
+                </button>
+              )}
             </>
           )}
         </div>
@@ -994,6 +1076,12 @@ export function MealItemsEditor({
                     <Save className="h-4 w-4" />
                     Salvar como receita
                   </button>
+                  {clientId && (
+                    <button type="button" onClick={() => { setOpenMealMenu(null); setSavedMealDraft({ mealIndex, name: meal.name || "", saving: false, error: "" }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]">
+                      <Star className="h-4 w-4" />
+                      Salvar como refeição favorita
+                    </button>
+                  )}
                   <button type="button" onClick={() => { setOpenMealMenu(null); onChange(meals.filter((_, index) => index !== mealIndex)); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">
                     <Trash2 className="h-4 w-4" />
                     Excluir refeição
@@ -1713,6 +1801,70 @@ export function MealItemsEditor({
               <button type="button" onClick={() => void saveMealAsRecipe()} disabled={recipeSaving || !recipeDraft.title.trim()} className="brand-btn-primary w-full sm:w-auto">
                 <Save className="h-4 w-4" />
                 {recipeSaving ? "Salvando..." : "Salvar receita"}
+              </button>
+            </div>
+          </section>
+        </div>,
+        document.body
+      )}
+
+      {reuseLibraryOpen && clientId && (
+        <ReuseLibraryDrawer
+          clientId={clientId}
+          currentPlanId={mealPlanId}
+          onInsertMeal={(meal) => {
+            const mealIndex = meals.length;
+            onChange([...meals, meal as Meal]);
+            setEditingItemKey(`${mealIndex}:0`);
+          }}
+          onClose={() => {
+            setReuseLibraryOpen(false);
+            reuseLibraryTriggerRef.current?.focus();
+          }}
+        />
+      )}
+
+      {portalReady && savedMealDraft && createPortal(
+        <div role="dialog" aria-modal="true" aria-label="Salvar refeição favorita" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+          <section className="w-full max-w-md overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
+            <div className="border-b border-[#EDE1D6] px-5 py-4">
+              <p className="brand-kicker">Biblioteca de reuso</p>
+              <h2 className="font-serif text-xl font-semibold text-[#3A3028]">Salvar refeição favorita</h2>
+              <p className="mt-1 text-xs leading-5 text-[#75675E]">Guarda a estrutura desta refeição (nunca a nutrição congelada) para reutilizar em qualquer plano futuro.</p>
+            </div>
+            <div className="space-y-3 p-5">
+              <label className="brand-label" htmlFor="saved-meal-name">Nome</label>
+              <input id="saved-meal-name" value={savedMealDraft.name} onChange={(event) => setSavedMealDraft({ ...savedMealDraft, name: event.target.value })} className="brand-input" autoFocus />
+              {savedMealDraft.error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{savedMealDraft.error}</p>}
+            </div>
+            <div className="grid gap-3 border-t border-[#EDE1D6] px-5 py-3 sm:flex sm:justify-end">
+              <button type="button" onClick={() => setSavedMealDraft(null)} className="brand-btn-secondary w-full sm:w-auto">Cancelar</button>
+              <button
+                type="button"
+                disabled={savedMealDraft.saving || !savedMealDraft.name.trim()}
+                onClick={() => void (async () => {
+                  setSavedMealDraft({ ...savedMealDraft, saving: true, error: "" });
+                  try {
+                    const meal = meals[savedMealDraft.mealIndex];
+                    const response = await fetch("/api/admin/saved-meals", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ name: savedMealDraft.name.trim(), meal }),
+                    });
+                    if (!response.ok) {
+                      const data = await response.json().catch(() => ({}));
+                      throw new Error(data.message ?? "Não foi possível salvar.");
+                    }
+                    setSavedMealDraft(null);
+                    onMessage?.("Refeição salva na biblioteca de reuso.");
+                  } catch (cause) {
+                    setSavedMealDraft((current) => current ? { ...current, saving: false, error: cause instanceof Error ? cause.message : "Não foi possível salvar." } : current);
+                  }
+                })()}
+                className="brand-btn-primary w-full sm:w-auto"
+              >
+                <Save className="h-4 w-4" />
+                {savedMealDraft.saving ? "Salvando..." : "Salvar"}
               </button>
             </div>
           </section>
