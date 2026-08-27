@@ -61,11 +61,33 @@ R2_TREE_SHA:   649ba38e7402935402723e2e277b0b562c7abbbb
 
 Ancestralidade: `git log --oneline --all` não mostra nenhum commit ou marca "F9" na história deste branch — `F9_IN_ANCESTRY: nao`.
 
-## CI autoritativo — BLOQUEADO (decisão do usuário pendente)
+## CI autoritativo — rodou, resultado misto (causa raiz classificada)
 
-Este ambiente não tem uma conexão de CI autorizada (sem `gh` autenticado/confirmado para este repositório, sem remoto verificado). Publicar uma branch para acionar CI é uma ação irreversível/visível a terceiros — por regra de segurança, isso exige confirmação explícita do usuário antes de eu agir, então **não fiz push nem abri PR**. Todos os gates *locais* equivalentes ao que o CI rodaria (TypeScript, lint, build, migration, runtime schema, artifact check, unit tests completos, Playwright) já rodaram e passaram nesta sessão — a única lacuna é a confirmação autoritativa de terceiros (CI real na SHA exata).
+Com autorização explícita do usuário: branch publicada (`codex/meal-plan-composer-r2`, sem merge, sem force-push) e PR aberta ([`#3`](https://github.com/fhoinaski/forms_bruna_nutri/pull/3)) pra acionar o CI real (o workflow só roda em `push` pra `main` ou em `pull_request`).
 
-Se o usuário confirmar, os próximos passos seriam: publicar a branch `codex/meal-plan-composer-r2` (já existente, sem merge, sem force-push) e acompanhar o CI na SHA `14334955c0c68d023d118133ee55f43052906ef9`.
+**CI rodou exatamente na SHA `eb4c0b89d5a559bdebf4ee0365855075c5683644`** (run [33030095378](https://github.com/fhoinaski/forms_bruna_nutri/actions/runs/33030095378)):
+
+| Etapa CI | Resultado |
+| --- | --- |
+| Guard against large database artifacts | PASS |
+| Validate migrations | PASS |
+| Block runtime DDL | PASS |
+| Lint | PASS |
+| Unit and API tests | **PASS — 1906/1906** |
+| Typecheck | PASS |
+| Build | PASS |
+| E2E tests (Playwright) | **FALHOU — 182 passed, 3 failed** |
+
+### Causa raiz das 3 falhas de E2E (classificada, seção 44 do pedido)
+
+As 3 falhas são **100% em `patient-record-p5-anthropometry.spec.ts` e `patient-record-p6-integrations.spec.ts`** — área de Prontuário/Antropometria, nunca tocada pelo diff da R2 (Meal Plan Composer). São bugs **pré-existentes em `main`**, já diagnosticados numa sessão anterior desta mesma conversa (fora deste worktree):
+
+1. `patient-record-p5-anthropometry.spec.ts` — seletor `getByRole("button", { name: "Primeira" })` sem escopo bate por substring em "Iniciar primeira consulta" também (bug de teste, não de produto). Já existe uma correção pronta (não commitada, em outro worktree deste mesmo repositório).
+2. `patient-record-p6-integrations.spec.ts` (2 testes) — `PatientOverview` foi redesenhado (card dinâmico "nextBestAction" substituiu os botões de ação discretos que o teste ainda procura); o teste ficou desatualizado em relação ao produto atual. Já havia uma tarefa de acompanhamento sinalizada anteriormente pra atualizar essa spec.
+
+Nenhuma correção desses dois arquivos foi incluída neste PR — misturar isso ao commit isolado da R2 violaria o próprio critério de escopo do fechamento (seção 36-38: só arquivos do Composer R2). A correção correta é uma PR separada, direto em `main`, fora do escopo deste fechamento.
+
+**Não enfraqueci nenhum teste** pra forçar verde — os 3 continuam falhando exatamente como estão, com a causa raiz documentada acima.
 
 ## Markers
 
@@ -108,15 +130,15 @@ MEAL_PLAN_COMPOSER_R2_FINAL_SELECTIVE_STAGING: PASS
 MEAL_PLAN_COMPOSER_R2_FINAL_COMMIT_ISOLATED: PASS
 MEAL_PLAN_COMPOSER_R2_FINAL_COMMIT_SHA: 14334955c0c68d023d118133ee55f43052906ef9
 MEAL_PLAN_COMPOSER_R2_FINAL_F9_IN_ANCESTRY: nao
-MEAL_PLAN_COMPOSER_R2_FINAL_CI_EXACT_REVISION: BLOCKED
-MEAL_PLAN_COMPOSER_R2_FINAL_CI_FULL_UNIT: BLOCKED
-MEAL_PLAN_COMPOSER_R2_FINAL_CI_BUILD: BLOCKED
-MEAL_PLAN_COMPOSER_R2_FINAL_CI_PLAYWRIGHT: BLOCKED
-MEAL_PLAN_COMPOSER_R2_FINAL_FULL_GATES: BLOCKED
+MEAL_PLAN_COMPOSER_R2_FINAL_CI_EXACT_REVISION: PASS
+MEAL_PLAN_COMPOSER_R2_FINAL_CI_FULL_UNIT: PASS
+MEAL_PLAN_COMPOSER_R2_FINAL_CI_BUILD: PASS
+MEAL_PLAN_COMPOSER_R2_FINAL_CI_PLAYWRIGHT: FAIL (3 falhas pré-existentes, não relacionadas à R2 — Patient Record P5/P6; ver causa raiz acima)
+MEAL_PLAN_COMPOSER_R2_FINAL_FULL_GATES: FAIL
 MEAL_PLAN_COMPOSER_R2_COMPLETE: nao
 MEAL_PLAN_SUBSTITUTION_R3_SAFE_TO_START: nao
 ```
 
 ## Por que `MEAL_PLAN_COMPOSER_R2_COMPLETE` continua `nao`
 
-Todos os gates locais passam. O único bloqueio é CI autoritativo na SHA exata (seção 44/47 do pedido exige isso explicitamente antes de "sim"), e isso depende de uma decisão do usuário: publicar a branch (ação visível/irreversível o suficiente para exigir confirmação explícita, por regra de segurança) e então rodar o CI real. Assim que isso acontecer — sem falhas — a fase pode ser fechada como `sim` e a R3 liberada.
+Todos os gates específicos do Composer R2 passam, incluindo o CI real na SHA exata (`eb4c0b8`): lint, TypeScript, build, migrations, runtime schema, artifact check e 1906/1906 testes unitários/API. A regra do pedido (seção 47) exige "CI Playwright PASS" sem exceção — e o job de E2E do CI falhou, então mantenho `nao` pela letra do critério, mesmo com a causa raiz das 3 falhas totalmente fora do escopo da R2 (Patient Record P5/P6, não Meal Plan Composer). Fechar essas duas specs em `main` (fora deste PR, numa mudança isolada própria) é o único item pendente pra uma reavaliação limpa de `MEAL_PLAN_COMPOSER_R2_COMPLETE`.
