@@ -90,12 +90,14 @@ PATIENT_RECORD_P5_P6_COMMIT_SHA: c877b532d723c90faf8ea0f8f6866f3ddc2f9030
 PATIENT_RECORD_P5_P6_CI_EXACT_REVISION: PASS
 PATIENT_RECORD_P5_P6_CI_E2E: PASS
 PATIENT_RECORD_P5_P6_READY_FOR_MAIN: sim
-R2_PR3_POST_FIX_CI: BLOCKED
-R2_PR3_PLAYWRIGHT: BLOCKED
-MEAL_PLAN_COMPOSER_R2_COMPLETE: nao
-MEAL_PLAN_SUBSTITUTION_R3_SAFE_TO_START: nao
+R2_PR3_POST_FIX_CI: PASS
+R2_PR3_PLAYWRIGHT: PASS
+MEAL_PLAN_COMPOSER_R2_COMPLETE: sim
+MEAL_PLAN_SUBSTITUTION_R3_SAFE_TO_START: sim
 ```
 
-## Por que `R2_PR3_POST_FIX_CI`/`R2_PR3_PLAYWRIGHT` continuam `BLOCKED`
+## Fechamento
 
-Este fix (PR #4) está pronto e verde, mas ainda não está em `main` — mergear é uma ação visível/compartilhada que exige confirmação explícita do usuário antes que eu (ou qualquer automação) a execute. Depois que PR #4 for mergeado em `main`, o PR #3 (Composer R2) precisa de uma nova rodada de CI contra o `main` atualizado (rebase/merge de `main` no branch da R2, ou reabrir a base do PR) pra provar que os 3 failures desapareceram — só então `MEAL_PLAN_COMPOSER_R2_COMPLETE` pode virar `sim`.
+Com aprovação explícita do usuário: PR #4 mergeado em `main` (merge commit `181ae122eb8312ed9c54e07ebb6ccd05059d4f9e`, sem force-push). PR #3 foi fechado e reaberto (sem adicionar nenhum commit ao branch da R2 — `pull_request` testa contra o merge-ref atualizado com o `main` corrente) só pra acionar uma nova rodada de CI autoritativo. Resultado: **[run 33034381087](https://github.com/fhoinaski/forms_bruna_nutri/actions/runs/33034381087) 100% verde**, incluindo o job de E2E (Playwright) que antes falhava nos 3 testes de Patient Record.
+
+Com isso, todos os gates da R2 (seção 47 do fechamento da R2) estão satisfeitos: `MEAL_PLAN_COMPOSER_R2_COMPLETE: sim` e `MEAL_PLAN_SUBSTITUTION_R3_SAFE_TO_START: sim`.
