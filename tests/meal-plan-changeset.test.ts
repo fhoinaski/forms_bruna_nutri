@@ -146,3 +146,68 @@ describe("mergeChangesetIntoMeals — aplica sem reordenar/apagar o que não foi
     expect(merged).toHaveLength(2);
   });
 });
+
+describe("R5.1 — lock/comparação estrutura-consciente também dentro de OPTIONS/COMBINATION (seção 28)", () => {
+  it("isMealLockedForCopilot detecta um lock ESCONDIDO dentro de uma option — não só em meal.items", () => {
+    const meal: ExistingPlanMeal = {
+      name: "Café da manhã",
+      items: [],
+      options: [{ items: [{ food: "Ovo", quantity_locked: true }] }],
+    };
+    expect(isMealLockedForCopilot(meal)).toBe(true);
+  });
+
+  it("isMealLockedForCopilot detecta um lock escondido dentro de um choice_group", () => {
+    const meal: ExistingPlanMeal = {
+      name: "Almoço",
+      items: [],
+      choice_groups: [{ items: [{ food: "Frango", substitutions_locked: true }] }],
+    };
+    expect(isMealLockedForCopilot(meal)).toBe(true);
+  });
+
+  it("draftMealMatchesExisting nunca considera SIMPLE igual a OPTIONS/COMBINATION mesmo com os mesmos itens fixos", () => {
+    const draft = draftMeal({ mealKey: "cafe_da_manha", meal_structure: "SIMPLE", items: [] });
+    const existing: ExistingPlanMeal = { name: "Café da manhã", items: [], options: [{ items: [{ food: "Ovo", quantity: "100", food_ref_id: "1" }] }] };
+    expect(draftMealMatchesExisting(draft, existing)).toBe(false);
+  });
+
+  it("draftMealMatchesExisting compara options item a item quando ambos são OPTIONS", () => {
+    const draft = draftMeal({
+      mealKey: "cafe_da_manha", meal_structure: "OPTIONS", items: [],
+      options: [{ id: "option-0", label: "A", items: [{ food: "Ovo", displayName: "Ovo", quantity: "100", unit: "g", food_source: "TACO", food_ref_id: "1", ai_suggested: true }], needsReview: [] }],
+    });
+    const same: ExistingPlanMeal = { name: "Café da manhã", items: [], options: [{ items: [{ food: "Ovo", quantity: "100", food_ref_id: "1" }] }] };
+    const different: ExistingPlanMeal = { name: "Café da manhã", items: [], options: [{ items: [{ food: "Ovo", quantity: "200", food_ref_id: "1" }] }] };
+    expect(draftMealMatchesExisting(draft, same)).toBe(true);
+    expect(draftMealMatchesExisting(draft, different)).toBe(false);
+  });
+
+  it("computeMealPlanChangeset: uma refeição OPTIONS regenerada com conteúdo diferente vira MODIFY, respeitando a estrutura", () => {
+    const existing: ExistingPlanMeal[] = [{ name: "Café da manhã", items: [], options: [{ items: [{ food: "Ovo", quantity: "100", food_ref_id: "1" }] }] }];
+    const regenerated = [draftMeal({
+      mealKey: "cafe_da_manha", name: "Café da manhã", meal_structure: "OPTIONS", items: [],
+      options: [{ id: "option-0", label: "A", items: [{ food: "Iogurte", displayName: "Iogurte", quantity: "170", unit: "g", food_source: "TACO", food_ref_id: "2", ai_suggested: true }], needsReview: [] }],
+    })];
+    const changeset = computeMealPlanChangeset(existing, regenerated, ["cafe_da_manha"]);
+    expect(changeset.modify).toEqual(["Café da manhã"]);
+  });
+
+  it("mergeChangesetIntoMeals preserva options/choice_groups inteiros da refeição casada (nunca achata pra SIMPLE)", () => {
+    const existing: ExistingPlanMeal[] = [{ name: "Café da manhã", items: [] }];
+    const regenerated = [draftMeal({
+      mealKey: "cafe_da_manha", name: "Café da manhã", meal_structure: "OPTIONS", items: [],
+      options: [
+        { id: "option-0", label: "A", items: [{ food: "Ovo", displayName: "Ovo", quantity: "100", unit: "g", food_source: "TACO", food_ref_id: "1", ai_suggested: true }], needsReview: [] },
+        { id: "option-1", label: "B", items: [{ food: "Iogurte", displayName: "Iogurte", quantity: "170", unit: "g", food_source: "TACO", food_ref_id: "2", ai_suggested: true }], needsReview: [] },
+      ],
+    })];
+    const merged = mergeChangesetIntoMeals<ExistingPlanMeal, DraftMeal, DraftMeal>(
+      existing, regenerated, ["cafe_da_manha"],
+      (meal) => meal,
+      (meal) => draftMeal({ mealKey: "cafe_da_manha", name: meal.name })
+    );
+    expect(merged[0].meal_structure).toBe("OPTIONS");
+    expect(merged[0].options).toHaveLength(2);
+  });
+});

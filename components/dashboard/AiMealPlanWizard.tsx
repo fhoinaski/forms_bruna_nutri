@@ -98,6 +98,8 @@ interface DraftMealItem {
   food_ref_id: string | null;
   ai_suggested: true;
   needsSafetyReview?: boolean;
+  /** R5.1 — item opcional dentro de uma refeição COMBINATION (mesmo campo do domínio real do Composer). */
+  is_optional?: boolean;
 }
 interface DraftNeedsReviewCandidate {
   ref: { source: string; sourceId: string; canonicalId?: string | null };
@@ -119,6 +121,24 @@ interface DraftNeedsReview {
   candidates: DraftNeedsReviewCandidate[];
   preparation?: string | null;
   recipeCandidates?: DraftNeedsReviewRecipeCandidate[];
+  /** R5.1 (seção 16) — caminho estável até a posição original nested (ex.: "options[1].items[0]"). */
+  path?: string;
+}
+/** R5.1 — uma alternativa completa de uma refeição OPTIONS. */
+interface DraftMealOption {
+  id: string;
+  label: string;
+  items: DraftMealItem[];
+  needsReview: DraftNeedsReview[];
+}
+/** R5.1 — um grupo de escolha de uma refeição COMBINATION. */
+interface DraftMealChoiceGroup {
+  id: string;
+  title: string;
+  min_selections: number;
+  max_selections: number;
+  items: DraftMealItem[];
+  needsReview: DraftNeedsReview[];
 }
 interface OptimizerAdjustment {
   mealIndex: number;
@@ -141,8 +161,12 @@ interface DraftMeal {
   name: string;
   suggested_time: string | null;
   source_recipe_id: string | null;
+  /** R5.1 — ausente/null equivale a "SIMPLE" (mesma convenção do Composer). */
+  meal_structure?: "SIMPLE" | "OPTIONS" | "COMBINATION" | null;
   items: DraftMealItem[];
   needsReview: DraftNeedsReview[];
+  options?: DraftMealOption[];
+  choice_groups?: DraftMealChoiceGroup[];
 }
 interface DraftWarning {
   level: "info" | "warning";
@@ -239,21 +263,37 @@ function expandRecipeIngredientsToItems(recipe: { servings: number; ingredients:
     });
 }
 
+function draftItemToEditorItem(item: DraftMealItem): Meal["items"][number] {
+  return {
+    food: item.food,
+    quantity: item.quantity,
+    unit: item.unit,
+    notes: null,
+    ai_suggested: true,
+    food_source: item.food_source,
+    food_ref_id: item.food_ref_id,
+    ...(item.is_optional ? { is_optional: true } : {}),
+  };
+}
+
+/**
+ * R5.1 (seções 20/21/38/39) — carrega meal_structure/options/choice_groups
+ * intactos pro mesmo shape que o Composer já entende nativamente (nunca
+ * achata OPTIONS/COMBINATION pra texto/instructions só pra caber no fluxo
+ * anterior). O Composer (MealItemsEditor.tsx) já sabe renderizar/editar/
+ * salvar essa estrutura — reaproveitada 100%, nenhum código novo lá.
+ */
 function draftMealToEditorMeal(meal: DraftMeal): Meal {
+  const structure = meal.meal_structure ?? "SIMPLE";
   return {
     name: meal.name,
     suggested_time: meal.suggested_time,
     notes: null,
     source_recipe_id: meal.source_recipe_id,
-    items: meal.items.map((item) => ({
-      food: item.food,
-      quantity: item.quantity,
-      unit: item.unit,
-      notes: null,
-      ai_suggested: true,
-      food_source: item.food_source,
-      food_ref_id: item.food_ref_id,
-    })),
+    meal_structure: structure,
+    items: meal.items.map(draftItemToEditorItem),
+    ...(structure === "OPTIONS" ? { options: (meal.options ?? []).map((option) => ({ label: option.label, items: option.items.map(draftItemToEditorItem) })) } : {}),
+    ...(structure === "COMBINATION" ? { choice_groups: (meal.choice_groups ?? []).map((group) => ({ title: group.title, min_selections: group.min_selections, max_selections: group.max_selections, items: group.items.map(draftItemToEditorItem) })) } : {}),
   };
 }
 
@@ -345,6 +385,8 @@ export function AiMealPlanWizard({
   // o padrão — receita é um recurso opcional que a nutricionista liga
   // deliberadamente, nunca o comportamento automático do gerador.
   const [useRecipes, setUseRecipes] = useState(false);
+  /** R5.1 (seção 4) — opt-in explícito: sem marcar, o Copilot continua gerando só SIMPLE (comportamento anterior, sem regressão). */
+  const [allowFlexibleStructure, setAllowFlexibleStructure] = useState(false);
 
   const [generateError, setGenerateError] = useState("");
   const [generateErrorReason, setGenerateErrorReason] = useState<string | null>(null);
@@ -473,6 +515,7 @@ export function AiMealPlanWizard({
           prioritizeFoods: prioritizeFoods.trim() || null,
           avoidFoods: avoidFoods.trim() || null,
           useRecipes,
+          allowFlexibleStructure,
           forceMealByMeal: options?.forceMealByMeal ?? false,
           ...(otherMealsContext?.length ? { otherMealsContext } : {}),
         }),
@@ -869,6 +912,61 @@ export function AiMealPlanWizard({
     void recalculate(nextMeals);
   }
 
+  /**
+   * R5.1 (seção 18) — resolve/remove um item de revisão ANINHADO (dentro de
+   * uma option de OPTIONS ou de um choice_group de COMBINATION) substituindo
+   * só a entrada exata correspondente — nunca reconstrói a refeição inteira
+   * nem afeta as outras options/grupos.
+   */
+  function nestedScopeItems(meal: DraftMeal, scope: "options" | "choice_groups", scopeIndex: number): { items: DraftMealItem[]; needsReview: DraftNeedsReview[] } {
+    const entry = scope === "options" ? meal.options?.[scopeIndex] : meal.choice_groups?.[scopeIndex];
+    return { items: entry?.items ?? [], needsReview: entry?.needsReview ?? [] };
+  }
+
+  function replaceNestedScope(meal: DraftMeal, scope: "options" | "choice_groups", scopeIndex: number, next: { items: DraftMealItem[]; needsReview: DraftNeedsReview[] }): DraftMeal {
+    if (scope === "options") {
+      return { ...meal, options: (meal.options ?? []).map((option, index) => index !== scopeIndex ? option : { ...option, ...next }) };
+    }
+    return { ...meal, choice_groups: (meal.choice_groups ?? []).map((group, index) => index !== scopeIndex ? group : { ...group, ...next }) };
+  }
+
+  function pickCandidateNested(mealIndex: number, scope: "options" | "choice_groups", scopeIndex: number, reviewIndex: number, candidate: DraftNeedsReviewCandidate, remember = false) {
+    if (!draft) return;
+    const meal = draft.meals[mealIndex];
+    const { items, needsReview } = nestedScopeItems(meal, scope, scopeIndex);
+    const review = needsReview[reviewIndex];
+    if (!review) return;
+    const newItem: DraftMealItem = {
+      food: candidate.name,
+      displayName: candidate.displayName,
+      quantity: review.quantity,
+      unit: review.unit,
+      food_source: candidate.ref.source === "CUSTOM" || candidate.ref.source === "MANUFACTURER" || candidate.ref.source === "USDA" ? candidate.ref.source : "TACO",
+      food_ref_id: candidate.ref.sourceId,
+      ai_suggested: true,
+    };
+    const nextMeals = draft.meals.map((m, index) => index !== mealIndex ? m : replaceNestedScope(m, scope, scopeIndex, {
+      items: [...items, newItem],
+      needsReview: needsReview.filter((_, index2) => index2 !== reviewIndex),
+    }));
+    void recalculate(nextMeals);
+    if (remember) {
+      void fetch("/api/admin/food-preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: review.query, foodSource: candidate.ref.source, foodRefId: candidate.ref.sourceId, foodNameSnapshot: candidate.displayName }),
+      }).catch(() => undefined);
+    }
+  }
+
+  function removeNeedsReviewNested(mealIndex: number, scope: "options" | "choice_groups", scopeIndex: number, reviewIndex: number) {
+    if (!draft) return;
+    const meal = draft.meals[mealIndex];
+    const { items, needsReview } = nestedScopeItems(meal, scope, scopeIndex);
+    const nextMeals = draft.meals.map((m, index) => index !== mealIndex ? m : replaceNestedScope(m, scope, scopeIndex, { items, needsReview: needsReview.filter((_, index2) => index2 !== reviewIndex) }));
+    void recalculate(nextMeals);
+  }
+
   async function handleApply() {
     if (!draft || !draft.meals.length) return;
     setApplying(true);
@@ -904,7 +1002,11 @@ export function AiMealPlanWizard({
   const changeset: MealPlanChangeset | null = sourceMode === "previous" && draft
     ? computeMealPlanChangeset(existingPlanMeals, draft.meals, draft.meals.map((meal) => meal.mealKey))
     : null;
-  const totalNeedsReview = draft?.meals.reduce((sum, meal) => sum + meal.needsReview.length, 0) ?? 0;
+  // R5.1 (seção 30) — contadores incluem itens nested (dentro de OPTIONS/COMBINATION), nunca só o nível de refeição.
+  const totalNeedsReview = draft?.meals.reduce((sum, meal) => sum
+    + meal.needsReview.length
+    + (meal.options ?? []).reduce((s, option) => s + option.needsReview.length, 0)
+    + (meal.choice_groups ?? []).reduce((s, group) => s + group.needsReview.length, 0), 0) ?? 0;
   const hasEnergyTarget = target.targetEnergyKcal !== null;
 
   const modal = (
@@ -1091,6 +1193,13 @@ export function AiMealPlanWizard({
                 <div>
                   <label htmlFor="wizard-use-recipes" className="text-sm font-semibold text-[#3A3028]">Permitir substituir uma refeição inteira por uma receita cadastrada</label>
                   <p className="mt-0.5 text-xs text-[#8C6E52]">Desligado por padrão — o gerador prioriza alimentos individuais simples (ex.: &ldquo;2 ovos, pão integral, mamão&rdquo;), não pratos elaborados.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl border border-[#EAD8C2] bg-[#FFFDFC] p-3">
+                <input type="checkbox" id="wizard-allow-flexible" checked={allowFlexibleStructure} onChange={(event) => setAllowFlexibleStructure(event.target.checked)} className="h-4 w-4 accent-[#7A9A74]" />
+                <div>
+                  <label htmlFor="wizard-allow-flexible" className="text-sm font-semibold text-[#3A3028]">Permitir estrutura flexível (opções/combinação)</label>
+                  <p className="mt-0.5 text-xs text-[#8C6E52]">Desligado por padrão. Quando ligado, o Copilot também pode propor refeições com alternativas completas (ex.: &ldquo;ovos OU iogurte&rdquo;) ou com grupo de escolha (ex.: arroz fixo + escolha de 1 proteína) — a soma nutricional nunca soma alternativas, mostra uma faixa min/máx.</p>
                 </div>
               </div>
             </div>
@@ -1330,6 +1439,49 @@ export function AiMealPlanWizard({
                             </ul>
                           )}
 
+                          {/* R5.1 (seções 20/21) — exibe OPTIONS/COMBINATION por inteiro, nunca achatado em texto. */}
+                          {meal.meal_structure === "OPTIONS" && (meal.options?.length ?? 0) > 0 && (
+                            <div className="mt-2 space-y-1.5">
+                              {meal.options!.map((option) => (
+                                <div key={option.id} className="rounded-lg border border-[#EAD8C2] bg-white/60 p-2">
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#8C6E52]">{option.label}</p>
+                                  {option.items.length > 0 && (
+                                    <ul className="mt-1 space-y-0.5 text-xs text-[#75675E]">
+                                      {option.items.map((item, itemIndex) => (
+                                        <li key={itemIndex} className="flex items-center justify-between gap-2">
+                                          <span>{item.displayName}</span>
+                                          <span>{item.quantity} {item.unit}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              ))}
+                              <p className="text-[11px] italic text-[#8C6E52]">Alternativas mutuamente exclusivas — nunca somadas no cálculo nutricional (mostra faixa mín./máx.).</p>
+                            </div>
+                          )}
+                          {meal.meal_structure === "COMBINATION" && (meal.choice_groups?.length ?? 0) > 0 && (
+                            <div className="mt-2 space-y-1.5">
+                              {meal.choice_groups!.map((group) => (
+                                <div key={group.id} className="rounded-lg border border-[#EAD8C2] bg-white/60 p-2">
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#8C6E52]">
+                                    {group.title} <span className="font-normal normal-case text-[#B08A63]">(escolha {group.min_selections === group.max_selections ? group.min_selections : `${group.min_selections}–${group.max_selections}`})</span>
+                                  </p>
+                                  {group.items.length > 0 && (
+                                    <ul className="mt-1 space-y-0.5 text-xs text-[#75675E]">
+                                      {group.items.map((item, itemIndex) => (
+                                        <li key={itemIndex} className="flex items-center justify-between gap-2">
+                                          <span>{item.displayName}</span>
+                                          <span>{item.quantity} {item.unit}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
                           {substitutionSuggestions.some((sub) => sub.mealKey === meal.mealKey) && (
                             <div className="mt-2 space-y-1.5 rounded-lg border border-[#EAD8C2] bg-[#FAF7F2] p-2">
                               <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-[#8C6E52]">Sugestões de substituição</p>
@@ -1478,6 +1630,52 @@ export function AiMealPlanWizard({
                               ))}
                             </div>
                           )}
+
+                          {/* R5.1 (seções 14-18) — revisão ANINHADA: mesmo tratamento (AMBIGUOUS/NOT_FOUND/CLINICAL_CONFLICT), mas com breadcrumb até a posição exata e resolução que só afeta aquele item nested. */}
+                          {(["options", "choice_groups"] as const).flatMap((scope) => {
+                            const entries = scope === "options" ? (meal.options ?? []) : (meal.choice_groups ?? []);
+                            return entries.map((entry, scopeIndex) => entry.needsReview.length > 0 ? (
+                              <div key={`${scope}-${scopeIndex}`} className="mt-2 space-y-2 rounded-lg border border-[#F0D4C7] bg-[#FFF7F3] p-2.5">
+                                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-[#8C5F50]">
+                                  <Info className="h-3 w-3" /> Precisa de revisão — {meal.name} → {scope === "options" ? (entry as DraftMealOption).label : (entry as DraftMealChoiceGroup).title}
+                                </p>
+                                {entry.needsReview.map((review, reviewIndex) => (
+                                  <div key={reviewIndex} className="rounded-md bg-white/70 p-2 text-xs">
+                                    <p className="font-semibold text-[#3A2B1F]">&ldquo;{review.query}&rdquo; — {review.quantity} {review.unit}</p>
+                                    <p className="mt-0.5 text-[#8C5F50]">{review.reason}</p>
+                                    {review.status === "AMBIGUOUS" && review.candidates.length > 0 && (
+                                      <div className="mt-1.5 space-y-1">
+                                        {review.candidates.map((candidate, candidateIndex) => (
+                                          <div key={candidateIndex} className="flex flex-wrap items-center gap-1.5 rounded-md border border-[#D9C4B2] bg-white px-2 py-1.5">
+                                            <span className="mr-auto text-[11px] font-semibold text-[#3A2B1F]">
+                                              {candidate.displayName}
+                                              <span className="ml-1 font-normal text-[#8C6E52]">· {candidate.sourceLabel}</span>
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => pickCandidateNested(mealIndex, scope, scopeIndex, reviewIndex, candidate)}
+                                              disabled={recalculating}
+                                              className="rounded-full border border-[#D9C4B2] px-2.5 py-1 text-[11px] font-semibold text-[#8C6E52] hover:bg-[#FBF7F1] disabled:opacity-50"
+                                            >
+                                              Selecionar
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => removeNeedsReviewNested(mealIndex, scope, scopeIndex, reviewIndex)}
+                                      disabled={recalculating}
+                                      className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 hover:underline disabled:opacity-50"
+                                    >
+                                      <Trash2 className="h-3 w-3" /> Remover
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null);
+                          })}
                         </div>
                       );
                     })}

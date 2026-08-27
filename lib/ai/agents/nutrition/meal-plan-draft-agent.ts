@@ -23,12 +23,14 @@ import {
   type DraftMeal,
   type DraftMealItem,
   type DraftMealNeedsReview,
+  type DraftMealOption,
+  type DraftMealChoiceGroup,
   type DraftWarning,
   type MealPlanDraftResult,
 } from "@/lib/nutrition/draft-types";
 
 export { MEAL_KEYS, MEAL_KEY_LABELS };
-export type { MealKey, RequestedMeal, DraftMeal, DraftMealItem, DraftMealNeedsReview, DraftWarning, MealPlanDraftResult };
+export type { MealKey, RequestedMeal, DraftMeal, DraftMealItem, DraftMealNeedsReview, DraftMealOption, DraftMealChoiceGroup, DraftWarning, MealPlanDraftResult };
 
 /**
  * Gerador de PRE-PLANO alimentar guiado por IA (nunca ativa, nunca publica
@@ -125,7 +127,12 @@ const draftFoodItemSchema = z.object({
   unit: z.string().min(1).max(20),
 }).strict();
 
-const draftMealLlmSchema = z.object({
+// R5.1 — SIMPLE continua exatamente igual (mesmos campos/limites de antes),
+// só ganhou o discriminador "structure" (sempre injetado com default
+// "SIMPLE" por `withDefaultStructure` antes do parse — nenhum chamador
+// existente precisa mudar). Nenhuma regressão (seção 4 do pedido).
+const draftMealLlmSimpleSchema = z.object({
+  structure: z.literal("SIMPLE"),
   mealKey: z.enum(MEAL_KEYS),
   /** Só um id REAL da lista de receitas fornecida no prompt — nunca inventado (validado de novo no resolver). */
   recipeId: z.string().max(80).nullable().optional(),
@@ -138,11 +145,55 @@ const draftMealLlmSchema = z.object({
   rationale: z.string().max(160).nullable().optional(),
 }).strict();
 
-const mealPlanDraftLlmSchema = z.object({
+// R5.1 (seções 5-7) — OPTIONS: alternativas COMPLETAS e mutuamente
+// exclusivas (nunca somadas — ver calculateFlexiblePlanNutrients). Mínimo
+// de 2 opções: uma "opção" única não é uma escolha real.
+const draftMealLlmOptionSchema = z.object({
+  label: z.string().min(1).max(80),
+  items: z.array(draftFoodItemSchema).min(1).max(6),
+}).strict();
+
+const draftMealLlmOptionsSchema = z.object({
+  structure: z.literal("OPTIONS"),
+  mealKey: z.enum(MEAL_KEYS),
+  rationale: z.string().max(160).nullable().optional(),
+  options: z.array(draftMealLlmOptionSchema).min(2).max(4),
+}).strict();
+
+// R5.1 (seções 8-10) — COMBINATION: itens fixos + grupos de escolha +
+// itens opcionais. min/max_selections seguem o mesmo contrato de
+// MealChoiceGroupPayload (lib/meal-plans/flexible-structure.ts).
+const draftMealLlmChoiceGroupSchema = z.object({
+  title: z.string().min(1).max(80),
+  min_selections: z.number().int().min(0).max(5),
+  max_selections: z.number().int().min(1).max(5),
+  items: z.array(draftFoodItemSchema).min(1).max(6),
+}).strict().refine((group) => group.max_selections >= group.min_selections, {
+  message: "max_selections deve ser maior ou igual a min_selections",
+});
+
+const draftMealLlmCombinationSchema = z.object({
+  structure: z.literal("COMBINATION"),
+  mealKey: z.enum(MEAL_KEYS),
+  rationale: z.string().max(160).nullable().optional(),
+  fixed_items: z.array(draftFoodItemSchema).max(6).default([]),
+  choice_groups: z.array(draftMealLlmChoiceGroupSchema).min(1).max(3),
+  /** Itens fixos porém opcionais (seção 10) — nunca viram fixed_items "de verdade"; carregam is_optional=true no DraftMeal final. */
+  optional_items: z.array(draftFoodItemSchema).max(4).default([]),
+}).strict();
+
+export const draftMealLlmSchema = z.discriminatedUnion("structure", [
+  draftMealLlmSimpleSchema,
+  draftMealLlmOptionsSchema,
+  draftMealLlmCombinationSchema,
+]);
+type LlmMeal = z.infer<typeof draftMealLlmSchema>;
+
+export const mealPlanDraftLlmSchema = z.object({
   meals: z.array(draftMealLlmSchema).min(1).max(6),
 }).strict();
 
-const DRAFT_SYSTEM_PROMPT = `Você ajuda uma nutricionista a montar a ESTRUTURA de um pré-plano alimentar.
+const DRAFT_SYSTEM_PROMPT_SIMPLE_ONLY = `Você ajuda uma nutricionista a montar a ESTRUTURA de um pré-plano alimentar.
 
 Regras absolutas:
 - Você NUNCA fornece kcal, calorias, gramas de proteína/carboidrato/gordura ou qualquer valor nutricional — o sistema calcula isso depois com uma engine determinística. Se você incluir esses campos eles serão descartados.
@@ -152,9 +203,10 @@ Regras absolutas:
 - Respeite rigorosamente alergias/restrições/aversões informadas — nunca proponha um alimento que contradiga isso.
 - Só proponha refeições cujas chaves (mealKey) estejam na lista de "Refeições solicitadas" — nunca adicione uma refeição extra.
 - Evite repetir o mesmo alimento em muitas refeições diferentes — priorize variedade quando fizer sentido para o objetivo.
+- Toda refeição usa "structure":"SIMPLE".
 
 Formato de resposta OBRIGATÓRIO — responda APENAS este JSON, sem markdown, sem texto antes ou depois:
-{"meals":[{"mealKey":"cafe_da_manha","recipeId":null,"items":[{"query":"arroz branco cozido","quantity":100,"unit":"g"}],"rationale":"texto curto opcional"}]}
+{"meals":[{"structure":"SIMPLE","mealKey":"cafe_da_manha","recipeId":null,"items":[{"query":"arroz branco cozido","quantity":100,"unit":"g"}],"rationale":"texto curto opcional"}]}
 
 Regras de formato (violar qualquer uma invalida a resposta inteira):
 - "mealKey" deve ser copiado EXATAMENTE (sem traduzir, sem espaços, sem maiúsculas) de uma destas strings: cafe_da_manha, lanche_manha, almoco, lanche_tarde, jantar, ceia.
@@ -163,6 +215,26 @@ Regras de formato (violar qualquer uma invalida a resposta inteira):
 - "recipeId" é null OU uma string com um id exato da lista de receitas — nunca invente, nunca deixe um texto que não seja um id real.
 - "items" é sempre um array, mesmo com 1 item só; nunca omita o campo.
 - Não inclua nenhum campo além dos mostrados no exemplo (nada de kcal/calories/protein/carbs/fat/macros).`;
+
+// R5.1 — variante do prompt habilitada só quando `allowFlexibleStructure`
+// é pedido explicitamente (opt-in do wizard, seção 4: SIMPLE continua o
+// padrão/comportamento anterior sem regressão). Acrescenta OPTIONS/
+// COMBINATION como estruturas possíveis, sem remover nenhuma regra SIMPLE.
+const DRAFT_SYSTEM_PROMPT_FLEXIBLE = `${DRAFT_SYSTEM_PROMPT_SIMPLE_ONLY}
+
+Além de "SIMPLE", você também pode propor DUAS outras estruturas quando fizer sentido clínico/prático — nunca force uma estrutura flexível numa refeição simples só por variedade:
+
+"structure":"OPTIONS" — a refeição vira 2 a 4 ALTERNATIVAS COMPLETAS e mutuamente exclusivas (a pessoa escolhe UMA só, nunca as duas juntas). Use quando fizer sentido dar opções reais de escolha pro paciente. Formato:
+{"structure":"OPTIONS","mealKey":"cafe_da_manha","rationale":"texto curto opcional","options":[{"label":"Opção A","items":[{"query":"ovo mexido","quantity":100,"unit":"g"}]},{"label":"Opção B","items":[{"query":"iogurte natural","quantity":170,"unit":"g"}]}]}
+
+"structure":"COMBINATION" — a refeição tem itens FIXOS (sempre presentes) mais um ou mais GRUPOS DE ESCOLHA (a pessoa escolhe min_selections a max_selections itens de cada grupo) mais, opcionalmente, itens totalmente opcionais. Use quando parte da refeição é fixa e parte é flexível. Formato:
+{"structure":"COMBINATION","mealKey":"almoco","rationale":"texto curto opcional","fixed_items":[{"query":"arroz branco cozido","quantity":100,"unit":"g"}],"choice_groups":[{"title":"Proteína","min_selections":1,"max_selections":1,"items":[{"query":"peito de frango grelhado","quantity":120,"unit":"g"},{"query":"filé de tilápia grelhado","quantity":120,"unit":"g"}]}],"optional_items":[{"query":"azeite de oliva extra virgem","quantity":10,"unit":"ml"}]}
+
+Regras de formato adicionais para OPTIONS/COMBINATION (violar qualquer uma invalida a resposta inteira):
+- Nunca inclua "recipeId" ou "items" de nível de refeição quando "structure" for "OPTIONS" ou "COMBINATION" — só os campos mostrados no exemplo daquela estrutura.
+- "options" tem sempre 2 a 4 entradas; cada uma com pelo menos 1 item.
+- "choice_groups" tem sempre pelo menos 1 grupo; "min_selections"/"max_selections" são sempre números inteiros, "max_selections" nunca menor que "min_selections".
+- "fixed_items"/"optional_items" são sempre arrays (podem ser vazios "[]"), nunca omitidos em COMBINATION.`;
 
 export interface GenerateMealPlanDraftInput {
   clientId: string;
@@ -180,34 +252,77 @@ export interface GenerateMealPlanDraftInput {
   otherMealsContext?: DraftMeal[];
   /** Pula direto pro fallback refeição-por-refeição (seção 20 do pedido de robustez: botão manual "Gerar refeição por refeição" no wizard). */
   forceMealByMeal?: boolean;
+  /**
+   * R5.1 (seção 4) — opt-in explícito pra permitir a IA propor OPTIONS/
+   * COMBINATION. `false`/ausente (padrão) mantém o comportamento SIMPLE
+   * anterior a esta fase, byte-a-byte — nenhuma regressão.
+   */
+  allowFlexibleStructure?: boolean;
+}
+
+/** Corrige quantidades string-numéricas óbvias num array de itens de comida — nunca inventa valor, só "100" -> 100. Reaproveitado em todo nível aninhado (items/options/choice_groups/fixed_items/optional_items). */
+function fixItemQuantities(items: unknown): unknown {
+  if (!Array.isArray(items)) return items;
+  return items.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const nextItem = { ...(item as Record<string, unknown>) };
+    if (typeof nextItem.quantity === "string" && /^\d+(\.\d+)?$/.test(nextItem.quantity.trim())) {
+      nextItem.quantity = Number(nextItem.quantity.trim());
+    }
+    return nextItem;
+  });
+}
+
+const VALID_STRUCTURES = new Set(["SIMPLE", "OPTIONS", "COMBINATION"]);
+
+/**
+ * Corrige UM objeto de refeição bruto: injeta "structure":"SIMPLE" como
+ * default quando ausente/inválido (compatibilidade retroativa total com
+ * qualquer payload anterior a esta fase, que nunca tinha esse campo — seção
+ * 4) e aplica `fixItemQuantities` em toda lista de itens conhecida, em
+ * qualquer nível aninhado (seção 5 do pedido de robustez original,
+ * estendida pra OPTIONS/COMBINATION).
+ */
+export function prepareMealRawForParse(meal: unknown): unknown {
+  if (!meal || typeof meal !== "object") return meal;
+  const next = { ...(meal as Record<string, unknown>) };
+  if (typeof next.structure !== "string" || !VALID_STRUCTURES.has(next.structure)) {
+    next.structure = "SIMPLE";
+  }
+  if (Array.isArray(next.items)) next.items = fixItemQuantities(next.items);
+  if (Array.isArray(next.fixed_items)) next.fixed_items = fixItemQuantities(next.fixed_items);
+  if (Array.isArray(next.optional_items)) next.optional_items = fixItemQuantities(next.optional_items);
+  if (Array.isArray(next.options)) {
+    next.options = next.options.map((option) => {
+      if (!option || typeof option !== "object") return option;
+      const nextOption = { ...(option as Record<string, unknown>) };
+      if (Array.isArray(nextOption.items)) nextOption.items = fixItemQuantities(nextOption.items);
+      return nextOption;
+    });
+  }
+  if (Array.isArray(next.choice_groups)) {
+    next.choice_groups = next.choice_groups.map((group) => {
+      if (!group || typeof group !== "object") return group;
+      const nextGroup = { ...(group as Record<string, unknown>) };
+      if (Array.isArray(nextGroup.items)) nextGroup.items = fixItemQuantities(nextGroup.items);
+      return nextGroup;
+    });
+  }
+  return next;
 }
 
 /**
  * Correções MECÂNICAS e semântica-preservantes aplicadas ANTES do zod
  * (seção 5 do pedido de robustez) — nunca inventa conteúdo, só corrige
- * formato óbvio: "100" (string estritamente numérica) → 100 (number).
- * NUNCA aceita "100g"/"uma porção" — essas continuam falhando no zod de
- * propósito (ambiguidade real, não erro mecânico de formato).
+ * formato óbvio. NUNCA aceita "100g"/"uma porção" — essas continuam
+ * falhando no zod de propósito (ambiguidade real, não erro mecânico de
+ * formato).
  */
 function normalizeMealPlanDraftRaw(raw: unknown): unknown {
   if (!raw || typeof raw !== "object") return raw;
   const obj = raw as Record<string, unknown>;
   if (!Array.isArray(obj.meals)) return raw;
-  const meals = obj.meals.map((meal) => {
-    if (!meal || typeof meal !== "object") return meal;
-    const next = { ...(meal as Record<string, unknown>) };
-    if (Array.isArray(next.items)) {
-      next.items = next.items.map((item) => {
-        if (!item || typeof item !== "object") return item;
-        const nextItem = { ...(item as Record<string, unknown>) };
-        if (typeof nextItem.quantity === "string" && /^\d+(\.\d+)?$/.test(nextItem.quantity.trim())) {
-          nextItem.quantity = Number(nextItem.quantity.trim());
-        }
-        return nextItem;
-      });
-    }
-    return next;
-  });
+  const meals = obj.meals.map(prepareMealRawForParse);
   return { ...obj, meals };
 }
 
@@ -245,11 +360,13 @@ async function candidateRecipesForMeals(requestedMeals: RequestedMeal[]): Promis
   return recipes.filter((recipe) => allowedGroups.has(recipe.meal_group)).slice(0, 15);
 }
 
-/** Converte uma FoodResolution já feita em item calculável ou entrada "precisa de revisão" — nunca deixa um item sem identidade real entrar silenciamente no cálculo. */
+/** Converte uma FoodResolution já feita em item calculável ou entrada "precisa de revisão" — nunca deixa um item sem identidade real entrar silenciamente no cálculo. `path` (R5.1, seção 16) identifica a posição EXATA de origem (SIMPLE/OPTIONS/COMBINATION), pra permitir substituição nested sem reconstruir a refeição. */
 function resolutionToMealParts(
   resolution: FoodResolution,
   quantity: string,
-  unitRaw: string
+  unitRaw: string,
+  path: string,
+  isOptional?: boolean
 ): { item: DraftMealItem | null; needsReview: DraftMealNeedsReview | null } {
   const unit = normalizeUnit(unitRaw);
   if (resolution.status === "RESOLVED" || resolution.status === "CLINICAL_UNKNOWN") {
@@ -263,6 +380,7 @@ function resolutionToMealParts(
         food_ref_id: resolution.ref!.sourceId,
         ai_suggested: true,
         needsSafetyReview: resolution.status === "CLINICAL_UNKNOWN",
+        ...(isOptional ? { is_optional: true } : {}),
       },
       needsReview: null,
     };
@@ -278,8 +396,48 @@ function resolutionToMealParts(
       candidates: resolution.candidates,
       preparation: resolution.preparation ?? null,
       recipeCandidates: resolution.recipeCandidates ?? [],
+      path,
     },
   };
+}
+
+/** Item bruto ainda não resolvido (SIMPLE/OPTIONS/COMBINATION, em qualquer nível aninhado) — shape mínimo comum antes da resolução. */
+interface RawFoodCandidate { query: string; quantity: number; unit: string; isOptional?: boolean }
+
+/**
+ * Resolve uma lista de candidatos (já com as resoluções em mãos, buscadas
+ * em UMA chamada em lote pra todo o draft — nunca N+1) e monta os
+ * `items`/`needsReview` correspondentes, carimbando o `path` de cada
+ * entrada precisando de revisão. `path` é a posição do candidato na lista
+ * ORIGINAL proposta pela IA para aquele escopo (não o índice no array
+ * resultante `items`, que fica esparso quando algo precisa de revisão) —
+ * reaproveitado para items/options[].items/choice_groups[].items (fixos +
+ * opcionais de COMBINATION combinados numa única lista antes de chamar
+ * isto) — nunca uma lógica duplicada por nível de aninhamento (seção 13 do
+ * pedido R5.1).
+ */
+function resolveItemList(
+  candidates: RawFoodCandidate[],
+  resolutions: Map<string, FoodResolution>,
+  keyPrefix: string,
+  pathPrefix: string,
+  warnings: DraftWarning[],
+  mealKeyForWarning: string
+): { items: DraftMealItem[]; needsReview: DraftMealNeedsReview[] } {
+  const items: DraftMealItem[] = [];
+  const needsReview: DraftMealNeedsReview[] = [];
+  candidates.forEach((candidate, itemIndex) => {
+    const resolution = resolutions.get(`${keyPrefix}:${itemIndex}`);
+    if (!resolution) return;
+    const path = `${pathPrefix}[${itemIndex}]`;
+    const { item, needsReview: review } = resolutionToMealParts(resolution, String(candidate.quantity), candidate.unit, path, candidate.isOptional);
+    if (item) items.push(item);
+    if (review) needsReview.push(review);
+    if (resolution.status !== "RESOLVED") {
+      warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey: mealKeyForWarning, message: resolution.reason });
+    }
+  });
+  return { items, needsReview };
 }
 
 export async function generateMealPlanDraft(input: GenerateMealPlanDraftInput): Promise<MealPlanDraftResult> {
@@ -344,7 +502,7 @@ export async function generateMealPlanDraft(input: GenerateMealPlanDraftInput): 
         agent: "meal-plan-draft",
         adminId: input.adminId,
         e2eFixtureKey: input.clientId,
-        system: DRAFT_SYSTEM_PROMPT,
+        system: input.allowFlexibleStructure ? DRAFT_SYSTEM_PROMPT_FLEXIBLE : DRAFT_SYSTEM_PROMPT_SIMPLE_ONLY,
         prompt: `Paciente: ${pseudonym}.\n\n${contextBlock}\n\nProponha a estrutura do pré-plano alimentar.`,
         schema: mealPlanDraftLlmSchema,
         normalize: normalizeMealPlanDraftRaw,
@@ -430,7 +588,7 @@ function recoverPartialMeals(
   const requestedKeys = new Set(requestedMeals.map((m) => m.key));
   const meals: z.infer<typeof mealPlanDraftLlmSchema>["meals"] = [];
   rawData.meals.forEach((rawMeal, index) => {
-    const parsed = draftMealLlmSchema.safeParse(rawMeal);
+    const parsed = draftMealLlmSchema.safeParse(prepareMealRawForParse(rawMeal));
     if (parsed.success && requestedKeys.has(parsed.data.mealKey)) {
       meals.push(parsed.data);
       return;
@@ -479,6 +637,48 @@ async function generateMealPlanDraftMealByMeal(input: GenerateMealPlanDraftInput
   return { meals, warnings };
 }
 
+/**
+ * Forma "segura" de uma refeição do LLM — todo campo sempre presente com
+ * um default previsível, independente da estrutura. `draftMealLlmSchema`
+ * (zod, discriminated union) já garante isso no caminho normal (via
+ * `generateStructuredResult`), mas testes unitários legítimos mockam
+ * `generateStructuredResult` diretamente e devolvem objetos "crus" sem
+ * `structure`/campos da variante (bypassando o zod de propósito, pra focar
+ * no comportamento testado) — `coerceLlmMeal` garante que `assembleDraft`
+ * nunca quebra nesse caso real, tratando ausência de `structure` como
+ * "SIMPLE" (mesma convenção usada em todo o resto do sistema).
+ */
+interface SafeLlmMeal {
+  structure: "SIMPLE" | "OPTIONS" | "COMBINATION";
+  mealKey: MealKey;
+  recipeId: string | null;
+  items: RawFoodCandidate[];
+  options: { label: string; items: RawFoodCandidate[] }[];
+  fixed_items: RawFoodCandidate[];
+  optional_items: RawFoodCandidate[];
+  choice_groups: { title: string; min_selections: number; max_selections: number; items: RawFoodCandidate[] }[];
+}
+
+function coerceLlmMeal(meal: LlmMeal): SafeLlmMeal {
+  const raw = meal as unknown as Record<string, unknown>;
+  const structure = raw.structure === "OPTIONS" || raw.structure === "COMBINATION" ? raw.structure : "SIMPLE";
+  const asItemArray = (value: unknown): RawFoodCandidate[] => Array.isArray(value) ? value as RawFoodCandidate[] : [];
+  return {
+    structure,
+    mealKey: meal.mealKey,
+    recipeId: typeof raw.recipeId === "string" ? raw.recipeId : null,
+    items: asItemArray(raw.items),
+    options: Array.isArray(raw.options) ? (raw.options as { label: string; items: unknown }[]).map((option) => ({ label: option.label, items: asItemArray(option.items) })) : [],
+    fixed_items: asItemArray(raw.fixed_items),
+    optional_items: asItemArray(raw.optional_items),
+    choice_groups: Array.isArray(raw.choice_groups)
+      ? (raw.choice_groups as { title: string; min_selections: number; max_selections: number; items: unknown }[]).map((group) => ({
+          title: group.title, min_selections: group.min_selections, max_selections: group.max_selections, items: asItemArray(group.items),
+        }))
+      : [],
+  };
+}
+
 async function assembleDraft(
   llmMeals: z.infer<typeof mealPlanDraftLlmSchema>["meals"],
   requestedMeals: RequestedMeal[],
@@ -494,12 +694,13 @@ async function assembleDraft(
   // de TODAS as refeições em UMA chamada em lote (cache por query +
   // paralelo), em vez de uma busca serializada por item por refeição
   // (seção 30/31 do pedido: evitar N+1).
-  type PendingMeal = { llmMeal: (typeof llmMeals)[number]; requested: RequestedMeal; recipe?: RecipePayload };
+  type PendingMeal = { llmMeal: SafeLlmMeal; requested: RequestedMeal; recipe?: RecipePayload };
   const pending: PendingMeal[] = [];
-  for (const llmMeal of llmMeals) {
+  for (const llmMealRaw of llmMeals) {
+    const llmMeal = coerceLlmMeal(llmMealRaw);
     const requested = requestedByKey.get(llmMeal.mealKey);
     if (!requested) continue; // IA nunca pode adicionar uma refeicao fora do que foi pedido.
-    if (llmMeal.recipeId) {
+    if (llmMeal.structure === "SIMPLE" && llmMeal.recipeId) {
       const recipe = candidateRecipes.find((r) => r.id === llmMeal.recipeId) ?? await getRecipeById(llmMeal.recipeId);
       if (!recipe) {
         warnings.push({ level: "warning", mealKey: llmMeal.mealKey, message: "Receita sugerida não encontrada na biblioteca — ignorada." });
@@ -511,12 +712,27 @@ async function assembleDraft(
     pending.push({ llmMeal, requested });
   }
 
+  // R5.1 (seções 13/49) — resolução recursiva em UMA ÚNICA chamada em lote
+  // pra TODOS os itens de TODAS as refeições, em qualquer nível aninhado
+  // (SIMPLE.items, OPTIONS.options[].items, COMBINATION.items/choice_groups[].items)
+  // — nunca uma busca serializada por item/nível/refeição (nunca N+1).
   const queries: { query: string; key: string }[] = [];
   pending.forEach((entry, mealIndex) => {
     if (entry.recipe) return;
-    entry.llmMeal.items.forEach((item, itemIndex) => {
-      queries.push({ query: item.query, key: `${mealIndex}:${itemIndex}` });
-    });
+    const meal = entry.llmMeal;
+    if (meal.structure === "SIMPLE") {
+      meal.items.forEach((item, itemIndex) => queries.push({ query: item.query, key: `${mealIndex}:items:${itemIndex}` }));
+    } else if (meal.structure === "OPTIONS") {
+      meal.options.forEach((option, optionIndex) => {
+        option.items.forEach((item, itemIndex) => queries.push({ query: item.query, key: `${mealIndex}:options:${optionIndex}:${itemIndex}` }));
+      });
+    } else {
+      const combinedItems = [...meal.fixed_items, ...meal.optional_items];
+      combinedItems.forEach((item, itemIndex) => queries.push({ query: item.query, key: `${mealIndex}:items:${itemIndex}` }));
+      meal.choice_groups.forEach((group, groupIndex) => {
+        group.items.forEach((item, itemIndex) => queries.push({ query: item.query, key: `${mealIndex}:groups:${groupIndex}:${itemIndex}` }));
+      });
+    }
   });
   const resolutions = await resolveFoodCandidatesWithCanonicalShadow(queries, markers, adminId, "meal_plan_ai");
 
@@ -536,31 +752,68 @@ async function assembleDraft(
           ai_suggested: true as const,
         }));
       if (items.length) {
-        meals.push({ mealKey: entry.llmMeal.mealKey, name: entry.recipe.title, suggested_time: entry.requested.suggestedTime, source_recipe_id: entry.recipe.id, items, needsReview: [] });
+        meals.push({ mealKey: entry.llmMeal.mealKey, name: entry.recipe.title, suggested_time: entry.requested.suggestedTime, source_recipe_id: entry.recipe.id, meal_structure: "SIMPLE", items, needsReview: [] });
         return;
       }
       warnings.push({ level: "warning", mealKey: entry.llmMeal.mealKey, message: `Receita "${entry.recipe.title}" não resultou em ingredientes calculáveis.` });
       return;
     }
 
-    const items: DraftMealItem[] = [];
-    const needsReview: DraftMealNeedsReview[] = [];
-    entry.llmMeal.items.forEach((candidate, itemIndex) => {
-      const resolution = resolutions.get(`${mealIndex}:${itemIndex}`);
-      if (!resolution) return;
-      const { item, needsReview: review } = resolutionToMealParts(resolution, String(candidate.quantity), candidate.unit);
-      if (item) items.push(item);
-      if (review) needsReview.push(review);
-      if (resolution.status !== "RESOLVED") {
-        warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey: entry.llmMeal.mealKey, message: resolution.reason });
-      }
-    });
+    const meal = entry.llmMeal;
 
-    if (!items.length && !needsReview.length) {
-      warnings.push({ level: "warning", mealKey: entry.llmMeal.mealKey, message: `Nenhum alimento proposto para ${MEAL_KEY_LABELS[entry.llmMeal.mealKey]}.` });
+    if (meal.structure === "SIMPLE") {
+      const { items, needsReview } = resolveItemList(meal.items, resolutions, `${mealIndex}:items`, "items", warnings, meal.mealKey);
+      if (!items.length && !needsReview.length) {
+        warnings.push({ level: "warning", mealKey: meal.mealKey, message: `Nenhum alimento proposto para ${MEAL_KEY_LABELS[meal.mealKey]}.` });
+        return;
+      }
+      meals.push({ mealKey: meal.mealKey, name: MEAL_KEY_LABELS[meal.mealKey], suggested_time: entry.requested.suggestedTime, source_recipe_id: null, meal_structure: "SIMPLE", items, needsReview });
       return;
     }
-    meals.push({ mealKey: entry.llmMeal.mealKey, name: MEAL_KEY_LABELS[entry.llmMeal.mealKey], suggested_time: entry.requested.suggestedTime, source_recipe_id: null, items, needsReview });
+
+    if (meal.structure === "OPTIONS") {
+      const options: DraftMealOption[] = meal.options.map((option, optionIndex) => {
+        const { items, needsReview } = resolveItemList(option.items, resolutions, `${mealIndex}:options:${optionIndex}`, `options[${optionIndex}].items`, warnings, meal.mealKey);
+        return { id: `option-${optionIndex}`, label: option.label, items, needsReview };
+      });
+      const hasAnyContent = options.some((option) => option.items.length || option.needsReview.length);
+      if (!hasAnyContent) {
+        warnings.push({ level: "warning", mealKey: meal.mealKey, message: `Nenhuma opção calculável para ${MEAL_KEY_LABELS[meal.mealKey]}.` });
+        return;
+      }
+      meals.push({ mealKey: meal.mealKey, name: MEAL_KEY_LABELS[meal.mealKey], suggested_time: entry.requested.suggestedTime, source_recipe_id: null, meal_structure: "OPTIONS", items: [], needsReview: [], options });
+      return;
+    }
+
+    // COMBINATION — itens fixos + opcionais resolvidos numa única lista
+    // combinada (mesma ordem usada na coleta de queries acima), depois
+    // separados de volta por `is_optional` — nunca dois arrays paralelos
+    // divergentes no domínio real (MealPlanItemPayload já modela "opcional"
+    // como flag no mesmo array, não uma lista à parte — seção 10).
+    const combinedCandidates: RawFoodCandidate[] = [
+      ...meal.fixed_items.map((item) => ({ ...item, isOptional: false })),
+      ...meal.optional_items.map((item) => ({ ...item, isOptional: true })),
+    ];
+    const { items: fixedAndOptionalItems, needsReview: fixedNeedsReview } = resolveItemList(combinedCandidates, resolutions, `${mealIndex}:items`, "items", warnings, meal.mealKey);
+    const choiceGroups: DraftMealChoiceGroup[] = meal.choice_groups.map((group, groupIndex) => {
+      const { items, needsReview } = resolveItemList(group.items, resolutions, `${mealIndex}:groups:${groupIndex}`, `choice_groups[${groupIndex}].items`, warnings, meal.mealKey);
+      return { id: `group-${groupIndex}`, title: group.title, min_selections: group.min_selections, max_selections: group.max_selections, items, needsReview };
+    });
+    const hasAnyContent = fixedAndOptionalItems.length || fixedNeedsReview.length || choiceGroups.some((group) => group.items.length || group.needsReview.length);
+    if (!hasAnyContent) {
+      warnings.push({ level: "warning", mealKey: meal.mealKey, message: `Nenhum alimento calculável para ${MEAL_KEY_LABELS[meal.mealKey]}.` });
+      return;
+    }
+    meals.push({
+      mealKey: meal.mealKey,
+      name: MEAL_KEY_LABELS[meal.mealKey],
+      suggested_time: entry.requested.suggestedTime,
+      source_recipe_id: null,
+      meal_structure: "COMBINATION",
+      items: fixedAndOptionalItems,
+      needsReview: fixedNeedsReview,
+      choice_groups: choiceGroups,
+    });
   });
 
   if (!meals.length) warnings.push({ level: "warning", message: "Não foi possível montar nenhuma refeição — tente novamente ou continue manualmente." });
@@ -682,7 +935,7 @@ export async function applyDraftOperations(
     }
     if (op.operation === "add_item") {
       const resolution = await resolveFoodWithCanonicalShadow(op.item.query, markers, adminId, "meal_plan_ai");
-      const { item, needsReview } = resolutionToMealParts(resolution, String(op.item.quantity), op.item.unit);
+      const { item, needsReview } = resolutionToMealParts(resolution, String(op.item.quantity), op.item.unit, `items[${meal.items.length}]`);
       if (resolution.status !== "RESOLVED") warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey, message: resolution.reason });
       if (item) meal.items = [...meal.items, item];
       if (needsReview) meal.needsReview = [...meal.needsReview, needsReview];
@@ -698,7 +951,7 @@ export async function applyDraftOperations(
       meal.items = meal.items.map((item, index) => index === op.itemIndex ? { ...item, quantity: String(op.quantity) } : item);
     } else if (op.operation === "replace_item") {
       const resolution = await resolveFoodWithCanonicalShadow(op.item.query, markers, adminId, "meal_plan_ai");
-      const { item, needsReview } = resolutionToMealParts(resolution, String(op.item.quantity), op.item.unit);
+      const { item, needsReview } = resolutionToMealParts(resolution, String(op.item.quantity), op.item.unit, `items[${op.itemIndex}]`);
       if (resolution.status !== "RESOLVED") warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey, message: resolution.reason });
       // Conflito/ambiguidade no replace: mantem o item original em vez de
       // apagar (uma substituicao que resultaria em remocao silenciosa seria
