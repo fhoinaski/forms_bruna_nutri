@@ -447,6 +447,95 @@ export interface MealPlanNutritionResult {
   quality: QuantityQualitySummary;
 }
 
+/**
+ * Nutrition-engine range for Meal Flex.  The bounds are deliberately made in
+ * this module, next to item resolution, so a UI never has to reimplement a
+ * nutrient formula or decide how an unresolved reference should be treated.
+ */
+export interface FlexibleMealNutrition {
+  mealId: string | undefined;
+  name: string;
+  min: NutrientValues;
+  max: NutrientValues;
+  varies: boolean;
+}
+
+export interface FlexiblePlanNutritionResult {
+  perMeal: FlexibleMealNutrition[];
+  total: { min: NutrientValues; max: NutrientValues; varies: boolean };
+  quality: QuantityQualitySummary;
+}
+
+function addNutrientValues(left: NutrientValues, right: NutrientValues): NutrientValues {
+  return sumNutrients([left, right]).values;
+}
+
+function optionalItemRange(values: NutrientValues, optional: boolean): { min: NutrientValues; max: NutrientValues; varies: boolean } {
+  return { min: optional ? { ...EMPTY_NUTRIENTS } : values, max: values, varies: optional };
+}
+
+function rangeForItems(
+  items: MealPlanItemLike[],
+  resolve: (item: MealPlanItemLike) => NutrientValues
+): { min: NutrientValues; max: NutrientValues; varies: boolean } {
+  const initial: { min: NutrientValues; max: NutrientValues; varies: boolean } = {
+    min: { ...EMPTY_NUTRIENTS }, max: { ...EMPTY_NUTRIENTS }, varies: false,
+  };
+  return items.filter((item) => item.food.trim()).reduce((range, item) => {
+    const itemRange = optionalItemRange(resolve(item), Boolean((item as MealPlanItemLike & { is_optional?: boolean }).is_optional));
+    return { min: addNutrientValues(range.min, itemRange.min), max: addNutrientValues(range.max, itemRange.max), varies: range.varies || itemRange.varies };
+  }, initial);
+}
+
+function boundAcrossAlternatives(ranges: Array<{ min: NutrientValues; max: NutrientValues }>, kind: "min" | "max"): NutrientValues {
+  const values = { ...EMPTY_NUTRIENTS };
+  for (const key of NUTRIENT_KEYS) {
+    const candidates = ranges.map((range) => range[kind][key]).filter((value): value is number => value !== null && value !== undefined);
+    values[key] = candidates.length ? (kind === "min" ? Math.min(...candidates) : Math.max(...candidates)) : null;
+  }
+  return values;
+}
+
+/** Calculates SIMPLE totals and OPTIONS/COMBINATION bounds without summing alternatives. */
+export function calculateFlexiblePlanNutrients(
+  plan: Pick<MealPlanPayload, "meals">,
+  lookup: FoodReferenceLookup
+): FlexiblePlanNutritionResult {
+  const quality: QuantityQualitySummary = { total: 0, highConfidence: 0, estimated: 0, unresolved: 0 };
+  const resolve = (item: MealPlanItemLike): NutrientValues => {
+    const householdMeasure = item.household_measure_id ? lookup.byMeasureId?.(item.household_measure_id) ?? null : null;
+    const calculated = calculateItemNutrients(item.quantity, item.unit, resolveItemReference(item, lookup), householdMeasure, {
+      resolvedGramsSnapshot: item.resolved_grams_snapshot,
+      quantityResolutionSnapshot: item.quantity_resolution_snapshot,
+    });
+    quality.total += 1;
+    if (calculated.resolution.method === "unresolved") quality.unresolved += 1;
+    else if (calculated.resolution.method === "estimated") quality.estimated += 1;
+    else quality.highConfidence += 1;
+    return calculated.values;
+  };
+  const perMeal = plan.meals.map((meal) => {
+    let range = rangeForItems(meal.items, resolve);
+    if (meal.meal_structure === "OPTIONS") {
+      const options = (meal.options ?? []).map((option) => rangeForItems(option.items, resolve));
+      if (options.length) {
+        range = { min: addNutrientValues(range.min, boundAcrossAlternatives(options, "min")), max: addNutrientValues(range.max, boundAcrossAlternatives(options, "max")), varies: true };
+      }
+    }
+    if (meal.meal_structure === "COMBINATION") {
+      for (const group of meal.choice_groups ?? []) {
+        const choices = group.items.filter((item) => item.food.trim()).map((item) => rangeForItems([item], resolve));
+        const minItems = choices.slice().sort((a, b) => (a.min.energyKcal ?? 0) - (b.min.energyKcal ?? 0)).slice(0, group.min_selections);
+        const maxItems = choices.slice().sort((a, b) => (b.max.energyKcal ?? 0) - (a.max.energyKcal ?? 0)).slice(0, group.max_selections);
+        range = { min: addNutrientValues(range.min, minItems.reduce((sum, item) => addNutrientValues(sum, item.min), { ...EMPTY_NUTRIENTS })), max: addNutrientValues(range.max, maxItems.reduce((sum, item) => addNutrientValues(sum, item.max), { ...EMPTY_NUTRIENTS })), varies: true };
+      }
+    }
+    return { mealId: meal.id, name: meal.name, ...range };
+  });
+  const total = perMeal.reduce((range, meal) => ({ min: addNutrientValues(range.min, meal.min), max: addNutrientValues(range.max, meal.max), varies: range.varies || meal.varies }), { min: { ...EMPTY_NUTRIENTS }, max: { ...EMPTY_NUTRIENTS }, varies: false });
+  return { perMeal, total, quality };
+}
+
 /** Totais por refeicao e por dia (secoes 13-15 do pedido), sempre derivados — nunca confia num total enviado pronto. */
 export function calculatePlanNutrients(
   plan: Pick<MealPlanPayload, "meals">,

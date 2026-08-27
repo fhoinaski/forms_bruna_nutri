@@ -177,6 +177,42 @@ type MealChoiceGroupRow = Omit<MealChoiceGroupPayload, "items"> & { id: string; 
 type WeeklySlotRow = MealPlanWeeklySlotPayload & { id: string; meal_plan_id: string; sort_order: number };
 type SubstitutionRow = MealPlanSubstitutionPayload & { id: string; meal_plan_id: string; sort_order: number };
 type SupplementRow = MealPlanSupplementPayload & { id: string; meal_plan_id: string; sort_order: number };
+
+/**
+ * SQLite grava booleanos como inteiro 0/1 — sem essa coerção explícita
+ * campo a campo, um item dentro de `options`/`choice_groups` (Meal Flex)
+ * voltava pro cliente com `quantity_locked`/`substitutions_locked` como
+ * NUMBER cru (bug real: achado auditando save de um plano grande — o
+ * client reenviava esse número puro, e o schema estrito do PUT rejeitava
+ * com "expected boolean, received number"). Um único mapeador pros 3
+ * lugares que leem ItemRow (items/options/choice_groups) garante que os 3
+ * nunca mais divirjam de novo.
+ */
+function mapItemRowForResponse(item: ItemRow) {
+  return {
+    id: item.id,
+    food: item.food,
+    quantity: item.quantity,
+    unit: item.unit,
+    notes: item.notes,
+    food_source: item.food_source ?? null,
+    food_ref_id: item.food_ref_id ?? null,
+    canonical_food_id: item.canonical_food_id ?? null,
+    household_measure_id: item.household_measure_id ?? null,
+    food_name_snapshot: item.food_name_snapshot ?? null,
+    nutrition_snapshot: item.nutrition_snapshot ?? null,
+    resolved_grams_snapshot: item.resolved_grams_snapshot ?? null,
+    quantity_resolution_snapshot: item.quantity_resolution_snapshot ?? null,
+    quantity_locked: Boolean(item.quantity_locked),
+    substitutions_locked: Boolean(item.substitutions_locked),
+    slot_food_group: item.slot_food_group ?? null,
+    slot_food_subgroup: item.slot_food_subgroup ?? null,
+    slot_nutritional_role: item.slot_nutritional_role ?? null,
+    template_slot_id: item.template_slot_id ?? null,
+    slot_exchange_eligible: item.slot_exchange_eligible === null || item.slot_exchange_eligible === undefined ? null : Boolean(item.slot_exchange_eligible),
+    is_optional: Boolean(item.is_optional),
+  };
+}
 type DietTemplateMealRow = Omit<MealPlanMealPayload, "items"> & { id: string; template_id: string; sort_order: number };
 type DietTemplateItemRow = MealPlanItemPayload & { id: string; meal_id: string; sort_order: number };
 type DietTemplateSubstitutionRow = MealPlanSubstitutionPayload & { id: string; template_id: string; sort_order: number };
@@ -510,37 +546,15 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
       source_recipe_id: meal.source_recipe_id,
       meal_structure: getMealStructure(meal),
       patient_instruction: meal.patient_instruction ?? null,
-      items: (itemsByMeal.get(meal.id) ?? []).filter((item) => !item.meal_option_id && !item.choice_group_id).map((item) => ({
-        id: item.id,
-        food: item.food,
-        quantity: item.quantity,
-        unit: item.unit,
-        notes: item.notes,
-        food_source: item.food_source ?? null,
-        food_ref_id: item.food_ref_id ?? null,
-        canonical_food_id: item.canonical_food_id ?? null,
-        household_measure_id: item.household_measure_id ?? null,
-        food_name_snapshot: item.food_name_snapshot ?? null,
-        nutrition_snapshot: item.nutrition_snapshot ?? null,
-        resolved_grams_snapshot: item.resolved_grams_snapshot ?? null,
-        quantity_resolution_snapshot: item.quantity_resolution_snapshot ?? null,
-        quantity_locked: Boolean(item.quantity_locked),
-        substitutions_locked: Boolean(item.substitutions_locked),
-        slot_food_group: item.slot_food_group ?? null,
-        slot_food_subgroup: item.slot_food_subgroup ?? null,
-        slot_nutritional_role: item.slot_nutritional_role ?? null,
-        template_slot_id: item.template_slot_id ?? null,
-        slot_exchange_eligible: item.slot_exchange_eligible === null || item.slot_exchange_eligible === undefined ? null : Boolean(item.slot_exchange_eligible),
-        is_optional: Boolean(item.is_optional),
-        })),
+      items: (itemsByMeal.get(meal.id) ?? []).filter((item) => !item.meal_option_id && !item.choice_group_id).map(mapItemRowForResponse),
       options: (optionsByMeal.get(meal.id) ?? []).map((option) => ({
         id: option.id, label: option.label, description: option.description ?? null,
-        items: (itemsByOption.get(option.id) ?? []).map((item) => ({ ...item, is_optional: Boolean(item.is_optional) })),
+        items: (itemsByOption.get(option.id) ?? []).map(mapItemRowForResponse),
       })),
       choice_groups: (groupsByMeal.get(meal.id) ?? []).map((group) => ({
         id: group.id, title: group.title, description: group.description ?? null,
         min_selections: group.min_selections, max_selections: group.max_selections,
-        items: (itemsByChoiceGroup.get(group.id) ?? []).map((item) => ({ ...item, is_optional: Boolean(item.is_optional) })),
+        items: (itemsByChoiceGroup.get(group.id) ?? []).map(mapItemRowForResponse),
       })),
       })),
     weekly_slots: (weeklySlotsByPlan.get(row.id) ?? []).map(({ id, weekday, meal_type, title, notes, source_meal_id }) => ({

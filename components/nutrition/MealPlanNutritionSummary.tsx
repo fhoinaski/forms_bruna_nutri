@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
-import { calculatePlanNutrients, roundedNutrients, type FoodReferenceLookup, type NutrientKey } from "@/lib/nutrition/nutrients";
+import { calculateFlexiblePlanNutrients, calculatePlanNutrients, roundedNutrients, type FoodReferenceLookup, type NutrientKey } from "@/lib/nutrition/nutrients";
 import { compareTargetVsPrescribed, type NutrientTarget } from "@/lib/nutrition/targets";
 import type { HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
 import type { FoodPortion } from "@/lib/repositories/food-portions";
 
-type SummaryItem = {
+export type SummaryItem = {
   food: string;
   quantity?: string | null;
   unit?: string | null;
@@ -20,8 +20,17 @@ type SummaryItem = {
   household_measure_id?: string | null;
   resolved_grams_snapshot?: number | null;
   quantity_resolution_snapshot?: string | null;
+  is_optional?: boolean;
 };
-type SummaryMeal = { id?: string; name: string; items: SummaryItem[] };
+export type SummaryMeal = {
+  id?: string; name: string; meal_structure?: "SIMPLE" | "OPTIONS" | "COMBINATION" | null; items: SummaryItem[];
+  options?: Array<{ label: string; items: SummaryItem[] }>;
+  choice_groups?: Array<{ title: string; min_selections: number; max_selections: number; items: SummaryItem[] }>;
+};
+
+function allItems(meals: SummaryMeal[]) {
+  return meals.flatMap((meal) => [meal.items, ...(meal.options ?? []).map((option) => option.items), ...(meal.choice_groups ?? []).map((group) => group.items)].flat());
+}
 
 const NUTRIENT_LABELS: Partial<Record<NutrientKey, string>> = {
   energyKcal: "Energia",
@@ -61,14 +70,23 @@ const PRIMARY_NUTRIENTS: NutrientKey[] = ["energyKcal", "proteinG", "carbohydrat
  * os alimentos ja pesquisados nesta sessao — por isso a cobertura por
  * nutriente e mostrada, nunca falsa precisao).
  */
-function useMealPlanNutritionData({ meals, target }: { meals: SummaryMeal[]; target: NutrientTarget }) {
+/**
+ * R2.3 — exportado pra ser reaproveitado pelo preview de trocas
+ * (components/dashboard/ExchangeGroupPanel.tsx): a MESMA hidratação em lote
+ * + Nutrition Engine (calculateFlexiblePlanNutrients) usada pela sidebar,
+ * nunca uma fórmula paralela. Chamado duas vezes lá (meals atuais vs meals
+ * com o candidato simulado) — cada chamada faz sua própria hidratação em
+ * lote (não há cache compartilhado entre instâncias nesta fase); aceito
+ * como troca simples, documentado no relatório da R2.3.
+ */
+export function useMealPlanNutritionData({ meals, target }: { meals: SummaryMeal[]; target: NutrientTarget }) {
   const [refByText, setRefByText] = useState<Record<string, MacroReferenceFood>>({});
   const [refById, setRefById] = useState<Record<string, MacroReferenceFood>>({});
   const [measuresById, setMeasuresById] = useState<Record<string, HouseholdMeasureOption>>({});
 
   useEffect(() => {
     const uniqueFoods = Array.from(
-      new Set(meals.flatMap((meal) => meal.items.map((item) => item.food.trim())).filter((food) => food.length >= 2))
+      new Set(allItems(meals).filter((item) => !item.food_ref_id).map((item) => item.food.trim()).filter((food) => food.length >= 2))
     );
     const missing = uniqueFoods.filter((food) => !refByText[food.toLowerCase()]);
     if (!missing.length) return;
@@ -103,15 +121,19 @@ function useMealPlanNutritionData({ meals, target }: { meals: SummaryMeal[]; tar
       });
     });
     return () => controller.abort();
+    // Precisa incluir options/choice_groups (Meal Flex) — não só meal.items:
+    // sem isso, um item de texto livre dentro de uma OPTIONS/COMBINATION
+    // nunca disparava a busca de hidratação (a refeição fixa não muda ao
+    // editar uma alternativa), e o item ficava "não reconhecido" pra
+    // sempre, mesmo depois de preenchido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(meals.map((meal) => meal.items.map((item) => item.food)))]);
+  }, [JSON.stringify(allItems(meals).map((item) => item.food))]);
 
   useEffect(() => {
     const pairs = Array.from(
       new Set(
-        meals
-          .flatMap((meal) => meal.items)
-          .filter((item) => item.food_ref_id && (item.food_source === "TACO" || item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER"))
+        allItems(meals)
+          .filter((item) => item.food_ref_id && (item.food_source === "TBCA" || item.food_source === "IBGE_POF"))
           .map((item) => `${item.food_source}:${item.food_ref_id}`)
       )
     );
@@ -140,7 +162,30 @@ function useMealPlanNutritionData({ meals, target }: { meals: SummaryMeal[]; tar
     });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(meals.map((meal) => meal.items.map((item) => `${item.food_source ?? ""}:${item.food_ref_id ?? ""}`)))]);
+  }, [JSON.stringify(allItems(meals).map((item) => `${item.food_source ?? ""}:${item.food_ref_id ?? ""}`))]);
+
+  useEffect(() => {
+    const references = Array.from(new Map(allItems(meals)
+      .filter((item) => item.food_ref_id && (item.food_source === "TACO" || item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER" || item.food_source === "USDA"))
+      .map((item) => [`${item.food_source}:${item.food_ref_id}`, { source: item.food_source!, refId: item.food_ref_id! }]))).slice(0, 60).map(([, reference]) => reference);
+    if (!references.length) return;
+    const controller = new AbortController();
+    fetch("/api/admin/foods/resolve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ references }), signal: controller.signal })
+      .then((response) => response.ok ? response.json() : { items: [] })
+      .then((data: { items?: Array<{ key: string; food: MacroReferenceFood | null; portions: FoodPortion[] }> }) => {
+        setRefById((current) => {
+          const next = { ...current };
+          for (const entry of data.items ?? []) if (entry.food?.numero !== undefined) next[String(entry.food.numero)] = entry.food;
+          return next;
+        });
+        setMeasuresById((current) => {
+          const next = { ...current };
+          for (const entry of data.items ?? []) for (const portion of entry.portions ?? []) next[portion.id] = { id: portion.id, description: portion.description, gramEquivalent: portion.gram_equivalent, source: portion.source, confidence: portion.confidence };
+          return next;
+        });
+      }).catch((cause) => { if (!(cause instanceof Error && cause.name === "AbortError")) return; });
+    return () => controller.abort();
+  }, [meals]);
 
   const lookup: FoodReferenceLookup = useMemo(
     () => ({
@@ -157,21 +202,35 @@ function useMealPlanNutritionData({ meals, target }: { meals: SummaryMeal[]; tar
     () => calculatePlanNutrients({ meals: meals.map((meal) => ({ name: meal.name, items: meal.items })) }, lookup),
     [meals, lookup]
   );
+  const flexibleResult = useMemo(() => calculateFlexiblePlanNutrients({ meals }, lookup), [meals, lookup]);
 
   const prescribed = roundedNutrients(result.total.values);
   const comparisons = useMemo(() => compareTargetVsPrescribed(target, result.total.values), [target, result.total.values]);
 
   return {
     result,
+    flexibleResult,
     prescribed,
     comparisons,
     hasTarget: comparisons.length > 0,
-    totalItems: result.total.coverage.energyKcal.total,
+    totalItems: flexibleResult.quality.total,
   };
 }
 
 export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: SummaryMeal[]; target: NutrientTarget }) {
-  const { result, prescribed, totalItems } = useMealPlanNutritionData({ meals, target });
+  const { flexibleResult, totalItems } = useMealPlanNutritionData({ meals, target });
+  const min = roundedNutrients(flexibleResult.total.min);
+  const max = roundedNutrients(flexibleResult.total.max);
+  const isRange = flexibleResult.total.varies;
+  const formatValue = (key: NutrientKey) => {
+    const low = min[key]; const high = max[key];
+    if (low === null && high === null) return "sem dado";
+    if (!isRange || low === high) return `${low ?? high} ${NUTRIENT_UNITS[key]}`;
+    return `${low ?? "?"}–${high ?? "?"} ${NUTRIENT_UNITS[key]}`;
+  };
+  const targetRows = ([
+    ["energyKcal", target.energyKcal], ["proteinG", target.proteinG], ["carbohydrateG", target.carbohydrateG], ["fatG", target.fatG],
+  ] as Array<[NutrientKey, number | null | undefined]>).filter(([, value]) => typeof value === "number");
 
   if (!totalItems) {
     return (
@@ -196,37 +255,56 @@ export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: Summ
         <div className="mt-3 space-y-3">
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
             {PRIMARY_NUTRIENTS.map((key) => {
-              const value = prescribed[key];
               return (
                 <div key={key} className="rounded-lg border border-[#EDE1D6] bg-[#FAF7F2]/70 px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">{NUTRIENT_LABELS[key]}</p>
-                  <p className="text-lg font-semibold text-[#3A3028]">{value === null ? "sem dado" : `${value} ${NUTRIENT_UNITS[key]}`}</p>
+                  <p className="text-lg font-semibold text-[#3A3028]">{formatValue(key)}</p>
                 </div>
               );
             })}
           </div>
 
-          {result.quality.total > 0 && (
+          {flexibleResult.quality.total > 0 && (
             <p className="rounded-lg bg-[#F5FAF0] px-3 py-2 text-xs leading-5 text-[#607A56]">
-              <span className="font-semibold">{result.quality.highConfidence}/{result.quality.total} itens</span> com alta confiança
-              {result.quality.estimated > 0 && <span> · {result.quality.estimated} estimado{result.quality.estimated > 1 ? "s" : ""}</span>}
-              {result.quality.unresolved > 0 && <span> · {result.quality.unresolved} não calculado{result.quality.unresolved > 1 ? "s" : ""}</span>}
+              <span className="font-semibold">{flexibleResult.quality.highConfidence}/{flexibleResult.quality.total} itens</span> com alta confiança
+              {flexibleResult.quality.estimated > 0 && <span> · {flexibleResult.quality.estimated} estimado{flexibleResult.quality.estimated > 1 ? "s" : ""}</span>}
+              {flexibleResult.quality.unresolved > 0 && <span> · {flexibleResult.quality.unresolved} não calculado{flexibleResult.quality.unresolved > 1 ? "s" : ""}</span>}
             </p>
           )}
+
+          <div className="rounded-lg border border-[#EDE1D6] bg-[#FAF7F2]/70 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">Distribuição de macros</p>
+            <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-[#EDE1D6]" aria-label="Distribuição de proteína, carboidrato e gordura">
+              {(["proteinG", "carbohydrateG", "fatG"] as NutrientKey[]).map((key, index) => {
+                const total = (max.proteinG ?? 0) + (max.carbohydrateG ?? 0) + (max.fatG ?? 0);
+                const value = max[key] ?? 0;
+                return <span key={key} className={["bg-[#607A56]", "bg-[#C9937B]", "bg-[#8C6E52]"][index]} style={{ width: total ? `${(value / total) * 100}%` : "0%" }} />;
+              })}
+            </div>
+            <p className="mt-2 text-[11px] text-[#75675E]">Proteína {formatValue("proteinG")} · Carboidrato {formatValue("carbohydrateG")} · Gordura {formatValue("fatG")}</p>
+          </div>
+
+          {targetRows.length > 0 && <details className="rounded-lg border border-[#EDE1D6] bg-white p-3" open>
+            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">Meta x prescrito</summary>
+            <div className="mt-2 space-y-1.5 text-xs text-[#75675E]">
+              {targetRows.map(([key, targetValue]) => {
+                const low = min[key]; const high = max[key];
+                const difference = typeof low !== "number" || typeof high !== "number" ? "sem dado" : `${low - targetValue! > 0 ? "+" : ""}${low - targetValue!}–${high - targetValue! > 0 ? "+" : ""}${high - targetValue!}`;
+                return <p key={key} className="flex justify-between gap-2"><span>{NUTRIENT_LABELS[key]}</span><span><strong className="text-[#3A3028]">{formatValue(key)}</strong> / meta {targetValue} {NUTRIENT_UNITS[key]} · {difference}</span></p>;
+              })}
+            </div>
+          </details>}
 
           <details className="rounded-lg border border-[#EDE1D6] bg-white p-3">
             <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">Micronutrientes</summary>
             <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-1">
               {MICRONUTRIENTS.map((key) => {
-                const coverage = result.total.coverage[key];
-                const value = prescribed[key];
+                const value = min[key];
                 return (
                   <div key={key} className="rounded-lg border border-[#F0E2D6] px-2.5 py-1.5">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9A6F5E]">{NUTRIENT_LABELS[key]}</p>
-                    <p className="text-sm font-semibold text-[#3A3028]">{value === null ? "sem dado" : `${value} ${NUTRIENT_UNITS[key]}`}</p>
-                    {coverage.known < coverage.total && (
-                      <p className="text-[10px] text-[#9A978A]">cobertura {Math.round((coverage.known / coverage.total) * 100)}%</p>
-                    )}
+                    <p className="text-sm font-semibold text-[#3A3028]">{value === null ? "sem dado" : formatValue(key)}</p>
+                    <p className="text-[10px] text-[#9A978A]">sem dado ≠ zero · cobertura depende da fonte</p>
                   </div>
                 );
               })}

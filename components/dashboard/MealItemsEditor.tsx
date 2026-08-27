@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Beef, Check, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, PanelRightClose, Pencil, Plus, RefreshCw, Save, Sparkles, Trash2, Unlock, Utensils, Wheat, X } from "lucide-react";
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
@@ -211,6 +211,15 @@ export function duplicateItemAt(items: MealItem[], index: number): MealItem[] {
   return next;
 }
 
+/** Duplicates an entire OPTIONS branch without sharing item references. */
+export function duplicateMealOptionAt(options: NonNullable<Meal["options"]>, index: number): NonNullable<Meal["options"]> {
+  const source = options[index];
+  if (!source) return options;
+  const next = [...options];
+  next.splice(index + 1, 0, { ...source, label: `${source.label || `Opção ${index + 1}`} (cópia)`, items: source.items.map((item) => ({ ...item })) });
+  return next;
+}
+
 export function cleanMealsForSave(meals: Meal[]): Meal[] {
   const cleanItem = (item: MealItem) => ({
     food: item.food,
@@ -293,6 +302,19 @@ export function MealItemsEditor({
   const [openExchangeKey, setOpenExchangeKey] = useState("");
   const [editingItemKey, setEditingItemKey] = useState("");
   const [exchangeDrawerKey, setExchangeDrawerKey] = useState("");
+  // R2.2 (seção 42) — devolve o foco ao botão que abriu o drawer ao fechar,
+  // em vez de deixá-lo perdido no <body>.
+  const exchangeDrawerTriggerRef = useRef<HTMLElement | null>(null);
+  const exchangeDrawerRef = useRef<HTMLElement | null>(null);
+  function openExchangeDrawer(key: string, trigger: HTMLElement) {
+    exchangeDrawerTriggerRef.current = trigger;
+    setExchangeDrawerKey(key);
+  }
+  function closeExchangeDrawer() {
+    setExchangeDrawerKey("");
+    exchangeDrawerTriggerRef.current?.focus();
+    exchangeDrawerTriggerRef.current = null;
+  }
   // FASE 8.5 (item 14) — aviso de incompatibilidade slot x alimento
   // escolhido, dispensável por item ("Manter mesmo assim"). Nunca bloqueia
   // a escolha da nutricionista, só avisa.
@@ -323,7 +345,26 @@ export function MealItemsEditor({
   useEffect(() => {
     if (!exchangeDrawerKey) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setExchangeDrawerKey("");
+      if (event.key === "Escape") {
+        closeExchangeDrawer();
+        return;
+      }
+      // Focus trap (seção 42) — Tab/Shift+Tab nunca escapam do drawer aberto.
+      if (event.key === "Tab") {
+        const container = exchangeDrawerRef.current;
+        if (!container) return;
+        const focusable = Array.from(container.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter((el) => !el.hasAttribute("disabled"));
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -368,9 +409,13 @@ export function MealItemsEditor({
   }, [recipeSelectorOpen, recipeDraft, exchangeDrawerKey]);
 
   useEffect(() => {
+    // N+1 (auditoria R2 final): um item que já tem identidade estruturada
+    // (food_source+food_ref_id) não precisa de sugestões de busca — nunca
+    // dispara 1 request por item num plano grande, só prime os itens ainda
+    // em texto livre (sem vínculo), que é onde a sugestão realmente ajuda.
     const foodsToPrime = meals.flatMap((meal, mealIndex) =>
-      meal.items.map((item, itemIndex) => ({ key: `${mealIndex}:${itemIndex}`, query: item.food.trim() }))
-    ).filter(({ key, query }) => query.length >= 2 && !foodSuggestions[key]?.length).slice(0, 24);
+      meal.items.map((item, itemIndex) => ({ key: `${mealIndex}:${itemIndex}`, query: item.food.trim(), hasIdentity: Boolean(item.food_source && item.food_ref_id) }))
+    ).filter(({ key, query, hasIdentity }) => !hasIdentity && query.length >= 2 && !foodSuggestions[key]?.length).slice(0, 24);
     if (!foodsToPrime.length) return;
 
     const controller = new AbortController();
@@ -568,6 +613,16 @@ export function MealItemsEditor({
     );
     return { mealIndex, itemIndex, meal, item, grams, itemSubstitutions, exchangeEntry };
   }, [exchangeDrawerKey, exchangeGroups, itemResolutions, meals, substitutions]);
+
+  // R2.2 (seção 42) — foco inicial dentro do drawer ao abrir (fechar botão),
+  // nunca deixado no elemento que estava embaixo do backdrop.
+  useEffect(() => {
+    if (!exchangeDrawerContext) return;
+    const frame = window.requestAnimationFrame(() => {
+      exchangeDrawerRef.current?.querySelector<HTMLElement>("button")?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [exchangeDrawerContext]);
 
   function updateMeal(index: number, patch: Partial<Meal>) {
     onChange(meals.map((meal, mealIndex) => mealIndex === index ? { ...meal, ...patch } : meal));
@@ -889,7 +944,7 @@ export function MealItemsEditor({
             <>
               <button type="button" onClick={addMealForEditing} className="brand-btn-secondary w-full sm:w-auto">
                 <Plus className="h-4 w-4" />
-                Refeicao
+                Adicionar refeição
               </button>
               <button type="button" onClick={() => setRecipeSelectorOpen(true)} className="brand-btn-secondary w-full sm:w-auto">
                 <Utensils className="h-4 w-4" />
@@ -973,20 +1028,42 @@ export function MealItemsEditor({
                 </label>
               </div>
               {meal.meal_structure === "OPTIONS" && <div className="mt-3 space-y-2">
-                {(meal.options ?? []).map((option, optionIndex) => <div key={optionIndex} className="flex gap-2 rounded-lg bg-[#FBF7F1] p-2">
-                  <input value={option.label} onChange={(event) => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, label: event.target.value } : value) })} className="brand-input" aria-label={`Nome da opção ${optionIndex + 1}`} />
-                  <input value={option.items[0]?.food ?? ""} onChange={(event) => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, items: [{ ...(value.items[0] ?? { quantity: "", unit: "", notes: "" }), food: event.target.value }] } : value) })} className="brand-input" placeholder="Primeiro alimento" aria-label={`Primeiro alimento da opção ${optionIndex + 1}`} />
-                  <button type="button" onClick={() => updateMeal(mealIndex, { options: [...(meal.options ?? []), { label: `Opção ${(meal.options?.length ?? 0) + 1}`, items: [{ food: "", quantity: "", unit: "", notes: "" }] }] })} className="brand-btn-secondary shrink-0">+ Opção</button>
+                {(meal.options ?? []).map((option, optionIndex) => <div key={optionIndex} className="rounded-lg bg-[#FBF7F1] p-2">
+                  <div className="flex gap-2">
+                    <input value={option.label} onChange={(event) => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, label: event.target.value } : value) })} className="brand-input" aria-label={`Nome da opção ${optionIndex + 1}`} />
+                    <button type="button" onClick={() => updateMeal(mealIndex, { options: duplicateMealOptionAt(meal.options ?? [], optionIndex) })} className="brand-btn-secondary shrink-0" aria-label={`Duplicar ${option.label || `opção ${optionIndex + 1}`}`}>Duplicar</button>
+                    <button type="button" onClick={() => updateMeal(mealIndex, { options: (meal.options ?? []).filter((_, index) => index !== optionIndex) })} className="brand-btn-secondary shrink-0 text-red-600" aria-label={`Excluir ${option.label || `opção ${optionIndex + 1}`}`}>Excluir</button>
+                  </div>
+                  <div className="mt-2 grid gap-1.5 md:grid-cols-[minmax(0,1fr)_76px_76px]">
+                    {option.items.map((item, itemIndex) => <div key={itemIndex} className="contents">
+                      <input value={item.food} onChange={(event) => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, items: value.items.map((candidate, candidateIndex) => candidateIndex === itemIndex ? { ...candidate, food: event.target.value } : candidate) } : value) })} className="brand-input" placeholder="Alimento da opção" aria-label={`Alimento ${itemIndex + 1} da opção ${optionIndex + 1}`} />
+                      <input value={item.quantity ?? ""} onChange={(event) => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, items: value.items.map((candidate, candidateIndex) => candidateIndex === itemIndex ? { ...candidate, quantity: event.target.value } : candidate) } : value) })} className="brand-input" placeholder="Qtd." aria-label={`Quantidade ${itemIndex + 1} da opção ${optionIndex + 1}`} />
+                      <input value={item.unit ?? ""} onChange={(event) => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, items: value.items.map((candidate, candidateIndex) => candidateIndex === itemIndex ? { ...candidate, unit: event.target.value } : candidate) } : value) })} className="brand-input" placeholder="Un." aria-label={`Unidade ${itemIndex + 1} da opção ${optionIndex + 1}`} />
+                    </div>)}
+                  </div>
+                  <button type="button" onClick={() => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, items: [...value.items, { food: "", quantity: "", unit: "", notes: "" }] } : value) })} className="mt-2 text-xs font-semibold text-[#607A56]">+ Alimento nesta opção</button>
                 </div>)}
+                <button type="button" onClick={() => updateMeal(mealIndex, { options: [...(meal.options ?? []), { label: `Opção ${(meal.options?.length ?? 0) + 1}`, items: [{ food: "", quantity: "", unit: "", notes: "" }] }] })} className="brand-btn-secondary">Adicionar opção</button>
               </div>}
               {meal.meal_structure === "COMBINATION" && <div className="mt-3 space-y-2">
-                {(meal.choice_groups ?? []).map((group, groupIndex) => <div key={groupIndex} className="grid gap-2 rounded-lg bg-[#FBF7F1] p-2 md:grid-cols-[minmax(0,1fr)_90px_90px]">
-                  <input value={group.title} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, title: event.target.value } : value) })} className="brand-input" aria-label={`Nome do grupo ${groupIndex + 1}`} />
-                  <input type="number" min="1" value={group.min_selections} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, min_selections: Number(event.target.value) } : value) })} className="brand-input" aria-label="Mínimo de escolhas" />
-                  <input type="number" min="1" value={group.max_selections} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, max_selections: Number(event.target.value) } : value) })} className="brand-input" aria-label="Máximo de escolhas" />
-                  <input value={group.items[0]?.food ?? ""} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, items: [{ ...(value.items[0] ?? { quantity: "", unit: "", notes: "" }), food: event.target.value }] } : value) })} className="brand-input md:col-span-3" placeholder="Primeiro alimento do grupo" aria-label={`Primeiro alimento do grupo ${groupIndex + 1}`} />
+                {(meal.choice_groups ?? []).map((group, groupIndex) => <div key={groupIndex} className="rounded-lg bg-[#FBF7F1] p-2">
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_90px_90px_auto]">
+                    <input value={group.title} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, title: event.target.value } : value) })} className="brand-input" aria-label={`Nome do grupo ${groupIndex + 1}`} placeholder="Ex.: Escolha 1 proteína" />
+                    <input type="number" min="1" value={group.min_selections} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, min_selections: Number(event.target.value) } : value) })} className="brand-input" aria-label="Mínimo de escolhas" title="Mínimo" />
+                    <input type="number" min="1" value={group.max_selections} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, max_selections: Number(event.target.value) } : value) })} className="brand-input" aria-label="Máximo de escolhas" title="Máximo" />
+                    <button type="button" onClick={() => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).filter((_, index) => index !== groupIndex) })} className="brand-btn-secondary text-red-600">Excluir</button>
+                  </div>
+                  <p className="mt-1 text-[11px] text-[#75675E]">Escolha de {group.min_selections} a {group.max_selections} item(ns)</p>
+                  <div className="mt-2 grid gap-1.5 md:grid-cols-[minmax(0,1fr)_76px_76px]">
+                    {group.items.map((item, itemIndex) => <div key={itemIndex} className="contents">
+                      <input value={item.food} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, items: value.items.map((candidate, candidateIndex) => candidateIndex === itemIndex ? { ...candidate, food: event.target.value } : candidate) } : value) })} className="brand-input" placeholder="Alimento do grupo" aria-label={`Alimento ${itemIndex + 1} do grupo ${groupIndex + 1}`} />
+                      <input value={item.quantity ?? ""} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, items: value.items.map((candidate, candidateIndex) => candidateIndex === itemIndex ? { ...candidate, quantity: event.target.value } : candidate) } : value) })} className="brand-input" placeholder="Qtd." aria-label={`Quantidade ${itemIndex + 1} do grupo ${groupIndex + 1}`} />
+                      <input value={item.unit ?? ""} onChange={(event) => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, items: value.items.map((candidate, candidateIndex) => candidateIndex === itemIndex ? { ...candidate, unit: event.target.value } : candidate) } : value) })} className="brand-input" placeholder="Un." aria-label={`Unidade ${itemIndex + 1} do grupo ${groupIndex + 1}`} />
+                    </div>)}
+                  </div>
+                  <button type="button" onClick={() => updateMeal(mealIndex, { choice_groups: (meal.choice_groups ?? []).map((value, index) => index === groupIndex ? { ...value, items: [...value.items, { food: "", quantity: "", unit: "", notes: "" }] } : value) })} className="mt-2 text-xs font-semibold text-[#607A56]">+ Alimento no grupo</button>
                 </div>)}
-                <button type="button" onClick={() => updateMeal(mealIndex, { choice_groups: [...(meal.choice_groups ?? []), { title: `Grupo ${(meal.choice_groups?.length ?? 0) + 1}`, min_selections: 1, max_selections: 1, items: [{ food: "", quantity: "", unit: "", notes: "" }] }] })} className="brand-btn-secondary">+ Adicionar grupo</button>
+                <button type="button" onClick={() => updateMeal(mealIndex, { choice_groups: [...(meal.choice_groups ?? []), { title: `Grupo ${(meal.choice_groups?.length ?? 0) + 1}`, min_selections: 1, max_selections: 1, items: [{ food: "", quantity: "", unit: "", notes: "" }] }] })} className="brand-btn-secondary">Adicionar grupo de escolha</button>
               </div>}
             </div>
           )}
@@ -1067,6 +1144,7 @@ export function MealItemsEditor({
                           {slotIncompatible && <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF3E9] px-2 py-0.5 text-[10px] font-semibold text-[#9A6B28]"><AlertTriangle className="h-3 w-3" /> revisar grupo</span>}
                           {item.ai_suggested && <span className="rounded-full bg-[#FFF7F3] px-2 py-0.5 text-[10px] font-semibold text-[#8C5F50]">IA</span>}
                           {item.quantity_locked && <span className="rounded-full bg-[#FAF7F2] px-2 py-0.5 text-[10px] font-semibold text-[#75675E]">quantidade fixa</span>}
+                          {item.is_optional && <span className="rounded-full bg-[#FFF3E9] px-2 py-0.5 text-[10px] font-semibold text-[#9A6B28]">opcional</span>}
                         </div>
                       </div>
                       <div className="text-sm font-semibold text-[#3A3028]">{mealPlanItemDisplayQuantity(item)}</div>
@@ -1075,7 +1153,7 @@ export function MealItemsEditor({
                         {clientId ? (
                           <button
                             type="button"
-                            onClick={() => setExchangeDrawerKey(key)}
+                            onClick={(event) => openExchangeDrawer(key, event.currentTarget)}
                             className="inline-flex h-9 min-w-0 items-center gap-2 rounded-lg border border-[#DDE8D6] bg-[#F8FBF5] px-2.5 text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]"
                             aria-haspopup="dialog"
                             aria-label={`Revisar trocas de ${item.food || "alimento"}`}
@@ -1202,6 +1280,10 @@ export function MealItemsEditor({
                         sugerido por IA
                       </span>
                     )}
+                    <label className="mt-1 inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#75675E]">
+                      <input type="checkbox" checked={Boolean(item.is_optional)} onChange={(event) => updateMealItem(mealIndex, itemIndex, { is_optional: event.target.checked })} />
+                      Item opcional
+                    </label>
                     {(() => {
                       const resolution = itemResolutions[key]?.quantity;
                       // "food_household_measure" e sua propria categoria (secao 9 do
@@ -1299,8 +1381,8 @@ export function MealItemsEditor({
                     {clientId ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          setExchangeDrawerKey(key);
+                        onClick={(event) => {
+                          openExchangeDrawer(key, event.currentTarget);
                           setOpenSubstitutionsKey("");
                           setOpenExchangeKey("");
                         }}
@@ -1406,6 +1488,9 @@ export function MealItemsEditor({
                           alternatives={exchangeEntry?.alternatives ?? []}
                           onResolved={(identity) => updateMealItem(mealIndex, itemIndex, identity)}
                           onRefresh={loadExchangeGroups}
+                          allMeals={meals}
+                          mealIndex={mealIndex}
+                          itemIndex={itemIndex}
                         />
                       </div>
                   )}
@@ -1440,8 +1525,13 @@ export function MealItemsEditor({
 
       {portalReady && exchangeDrawerContext && createPortal(
         <div role="dialog" aria-modal="true" aria-labelledby="meal-exchange-drawer-title" className="fixed inset-0 z-50 overflow-hidden bg-black/25 backdrop-blur-sm">
-          <button type="button" className="absolute inset-0 h-full w-full cursor-default" aria-hidden="true" tabIndex={-1} onClick={() => setExchangeDrawerKey("")} />
-          <aside className="absolute right-0 top-0 flex h-full w-full max-w-[520px] flex-col border-l border-[#EAD8C2] bg-[#FFFDFC] shadow-[0_24px_80px_rgba(58,48,40,0.28)]">
+          <button type="button" className="absolute inset-0 h-full w-full cursor-default" aria-hidden="true" tabIndex={-1} onClick={closeExchangeDrawer} />
+          {/* R2.2 (seção 40) — mobile: bottom sheet de altura fixa; a partir de
+              sm: drawer lateral direito, altura cheia, como antes. */}
+          <aside
+            ref={(node) => { exchangeDrawerRef.current = node; }}
+            className="absolute inset-x-0 bottom-0 top-auto flex h-[85vh] flex-col rounded-t-2xl border-t border-[#EAD8C2] bg-[#FFFDFC] shadow-[0_-16px_60px_rgba(58,48,40,0.28)] sm:inset-x-auto sm:right-0 sm:top-0 sm:bottom-auto sm:h-full sm:w-full sm:max-w-[520px] sm:rounded-t-none sm:rounded-none sm:border-l sm:border-t-0 sm:shadow-[0_24px_80px_rgba(58,48,40,0.28)]"
+          >
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-4 py-4">
               <div className="min-w-0">
                 <p className="brand-kicker">Trocas</p>
@@ -1450,7 +1540,7 @@ export function MealItemsEditor({
                   {exchangeDrawerContext.meal.name || "Refeicao"} - {mealPlanItemDisplayQuantity(exchangeDrawerContext.item)}
                 </p>
               </div>
-              <button type="button" onClick={() => setExchangeDrawerKey("")} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar trocas" title="Fechar">
+              <button type="button" onClick={closeExchangeDrawer} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar trocas" title="Fechar">
                 <PanelRightClose className="h-4 w-4" />
               </button>
             </div>
@@ -1515,6 +1605,9 @@ export function MealItemsEditor({
                   alternatives={exchangeDrawerContext.exchangeEntry?.alternatives ?? []}
                   onResolved={(identity) => updateMealItem(exchangeDrawerContext.mealIndex, exchangeDrawerContext.itemIndex, identity)}
                   onRefresh={loadExchangeGroups}
+                  allMeals={meals}
+                  mealIndex={exchangeDrawerContext.mealIndex}
+                  itemIndex={exchangeDrawerContext.itemIndex}
                 />
               ) : (
                 <ItemSubstitutionsPanel
