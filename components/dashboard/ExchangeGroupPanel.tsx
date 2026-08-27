@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, Loader2, Plus, RefreshCw, Search, Sparkles, Trash2, X } from "lucide-react";
 import { useMealPlanNutritionData, type SummaryItem, type SummaryMeal } from "@/components/nutrition/MealPlanNutritionSummary";
+import { EQUIVALENT_QUANTITY_CRITERIA, CRITERION_LABEL, type EquivalentQuantityCriterion, type EquivalentQuantityStatus } from "@/lib/nutrition/equivalent-quantity";
 
 const NO_TARGET = { energyKcal: null, proteinG: null, carbohydrateG: null, fatG: null };
 
@@ -50,6 +51,41 @@ type FoodSearchItem = {
   sourceLabel?: string;
   grupo?: string;
 };
+
+/** Fontes aceitas por `/api/admin/foods/equivalent-quantity` (seção 1 do
+ * pedido — não criar novo drawer, só conectar ao contrato real do
+ * endpoint). TBCA/IBGE_POF ainda não têm identidade canônica consumível
+ * pela Nutrition Engine (mesma restrição de `resolveItemReference`), então
+ * simplesmente não recebem anotação de equivalência — nunca um número
+ * inventado pra essas fontes. */
+const EQUIVALENT_QUANTITY_SOURCES = new Set(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]);
+
+interface HouseholdPortionMatchView {
+  portionId: string;
+  label: string;
+  gramWeight: number;
+  approxCount: number;
+  toleranceRatio: number;
+}
+
+interface EquivalentQuantityResultView {
+  criterion: EquivalentQuantityCriterion;
+  status: EquivalentQuantityStatus;
+  practicalCandidateQuantityGrams: number | null;
+  rawCandidateQuantityGrams: number | null;
+  targetDelta: number | null;
+  percentDifference: number | null;
+  nutritionDelta: Partial<Record<"energyKcal" | "proteinG" | "carbohydrateG" | "fatG" | "fiberG", number | null>> | null;
+}
+
+interface EquivalentBatchItem {
+  ref: { source: string; refId: string };
+  name: string | null;
+  sourceLabel: string | null;
+  sameCategory: boolean;
+  result: EquivalentQuantityResultView | null;
+  householdPortion: HouseholdPortionMatchView | null;
+}
 
 function friendlyFoodName(technicalName: string) {
   const parts = technicalName.split(",").map((part) => part.trim()).filter(Boolean);
@@ -128,6 +164,19 @@ export function ExchangeGroupPanel({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
 
+  // R3 — critério de equivalência (energia/proteína/carboidrato/gordura,
+  // seção 2). ENERGY é só o default operacional/visual (seção 3), nunca
+  // uma recomendação clínica. `previewQuantityEditedRef` marca quando a
+  // nutricionista editou a quantidade manualmente — a partir daí, trocar
+  // de critério nunca sobrescreve o que ela digitou (seção 4/32: recalcula
+  // a sugestão, mas respeita edição manual já feita).
+  const [criterion, setCriterion] = useState<EquivalentQuantityCriterion>("ENERGY");
+  const [equivalentByKey, setEquivalentByKey] = useState<Map<string, EquivalentBatchItem>>(new Map());
+  const [equivalentLoading, setEquivalentLoading] = useState(false);
+  const [equivalentError, setEquivalentError] = useState(false);
+  const equivalentRequestRef = useRef(0);
+  const previewQuantityEditedRef = useRef(false);
+
   const hasStructuredIdentity = Boolean(primaryFoodSource && primaryFoodRefId);
   const canTryResolve = Boolean(mealPlanItemId && primaryFoodName?.trim());
   const hasGrams = Number.isFinite(primaryGrams) && (primaryGrams ?? 0) > 0;
@@ -184,6 +233,74 @@ export function ExchangeGroupPanel({
     if (manualOpen) window.requestAnimationFrame(() => searchInputRef.current?.focus());
   }, [manualOpen]);
 
+  /**
+   * R3 — UMA chamada em lote pra todos os candidatos da busca atual
+   * (seção 5/6/7: nunca 1 request por candidato, até 30 por vez, mesmo
+   * limite do endpoint). Segurança contra resposta obsoleta (seção 9):
+   * um contador de geração garante que só a resposta da chamada MAIS
+   * recente (troca de critério, nova busca, novo alimento de referência)
+   * atualiza o estado — uma resposta atrasada de uma chamada anterior é
+   * descartada silenciosamente.
+   */
+  async function runEquivalentBatch(candidateRefs: { source: string; refId: string }[]) {
+    const requestId = ++equivalentRequestRef.current;
+    if (!hasStructuredIdentity || !hasGrams || !candidateRefs.length) {
+      setEquivalentByKey(new Map());
+      setEquivalentError(false);
+      return;
+    }
+    setEquivalentLoading(true);
+    setEquivalentError(false);
+    try {
+      const response = await fetch("/api/admin/foods/equivalent-quantity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          referenceFood: { source: primaryFoodSource, refId: primaryFoodRefId },
+          referenceGrams: primaryGrams,
+          criterion,
+          candidates: candidateRefs.slice(0, 30),
+        }),
+      });
+      if (requestId !== equivalentRequestRef.current) return;
+      if (!response.ok) {
+        setEquivalentError(true);
+        return;
+      }
+      const data = await response.json() as { items?: EquivalentBatchItem[] };
+      if (requestId !== equivalentRequestRef.current) return;
+      setEquivalentByKey(new Map((data.items ?? []).map((item) => [`${item.ref.source}:${item.ref.refId}`, item])));
+    } catch (cause) {
+      if (requestId === equivalentRequestRef.current && !(cause instanceof Error && cause.name === "AbortError")) setEquivalentError(true);
+    } finally {
+      if (requestId === equivalentRequestRef.current) setEquivalentLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    // Nunca sugere o próprio alimento principal como substituição (seção 43).
+    const candidateRefs = manualResults
+      .filter((item) => item.ref && EQUIVALENT_QUANTITY_SOURCES.has(item.ref.source))
+      .filter((item) => !(item.ref!.source === primaryFoodSource && item.ref!.sourceId === primaryFoodRefId))
+      .map((item) => ({ source: item.ref!.source, refId: item.ref!.sourceId }));
+    void runEquivalentBatch(candidateRefs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualResults, criterion, hasStructuredIdentity, hasGrams, primaryFoodSource, primaryFoodRefId, primaryGrams]);
+
+  /**
+   * Ao trocar de critério (ou assim que o lote termina de calcular), a
+   * quantidade sugerida no preview acompanha o novo critério — MAS só
+   * enquanto a nutricionista não editou a quantidade manualmente (seção
+   * 32: recalcula a sugestão; nunca sobrescreve uma edição deliberada).
+   */
+  useEffect(() => {
+    if (!previewItem?.ref || previewQuantityEditedRef.current) return;
+    const entry = equivalentByKey.get(`${previewItem.ref.source}:${previewItem.ref.sourceId}`);
+    if (entry?.result?.status === "CALCULATED" && entry.result.practicalCandidateQuantityGrams != null) {
+      setPreviewQuantity(String(entry.result.practicalCandidateQuantityGrams));
+    }
+  }, [criterion, equivalentByKey, previewItem]);
+
   async function fetchPreviewNutrients(ref: { source: string; sourceId: string }, grams: number, signal?: AbortSignal): Promise<PreviewNutrients | null> {
     const params = new URLSearchParams({ source: ref.source, sourceId: ref.sourceId, quantity: String(grams), unit: "g" });
     const response = await fetch(`/api/admin/foods/nutrients?${params}`, { cache: "no-store", signal });
@@ -200,8 +317,11 @@ export function ExchangeGroupPanel({
   }
 
   function openPreview(item: FoodSearchItem) {
+    previewQuantityEditedRef.current = false;
     setPreviewItem(item);
-    setPreviewQuantity(hasGrams ? String(Math.round((primaryGrams ?? 0) * 10) / 10) : "100");
+    const entry = item.ref ? equivalentByKey.get(`${item.ref.source}:${item.ref.sourceId}`) : undefined;
+    const suggested = entry?.result?.status === "CALCULATED" ? entry.result.practicalCandidateQuantityGrams : null;
+    setPreviewQuantity(suggested != null ? String(suggested) : hasGrams ? String(Math.round((primaryGrams ?? 0) * 10) / 10) : "100");
     setPreviewCandidate(null);
     setPreviewReference(null);
     setPreviewError("");
@@ -212,6 +332,11 @@ export function ExchangeGroupPanel({
     setPreviewCandidate(null);
     setPreviewReference(null);
     setPreviewError("");
+  }
+
+  function handlePreviewQuantityChange(value: string) {
+    previewQuantityEditedRef.current = true;
+    setPreviewQuantity(value);
   }
 
   useEffect(() => {
@@ -491,6 +616,10 @@ export function ExchangeGroupPanel({
               </button>
             </div>
 
+            {manualOpen && hasStructuredIdentity && hasGrams && (
+              <CriterionSelector value={criterion} onChange={setCriterion} />
+            )}
+
             {manualOpen && !previewItem && (
               <div className="rounded-xl border border-[#EDE1D6] bg-[#FAF7F2]/60 p-3">
                 <label className="brand-label" htmlFor="exchange-manual-search">Pesquisar alimento</label>
@@ -519,6 +648,7 @@ export function ExchangeGroupPanel({
                   <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-[#EAD8C2] bg-white p-1">
                     {manualResults.map((item, index) => {
                       const label = item.displayName ?? item.name ?? item.descricao ?? "Alimento";
+                      const entry = item.ref ? equivalentByKey.get(`${item.ref.source}:${item.ref.sourceId}`) : undefined;
                       return (
                         <button
                           key={`${item.ref?.source ?? "food"}:${item.ref?.sourceId ?? index}`}
@@ -529,10 +659,23 @@ export function ExchangeGroupPanel({
                         >
                           <span className="block text-sm font-semibold text-[#3A3028]">{label}</span>
                           <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">{item.sourceLabel ?? item.grupo ?? "Catálogo"}</span>
+                          <EquivalentQuantitySummary entry={entry} loading={equivalentLoading && !entry} criterion={criterion} />
                         </button>
                       );
                     })}
                   </div>
+                )}
+                {equivalentError && (
+                  <p className="mt-2 text-xs font-semibold text-red-700">
+                    Não foi possível calcular a equivalência agora.{" "}
+                    <button
+                      type="button"
+                      onClick={() => void runEquivalentBatch(manualResults.filter((item) => item.ref && EQUIVALENT_QUANTITY_SOURCES.has(item.ref.source)).map((item) => ({ source: item.ref!.source, refId: item.ref!.sourceId })))}
+                      className="underline"
+                    >
+                      Tentar novamente
+                    </button>
+                  </p>
                 )}
               </div>
             )}
@@ -541,7 +684,7 @@ export function ExchangeGroupPanel({
               <FoodPreviewCard
                 item={previewItem}
                 quantity={previewQuantity}
-                onQuantityChange={setPreviewQuantity}
+                onQuantityChange={handlePreviewQuantityChange}
                 candidate={previewCandidate}
                 reference={previewReference}
                 loading={previewLoading}
@@ -549,6 +692,8 @@ export function ExchangeGroupPanel({
                 addDisabled={loading || !previewCandidate}
                 onCancel={closePreview}
                 onConfirm={() => void confirmAddPreview()}
+                equivalentEntry={previewItem.ref ? equivalentByKey.get(`${previewItem.ref.source}:${previewItem.ref.sourceId}`) : undefined}
+                criterion={criterion}
                 impactProps={
                   allMeals && typeof mealIndex === "number" && typeof itemIndex === "number" && previewItem.ref
                     ? { allMeals, mealIndex, itemIndex, candidateRef: previewItem.ref, quantity: previewQuantity }
@@ -608,6 +753,88 @@ export function accessibleDeltaPhrase(value: number, unit: string, label: string
   return `${label}: ${rounded} ${spokenUnit} a ${value > 0 ? "mais" : "menos"}`;
 }
 
+const CRITERION_ORDER: EquivalentQuantityCriterion[] = EQUIVALENT_QUANTITY_CRITERIA;
+
+const NOT_CALCULABLE_MESSAGE: Record<Exclude<EquivalentQuantityStatus, "CALCULATED">, string> = {
+  NOT_CALCULABLE: "Não foi possível calcular equivalência para este critério.",
+  MISSING_TARGET_NUTRIENT: "Não foi possível calcular equivalência para este critério.",
+  ZERO_TARGET_NUTRIENT: "Não foi possível calcular equivalência para este critério.",
+  INVALID_QUANTITY: "Não foi possível calcular equivalência para este critério.",
+};
+
+/**
+ * Seletor de critério de equivalência (seção 2/3): ENERGY é só o default
+ * visual/operacional inicial — nunca apresentado como recomendação
+ * clínica (nenhum rótulo de "melhor" aqui). Botões nativos com
+ * `aria-pressed` já cobrem navegação por teclado (Tab + Enter/Espaço)
+ * sem precisar de um padrão de tabs mais complexo (seção 44).
+ */
+function CriterionSelector({ value, onChange }: { value: EquivalentQuantityCriterion; onChange: (criterion: EquivalentQuantityCriterion) => void }) {
+  return (
+    <div className="rounded-xl border border-[#EDE1D6] bg-white p-2.5">
+      <p className="brand-label" id="exchange-criterion-label">Equivalência por</p>
+      <div role="group" aria-labelledby="exchange-criterion-label" className="mt-1.5 flex flex-wrap gap-1.5">
+        {CRITERION_ORDER.map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={value === option}
+            onClick={() => onChange(option)}
+            className={`min-h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${
+              value === option ? "border-[#607A56] bg-[#607A56] text-white" : "border-[#EAD8C2] bg-white text-[#75675E] hover:bg-[#FAF7F2]"
+            }`}
+          >
+            {CRITERION_LABEL[option]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Linha compacta usada dentro de cada resultado de busca (seção 10, versão resumida — o detalhe completo por macro fica no card de preview ao selecionar). */
+function EquivalentQuantitySummary({ entry, loading, criterion }: { entry: EquivalentBatchItem | undefined; loading: boolean; criterion: EquivalentQuantityCriterion }) {
+  if (loading) return <span className="mt-1 flex items-center gap-1 text-[10px] text-[#8C6E52]"><Loader2 className="h-3 w-3 animate-spin" /> Calculando equivalência...</span>;
+  if (!entry?.result) return null;
+  if (entry.result.status !== "CALCULATED") {
+    return <span className="mt-1 block text-[10px] text-[#8C6E52]">{NOT_CALCULABLE_MESSAGE[entry.result.status]}</span>;
+  }
+  const grams = entry.result.practicalCandidateQuantityGrams;
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-x-2 text-[10px] text-[#8C6E52]">
+      <span className="font-semibold text-[#3A3028]">{grams} g</span>
+      {entry.householdPortion && <span>≈ {entry.householdPortion.approxCount} {entry.householdPortion.label}</span>}
+      {entry.result.percentDifference !== null && (
+        <span>{Math.abs(Math.round(entry.result.percentDifference * 10) / 10)}% de diferença em {CRITERION_LABEL[criterion].toLowerCase()}</span>
+      )}
+    </span>
+  );
+}
+
+/** Detalhe da equivalência dentro do card de preview (seção 11-17): quantidade prática em destaque, bruta só como detalhe opcional, medida caseira só quando real. */
+function EquivalentQuantityDetail({ entry, criterion }: { entry: EquivalentBatchItem | undefined; criterion: EquivalentQuantityCriterion }) {
+  if (!entry?.result) return null;
+  if (entry.result.status !== "CALCULATED") {
+    return <p className="mt-1.5 text-xs text-[#8C6E52]">{NOT_CALCULABLE_MESSAGE[entry.result.status]}</p>;
+  }
+  const { practicalCandidateQuantityGrams, rawCandidateQuantityGrams, percentDifference } = entry.result;
+  return (
+    <p className="mt-1.5 text-xs text-[#75675E]">
+      Quantidade equivalente ({CRITERION_LABEL[criterion].toLowerCase()}):{" "}
+      <span
+        className="font-semibold text-[#3A3028]"
+        title={rawCandidateQuantityGrams !== null ? `Quantidade matemática: ${Math.round(rawCandidateQuantityGrams * 100) / 100} g` : undefined}
+      >
+        {practicalCandidateQuantityGrams} g
+      </span>
+      {entry.householdPortion && <> · ≈ {entry.householdPortion.approxCount} {entry.householdPortion.label}</>}
+      {percentDifference !== null && (
+        <span className="text-[#8C6E52]"> ({Math.abs(Math.round(percentDifference * 10) / 10)}% de diferença)</span>
+      )}
+    </p>
+  );
+}
+
 /**
  * Preview + comparação nutricional (seções 15-22 do pedido) antes de
  * confirmar a adição. Nunca calcula nada por conta própria — os valores de
@@ -626,6 +853,8 @@ function FoodPreviewCard({
   addDisabled,
   onCancel,
   onConfirm,
+  equivalentEntry,
+  criterion,
   impactProps,
 }: {
   item: FoodSearchItem;
@@ -638,6 +867,8 @@ function FoodPreviewCard({
   addDisabled: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  equivalentEntry?: EquivalentBatchItem;
+  criterion: EquivalentQuantityCriterion;
   impactProps: { allMeals: SummaryMeal[]; mealIndex: number; itemIndex: number; candidateRef: { source: string; sourceId: string; canonicalId?: string | null }; quantity: string } | null;
 }) {
   const label = item.displayName ?? item.name ?? item.descricao ?? "Alimento";
@@ -649,6 +880,8 @@ function FoodPreviewCard({
       </button>
 
       <p className="text-sm font-semibold text-[#3A3028]">{friendlyFoodName(label)} · {item.sourceLabel ?? "Catálogo"}</p>
+
+      <EquivalentQuantityDetail entry={equivalentEntry} criterion={criterion} />
 
       <div className="mt-2">
         <label className="brand-label" htmlFor="exchange-preview-quantity">Quantidade (g)</label>

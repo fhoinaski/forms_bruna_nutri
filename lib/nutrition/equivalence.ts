@@ -1,4 +1,5 @@
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
+import { roundToPracticalQuantity } from "@/lib/nutrition/equivalent-quantity";
 
 /**
  * Motor de equivalencias (secoes 22-24 do pedido) — 100% deterministico,
@@ -24,7 +25,6 @@ const NUTRIENT_FIELD: Record<EquivalenceNutrient, keyof MacroReferenceFood> = {
 
 const MIN_PLAUSIBLE_GRAMS = 5;
 const MAX_PLAUSIBLE_GRAMS = 1000;
-const PRACTICAL_INCREMENT_GRAMS = 5;
 const DEFAULT_TOLERANCE_PERCENT = 10;
 const DEFAULT_LIMIT = 5;
 
@@ -77,7 +77,7 @@ export function findEquivalentFoods(options: FindEquivalentFoodsOptions): Equiva
     const rawGramsNeeded = (baseAmountValue / candidatePer100) * 100;
     if (rawGramsNeeded < MIN_PLAUSIBLE_GRAMS || rawGramsNeeded > MAX_PLAUSIBLE_GRAMS) continue;
 
-    const roundedGrams = Math.max(PRACTICAL_INCREMENT_GRAMS, Math.round(rawGramsNeeded / PRACTICAL_INCREMENT_GRAMS) * PRACTICAL_INCREMENT_GRAMS);
+    const roundedGrams = roundToPracticalQuantity(rawGramsNeeded);
     const nutrientAtThatAmount = (candidatePer100 * roundedGrams) / 100;
     const deltaPercent = ((nutrientAtThatAmount - baseAmountValue) / baseAmountValue) * 100;
     if (Math.abs(deltaPercent) > tolerancePercent) continue;
