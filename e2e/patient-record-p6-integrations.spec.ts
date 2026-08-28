@@ -20,16 +20,10 @@ test.describe("Patient Record P6 final integrations", () => {
     await page.goto(`/dashboard/clients/${patient.id}`);
 
     await expect(page.getByTestId("patient-record-overview")).toBeVisible();
-    // As ações rápidas foram centralizadas no cabeçalho do paciente (nunca
-    // duplicadas no card de resumo — ver lib/patient-record/workspace-state.ts,
-    // "Keeping this decision here prevents competing CTAs from reappearing
-    // in each card"). Um paciente novo, sem consulta/avaliação/plano, tem
-    // "Iniciar primeira consulta" como ação principal e "Criar plano" +
-    // "Nova avaliação" como ações secundárias — nunca "Iniciar consulta"/
-    // "Abrir plano" (que só existem quando já há consulta anterior/plano
-    // ativo) nem dentro de patient-record-overview.
+    // A ação primária do cabeçalho permanece estável para orientação clínica;
+    // as ações complementares continuam disponíveis sem duplicar módulos.
     const header = page.locator("header");
-    await expect(header.getByRole("button", { name: "Iniciar primeira consulta" })).toBeVisible();
+    await expect(header.getByRole("button", { name: "Nova consulta" })).toBeVisible();
     await expect(header.getByRole("button", { name: "Nova avaliação" })).toBeVisible();
     await expect(header.getByRole("button", { name: "Criar plano" })).toBeVisible();
     await page.getByText("Mais ações", { exact: true }).click();

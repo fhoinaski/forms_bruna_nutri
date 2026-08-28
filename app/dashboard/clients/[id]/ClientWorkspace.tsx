@@ -263,6 +263,7 @@ const TABS = [
   { id: "antropometria", label: "Antropometria", icon: Activity },
   { id: "plano-alimentar", label: "Plano alimentar", icon: Utensils },
   { id: "evolucao", label: "Evolução", icon: TrendingUp },
+  { id: "portal", label: "Portal", icon: ExternalLink },
   { id: "mais", label: "Mais", icon: MoreHorizontal },
 ] as const;
 
@@ -1508,11 +1509,13 @@ function PatientOverview({
   recentActivity,
   onOpenProtocols,
   onOpenTimeline,
+  onRunNextAction,
 }: {
   summary: PatientRecordSummaryViewModel;
   recentActivity: PatientTimelineEvent[];
   onOpenProtocols: () => void;
   onOpenTimeline: () => void;
+  onRunNextAction: (action: PatientWorkspaceAction) => void;
 }) {
   const weightValue = formatWeight(summary.latestAnthropometry?.weightKg);
   const trend = formatTrend(summary.weightTrend);
@@ -1592,7 +1595,10 @@ function PatientOverview({
               <p className="brand-kicker">Próxima ação</p>
               <h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">{workspace.nextBestAction.label}</h3>
               <p className="mt-2 text-sm leading-6 text-[#75675E]">{workspace.nextBestAction.description}</p>
-              <p className="mt-4 text-xs font-medium text-[#607A56]">A ação está disponível no cabeçalho do paciente.</p>
+              <button type="button" onClick={() => onRunNextAction(workspace.nextBestAction)} disabled={summary.patient.status === "arquivado"} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-full bg-[#607A56] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#4F6847] disabled:cursor-not-allowed disabled:opacity-50">
+                {workspace.nextBestAction.label}
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </section>
           </div>
 
@@ -1747,11 +1753,13 @@ export default function ClientWorkspace({
   }
 
   function openPlanTab() {
+    router.push(getPatientRecordHref(id, "plano-alimentar"));
     setActiveTab("plano-alimentar");
     setPlanView("dieta");
   }
 
   function openProtocolsTab() {
+    router.push(`/dashboard/clients/${id}?tab=plano-alimentar&view=protocolos`);
     setActiveTab("plano-alimentar");
     setPlanView("protocolos");
   }
@@ -1825,7 +1833,7 @@ export default function ClientWorkspace({
         })
         .catch(() => null).finally(() => setProtocolsLoading(false));
     }
-    if (activeTab === "mais" && moreView === "portal" && !portalAccess) {
+    if ((activeTab === "portal" || (activeTab === "mais" && moreView === "portal")) && !portalAccess) {
       reloadPortalAccess();
     }
     if ((activeTab === "consultas" || (activeTab === "evolucao" && evolutionView === "agenda")) && appointments.length === 0) {
@@ -2033,6 +2041,11 @@ export default function ClientWorkspace({
 
   const workspaceState = getPatientWorkspaceState(patientSummary);
 
+  function changeTab(value: TabId) {
+    setActiveTab(value);
+    router.push(getPatientRecordHref(id, value));
+  }
+
   return (
     <div className="mx-auto w-full min-w-0 max-w-7xl space-y-6 pb-16 animate-fade-up">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2067,9 +2080,9 @@ export default function ClientWorkspace({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 xl:justify-end xl:shrink-0">
-              <button type="button" onClick={() => runWorkspaceAction(workspaceState.nextBestAction)} disabled={patientSummary.patient.status === "arquivado" && workspaceState.nextBestAction.kind !== "meal-plan" && workspaceState.nextBestAction.kind !== "appointment"} className="brand-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
-                {workspaceState.nextBestAction.kind === "consultation" ? <Stethoscope className="h-4 w-4" /> : workspaceState.nextBestAction.kind === "assessment" ? <Activity className="h-4 w-4" /> : workspaceState.nextBestAction.kind === "meal-plan" ? <Utensils className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
-                {workspaceState.nextBestAction.label}
+              <button type="button" onClick={() => void startConsultation()} disabled={patientSummary.patient.status === "arquivado"} className="brand-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+                <Stethoscope className="h-4 w-4" />
+                {patientSummary.activeConsultation ? "Continuar consulta" : "Nova consulta"}
               </button>
               {workspaceState.secondaryActions.map((action) => (
                 <button key={action.kind} type="button" onClick={() => runWorkspaceAction(action)} disabled={patientSummary.patient.status === "arquivado" && action.kind !== "meal-plan" && action.kind !== "appointment"} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50" aria-label={action.kind === "meal-plan" ? `${action.label}: plano alimentar` : undefined}>
@@ -2090,14 +2103,14 @@ export default function ClientWorkspace({
           </div>
         </header>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)} className="min-w-0">
+        <Tabs value={activeTab} onValueChange={(value) => changeTab(value as TabId)} className="min-w-0">
         {/* Tabs */}
         <div className="border-b border-[#EAD8C2] bg-[#FFFDFC] p-2">
-          <TabsList className="grid w-full min-w-0 grid-cols-2 gap-1 rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-1 sm:grid-cols-3 lg:flex lg:justify-start lg:rounded-none lg:border-0 lg:bg-[#FFFDFC] lg:p-0">
+          <TabsList aria-label="Seções da ficha do paciente" className="flex w-full min-w-0 gap-1 overflow-x-auto rounded-lg border border-[#EDE1D6] bg-[#FBF7F1] p-1 lg:justify-start lg:rounded-none lg:border-0 lg:bg-[#FFFDFC] lg:p-0">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               return (
-                <TabsTrigger key={tab.id} value={tab.id} className="min-h-10 min-w-0 whitespace-normal px-2 text-[11px] leading-tight sm:px-3 sm:text-xs lg:h-10 lg:shrink-0 lg:whitespace-nowrap lg:px-4 lg:text-sm">
+                <TabsTrigger key={tab.id} value={tab.id} className="min-h-11 shrink-0 whitespace-nowrap px-3 text-xs leading-tight sm:px-3 sm:text-sm lg:h-10 lg:px-4">
                   <Icon className="h-4 w-4 shrink-0" />
                   <span className="min-w-0 whitespace-normal text-center lg:whitespace-nowrap">{tab.label}</span>
                 </TabsTrigger>
@@ -2119,7 +2132,31 @@ export default function ClientWorkspace({
               recentActivity={recentActivity}
               onOpenProtocols={openProtocolsTab}
               onOpenTimeline={openTimelineTab}
+              onRunNextAction={runWorkspaceAction}
             />
+          )}
+
+          {activeTab === "portal" && (
+            <div className="space-y-6">
+              <div>
+                <p className="brand-kicker">Portal do paciente</p>
+                <h2 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">Acesso do paciente</h2>
+                <p className="mt-2 text-sm text-[#75675E]">Gerencie o estado do portal sem sair da ficha clínica.</p>
+              </div>
+              {portalLoading ? <p className="text-sm text-[#75675E]">Carregando acesso do portal...</p> : portalError ? <p className="rounded-lg bg-[#FFF7F5] p-4 text-sm text-[#9A5C4E]">{portalError}</p> : !portalAccess ? <p className="text-sm text-[#75675E]">O acesso ao portal será carregado ao abrir esta seção.</p> : (
+                <section className="max-w-2xl rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-5">
+                  <dl className="grid gap-4 text-sm sm:grid-cols-2">
+                    <div><dt className="text-[#75675E]">Estado</dt><dd className="mt-1 font-semibold text-[#3A3028]">{portalAccess.is_active ? "Portal ativo" : "Portal inativo"}</dd></div>
+                    <div><dt className="text-[#75675E]">Último acesso</dt><dd className="mt-1 font-semibold text-[#3A3028]">{formatDateTime(portalAccess.last_used_at)}</dd></div>
+                    <div><dt className="text-[#75675E]">E-mail</dt><dd className="mt-1 font-semibold text-[#3A3028]">{email || "Não informado"}</dd></div>
+                  </dl>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => void togglePortalAccess(!portalAccess.is_active)} className="brand-btn-secondary">{portalAccess.is_active ? "Desativar portal" : "Ativar portal"}</button>
+                    <button type="button" onClick={() => void generatePortalCode()} className="brand-btn-primary">Gerar novo acesso</button>
+                  </div>
+                </section>
+              )}
+            </div>
           )}
 
           {activeTab === "consultas" && (
