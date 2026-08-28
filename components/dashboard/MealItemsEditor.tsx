@@ -105,6 +105,15 @@ const RECORDABLE_FOOD_USAGE_SOURCES = new Set(["TACO", "CUSTOM", "MANUFACTURER",
  * cada tecla digitada). Fire-and-forget: nunca bloqueia nem falha a
  * seleção do alimento em si se a chamada falhar.
  */
+/**
+ * R6.5.2B (seções 22-24) — só mostra o rótulo "Itens fixos" quando a refeição
+ * é COMBINATION e tem de fato grupo(s) de escolha E itens base — evita um
+ * rótulo órfão numa COMBINATION sem itens fixos ou numa refeição SIMPLE/OPTIONS.
+ */
+export function shouldShowFixedItemsLabel(meal: { meal_structure?: string | null; choice_groups?: { items: unknown[] }[] | null; items: unknown[] }): boolean {
+  return meal.meal_structure === "COMBINATION" && (meal.choice_groups?.length ?? 0) > 0 && meal.items.length > 0;
+}
+
 function recordFoodUsageForReuse(source: string, refId: string | null | undefined) {
   if (!refId || !RECORDABLE_FOOD_USAGE_SOURCES.has(source)) return;
   void fetch("/api/admin/foods/recent", {
@@ -1286,6 +1295,12 @@ export function MealItemsEditor({
                 <label className="sr-only" htmlFor={`meal-notes-${mealIndex}`}>Observações da refeição</label>
                 <textarea id={`meal-notes-${mealIndex}`} value={meal.notes ?? ""} onChange={(event) => updateMeal(mealIndex, { notes: event.target.value })} className="brand-input mt-2 min-h-14 resize-y" placeholder="Observacoes da refeicao" />
               </>
+            )}
+            {/* R6.5.2B (seções 22-24) — rótulo "Itens fixos" só quando há grupos de escolha
+                (COMBINATION), pra diferenciar visualmente da seção "Escolha X" abaixo. Não
+                reordena nem filtra meal.items — mesma lista, mesmos índices/handlers de sempre. */}
+            {shouldShowFixedItemsLabel(meal) && (
+              <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">Itens fixos</p>
             )}
             <div className="mt-2 space-y-1.5">
               {meal.items.map((item, itemIndex) => {
