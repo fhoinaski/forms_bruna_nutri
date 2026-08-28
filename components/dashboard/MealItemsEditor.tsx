@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Beef, Check, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, PanelRightClose, Pencil, Plus, RefreshCw, Save, Sparkles, Star, Trash2, Unlock, Utensils, Wheat, X } from "lucide-react";
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
@@ -1073,7 +1073,10 @@ export function MealItemsEditor({
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Refeicoes</h3>
-        <div className="grid gap-2 sm:flex">
+        {/* R6.5.2 (regressão encontrada no fechamento) — a coluna central ficou mais estreita
+            com a navegação de refeições nova; sem flex-wrap, esses botões extrapolavam a
+            coluna e ficavam por baixo da sidebar de nutrição (clique interceptado). */}
+        <div className="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
           {clientId && mealPlanId && !readOnly && (
             <button type="button" onClick={() => void generateAlternativesForAll()} disabled={bulkGeneratingAlternatives} className="brand-btn-secondary w-full sm:w-auto">
               <Sparkles className="h-4 w-4" />
@@ -1102,12 +1105,18 @@ export function MealItemsEditor({
       </div>
 
       {meals.map((meal, mealIndex) => (
-        <article key={mealIndex} className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_8px_24px_rgba(58,48,40,0.035)]">
+        <article key={mealIndex} id={`meal-card-${mealIndex}`} className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_8px_24px_rgba(58,48,40,0.035)] scroll-mt-24">
           <div className="relative flex flex-col gap-2 border-b border-[#EDE1D6] bg-[#FBF7F1] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-2">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#EAF0E4] text-[#607A56]"><Utensils className="h-4 w-4" /></div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-[#3A3028]">{meal.name || `Refeicao ${mealIndex + 1}`}</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="text-sm font-semibold text-[#3A3028]">{meal.name || `Refeicao ${mealIndex + 1}`}</p>
+                  {/* R6.5.2 (seção 16) — badge discreto de estrutura, puramente visual, não altera meal_structure/cálculo. */}
+                  <span className="rounded-full border border-[#EAD8C2] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#8C6E52]">
+                    {meal.meal_structure === "OPTIONS" ? "Opções" : meal.meal_structure === "COMBINATION" ? "Combinação" : "Simples"}
+                  </span>
+                </div>
                 <p className="text-xs text-[#75675E]">{meal.items.filter((item) => item.food.trim()).length} alimento(s) - {mealMacros[mealIndex]?.kcal ?? 0} kcal estimadas</p>
               </div>
             </div>
@@ -1211,7 +1220,16 @@ export function MealItemsEditor({
                 </label>
               </div>
               {meal.meal_structure === "OPTIONS" && <div className="mt-3 space-y-2">
-                {(meal.options ?? []).map((option, optionIndex) => <div key={optionIndex} className="rounded-lg bg-[#FBF7F1] p-2">
+                {(meal.options ?? []).map((option, optionIndex) => <Fragment key={optionIndex}>
+                {/* R6.5.2 (seção 30-31) — divisor "OU" leve entre alternativas; puramente visual, não altera options/aria-label. */}
+                {optionIndex > 0 && (
+                  <div className="flex items-center gap-2 py-0.5" aria-hidden="true">
+                    <span className="h-px flex-1 bg-[#EAD8C2]" />
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9A6F5E]">ou</span>
+                    <span className="h-px flex-1 bg-[#EAD8C2]" />
+                  </div>
+                )}
+                <div className="rounded-lg border-l-2 border-[#D9E4D3] bg-[#FBF7F1] p-2">
                   <div className="flex gap-2">
                     <input value={option.label} onChange={(event) => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, label: event.target.value } : value) })} className="brand-input" aria-label={`Nome da opção ${optionIndex + 1}`} />
                     <button type="button" onClick={() => updateMeal(mealIndex, { options: duplicateMealOptionAt(meal.options ?? [], optionIndex) })} className="brand-btn-secondary shrink-0" aria-label={`Duplicar ${option.label || `opção ${optionIndex + 1}`}`}>Duplicar</button>
@@ -1225,7 +1243,8 @@ export function MealItemsEditor({
                     </div>)}
                   </div>
                   <button type="button" onClick={() => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, items: [...value.items, { food: "", quantity: "", unit: "", notes: "" }] } : value) })} className="mt-2 text-xs font-semibold text-[#607A56]">+ Alimento nesta opção</button>
-                </div>)}
+                </div>
+                </Fragment>)}
                 <button type="button" onClick={() => updateMeal(mealIndex, { options: [...(meal.options ?? []), { label: `Opção ${(meal.options?.length ?? 0) + 1}`, items: [{ food: "", quantity: "", unit: "", notes: "" }] }] })} className="brand-btn-secondary">Adicionar opção</button>
               </div>}
               {meal.meal_structure === "COMBINATION" && <div className="mt-3 space-y-2">

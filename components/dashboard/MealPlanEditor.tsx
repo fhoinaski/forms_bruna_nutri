@@ -7,6 +7,7 @@ import { MealItemsEditor, cleanMealsForSave, sanitizeMealForPlanClone, type Meal
 import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
 import { AiMealPlanWizard } from "@/components/dashboard/AiMealPlanWizard";
 import { MealPlanNutritionWorkspacePanel } from "@/components/nutrition/MealPlanNutritionSummary";
+import { MealNavigationRail } from "@/components/dashboard/MealNavigationRail";
 import { useDebouncedFoodSearch, type FoodSuggestion } from "@/hooks/use-debounced-food-search";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
@@ -684,7 +685,18 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
 
       {plan && (
         <section className="rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-3 sm:p-4">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+          {/*
+            R6.5.2 (regressão encontrada no fechamento): a coluna central já usa
+            larguras mínimas fixas em px nos food rows (MealItemsEditor) que não
+            cabem numa 3ª coluna à esquerda no breakpoint xl (1280px) — isso causava
+            texto cortado/oculto e cliques interceptados pela sidebar sticky. Por
+            isso a navegação de refeições só entra em 2xl (1536px+), onde há espaço
+            real de sobra; em xl o layout permanece EXATAMENTE o de 2 colunas da R6.5.1.
+          */}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[220px_minmax(0,1fr)_360px]">
+            {/* R6.5.2 (seções 4, 7-13) — navegação de refeições, coluna nova, só desktop largo (2xl+); deriva de plan.meals, sem estado próprio a sincronizar. */}
+            <MealNavigationRail meals={plan.meals} />
+
             <div className="min-w-0 space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
