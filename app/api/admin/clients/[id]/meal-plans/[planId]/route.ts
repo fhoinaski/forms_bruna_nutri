@@ -17,6 +17,7 @@ const itemSchema = z.object({
   quantity: z.string().max(80).nullable().optional(),
   unit: z.string().max(40).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
+  is_optional: z.boolean().optional(),
   // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2.
   // FASE 6.5 (item 5): TBCA/IBGE_POF aceitos aqui (o item do plano em si —
   // "onde a identidade e transportada"), nunca em substitutionSchema
@@ -46,13 +47,33 @@ const itemSchema = z.object({
   slot_exchange_eligible: z.boolean().nullable().optional(),
 }).strict();
 
+const mealOptionSchema = z.object({
+  label: z.string().min(1).max(200),
+  description: z.string().max(1000).nullable().optional(),
+  items: z.array(itemSchema).min(1).max(80),
+}).strict();
+
+const choiceGroupSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(1000).nullable().optional(),
+  min_selections: z.number().int().min(0).max(80),
+  max_selections: z.number().int().min(1).max(80),
+  items: z.array(itemSchema).min(1).max(80),
+}).strict().refine((group) => group.min_selections <= group.max_selections, {
+  message: "O mínimo de escolhas não pode ser maior que o máximo.",
+});
+
 const mealSchema = z.object({
   name: z.string().min(1).max(200),
   meal_context: z.string().max(40).nullable().optional(),
   suggested_time: z.string().max(30).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
   source_recipe_id: z.string().max(80).nullable().optional(),
+  meal_structure: z.enum(["SIMPLE", "OPTIONS", "COMBINATION"]).nullable().optional(),
+  patient_instruction: z.string().max(1000).nullable().optional(),
   items: z.array(itemSchema).max(80),
+  options: z.array(mealOptionSchema).max(20).optional(),
+  choice_groups: z.array(choiceGroupSchema).max(20).optional(),
 }).strict();
 
 const weeklySlotSchema = z.object({
@@ -131,21 +152,18 @@ export async function PUT(
   // server-side que ele realmente pertence ao mesmo alimento do item —
   // aceitar um id trocado (ex.: da medida de outro alimento) corromperia o
   // calculo em silencio (secao 19 do pedido).
-  const measureIds = Array.from(
-    new Set(parsed.data.meals.flatMap((meal) => meal.items.map((item) => item.household_measure_id).filter((value): value is string => Boolean(value))))
-  );
+  const structuredItems = parsed.data.meals.flatMap((meal) => [meal.items, ...(meal.options ?? []).map((option) => option.items), ...(meal.choice_groups ?? []).map((group) => group.items)].flat());
+  const measureIds = Array.from(new Set(structuredItems.map((item) => item.household_measure_id).filter((value): value is string => Boolean(value))));
   if (measureIds.length) {
     const portions = await Promise.all(measureIds.map((measureId) => getFoodPortionById(measureId)));
     const portionById = new Map(portions.filter((portion) => portion !== null).map((portion) => [portion.id, portion]));
-    for (const meal of parsed.data.meals) {
-      for (const item of meal.items) {
+    for (const item of structuredItems) {
         if (!item.household_measure_id) continue;
         const portion = portionById.get(item.household_measure_id);
         const matches = portion && portion.food_source === item.food_source && portion.food_ref_id === item.food_ref_id;
         if (!matches) {
           return NextResponse.json({ message: `Medida caseira inválida para o alimento "${item.food}".` }, { status: 400 });
         }
-      }
     }
   }
 

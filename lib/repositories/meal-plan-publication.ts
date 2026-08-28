@@ -8,6 +8,7 @@ import { currentItemGramsForExchangeGroup } from "@/lib/repositories/meal-plan-a
 import { getFoodPortionById, toHouseholdMeasureOption } from "@/lib/repositories/food-portions";
 import { listPatientClinicalMarkers } from "@/lib/repositories/patient-clinical-markers";
 import type { MealPlanItemPayload, MealPlanPayload } from "@/lib/repositories/meal-plans";
+import { getMealStructureItems } from "@/lib/meal-plans/flexible-structure";
 
 export type MealPlanPublicationCode =
   | "UNRESOLVED_FOOD"
@@ -83,7 +84,7 @@ function parseTarget(value: number | null | undefined): number | null {
 
 function activeQuantityForGroup(plan: MealPlanPayload, group: { primary_food_source: string; primary_food_ref_id: string; primary_food_name: string }) {
   for (const meal of plan.meals) {
-    for (const item of meal.items) {
+    for (const item of getMealStructureItems(meal)) {
       const refMatches = item.food_source === group.primary_food_source && item.food_ref_id === group.primary_food_ref_id;
       const nameMatches = item.food.trim().toLocaleLowerCase("pt-BR") === group.primary_food_name.trim().toLocaleLowerCase("pt-BR");
       if (refMatches || nameMatches) {
@@ -127,7 +128,7 @@ export async function validateMealPlanForPublication(plan: MealPlanPayload): Pro
   let itemCount = 0;
   let resolvedItems = 0;
   for (const meal of plan.meals) {
-    for (const item of meal.items) {
+    for (const item of getMealStructureItems(meal)) {
       if (!item.food.trim()) continue;
       itemCount++;
       const ref = itemRef(item);
@@ -313,7 +314,7 @@ export async function validateMealPlanForPublication(plan: MealPlanPayload): Pro
     nutritionSummary,
     mealSummary: plan.meals.map((meal) => {
       const counts = mealIssueCounts.get(meal.name) ?? { blockers: 0, warnings: 0 };
-      return { mealName: meal.name, items: meal.items.filter((item) => item.food.trim()).length, ...counts };
+      return { mealName: meal.name, items: getMealStructureItems(meal).filter((item) => item.food.trim()).length, ...counts };
     }),
   };
 }

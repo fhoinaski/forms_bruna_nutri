@@ -15,6 +15,7 @@ import { toDisplayFoodName, type FoodResolution } from "@/lib/nutrition/food-res
 // tem exatamente o mesmo contrato de resolveFoodCandidate(s), so envolvendo
 // com o shadow do resolver canonico (ver lib/nutrition/canonical-food-shadow.ts).
 import { resolveFoodWithCanonicalShadow, resolveFoodCandidatesWithCanonicalShadow } from "@/lib/nutrition/canonical-food-shadow";
+import { recordStageTiming } from "@/lib/ai/gateway/e2e-stage-timings";
 import {
   MEAL_KEYS,
   MEAL_KEY_LABELS,
@@ -123,9 +124,11 @@ const draftFoodItemSchema = z.object({
   query: z.string().min(1).max(120),
   quantity: z.number().positive().max(5000),
   unit: z.string().min(1).max(20),
+  preparation: z.string().min(1).max(100).nullable().optional(),
+  optional: z.boolean().optional(),
 }).strict();
 
-const draftMealLlmSchema = z.object({
+const generatedMealBase = {
   mealKey: z.enum(MEAL_KEYS),
   /** Só um id REAL da lista de receitas fornecida no prompt — nunca inventado (validado de novo no resolver). */
   recipeId: z.string().max(80).nullable().optional(),
@@ -134,13 +137,17 @@ const draftMealLlmSchema = z.object({
   // testes reais (bug observado: "Falha persistente do provedor de IA" —
   // todas as tentativas expirando contra o mesmo relogio compartilhado).
   // 6 itens por refeicao ja e generoso pro caso comum.
-  items: z.array(draftFoodItemSchema).max(6).default([]),
   rationale: z.string().max(160).nullable().optional(),
-}).strict();
+};
+const draftMealLlmSchema = z.discriminatedUnion("structureType", [
+  z.object({ ...generatedMealBase, structureType: z.literal("SIMPLE"), items: z.array(draftFoodItemSchema).max(6).default([]) }).strict(),
+  z.object({ ...generatedMealBase, structureType: z.literal("OPTIONS"), options: z.array(z.object({ label: z.string().min(1).max(80), description: z.string().max(160).nullable().optional(), items: z.array(draftFoodItemSchema).min(1).max(6) }).strict()).min(2).max(4) }).strict(),
+  z.object({ ...generatedMealBase, structureType: z.literal("COMBINATION"), fixedItems: z.array(draftFoodItemSchema).max(6).default([]), choiceGroups: z.array(z.object({ label: z.string().min(1).max(80), description: z.string().max(160).nullable().optional(), minSelections: z.number().int().min(0).max(6), maxSelections: z.number().int().min(1).max(6), items: z.array(draftFoodItemSchema).min(1).max(6) }).strict().refine((group) => group.maxSelections >= group.minSelections && group.items.length >= group.minSelections, "Limites do grupo inválidos")).min(1).max(4) }).strict(),
+]);
 
-const mealPlanDraftLlmSchema = z.object({
+export const mealPlanDraftLlmSchema = z.preprocess(normalizeMealPlanDraftRaw, z.object({
   meals: z.array(draftMealLlmSchema).min(1).max(6),
-}).strict();
+}).strict());
 
 const DRAFT_SYSTEM_PROMPT = `Você ajuda uma nutricionista a montar a ESTRUTURA de um pré-plano alimentar.
 
@@ -153,15 +160,18 @@ Regras absolutas:
 - Só proponha refeições cujas chaves (mealKey) estejam na lista de "Refeições solicitadas" — nunca adicione uma refeição extra.
 - Evite repetir o mesmo alimento em muitas refeições diferentes — priorize variedade quando fizer sentido para o objetivo.
 
+Estrutura: prefira SIMPLE. Use OPTIONS somente para duas ou mais alternativas completas da mesma refeição (ex.: café da manhã opção 1 e opção 2). Use COMBINATION somente para uma refeição montável: fixedItems são fixos e choiceGroups são escolhas, por exemplo “1 proteína” e “1 carboidrato”.
+
 Formato de resposta OBRIGATÓRIO — responda APENAS este JSON, sem markdown, sem texto antes ou depois:
-{"meals":[{"mealKey":"cafe_da_manha","recipeId":null,"items":[{"query":"arroz branco cozido","quantity":100,"unit":"g"}],"rationale":"texto curto opcional"}]}
+{"meals":[{"mealKey":"cafe_da_manha","recipeId":null,"structureType":"SIMPLE","items":[{"query":"arroz branco cozido","quantity":100,"unit":"g"}],"rationale":"texto curto opcional"}]}
 
 Regras de formato (violar qualquer uma invalida a resposta inteira):
 - "mealKey" deve ser copiado EXATAMENTE (sem traduzir, sem espaços, sem maiúsculas) de uma destas strings: cafe_da_manha, lanche_manha, almoco, lanche_tarde, jantar, ceia.
 - "quantity" é sempre um NÚMERO json (ex.: 100), nunca uma string (nunca "100" nem "100g").
 - "unit" é uma string curta (ex.: "g", "ml", "unidade", "colher de sopa").
 - "recipeId" é null OU uma string com um id exato da lista de receitas — nunca invente, nunca deixe um texto que não seja um id real.
-- "items" é sempre um array, mesmo com 1 item só; nunca omita o campo.
+- SIMPLE exige "items"; OPTIONS exige ao menos duas "options" com label e items; COMBINATION exige "fixedItems" (pode ser vazio) e "choiceGroups" com label, minSelections, maxSelections e items.
+- Não misture fields de estruturas diferentes e não inclua nutrientes oficiais.
 - Não inclua nenhum campo além dos mostrados no exemplo (nada de kcal/calories/protein/carbs/fat/macros).`;
 
 export interface GenerateMealPlanDraftInput {
@@ -196,16 +206,21 @@ function normalizeMealPlanDraftRaw(raw: unknown): unknown {
   const meals = obj.meals.map((meal) => {
     if (!meal || typeof meal !== "object") return meal;
     const next = { ...(meal as Record<string, unknown>) };
-    if (Array.isArray(next.items)) {
-      next.items = next.items.map((item) => {
+    // Compatibilidade com fixtures/saídas SIMPLE anteriores à união: o
+    // formato antigo só tinha items, portanto é inequivocamente SIMPLE.
+    if (!next.structureType && Array.isArray(next.items)) next.structureType = "SIMPLE";
+    const normalizeItems = (items: unknown) => Array.isArray(items) ? items.map((item) => {
         if (!item || typeof item !== "object") return item;
         const nextItem = { ...(item as Record<string, unknown>) };
         if (typeof nextItem.quantity === "string" && /^\d+(\.\d+)?$/.test(nextItem.quantity.trim())) {
           nextItem.quantity = Number(nextItem.quantity.trim());
         }
         return nextItem;
-      });
-    }
+      }) : items;
+    if ("items" in next) next.items = normalizeItems(next.items);
+    if ("fixedItems" in next) next.fixedItems = normalizeItems(next.fixedItems);
+    if (Array.isArray(next.options)) next.options = next.options.map((option) => option && typeof option === "object" ? { ...(option as Record<string, unknown>), items: normalizeItems((option as Record<string, unknown>).items) } : option);
+    if (Array.isArray(next.choiceGroups)) next.choiceGroups = next.choiceGroups.map((group) => group && typeof group === "object" ? { ...(group as Record<string, unknown>), items: normalizeItems((group as Record<string, unknown>).items) } : group);
     return next;
   });
   return { ...obj, meals };
@@ -337,6 +352,7 @@ export async function generateMealPlanDraft(input: GenerateMealPlanDraftInput): 
   let data: z.infer<typeof mealPlanDraftLlmSchema> | null = null;
   const preAssembleWarnings: DraftWarning[] = [];
   let fallbackUsed: MealPlanDraftResult["fallbackUsed"] = "none";
+  const generationStartedAt = Date.now();
 
   if (!input.forceMealByMeal) {
     try {
@@ -369,7 +385,9 @@ export async function generateMealPlanDraft(input: GenerateMealPlanDraftInput): 
         timeoutMs: 120_000,
         maxAttempts: 2,
       });
-      data = result.data;
+      // O gateway valida contra a união acima. A normalização adicional aqui
+      // existe para fixtures SIMPLE legadas e não torna o schema permissivo.
+      data = normalizeMealPlanDraftRaw(result.data) as z.infer<typeof mealPlanDraftLlmSchema>;
     } catch (cause) {
       if (cause instanceof AiConfigError || cause instanceof AiProviderError) throw cause;
       if (cause instanceof AiValidationError) {
@@ -409,7 +427,8 @@ export async function generateMealPlanDraft(input: GenerateMealPlanDraftInput): 
     return { meals: fallback.meals, warnings: [...preAssembleWarnings, ...fallback.warnings], fallbackUsed: "meal_by_meal" };
   }
 
-  const assembled = await assembleDraft(data.meals, input.requestedMeals, candidateRecipes, markers, input.adminId);
+  recordStageTiming(input.clientId, { generationMs: Date.now() - generationStartedAt });
+  const assembled = await assembleDraft(data.meals, input.requestedMeals, candidateRecipes, markers, input.adminId, input.clientId);
   return { meals: assembled.meals, warnings: [...preAssembleWarnings, ...assembled.warnings], fallbackUsed };
 }
 
@@ -430,7 +449,8 @@ function recoverPartialMeals(
   const requestedKeys = new Set(requestedMeals.map((m) => m.key));
   const meals: z.infer<typeof mealPlanDraftLlmSchema>["meals"] = [];
   rawData.meals.forEach((rawMeal, index) => {
-    const parsed = draftMealLlmSchema.safeParse(rawMeal);
+    const normalized = normalizeMealPlanDraftRaw({ meals: [rawMeal] }) as { meals?: unknown[] };
+    const parsed = draftMealLlmSchema.safeParse(normalized.meals?.[0] ?? rawMeal);
     if (parsed.success && requestedKeys.has(parsed.data.mealKey)) {
       meals.push(parsed.data);
       return;
@@ -484,7 +504,8 @@ async function assembleDraft(
   requestedMeals: RequestedMeal[],
   candidateRecipes: RecipePayload[],
   markers: PatientClinicalMarker[],
-  adminId?: string | null
+  adminId?: string | null,
+  timingKey?: string
 ): Promise<MealPlanDraftResult> {
   const warnings: DraftWarning[] = [];
   const requestedByKey = new Map(requestedMeals.map((m) => [m.key, m]));
@@ -499,7 +520,7 @@ async function assembleDraft(
   for (const llmMeal of llmMeals) {
     const requested = requestedByKey.get(llmMeal.mealKey);
     if (!requested) continue; // IA nunca pode adicionar uma refeicao fora do que foi pedido.
-    if (llmMeal.recipeId) {
+    if (llmMeal.recipeId && llmMeal.structureType === "SIMPLE") {
       const recipe = candidateRecipes.find((r) => r.id === llmMeal.recipeId) ?? await getRecipeById(llmMeal.recipeId);
       if (!recipe) {
         warnings.push({ level: "warning", mealKey: llmMeal.mealKey, message: "Receita sugerida não encontrada na biblioteca — ignorada." });
@@ -511,14 +532,23 @@ async function assembleDraft(
     pending.push({ llmMeal, requested });
   }
 
+  type ItemLocation = { path: string; candidate: z.infer<typeof draftFoodItemSchema>; kind: "items" | "option" | "group"; branchIndex?: number };
+  const locationsFor = (meal: (typeof llmMeals)[number], mealIndex: number): ItemLocation[] => {
+    if (meal.structureType === "SIMPLE") return meal.items.map((candidate, index) => ({ candidate, kind: "items", path: `meal[${mealIndex}].items[${index}]` }));
+    if (meal.structureType === "OPTIONS") return meal.options.flatMap((option, optionIndex) => option.items.map((candidate, itemIndex) => ({ candidate, kind: "option" as const, branchIndex: optionIndex, path: `meal[${mealIndex}].options[${optionIndex}].items[${itemIndex}]` })));
+    return [
+      ...meal.fixedItems.map((candidate, index) => ({ candidate, kind: "items" as const, path: `meal[${mealIndex}].items[${index}]` })),
+      ...meal.choiceGroups.flatMap((group, groupIndex) => group.items.map((candidate, itemIndex) => ({ candidate, kind: "group" as const, branchIndex: groupIndex, path: `meal[${mealIndex}].choiceGroups[${groupIndex}].items[${itemIndex}]` }))),
+    ];
+  };
   const queries: { query: string; key: string }[] = [];
   pending.forEach((entry, mealIndex) => {
     if (entry.recipe) return;
-    entry.llmMeal.items.forEach((item, itemIndex) => {
-      queries.push({ query: item.query, key: `${mealIndex}:${itemIndex}` });
-    });
+    locationsFor(entry.llmMeal, mealIndex).forEach((location) => queries.push({ query: location.candidate.query, key: location.path }));
   });
+  const resolutionStartedAt = Date.now();
   const resolutions = await resolveFoodCandidatesWithCanonicalShadow(queries, markers, adminId, "meal_plan_ai");
+  if (timingKey) recordStageTiming(timingKey, { resolutionMs: Date.now() - resolutionStartedAt });
 
   const meals: DraftMeal[] = [];
   pending.forEach((entry, mealIndex) => {
@@ -544,23 +574,32 @@ async function assembleDraft(
     }
 
     const items: DraftMealItem[] = [];
+    const options = entry.llmMeal.structureType === "OPTIONS" ? entry.llmMeal.options.map((option) => ({ label: option.label, description: option.description ?? null, items: [] as DraftMealItem[] })) : undefined;
+    const choiceGroups = entry.llmMeal.structureType === "COMBINATION" ? entry.llmMeal.choiceGroups.map((group) => ({ title: group.label, description: group.description ?? null, min_selections: group.minSelections, max_selections: group.maxSelections, items: [] as DraftMealItem[] })) : undefined;
     const needsReview: DraftMealNeedsReview[] = [];
-    entry.llmMeal.items.forEach((candidate, itemIndex) => {
-      const resolution = resolutions.get(`${mealIndex}:${itemIndex}`);
+    locationsFor(entry.llmMeal, mealIndex).forEach((location) => {
+      const { candidate } = location;
+      const resolution = resolutions.get(location.path);
       if (!resolution) return;
       const { item, needsReview: review } = resolutionToMealParts(resolution, String(candidate.quantity), candidate.unit);
-      if (item) items.push(item);
-      if (review) needsReview.push(review);
+      const resolvedItem = item ? { ...item, preparation: candidate.preparation ?? null, is_optional: candidate.optional ?? false } : null;
+      if (resolvedItem) {
+        if (location.kind === "option") options?.[location.branchIndex!]?.items.push(resolvedItem);
+        else if (location.kind === "group") choiceGroups?.[location.branchIndex!]?.items.push(resolvedItem);
+        else items.push(resolvedItem);
+      }
+      if (review) needsReview.push({ ...review, path: location.path });
       if (resolution.status !== "RESOLVED") {
         warnings.push({ level: resolution.status === "CLINICAL_UNKNOWN" ? "info" : "warning", mealKey: entry.llmMeal.mealKey, message: resolution.reason });
       }
     });
 
-    if (!items.length && !needsReview.length) {
+    const resolvedCount = items.length + (options?.reduce((sum, option) => sum + option.items.length, 0) ?? 0) + (choiceGroups?.reduce((sum, group) => sum + group.items.length, 0) ?? 0);
+    if (!resolvedCount && !needsReview.length) {
       warnings.push({ level: "warning", mealKey: entry.llmMeal.mealKey, message: `Nenhum alimento proposto para ${MEAL_KEY_LABELS[entry.llmMeal.mealKey]}.` });
       return;
     }
-    meals.push({ mealKey: entry.llmMeal.mealKey, name: MEAL_KEY_LABELS[entry.llmMeal.mealKey], suggested_time: entry.requested.suggestedTime, source_recipe_id: null, items, needsReview });
+    meals.push({ mealKey: entry.llmMeal.mealKey, name: MEAL_KEY_LABELS[entry.llmMeal.mealKey], suggested_time: entry.requested.suggestedTime, source_recipe_id: null, meal_structure: entry.llmMeal.structureType, items, options, choice_groups: choiceGroups, needsReview });
   });
 
   if (!meals.length) warnings.push({ level: "warning", message: "Não foi possível montar nenhuma refeição — tente novamente ou continue manualmente." });

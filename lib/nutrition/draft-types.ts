@@ -37,10 +37,16 @@ export interface DraftMealItem {
   ai_suggested: true;
   /** true quando a identidade foi resolvida mas a segurança clínica não pôde ser confirmada (CLINICAL_UNKNOWN) — conta no cálculo, mas fica destacado na revisão. */
   needsSafetyReview?: boolean;
+  /** Intenção de preparo comunicada pela IA; metadado transitório do draft. */
+  preparation?: string | null;
+  /** Item opcional preservado ao entrar no editor Meal Flex. */
+  is_optional?: boolean;
 }
 
 /** Candidato que NÃO virou um item calculável — precisa de decisão humana antes de entrar no plano. */
 export interface DraftMealNeedsReview {
+  /** Endereço determinístico da sugestão no draft; não é id persistido. */
+  path?: string;
   query: string;
   quantity: string;
   unit: string;
@@ -60,8 +66,14 @@ export interface DraftMeal {
   name: string;
   suggested_time: string | null;
   source_recipe_id: string | null;
+  /** NULL é aceito pelo legado e equivale a SIMPLE. */
+  meal_structure?: "SIMPLE" | "OPTIONS" | "COMBINATION" | null;
   /** Só itens com identidade real — é isto (nunca needsReview) que alimenta calculatePlanNutrients. */
   items: DraftMealItem[];
+  /** Alternativas completas, nunca aditivas entre si. */
+  options?: Array<{ label: string; description?: string | null; items: DraftMealItem[] }>;
+  /** Grupos de escolha combináveis; os itens fixos continuam em `items`. */
+  choice_groups?: Array<{ title: string; description?: string | null; min_selections: number; max_selections: number; items: DraftMealItem[] }>;
   needsReview: DraftMealNeedsReview[];
 }
 

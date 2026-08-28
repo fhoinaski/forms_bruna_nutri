@@ -8,6 +8,7 @@ import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { writeAuditLog } from "@/lib/security/audit";
 import { calculateDraftNutrition } from "@/lib/nutrition/draft-nutrition";
 import { critiqueDraft } from "@/lib/nutrition/draft-critic";
+import { recordStageTiming, takeStageTimings } from "@/lib/ai/gateway/e2e-stage-timings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,10 +66,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // — mesma engine central, nunca uma fórmula própria; e roda o critic
     // determinístico (nunca altera o draft, só aponta o que revisar).
     const target = { energyKcal: parsed.data.targetEnergyKcal, proteinG: parsed.data.targetProteinG, carbohydrateG: parsed.data.targetCarbohydrateG, fatG: parsed.data.targetFatG };
+    const nutritionStartedAt = Date.now();
     const [nutrition, critic] = await Promise.all([
       calculateDraftNutrition(draft.meals, target),
       Promise.resolve(critiqueDraft(draft.meals)),
     ]);
+    recordStageTiming(id, { nutritionMs: Date.now() - nutritionStartedAt });
+    // Test-only (Clinical Copilot R1.2.6, seção 42-56): stage timings
+    // separadas de geração/resolução/nutrição, só quando E2E_TEST_MODE=1 —
+    // takeStageTimings() é sempre undefined em produção, então o campo abaixo
+    // nunca aparece na resposta real.
+    const stageTimingsMs = takeStageTimings(id);
     // Observabilidade (seção 35 do pedido de robustez) — nunca contexto
     // clínico bruto, só contagens e flags: permite medir taxa de sucesso e
     // uso de fallback ao longo do tempo sem tocar em dado do paciente.
@@ -88,7 +96,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         durationMs: Date.now() - generationStartedAt,
       },
     });
-    return NextResponse.json({ ...draft, nutrition, critic });
+    return NextResponse.json(stageTimingsMs ? { ...draft, nutrition, critic, stageTimingsMs } : { ...draft, nutrition, critic });
   } catch (cause) {
     if (cause instanceof AiConfigError) {
       return NextResponse.json({ message: "Configure um provedor de IA em Configurações antes de usar este recurso." }, { status: 409 });

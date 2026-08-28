@@ -2,6 +2,9 @@ import { calculatePlanNutrients, roundedNutrients, type NutrientValues } from "@
 import { compareTargetVsPrescribed, type NutrientTarget, type TargetComparisonRow } from "@/lib/nutrition/targets";
 import { resolveMealPlanChangeReferences, buildFoodReferenceLookup } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import type { DraftMeal } from "@/lib/nutrition/draft-types";
+import { draftMealToMealFlex } from "@/lib/nutrition/draft-meal-flex";
+import { calculateMealNutritionRange, type FlexibleNutrientValues } from "@/lib/meal-plans/flexible-structure";
+import type { MealPlanItemPayload } from "@/lib/repositories/meal-plans";
 
 /**
  * Adaptador: DraftMeal[] → engine nutricional canônica. Este é o passo que
@@ -18,24 +21,55 @@ export interface DraftNutritionSummary {
   perMeal: NutrientValues[];
   unresolvedCount: number;
   targetComparison: TargetComparisonRow[];
+  /** Faixa do Meal Flex; em SIMPLE min=max. OPTIONS nunca é somado. */
+  range?: { min: NutrientValues; max: NutrientValues; varies: boolean };
 }
 
 export async function calculateDraftNutrition(meals: DraftMeal[], target: NutrientTarget): Promise<DraftNutritionSummary> {
-  const plan = { meals };
+  const flexMeals = meals.map(draftMealToMealFlex);
+  const plan = { meals: flexMeals };
   const { references, measuresById } = await resolveMealPlanChangeReferences(plan);
   const lookup = buildFoodReferenceLookup(references, measuresById);
-  const result = calculatePlanNutrients(plan, lookup);
+  // calculatePlanNutrients é a autoridade por item. Meal Flex decide apenas
+  // como combinar os valores (opções são alternativas, não uma soma).
+  const itemValues = new Map<MealPlanItemPayload, FlexibleNutrientValues>();
+  const valueFor = (item: MealPlanItemPayload): FlexibleNutrientValues => {
+    const cached = itemValues.get(item);
+    if (cached) return cached;
+    const values = calculatePlanNutrients({ meals: [{ name: "item", items: [item] }] }, lookup).total.values;
+    const value = { energyKcal: values.energyKcal ?? 0, proteinG: values.proteinG ?? 0, carbohydrateG: values.carbohydrateG ?? 0, fatG: values.fatG ?? 0, fiberG: values.fiberG ?? 0 };
+    itemValues.set(item, value);
+    return value;
+  };
+  const ranges = flexMeals.map((meal) => calculateMealNutritionRange(meal, valueFor));
+  const keys: Array<keyof FlexibleNutrientValues> = ["energyKcal", "proteinG", "carbohydrateG", "fatG", "fiberG"];
+  const rangeTotal = ranges.reduce((total, range) => {
+    for (const key of keys) { total.min[key] += range.min[key]; total.max[key] += range.max[key]; }
+    total.varies ||= range.varies;
+    return total;
+  }, { min: { energyKcal: 0, proteinG: 0, carbohydrateG: 0, fatG: 0, fiberG: 0 }, max: { energyKcal: 0, proteinG: 0, carbohydrateG: 0, fatG: 0, fiberG: 0 }, varies: false });
+  const result = calculatePlanNutrients({ meals: flexMeals.map((meal) => ({ ...meal, items: [
+    ...meal.items,
+    ...(meal.options ?? []).flatMap((option) => option.items),
+    ...(meal.choice_groups ?? []).flatMap((group) => group.items),
+  ] })) }, lookup);
+  const minTotal = { ...result.total.values, ...rangeTotal.min };
+  const maxTotal = { ...result.total.values, ...rangeTotal.max };
+  // Preserva a semântica histórica de ausência: uma refeição vazia não é
+  // “0 kcal”. Em SIMPLE a engine retorna exatamente o total anterior.
+  const selectedTotal = rangeTotal.varies ? minTotal : result.total.values;
   return {
-    total: roundedNutrients(result.total.values),
-    perMeal: result.perMeal.map((meal) => roundedNutrients(meal.values)),
+    total: roundedNutrients(selectedTotal),
+    perMeal: ranges.map((range, index) => roundedNutrients(range.varies ? { ...result.perMeal[index]!.values, ...range.min } : result.perMeal[index]!.values)),
     unresolvedCount: result.quality.unresolved,
-    targetComparison: compareTargetVsPrescribed(target, result.total.values),
+    targetComparison: compareTargetVsPrescribed(target, selectedTotal),
+    range: { min: roundedNutrients(minTotal), max: roundedNutrients(maxTotal), varies: rangeTotal.varies },
   };
 }
 
 /** Versão sem arredondamento — usada internamente pelo optimizer, que precisa de precisão total pra calcular fatores de escala (arredondar cedo demais distorceria o ajuste). */
 export async function calculateDraftNutritionRaw(meals: DraftMeal[]): Promise<NutrientValues> {
-  const plan = { meals };
+  const plan = { meals: meals.map(draftMealToMealFlex) };
   const { references, measuresById } = await resolveMealPlanChangeReferences(plan);
   const lookup = buildFoodReferenceLookup(references, measuresById);
   return calculatePlanNutrients(plan, lookup).total.values;

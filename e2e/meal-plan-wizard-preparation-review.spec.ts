@@ -14,6 +14,21 @@ import { createTestPatient } from "./helpers/test-data";
  */
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
+/**
+ * Preenche o prontuário mínimo exigido pelo gate determinístico de
+ * pré-análise (generationReadiness) — adicionado depois deste arquivo, sem
+ * o qual "Gerar pré-plano" nunca habilita. Nunca muda o que o teste
+ * verifica (Food Preparation Engine), só permite alcançar essa etapa.
+ */
+async function ready(request: import("@playwright/test").APIRequestContext, clientId: string) {
+  const current = await request.get(`/api/admin/clients/${clientId}/nutrition-record`);
+  const record = (await current.json()) as { version: number };
+  const update = await request.patch(`/api/admin/clients/${clientId}/nutrition-record`, {
+    data: { expectedVersion: record.version, goals: "Manutenção", current_weight_kg: "70", height_cm: "165", eating_routine: "Rotina comercial", allergies: "Nenhuma" },
+  });
+  expect(update.ok(), await update.text()).toBeTruthy();
+}
+
 test.describe("wizard Criar com IA — revisão de preparo composto (ovo mexido)", () => {
   test('"ovo mexido" sem referência direta pede revisão; escolher a receita real expande os ingredientes e calcula pela engine real', async ({ page, request }) => {
     const recipeRes = await request.post("/api/admin/recipes", {
@@ -30,6 +45,7 @@ test.describe("wizard Criar com IA — revisão de preparo composto (ovo mexido)
     expect(recipeRes.ok(), await recipeRes.text()).toBeTruthy();
 
     const patient = await createTestPatient(request);
+    await ready(request, patient.id);
     const fixtureRes = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
       data: {
         clientId: patient.id,
@@ -70,7 +86,10 @@ test.describe("wizard Criar com IA — revisão de preparo composto (ovo mexido)
     // nunca a preparação "fornecendo" kcal por si só.
     await expect(dialog.getByText(/precisa de revisão/i)).not.toBeVisible();
     const kcalMetric = dialog.getByText(/^\d+ kcal$/).first();
-    await expect(kcalMetric).toBeVisible();
+    // Expandir a receita (getRecipeById + recalculate) é uma chamada real ao
+    // servidor mais lenta que a resolução de um item simples — dá mais folga
+    // que o timeout padrão de 5s antes de considerar ausente.
+    await expect(kcalMetric).toBeVisible({ timeout: 15_000 });
     const kcalAfter = Number(((await kcalMetric.textContent()) ?? "").replace(/\D/g, "") || "0");
     expect(kcalAfter).toBeGreaterThan(0);
     await expect(dialog.getByText(/ovo,?\s*de galinha,?\s*inteiro,?\s*cru/i)).toBeVisible();

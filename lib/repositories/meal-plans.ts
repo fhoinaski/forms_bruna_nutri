@@ -16,6 +16,7 @@ import type { ExchangeGroupCandidate } from "@/lib/nutrition/food-exchange-engin
 import { resolveFoodCandidate, type FoodResolutionCandidate, type FoodResolutionStatus } from "@/lib/nutrition/food-resolver";
 import { mealContextForTemplateMeal } from "@/lib/meal-templates/system-template-contract";
 import { validateMealTemplateIntegrity, type MealTemplateIntegrityIssue } from "@/lib/repositories/meal-template-integrity";
+import { getMealStructure, validateMealStructure, type MealChoiceGroupPayload, type MealOptionPayload, type MealStructureType } from "@/lib/meal-plans/flexible-structure";
 
 export type MealPlanStatus = "draft" | "active" | "archived";
 
@@ -57,7 +58,12 @@ export type MealPlanMealPayload = {
   suggested_time?: string | null;
   notes?: string | null;
   source_recipe_id?: string | null;
+  /** NULL is legacy-compatible and is always interpreted as SIMPLE. */
+  meal_structure?: MealStructureType | null;
+  patient_instruction?: string | null;
   items: MealPlanItemPayload[];
+  options?: MealOptionPayload[];
+  choice_groups?: MealChoiceGroupPayload[];
 };
 
 export type MealPlanItemPayload = {
@@ -66,6 +72,7 @@ export type MealPlanItemPayload = {
   quantity?: string | null;
   unit?: string | null;
   notes?: string | null;
+  is_optional?: boolean;
   // Vinculo estruturado a um alimento (TACO/personalizado) — FASE 2.
   // Ambos nulos = item legado ou digitado livremente; o calculo cai para o
   // match aproximado por texto ja existente (findBestFoodReference).
@@ -163,8 +170,10 @@ export type MealPlanSupplementPayload = {
 };
 
 type MealPlanRow = Omit<MealPlanPayload, "meals" | "weekly_slots" | "substitutions" | "supplements">;
-type MealRow = Omit<MealPlanMealPayload, "items"> & { id: string; meal_plan_id: string; sort_order: number };
-type ItemRow = MealPlanItemPayload & { id: string; meal_id: string; sort_order: number };
+type MealRow = Omit<MealPlanMealPayload, "items" | "options" | "choice_groups"> & { id: string; meal_plan_id: string; sort_order: number };
+type ItemRow = MealPlanItemPayload & { id: string; meal_id: string; meal_option_id?: string | null; choice_group_id?: string | null; sort_order: number };
+type MealOptionRow = Omit<MealOptionPayload, "items"> & { id: string; meal_id: string; sort_order: number };
+type MealChoiceGroupRow = Omit<MealChoiceGroupPayload, "items"> & { id: string; meal_id: string; sort_order: number };
 type WeeklySlotRow = MealPlanWeeklySlotPayload & { id: string; meal_plan_id: string; sort_order: number };
 type SubstitutionRow = MealPlanSubstitutionPayload & { id: string; meal_plan_id: string; sort_order: number };
 type SupplementRow = MealPlanSupplementPayload & { id: string; meal_plan_id: string; sort_order: number };
@@ -454,6 +463,14 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
       params: [planIds],
     },
     {
+      sql: "SELECT o.* FROM meal_plan_meal_options o JOIN meal_plan_meals m ON m.id = o.meal_id JOIN json_each(?1) ids ON m.meal_plan_id = ids.value ORDER BY m.meal_plan_id, o.meal_id, o.sort_order ASC",
+      params: [planIds],
+    },
+    {
+      sql: "SELECT g.* FROM meal_plan_choice_groups g JOIN meal_plan_meals m ON m.id = g.meal_id JOIN json_each(?1) ids ON m.meal_plan_id = ids.value ORDER BY m.meal_plan_id, g.meal_id, g.sort_order ASC",
+      params: [planIds],
+    },
+    {
       sql: "SELECT w.* FROM meal_plan_weekly_slots w JOIN json_each(?1) ids ON w.meal_plan_id = ids.value ORDER BY w.meal_plan_id, w.weekday ASC, w.meal_type ASC, w.sort_order ASC",
       params: [planIds],
     },
@@ -468,11 +485,17 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
   ]);
   const meals = (results[0]?.results ?? []) as MealRow[];
   const items = (results[1]?.results ?? []) as ItemRow[];
-  const weeklySlots = (results[2]?.results ?? []) as WeeklySlotRow[];
-  const substitutions = (results[3]?.results ?? []) as SubstitutionRow[];
-  const supplements = (results[4]?.results ?? []) as SupplementRow[];
+  const options = (results[2]?.results ?? []) as MealOptionRow[];
+  const choiceGroups = (results[3]?.results ?? []) as MealChoiceGroupRow[];
+  const weeklySlots = (results[4]?.results ?? []) as WeeklySlotRow[];
+  const substitutions = (results[5]?.results ?? []) as SubstitutionRow[];
+  const supplements = (results[6]?.results ?? []) as SupplementRow[];
   const mealsByPlan = groupBy(meals, (meal) => meal.meal_plan_id);
   const itemsByMeal = groupBy(items, (item) => item.meal_id);
+  const optionsByMeal = groupBy(options, (option) => option.meal_id);
+  const groupsByMeal = groupBy(choiceGroups, (group) => group.meal_id);
+  const itemsByOption = groupBy(items.filter((item) => item.meal_option_id), (item) => item.meal_option_id!);
+  const itemsByChoiceGroup = groupBy(items.filter((item) => item.choice_group_id), (item) => item.choice_group_id!);
   const weeklySlotsByPlan = groupBy(weeklySlots, (item) => item.meal_plan_id);
   const substitutionsByPlan = groupBy(substitutions, (item) => item.meal_plan_id);
   const supplementsByPlan = groupBy(supplements, (item) => item.meal_plan_id);
@@ -485,7 +508,9 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
       suggested_time: meal.suggested_time,
       notes: meal.notes,
       source_recipe_id: meal.source_recipe_id,
-      items: (itemsByMeal.get(meal.id) ?? []).map((item) => ({
+      meal_structure: getMealStructure(meal),
+      patient_instruction: meal.patient_instruction ?? null,
+      items: (itemsByMeal.get(meal.id) ?? []).filter((item) => !item.meal_option_id && !item.choice_group_id).map((item) => ({
         id: item.id,
         food: item.food,
         quantity: item.quantity,
@@ -506,7 +531,17 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
         slot_nutritional_role: item.slot_nutritional_role ?? null,
         template_slot_id: item.template_slot_id ?? null,
         slot_exchange_eligible: item.slot_exchange_eligible === null || item.slot_exchange_eligible === undefined ? null : Boolean(item.slot_exchange_eligible),
+        is_optional: Boolean(item.is_optional),
         })),
+      options: (optionsByMeal.get(meal.id) ?? []).map((option) => ({
+        id: option.id, label: option.label, description: option.description ?? null,
+        items: (itemsByOption.get(option.id) ?? []).map((item) => ({ ...item, is_optional: Boolean(item.is_optional) })),
+      })),
+      choice_groups: (groupsByMeal.get(meal.id) ?? []).map((group) => ({
+        id: group.id, title: group.title, description: group.description ?? null,
+        min_selections: group.min_selections, max_selections: group.max_selections,
+        items: (itemsByChoiceGroup.get(group.id) ?? []).map((item) => ({ ...item, is_optional: Boolean(item.is_optional) })),
+      })),
       })),
     weekly_slots: (weeklySlotsByPlan.get(row.id) ?? []).map(({ id, weekday, meal_type, title, notes, source_meal_id }) => ({
       id,
@@ -961,26 +996,30 @@ function buildQuantitySnapshots(item: MealPlanItemPayload, portionsById: Map<str
 
 /** Congela nome + composicao de cada item vinculado (P1-A, FASE 20) e a gramagem da medida caseira selecionada. */
 async function resolveMealsWithSnapshots(meals: MealPlanMealPayload[]): Promise<MealPlanMealPayload[]> {
-  const measureIds = Array.from(new Set(meals.flatMap((meal) => meal.items.map((item) => item.household_measure_id).filter((id): id is string => Boolean(id)))));
+  const allItems = (meal: MealPlanMealPayload) => [meal.items, ...(meal.options ?? []).map((option) => option.items), ...(meal.choice_groups ?? []).map((group) => group.items)].flat();
+  const measureIds = Array.from(new Set(meals.flatMap((meal) => allItems(meal).map((item) => item.household_measure_id).filter((id): id is string => Boolean(id)))));
   const portions = await Promise.all(measureIds.map((id) => getFoodPortionById(id)));
   const portionsById = new Map(portions.filter((portion): portion is FoodPortion => Boolean(portion)).map((portion) => [portion.id, portion]));
   return Promise.all(
-    meals.map(async (meal) => ({
-      ...meal,
-      items: await Promise.all(
-        meal.items.map(async (item) => {
+    meals.map(async (meal) => {
+      const resolveItems = (items: MealPlanItemPayload[]) => Promise.all(items.map(async (item) => {
           if (!item.food.trim()) return item;
           const snapshot = await buildItemSnapshot(item.food_source, item.food_ref_id);
           const quantitySnapshot = buildQuantitySnapshots(item, portionsById);
           return { ...item, ...snapshot, ...quantitySnapshot };
-        })
-      ),
-    }))
+      }));
+      return {
+        ...meal,
+        items: await resolveItems(meal.items),
+        options: await Promise.all((meal.options ?? []).map(async (option) => ({ ...option, items: await resolveItems(option.items) }))),
+        choice_groups: await Promise.all((meal.choice_groups ?? []).map(async (group) => ({ ...group, items: await resolveItems(group.items) }))),
+      };
+    })
   );
 }
 
 /** Monta o snapshot clinico completo do plano para versionamento (FASE 21). */
-function buildMealPlanVersionSnapshot(
+export function buildMealPlanVersionSnapshot(
   input: {
     title: string;
     status: MealPlanStatus;
@@ -1010,6 +1049,8 @@ function buildMealPlanVersionSnapshot(
       suggested_time: meal.suggested_time ?? null,
       notes: meal.notes ?? null,
       source_recipe_id: meal.source_recipe_id ?? null,
+      meal_structure: getMealStructure(meal),
+      patient_instruction: meal.patient_instruction ?? null,
       items: meal.items.map((item) => ({
         food: item.food,
         quantity: item.quantity ?? null,
@@ -1024,6 +1065,14 @@ function buildMealPlanVersionSnapshot(
         quantity_resolution_snapshot: item.quantity_resolution_snapshot ?? null,
         quantity_locked: Boolean(item.quantity_locked),
         substitutions_locked: Boolean(item.substitutions_locked),
+      })),
+      options: (meal.options ?? []).map((option) => ({
+        label: option.label, description: option.description ?? null,
+        items: option.items.map((item) => ({ ...item, is_optional: Boolean(item.is_optional) })),
+      })),
+      choice_groups: (meal.choice_groups ?? []).map((group) => ({
+        title: group.title, description: group.description ?? null, min_selections: group.min_selections, max_selections: group.max_selections,
+        items: group.items.map((item) => ({ ...item, is_optional: Boolean(item.is_optional) })),
       })),
     })),
     weekly_slots: input.weekly_slots ?? [],
@@ -1061,6 +1110,8 @@ export async function createMealPlan(input: {
   templateId?: string | null;
   templateVersion?: number | null;
 }): Promise<MealPlanPayload> {
+  const structureErrors = input.meals.flatMap(validateMealStructure);
+  if (structureErrors.length) throw new Error(structureErrors.join(" "));
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const meals = await resolveMealsWithSnapshots(input.meals);
@@ -1280,6 +1331,8 @@ export async function updateMealPlan(planId: string, clientId: string, input: {
   substitutions: MealPlanSubstitutionPayload[];
   supplements: MealPlanSupplementPayload[];
 }, options: UpdateMealPlanOptions = {}): Promise<MealPlanPayload | null> {
+  const structureErrors = input.meals.flatMap(validateMealStructure);
+  if (structureErrors.length) throw new Error(structureErrors.join(" "));
   const existingRows = await d1Query<MealPlanRow>(
     "SELECT * FROM meal_plans WHERE id = ?1 AND client_id = ?2 LIMIT 1",
     [planId, clientId]
@@ -1361,14 +1414,16 @@ function buildMealPlanDetailStatements(
   now: string
 ): D1Statement[] {
   const mealRows: Record<string, unknown>[] = [];
+  const optionRows: Record<string, unknown>[] = [];
+  const choiceGroupRows: Record<string, unknown>[] = [];
   const itemRows: Record<string, unknown>[] = [];
   const savedMealIdsByClientId = new Map<string, string>();
   for (const [mealIndex, meal] of meals.entries()) {
     const mealId = crypto.randomUUID();
     if (meal.id) savedMealIdsByClientId.set(meal.id, mealId);
-    mealRows.push({ id: mealId, planId, name: meal.name, mealContext: meal.meal_context ?? mealContextForTemplateMeal(meal.name), time: meal.suggested_time ?? null, notes: meal.notes ?? null, sourceRecipeId: meal.source_recipe_id ?? null, order: mealIndex, now });
-    for (const [itemIndex, item] of meal.items.entries()) {
-      if (!item.food.trim()) continue;
+    mealRows.push({ id: mealId, planId, name: meal.name, mealContext: meal.meal_context ?? mealContextForTemplateMeal(meal.name), time: meal.suggested_time ?? null, notes: meal.notes ?? null, sourceRecipeId: meal.source_recipe_id ?? null, structure: getMealStructure(meal), patientInstruction: meal.patient_instruction ?? null, order: mealIndex, now });
+    const appendItems = (items: MealPlanItemPayload[], mealOptionId: string | null, choiceGroupId: string | null) => items.forEach((item, itemIndex) => {
+      if (!item.food.trim()) return;
       itemRows.push({
         id: crypto.randomUUID(),
         mealId,
@@ -1391,10 +1446,24 @@ function buildMealPlanDetailStatements(
         slotNutritionalRole: item.slot_nutritional_role ?? null,
         templateSlotId: item.template_slot_id ?? null,
         slotExchangeEligible: item.slot_exchange_eligible === undefined || item.slot_exchange_eligible === null ? null : (item.slot_exchange_eligible ? 1 : 0),
+        mealOptionId,
+        choiceGroupId,
+        isOptional: item.is_optional ? 1 : 0,
         order: itemIndex,
         now,
       });
-    }
+    });
+    appendItems(meal.items, null, null);
+    (meal.options ?? []).forEach((option, optionIndex) => {
+      const optionId = crypto.randomUUID();
+      optionRows.push({ id: optionId, mealId, label: option.label || `Opção ${optionIndex + 1}`, description: option.description ?? null, order: optionIndex, now });
+      appendItems(option.items, optionId, null);
+    });
+    (meal.choice_groups ?? []).forEach((group, groupIndex) => {
+      const groupId = crypto.randomUUID();
+      choiceGroupRows.push({ id: groupId, mealId, title: group.title, description: group.description ?? null, minSelections: group.min_selections, maxSelections: group.max_selections, order: groupIndex, now });
+      appendItems(group.items, null, groupId);
+    });
   }
   const weeklyRows = weeklySlots
     .filter((slot) => Number.isInteger(slot.weekday) && slot.weekday >= 0 && slot.weekday <= 6 && (slot.meal_type === "almoco" || slot.meal_type === "jantar"))
@@ -1445,19 +1514,31 @@ function buildMealPlanDetailStatements(
   }));
   const statements: D1Statement[] = [
     { sql: "DELETE FROM meal_plan_items WHERE meal_id IN (SELECT id FROM meal_plan_meals WHERE meal_plan_id = ?1)", params: [planId] },
+    { sql: "DELETE FROM meal_plan_meal_options WHERE meal_id IN (SELECT id FROM meal_plan_meals WHERE meal_plan_id = ?1)", params: [planId] },
+    { sql: "DELETE FROM meal_plan_choice_groups WHERE meal_id IN (SELECT id FROM meal_plan_meals WHERE meal_plan_id = ?1)", params: [planId] },
     { sql: "DELETE FROM meal_plan_weekly_slots WHERE meal_plan_id = ?1", params: [planId] },
     { sql: "DELETE FROM meal_plan_meals WHERE meal_plan_id = ?1", params: [planId] },
     { sql: "DELETE FROM meal_plan_substitutions WHERE meal_plan_id = ?1", params: [planId] },
     { sql: "DELETE FROM meal_plan_supplements WHERE meal_plan_id = ?1", params: [planId] },
   ];
   if (mealRows.length) statements.push({
-    sql: `INSERT INTO meal_plan_meals (id, meal_plan_id, name, meal_context, suggested_time, notes, source_recipe_id, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.planId'), json_extract(value,'$.name'), json_extract(value,'$.mealContext'), json_extract(value,'$.time'), json_extract(value,'$.notes'), json_extract(value,'$.sourceRecipeId'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO meal_plan_meals (id, meal_plan_id, name, meal_context, suggested_time, notes, source_recipe_id, meal_structure, patient_instruction, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.planId'), json_extract(value,'$.name'), json_extract(value,'$.mealContext'), json_extract(value,'$.time'), json_extract(value,'$.notes'), json_extract(value,'$.sourceRecipeId'), json_extract(value,'$.structure'), json_extract(value,'$.patientInstruction'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(mealRows)],
   });
+  if (optionRows.length) statements.push({
+    sql: `INSERT INTO meal_plan_meal_options (id, meal_id, label, description, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.label'), json_extract(value,'$.description'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    params: [JSON.stringify(optionRows)],
+  });
+  if (choiceGroupRows.length) statements.push({
+    sql: `INSERT INTO meal_plan_choice_groups (id, meal_id, title, description, min_selections, max_selections, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.title'), json_extract(value,'$.description'), json_extract(value,'$.minSelections'), json_extract(value,'$.maxSelections'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    params: [JSON.stringify(choiceGroupRows)],
+  });
   if (itemRows.length) statements.push({
-    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, canonical_food_id, household_measure_id, food_name_snapshot, nutrition_snapshot, resolved_grams_snapshot, quantity_resolution_snapshot, quantity_locked, substitutions_locked, slot_food_group, slot_food_subgroup, slot_nutritional_role, template_slot_id, slot_exchange_eligible, sort_order, created_at, updated_at)
-          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.canonicalFoodId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.foodNameSnapshot'), json_extract(value,'$.nutritionSnapshot'), json_extract(value,'$.resolvedGramsSnapshot'), json_extract(value,'$.quantityResolutionSnapshot'), json_extract(value,'$.quantityLocked'), json_extract(value,'$.substitutionsLocked'), json_extract(value,'$.slotFoodGroup'), json_extract(value,'$.slotFoodSubgroup'), json_extract(value,'$.slotNutritionalRole'), json_extract(value,'$.templateSlotId'), json_extract(value,'$.slotExchangeEligible'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
+    sql: `INSERT INTO meal_plan_items (id, meal_id, food, quantity, unit, notes, food_source, food_ref_id, canonical_food_id, household_measure_id, food_name_snapshot, nutrition_snapshot, resolved_grams_snapshot, quantity_resolution_snapshot, quantity_locked, substitutions_locked, slot_food_group, slot_food_subgroup, slot_nutritional_role, template_slot_id, slot_exchange_eligible, meal_option_id, choice_group_id, is_optional, sort_order, created_at, updated_at)
+          SELECT json_extract(value,'$.id'), json_extract(value,'$.mealId'), json_extract(value,'$.food'), json_extract(value,'$.quantity'), json_extract(value,'$.unit'), json_extract(value,'$.notes'), json_extract(value,'$.foodSource'), json_extract(value,'$.foodRefId'), json_extract(value,'$.canonicalFoodId'), json_extract(value,'$.householdMeasureId'), json_extract(value,'$.foodNameSnapshot'), json_extract(value,'$.nutritionSnapshot'), json_extract(value,'$.resolvedGramsSnapshot'), json_extract(value,'$.quantityResolutionSnapshot'), json_extract(value,'$.quantityLocked'), json_extract(value,'$.substitutionsLocked'), json_extract(value,'$.slotFoodGroup'), json_extract(value,'$.slotFoodSubgroup'), json_extract(value,'$.slotNutritionalRole'), json_extract(value,'$.templateSlotId'), json_extract(value,'$.slotExchangeEligible'), json_extract(value,'$.mealOptionId'), json_extract(value,'$.choiceGroupId'), json_extract(value,'$.isOptional'), json_extract(value,'$.order'), json_extract(value,'$.now'), json_extract(value,'$.now') FROM json_each(?1)`,
     params: [JSON.stringify(itemRows)],
   });
   if (weeklyRows.length) statements.push({

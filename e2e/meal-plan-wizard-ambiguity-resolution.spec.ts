@@ -16,9 +16,25 @@ import { createTestPatient } from "./helpers/test-data";
  */
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
+/**
+ * Preenche o prontuário mínimo exigido pelo gate determinístico de
+ * pré-análise (generationReadiness) — adicionado depois deste arquivo, sem
+ * o qual "Gerar pré-plano" nunca habilita. Nunca muda o que o teste
+ * verifica (resolução de ambiguidade), só permite alcançar essa etapa.
+ */
+async function ready(request: import("@playwright/test").APIRequestContext, clientId: string) {
+  const current = await request.get(`/api/admin/clients/${clientId}/nutrition-record`);
+  const record = (await current.json()) as { version: number };
+  const update = await request.patch(`/api/admin/clients/${clientId}/nutrition-record`, {
+    data: { expectedVersion: record.version, goals: "Manutenção", current_weight_kg: "70", height_cm: "165", eating_routine: "Rotina comercial", allergies: "Nenhuma" },
+  });
+  expect(update.ok(), await update.text()).toBeTruthy();
+}
+
 test.describe("wizard Criar com IA — resolução inline de ambiguidade", () => {
   test("escolher um candidato resolve o item e recalcula sem regenerar o resto do plano", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await ready(request, patient.id);
 
     const fixtureRes = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
       data: {
@@ -78,7 +94,10 @@ test.describe("wizard Criar com IA — resolução inline de ambiguidade", () =>
     // aparece na lista, nutrição recalculada pela engine real (nunca da fixture).
     await expect(dialog.getByText(/precisa de revisão/i)).not.toBeVisible();
     await expect(dialog.getByText(new RegExp(chosenCandidateName.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"))).toBeVisible();
-    await expect(kcalMetric).toBeVisible();
+    // recalculate() é assíncrono (chamada real ao servidor) — esperar o
+    // valor mudar em vez de ler o texto logo após o clique, que corre risco
+    // de capturar o kcal ainda não recalculado (stale).
+    await expect(kcalMetric).not.toHaveText(`${kcalBeforePick} kcal`, { timeout: 10_000 });
     const kcalAfterPick = Number(((await kcalMetric.textContent()) ?? "").replace(/\D/g, "") || "0");
     expect(kcalAfterPick).toBeGreaterThan(kcalBeforePick); // batata soma calorias — não foi descartada
 
@@ -99,6 +118,7 @@ test.describe("wizard Criar com IA — resolução inline de ambiguidade", () =>
 
   test("remover um item ambíguo o descarta sem adivinhar — nunca entra no plano salvo", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await ready(request, patient.id);
 
     const fixtureRes = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
       data: {
@@ -151,6 +171,7 @@ test.describe("wizard Criar com IA — resolução inline de ambiguidade", () =>
 
   test('"Selecionar e lembrar" salva uma preferência do profissional (não um alias global) e reaplica automaticamente na próxima geração ambígua igual', async ({ page, request }) => {
     const firstPatient = await createTestPatient(request);
+    await ready(request, firstPatient.id);
     const fixtureRes1 = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
       data: { clientId: firstPatient.id, meals: [{ mealKey: "almoco", recipeId: null, items: [{ query: "iogurte", quantity: 100, unit: "g" }], rationale: "Laticínio." }] },
     });
@@ -192,6 +213,7 @@ test.describe("wizard Criar com IA — resolução inline de ambiguidade", () =>
     // PROFISSIONAL (sessão atual), nunca do paciente nem um alias global do
     // catálogo: reaplicada aqui mesmo trocando de paciente.
     const secondPatient = await createTestPatient(request);
+    await ready(request, secondPatient.id);
     const fixtureRes2 = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
       data: { clientId: secondPatient.id, meals: [{ mealKey: "almoco", recipeId: null, items: [{ query: "iogurte", quantity: 100, unit: "g" }], rationale: "Laticínio." }] },
     });

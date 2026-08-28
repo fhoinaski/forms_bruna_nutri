@@ -23,9 +23,20 @@ import { createTestPatient } from "./helpers/test-data";
  */
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
+async function makeDraftReady(request: import("@playwright/test").APIRequestContext, clientId: string) {
+  const current = await request.get(`/api/admin/clients/${clientId}/nutrition-record`);
+  expect(current.ok(), await current.text()).toBeTruthy();
+  const record = await current.json() as { version: number };
+  const update = await request.patch(`/api/admin/clients/${clientId}/nutrition-record`, {
+    data: { expectedVersion: record.version, goals: "Emagrecimento", current_weight_kg: "70", height_cm: "165", eating_routine: "Rotina comercial", allergies: "Nenhuma" },
+  });
+  expect(update.ok(), await update.text()).toBeTruthy();
+}
+
 test.describe("wizard Criar com IA — geração completa com provider determinístico", () => {
   test("gera pré-plano com nutrientes calculados pela engine real, aplica ao editor, salva, recarrega, ativa e o print mostra os mesmos dados", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await makeDraftReady(request, patient.id);
 
     const fixtureRes = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
       data: {
@@ -41,6 +52,10 @@ test.describe("wizard Criar com IA — geração completa com provider determin�
       },
     });
     expect(fixtureRes.ok(), await fixtureRes.text()).toBeTruthy();
+    const fixtureDebug = await fixtureRes.json() as { registration?: { hash?: string; registryInstanceId?: string }; readback?: { hash?: string; registryInstanceId?: string } };
+    expect(fixtureDebug.registration?.hash).toBeTruthy();
+    expect(fixtureDebug.readback?.hash).toBe(fixtureDebug.registration?.hash);
+    expect(fixtureDebug.readback?.registryInstanceId).toBe(fixtureDebug.registration?.registryInstanceId);
 
     await page.goto(`/dashboard/clients/${patient.id}`);
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
@@ -53,6 +68,12 @@ test.describe("wizard Criar com IA — geração completa com provider determin�
     await dialog.getByRole("button", { name: /^continuar$/i }).click(); // refeições -> preferências
 
     await dialog.getByRole("button", { name: /^gerar pré-plano$/i }).click();
+    await expect.poll(async () => {
+      const consumption = await request.get(`/api/admin/e2e/set-meal-plan-draft-fixture?clientId=${patient.id}`);
+      if (!consumption.ok()) return false;
+      const body = await consumption.json() as { traces: Array<{ event: string; hash?: string }> };
+      return body.traces.some((trace) => trace.event === "consumed" && trace.hash === fixtureDebug.registration?.hash);
+    }, { timeout: 10_000 }).toBeTruthy();
 
     // Nutrientes vêm da MESMA engine do editor (draft-nutrition.ts), nunca da fixture.
     const kcalMetric = dialog.getByText(/^\d+ kcal$/).first();
@@ -96,6 +117,7 @@ test.describe("wizard Criar com IA — geração completa com provider determin�
 
   test("fixture inválida (fora do schema real) nunca é aceita silenciosamente — nenhum plano fantasma", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await makeDraftReady(request, patient.id);
 
     // Payload estruturalmente inválido: mealKey fora do enum real.
     const fixtureRes = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
