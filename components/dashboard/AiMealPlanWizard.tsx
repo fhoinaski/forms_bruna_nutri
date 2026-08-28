@@ -12,6 +12,7 @@ import type { Meal } from "@/components/dashboard/MealItemsEditor";
 import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
 import { normalizeIngredientForRead, type RecipeIngredient } from "@/lib/nutrition/recipes";
 import { computeMealPlanReadiness } from "@/lib/ai/agents/nutrition/meal-plan-readiness";
+import { useDialogKeyboard } from "@/hooks/use-dialog-keyboard";
 import {
   selectableMealKeys,
   computeMealPlanChangeset,
@@ -474,6 +475,12 @@ export function AiMealPlanWizard({
   // novo — só o resultado da chamada MAIS recente é aplicado.
   const generationRequestRef = useRef(0);
   const generationInFlightRef = useRef(false);
+  // R6.5.3 (seção 89) — o wizard não tinha nenhum tratamento de teclado antes
+  // desta fase (só fechava pelo botão "x"/"Cancelar"); Escape + Tab-trap
+  // agora reaproveitam o mesmo hook já usado pelo drawer de trocas e pela
+  // biblioteca de reuso.
+  const wizardContainerRef = useRef<HTMLElement | null>(null);
+  useDialogKeyboard(wizardContainerRef, onClose, true);
 
   // Objetivo/meta/refeições/horários/preferências ficam no state do
   // próprio componente — um retry (ou o botão "Gerar refeição por
@@ -1010,8 +1017,8 @@ export function AiMealPlanWizard({
   const hasEnergyTarget = target.targetEnergyKcal !== null;
 
   const modal = (
-    <div role="dialog" aria-modal="true" aria-labelledby="ai-wizard-title" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
-      <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
+    <div role="dialog" aria-modal="true" aria-labelledby="ai-wizard-title" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+      <section ref={wizardContainerRef} className="flex h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-5 py-4">
           <div>
             <p className="brand-kicker flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Assistente guiado</p>

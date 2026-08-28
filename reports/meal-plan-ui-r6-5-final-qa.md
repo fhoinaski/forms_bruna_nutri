@@ -1,102 +1,109 @@
-# Meal Plan Composer UX/UI R6.5.1 — Final QA / Release Closure
+# Meal Plan Composer UX/UI R6.5 — Fechamento Geral (Fases 1 → 3)
 
-## Nome de fechamento
+## Histórico de fases
 
-Fecha como **R6.5.1 — Nutrition Sidebar Visual Upgrade** (não R6.5
-completa). Ver `-audit.md` para a tabela de decisão de escopo
-completa e a justificativa (apenas a sidebar de nutrição foi
-implementada e testada frente às ~109 seções do pedido original).
+| Fase | PR | Commit | Entregue |
+| --- | --- | --- | --- |
+| R6.5.1 | #10 | 46c91bd | Nutrition Sidebar: energia/meta, barras de progresso por macro, missing seguro ("—") |
+| R6.5.2 | #11 | 6d8dec8 | Layout 3 colunas (só 2xl+), navegação de refeições, meal ativo, badge de estrutura, divisor "OU" |
+| R6.5.2B | #12 | 1cc9dff | Rótulo COMBINATION, compatibilidade R5 (SIMPLE/OPTIONS/COMBINATION via Copilot real) e R6 (receita), toolbar/inline quantity confirmados |
+| R6.5.2C | #13 | 35aefc3 | Menu de ações da refeição consolidado (⋯, acessível), food row com hover-reveal |
+| R6.5.3 | (esta) | — | Hook de teclado compartilhado; Escape/Tab-trap retrofitado no Copilot e no modal de receita (gap real fechado); bug do "x" corrigido; backdrop normalizado |
 
-## Mudança entregue
+Todas as 5 fases fecharam com CI verde na SHA exata e zero regressão
+introduzida (confirmado por reexecução ampla a cada fechamento).
 
-`components/nutrition/MealPlanNutritionSummary.tsx`
-(`MealPlanNutritionWorkspacePanel`):
+## Matriz de requisitos (seção 134 do pedido R6.5.3)
 
-1. Header de energia com valor prescrito ao lado e "% da meta".
-2. 3 barras de progresso reais por macro (proteína/carboidrato/
-   gordura) vs. a meta de cada um — substituindo a barra antiga que
-   comparava P:C:F entre si (leitura clinicamente sem sentido).
-3. "—" consistente para valor ausente em 3 pontos (era "sem dado").
+| Requisito (origem) | Fase | Testado | Status |
+| --- | --- | --- | --- |
+| Header de energia/meta | R6.5.1 | E2E | PASS |
+| Barras de progresso por macro vs. meta | R6.5.1 | E2E | PASS |
+| Missing = "—", nunca "0%" | R6.5.1 | E2E | PASS |
+| Layout 3 colunas desktop | R6.5.2 | E2E | PASS (só 2xl+, não xl — decisão de segurança documentada) |
+| Navegação de refeições + meal ativo | R6.5.2 | E2E + unit | PASS |
+| Badge de estrutura (Simples/Opções/Combinação) | R6.5.2 | E2E | PASS |
+| Divisor "OU" em OPTIONS | R6.5.2 | E2E | PASS |
+| Rótulo "Itens fixos" em COMBINATION | R6.5.2B | E2E + unit | PASS |
+| Toolbar (status/save-state/CTA único/reuso R4-R5) | R6.5.2B | E2E | PASS (já existia, confirmado) |
+| Compatibilidade R5 (SIMPLE/OPTIONS/COMBINATION via Copilot) | R6.5.2B | E2E | PASS |
+| Compatibilidade R6 (item de receita) | R6.5.2B | E2E | PASS |
+| Menu de ações da refeição consolidado (⋯) | R6.5.2C | E2E | PASS |
+| Food row: hover-reveal de ações secundárias | R6.5.2C | E2E | PASS |
+| Inline quantity/unit preservados | R6.5.2B/2C | E2E | PASS |
+| R3 "Trocas" preservado | R6.5.2B/2C | E2E | PASS |
+| Escape/Tab-trap unificado (drawer trocas, reuso, Copilot, receita) | R6.5.3 | E2E | PASS |
+| Bug do "x" literal corrigido | R6.5.3 | E2E | PASS |
+| Backdrop normalizado | R6.5.3 | leitura de código | PASS |
+| **Food Search — redesign visual (header/estados)** | — | — | **NÃO IMPLEMENTADO** |
+| **Substituição R3 — redesign de conteúdo (cards, comparação Atual→Novo)** | — | — | **NÃO IMPLEMENTADO** |
+| **Reuso R4 — redesign de cards** | — | — | **NÃO IMPLEMENTADO** |
+| **Receitas R6 — redesign de biblioteca/editor completo** | — | — | **NÃO IMPLEMENTADO** |
+| **Copilot — stepper visual** | — | — | **NÃO IMPLEMENTADO** |
+| **Copilot — chips de resumo de revisão (X resolvidos/Y revisar/Z não encontrado)** | — | — | **NÃO EXISTE** (confirmado pela auditoria — nem antes nem depois desta fase) |
+| **Copilot — badges de prontidão com texto+ícone** | — | — | **NÃO IMPLEMENTADO** |
+| **Extração de design system (DrawerShell/CompactEmptyState/etc.)** | — | — | **NÃO IMPLEMENTADO** |
+| **Meal-card action menu (seção específica R6.5.2 original)** — consolidação de Duplicar/Copiar/Modelo/Excluir | R6.5.2C | E2E | PASS |
+| **Food row — redesign visual completo (não só hover-reveal)** | — | — | **NÃO IMPLEMENTADO** (só compactação CSS, ver R6.5.2C) |
+| Toolbar — "última alteração" (timestamp) | — | — | **NÃO IMPLEMENTADO** (exigiria mudança de contrato de API) |
+| Tablet/mobile — polish dedicado (além de regression-guard) | — | — | **NÃO IMPLEMENTADO** |
 
-## Regressão real encontrada e corrigida (honestidade de processo)
+## Regra de conclusão (seção 146 do pedido)
 
-Durante o broad E2E de fechamento, 4 specs pré-existentes falharam:
-`meal-plan-composer-r2-final-flex.spec.ts` (2 testes),
-`meal-plan-composer-r2-final-large-plan.spec.ts` (1 teste),
-`meal-plan.spec.ts` (1 teste).
+Como itens visuais significativos permanecem abertos (Food Search,
+Substituição, Reuso, Receitas e Copilot continuam com o VISUAL de
+antes da R6.5 — só ganharam correções pontuais de acessibilidade e
+bugs, não o redesign completo pedido nas 109+120+147 seções
+acumuladas):
 
-**Causa raiz** — SELECTOR_REGRESSION: a primeira versão da mudança
-removeu o `<h3>Plano do dia</h3>` (usado como âncora de locator por
-`page.locator("aside", { hasText: "Plano do dia" })` e
-`page.getByRole("heading", { name: "Plano do dia" })`) e a grade
-"primary nutrients" com parágrafos `<p className="text-lg">` (usada
-por `sidebar.locator("p.text-lg").first()` para detectar qualquer
-atualização de valor nutricional após editar quantidade). A mudança
-visual substituiu esses dois elementos por um header novo sem manter
-contrato de seletor.
+```
+MEAL_PLAN_UI_R6_5_COMPLETE: nao
+```
 
-**Fix aplicado**:
-1. Heading `<h3>Plano do dia</h3>` restaurado, com a energia/meta
-   agora como uma linha adicional logo abaixo (não substituindo o
-   heading).
-2. Grade "primary nutrients" restaurada (parágrafos `text-lg`),
-   **exceto** `energyKcal` — removido dessa grade especificamente
-   porque, com o novo header, `energyKcal` passou a aparecer 2x na
-   sidebar (`"X kcal"` no header + `"X kcal"` na grade), causando um
-   **segundo bug real** descoberto pela mesma rodada de regressão:
-   `strict mode violation: locator(...).getByText(/^\d+(–\d+)? kcal$/)
-   resolved to 2 elements` em `meal-plan-composer-r2-final-large-plan.spec.ts`.
-   Corrigido filtrando `energyKcal` fora do `.map` da grade — protein/
-   carb/gordura/fibra continuam na grade (mantendo o `p.text-lg` que o
-   teste de N+1 usa para detectar mudança de valor).
+### Gaps exatos restantes
 
-**Reprodução após fix** — specs afetadas reexecutadas isoladamente:
-12/12 PASS (`meal-plan-composer-r2-final-flex.spec.ts`,
-`meal-plan-composer-r2-final-large-plan.spec.ts`, `meal-plan.spec.ts`,
-`meal-plan-ui-r6-5-visual.spec.ts`).
+1. Food Search: nenhum redesign de header/estrutura/estados.
+2. Substituição R3: conteúdo do drawer (cards de candidato, comparação
+   Atual→Novo, seções colapsáveis de impacto) não redesenhado.
+3. Reuso R4: cards de refeição salva/modelo/plano anterior não
+   redesenhados.
+4. Receitas R6: biblioteca (grid de cards) e editor completo
+   (ingredientes/rendimento/instruções/nutrição) não redesenhados.
+5. Copilot: sem stepper visual, sem chips de resumo de revisão (que
+   nem existem hoje como conceito), sem badges de prontidão
+   texto+ícone.
+6. Nenhuma extração de componentes de design system compartilhados
+   (`DrawerShell`, `CompactEmptyState`, `InlineErrorState`,
+   `DrawerSearchField`, segmented control compartilhado).
+7. Food row: só compactação CSS (hover-reveal), não um redesign
+   estrutural completo.
+8. Toolbar: falta o timestamp de "última alteração".
+9. Tablet/mobile: nenhum polish dedicado além de confirmar que nada
+   quebrou.
 
-## Gates finais
+### O que fechou de verdade (não pequeno)
 
-| Gate | Resultado |
-| --- | --- |
-| TypeScript (`tsc --noEmit`) | PASS, 0 erros |
-| ESLint (arquivos alterados) | PASS, 0 erros/avisos |
-| Build (`next build`) | PASS (rebuildado após CADA fix — nenhum resultado de teste E2E veio de build stale) |
-| Migração (`migrate:d1:check`) | PASS, 71 migrações validadas, 0 novas |
-| Runtime DDL guard (`schema:runtime-check`) | PASS |
-| Artifact check | PASS, 1274 arquivos rastreados |
-| Full Vitest | 2007/2007 PASS (233 arquivos, nenhum teste novo — mudança é só de apresentação) |
-| E2E visual dedicado R6.5 (`meal-plan-ui-r6-5-visual.spec.ts`) | 4/4 PASS |
-| Broad E2E (chromium-desktop, single worker, após fix final) | 223/223 PASS |
-| Broad E2E (default parallelism, chromium-desktop + mobile-chrome) | ver marcador `MEAL_PLAN_UI_R6_5_BROAD_E2E` — reportado à parte com classificação de qualquer falha residual (nunca chamada de flake sem prova) |
-| Migrations novas | 0 |
-| Escritas em produção | 0 (shim SQLite local do E2E) |
+O Composer central (sidebar de nutrição, layout, navegação de
+refeições, meal cards, OPTIONS/COMBINATION, toolbar, compatibilidade
+R3/R4/R5/R6, e agora acessibilidade de teclado unificada em todos os
+diálogos) está genuinamente mais profissional e sem nenhuma
+regressão introduzida em 5 fases consecutivas — cada uma delas
+verificada com CI verde na SHA exata, full Vitest, e broad E2E
+single-worker + paralelo. As áreas de suporte (Food Search/
+Substituição/Reuso/Receitas/Copilot) continuam funcionalmente
+intactas e agora mais acessíveis por teclado, mas visualmente como
+estavam antes da R6.5.
 
-## Sem segundo calculador (seção 13 do pedido)
+## Próximos passos sugeridos (não iniciados)
 
-Confirmado por leitura de código: `percentOfTarget` e `formatValue`
-operam apenas sobre `max[key]`/`min[key]`/`target[key]` — valores que
-chegam já calculados pelo Nutrition Engine via
-`useMealPlanNutritionData`/`calculateFlexiblePlanNutrients`. Nenhuma
-lógica de cálculo nutricional nova foi introduzida na camada visual.
-As faixas min/max de OPTIONS/COMBINATION continuam vindo do mesmo
-`flexibleResult.total` — não alteradas.
+Uma fase R6.5.4 (ou equivalente) dedicada exclusivamente ao redesign
+visual das 5 áreas de suporte, feita uma de cada vez (não todas
+simultaneamente, dado o histórico de regressões nesta base de código
+quando mudanças amplas são tentadas de uma vez), seria o caminho mais
+seguro pra fechar os gaps acima.
 
-## Escopo conscientemente fora desta fase
+## STOP
 
-Ver `-audit.md` (tabela completa). Resumo: layout 3 colunas, cards de
-refeição, linhas de alimento com edição inline, visual de OPTIONS/
-COMBINATION, toolbar, drawers padronizados, integração visual do
-Copilot, redesenho dedicado de tablet/mobile, tokens de design,
-atalhos de teclado, extração de design system, acessibilidade
-dedicada e medição formal de performance — nenhum implementado nesta
-fase.
-
-## Regra de conclusão
-
-`MEAL_PLAN_UI_R6_5_COMPLETE: nao` — a fase entrega um upgrade real,
-testado e sem regressão (após a correção documentada acima) da
-Nutrition Sidebar, mas não o escopo amplo de 109 seções do pedido
-original. Fecha como R6.5.1, com R6.5.2 (layout/cards/navegação) e
-R6.5.3 (drawers/Copilot/responsivo dedicado/tokens/acessibilidade)
-como follow-ups sugeridos.
+Conforme instruído: não iniciando R7/Analytics. `MEAL_PLAN_ANALYTICS_R7_SAFE_TO_START`
+não é declarado (só se aplicaria se `MEAL_PLAN_UI_R6_5_COMPLETE: sim`,
+que não é o caso).

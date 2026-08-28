@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Search, Star, X } from "lucide-react";
 import type { MealPlanMealPayload, MealPlanItemPayload } from "@/lib/repositories/meal-plans";
+import { useDialogKeyboard } from "@/hooks/use-dialog-keyboard";
 
 type ReuseTab = "recent" | "favorites" | "saved" | "plans" | "templates";
 
@@ -78,31 +79,8 @@ export function ReuseLibraryDrawer({
     window.requestAnimationFrame(() => closeButtonRef.current?.focus());
   }, []);
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-        return;
-      }
-      if (event.key === "Tab") {
-        const container = containerRef.current;
-        if (!container) return;
-        const focusable = Array.from(container.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter((el) => !el.hasAttribute("disabled"));
-        if (!focusable.length) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  // R6.5.3 — Escape/Tab-trap extraído pro hook compartilhado `useDialogKeyboard`.
+  useDialogKeyboard(containerRef, onClose, true);
 
   async function loadTab(target: ReuseTab) {
     setLoadingTab(true);

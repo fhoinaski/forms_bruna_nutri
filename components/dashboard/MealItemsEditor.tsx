@@ -15,6 +15,7 @@ import { ReuseLibraryDrawer } from "@/components/dashboard/ReuseLibraryDrawer";
 import type { FoodReference } from "@/lib/nutrition/food-catalog";
 import { classifyFoodExchangeGroup, FOOD_GROUP_LABELS, type FoodGroup } from "@/lib/nutrition/food-exchange-hierarchy";
 import { CLINICAL_ROLE_LABELS, type TemplateClinicalRole } from "@/lib/meal-templates/system-template-contract";
+import { useDialogKeyboard } from "@/hooks/use-dialog-keyboard";
 
 export type MealItem = {
   id?: string;
@@ -429,33 +430,9 @@ export function MealItemsEditor({
     loadExchangeGroups();
   }, [loadExchangeGroups]);
 
-  useEffect(() => {
-    if (!exchangeDrawerKey) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeExchangeDrawer();
-        return;
-      }
-      // Focus trap (seção 42) — Tab/Shift+Tab nunca escapam do drawer aberto.
-      if (event.key === "Tab") {
-        const container = exchangeDrawerRef.current;
-        if (!container) return;
-        const focusable = Array.from(container.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter((el) => !el.hasAttribute("disabled"));
-        if (!focusable.length) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [exchangeDrawerKey]);
+  // R6.5.3 — Escape/Tab-trap extraído pro hook compartilhado `useDialogKeyboard`
+  // (mesma lógica que já existia aqui, agora reaproveitada por outros diálogos).
+  useDialogKeyboard(exchangeDrawerRef, closeExchangeDrawer, Boolean(exchangeDrawerKey));
 
   const [activeFoodField, setActiveFoodField] = useState("");
   const [foodSearch, setFoodSearch] = useState<{ key: string; query: string }>({ key: "", query: "" });
@@ -464,6 +441,9 @@ export function MealItemsEditor({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [searchLoadingKey, setSearchLoadingKey] = useState("");
   const [recipeSelectorOpen, setRecipeSelectorOpen] = useState(false);
+  const recipeSelectorRef = useRef<HTMLElement | null>(null);
+  // R6.5.3 — este modal também não tinha Escape/Tab-trap antes desta fase.
+  useDialogKeyboard(recipeSelectorRef, () => setRecipeSelectorOpen(false), recipeSelectorOpen);
   // R4 — biblioteca de reuso (recentes/favoritos/refeições salvas/planos
   // anteriores/modelos de plano), reaproveitando o mesmo padrão de
   // "inserir receita" já existente: insere no estado LOCAL, nunca auto-save.
@@ -1767,7 +1747,7 @@ export function MealItemsEditor({
       )}
 
       {portalReady && exchangeDrawerContext && createPortal(
-        <div role="dialog" aria-modal="true" aria-labelledby="meal-exchange-drawer-title" className="fixed inset-0 z-50 overflow-hidden bg-black/25 backdrop-blur-sm">
+        <div role="dialog" aria-modal="true" aria-labelledby="meal-exchange-drawer-title" className="fixed inset-0 z-50 overflow-hidden bg-black/30 backdrop-blur-sm">
           <button type="button" className="absolute inset-0 h-full w-full cursor-default" aria-hidden="true" tabIndex={-1} onClick={closeExchangeDrawer} />
           {/* R2.2 (seção 40) — mobile: bottom sheet de altura fixa; a partir de
               sm: drawer lateral direito, altura cheia, como antes. */}
@@ -1882,14 +1862,17 @@ export function MealItemsEditor({
       )}
 
       {portalReady && recipeSelectorOpen && createPortal(
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
-          <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
+        <div role="dialog" aria-modal="true" aria-labelledby="insert-recipe-title" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+          <section ref={recipeSelectorRef} className="flex h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-5 py-4">
               <div>
                 <p className="brand-kicker">Biblioteca de receitas</p>
-                <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Inserir receita</h2>
+                <h2 id="insert-recipe-title" className="font-serif text-2xl font-semibold text-[#3A3028]">Inserir receita</h2>
               </div>
-              <button type="button" onClick={() => setRecipeSelectorOpen(false)} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar" title="Fechar">x</button>
+              {/* R6.5.3 — era o literal "x" (texto), não um ícone; agora consistente com todo o resto do app. */}
+              <button type="button" onClick={() => setRecipeSelectorOpen(false)} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar" title="Fechar">
+                <X className="h-4 w-4" />
+              </button>
             </div>
             <div className="grid shrink-0 gap-3 border-b border-[#EDE1D6] p-4 md:grid-cols-[minmax(0,1fr)_220px]">
               <input value={recipeSearch} onChange={(event) => setRecipeSearch(event.target.value)} className="brand-input" placeholder="Buscar por nome ou tag..." />
