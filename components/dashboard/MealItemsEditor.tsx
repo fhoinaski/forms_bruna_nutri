@@ -483,10 +483,25 @@ export function MealItemsEditor({
   const [measuresByFood, setMeasuresByFood] = useState<Record<string, MealMeasure[]>>({});
   const [openMealMenu, setOpenMealMenu] = useState<number | null>(null);
   const [openItemMenu, setOpenItemMenu] = useState("");
+  const mealMenuTriggerRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     setPortalReady(true);
   }, []);
+
+  /** R6.5.2C (seção 7) — Escape fecha o menu "⋯" da refeição e devolve o foco pro botão que abriu. */
+  useEffect(() => {
+    if (openMealMenu === null) return;
+    const triggerIndex = openMealMenu;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpenMealMenu(null);
+        mealMenuTriggerRefs.current[triggerIndex]?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [openMealMenu]);
 
   useEffect(() => {
     if (!recipeSelectorOpen && !recipeDraft && !exchangeDrawerKey) return;
@@ -1165,22 +1180,25 @@ export function MealItemsEditor({
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-1 rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-0.5">
-                <button type="button" onClick={() => onChange(reorderArray(meals, mealIndex, -1))} disabled={mealIndex === 0} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label={`Mover ${meal.name || "refeicao"} para cima`} title="Mover refeicao para cima">
-                  <ChevronUp className="h-4 w-4" />
-                </button>
-                <button type="button" onClick={() => onChange(reorderArray(meals, mealIndex, 1))} disabled={mealIndex === meals.length - 1} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label={`Mover ${meal.name || "refeicao"} para baixo`} title="Mover refeicao para baixo">
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-              </div>
-              <button type="button" onClick={() => onChange(duplicateMealAt(meals, mealIndex))} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#607A56] hover:bg-[#EAF0E4]" aria-label={`Duplicar ${meal.name || "refeicao"}`} title="Duplicar refeicao">
-                <Copy className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => setOpenMealMenu((current) => current === mealIndex ? null : mealIndex)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] hover:bg-[#FBF7F1]" aria-label={`Mais ações para ${meal.name || "refeicao"}`} title="Mais ações">
+              {/* R6.5.2C (seções 3-6) — Mover/Duplicar movidos pra dentro do menu "⋯"; mesmos
+                  aria-label/title/handlers de sempre, só a localização visual mudou. */}
+              <button ref={(el) => { mealMenuTriggerRefs.current[mealIndex] = el; }} type="button" onClick={() => setOpenMealMenu((current) => current === mealIndex ? null : mealIndex)} aria-haspopup="menu" aria-expanded={openMealMenu === mealIndex} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] hover:bg-[#FBF7F1]" aria-label={`Ações da refeição ${meal.name || "refeicao"}`} title="Mais ações">
                 <MoreHorizontal className="h-4 w-4" />
               </button>
               {openMealMenu === mealIndex && (
-                <div className="absolute right-3 top-[calc(100%-4px)] z-20 w-56 rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_16px_40px_rgba(58,48,40,0.14)]">
+                <div role="menu" aria-label={`Ações da refeição ${meal.name || "refeicao"}`} className="absolute right-3 top-[calc(100%-4px)] z-20 w-56 rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_16px_40px_rgba(58,48,40,0.14)]">
+                  <button type="button" onClick={() => { setOpenMealMenu(null); onChange(reorderArray(meals, mealIndex, -1)); }} disabled={mealIndex === 0} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Mover ${meal.name || "refeicao"} para cima`} title="Mover refeicao para cima">
+                    <ChevronUp className="h-4 w-4" />
+                    Mover para cima
+                  </button>
+                  <button type="button" onClick={() => { setOpenMealMenu(null); onChange(reorderArray(meals, mealIndex, 1)); }} disabled={mealIndex === meals.length - 1} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Mover ${meal.name || "refeicao"} para baixo`} title="Mover refeicao para baixo">
+                    <ChevronDown className="h-4 w-4" />
+                    Mover para baixo
+                  </button>
+                  <button type="button" onClick={() => { setOpenMealMenu(null); onChange(duplicateMealAt(meals, mealIndex)); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]" aria-label={`Duplicar ${meal.name || "refeicao"}`} title="Duplicar refeicao">
+                    <Copy className="h-4 w-4" />
+                    Duplicar
+                  </button>
                   <button type="button" onClick={() => { setOpenMealMenu(null); setAiModalMealIndex(mealIndex); }} disabled={!aiEnabled || aiLoadingMeal === mealIndex} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#8C5F50] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
                     <Sparkles className="h-4 w-4" />
                     {aiLoadingMeal === mealIndex ? "Sugerindo..." : "Sugerir com IA"}
@@ -1195,6 +1213,7 @@ export function MealItemsEditor({
                       Salvar como refeição favorita
                     </button>
                   )}
+                  <div className="my-1 h-px bg-[#F0E2D6]" aria-hidden="true" />
                   <button type="button" onClick={() => { setOpenMealMenu(null); onChange(meals.filter((_, index) => index !== mealIndex)); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">
                     <Trash2 className="h-4 w-4" />
                     Excluir refeição
@@ -1347,7 +1366,7 @@ export function MealItemsEditor({
                 const editingItem = !readOnly && (editingItemKey === key || !item.food.trim());
                 if (!editingItem) {
                   return (
-                    <div key={itemIndex} className="relative grid min-w-0 gap-2 rounded-lg border border-[#EDE1D6] bg-white px-3 py-2 md:grid-cols-[minmax(0,150px)_minmax(0,1fr)_120px_minmax(140px,190px)_auto] md:items-center">
+                    <div key={itemIndex} className="group relative grid min-w-0 gap-2 rounded-lg border border-[#EDE1D6] bg-white px-3 py-2 md:grid-cols-[minmax(0,150px)_minmax(0,1fr)_120px_minmax(140px,190px)_auto] md:items-center">
                       <div className="min-w-0">
                         {slotGroupLabel ? (
                           <span className="block truncate text-[11px] font-bold uppercase tracking-[0.08em] text-[#607A56]">{slotGroupLabel}</span>
@@ -1385,7 +1404,13 @@ export function MealItemsEditor({
                       </div>
                       <div className="relative flex items-center justify-end">
                         {!readOnly && (
-                          <button type="button" onClick={() => setOpenItemMenu((current) => current === key ? "" : key)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Mais ações do alimento" title="Mais ações">
+                          <button
+                            type="button"
+                            onClick={() => setOpenItemMenu((current) => current === key ? "" : key)}
+                            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] transition-opacity hover:bg-[#FBF7F1] md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 ${openItemMenu === key ? "" : "md:opacity-0"}`}
+                            aria-label="Mais ações do alimento"
+                            title="Mais ações"
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </button>
                         )}

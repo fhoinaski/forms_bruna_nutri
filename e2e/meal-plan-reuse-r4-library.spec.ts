@@ -65,7 +65,8 @@ test.describe("Meal Plan Reuse R4 — Biblioteca de reuso", () => {
     await selectFood(page, meal, "Arroz, tipo 1, cozido", /arroz/i);
     await setLastQuantity(meal, "100");
 
-    await meal.getByRole("button", { name: /mais ações para/i }).click();
+    // R6.5.2C: aria-label do gatilho do menu da refeição passou a "Ações da refeição {nome}".
+    await meal.getByRole("button", { name: /ações da refeição/i }).click();
     await page.getByRole("button", { name: "Salvar como refeição favorita" }).click();
     const saveDialog = page.getByRole("dialog", { name: "Salvar refeição favorita" });
     await expect(saveDialog).toBeVisible();
