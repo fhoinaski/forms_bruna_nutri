@@ -2,6 +2,9 @@ import { d1Batch, d1Execute, d1Query, type D1Statement } from "@/lib/d1/client";
 import { getAllTemplates, getSlotClassificationBySourceItemId, type ProtocolTemplate } from "@/lib/repositories/protocol-templates";
 import type { ProtocolTemplateTargetGroup } from "@/lib/protocol-templates/constants";
 import { buildItemSnapshot } from "@/lib/nutrition/food-snapshot-server";
+import { buildRecipeItemSnapshot as serializeRecipeItemSnapshot } from "@/lib/nutrition/food-snapshot";
+import { resolveRecipeItemNutrients } from "@/lib/nutrition/nutrients";
+import { getRecipeReferenceEntry } from "@/lib/repositories/recipes";
 import type { MealPlanVersionSource } from "@/lib/repositories/meal-plan-versions";
 import { encryptJsonValue } from "@/lib/security/encrypted-fields";
 import { getFoodPortionById, toHouseholdMeasureOption, type FoodPortion } from "@/lib/repositories/food-portions";
@@ -79,7 +82,7 @@ export type MealPlanItemPayload = {
   // FASE 6.5 (item 5): TBCA/IBGE_POF aceitos aqui — identidade transportada,
   // mas o Nutrition Engine ainda trata como "nao reconhecido" pro calculo
   // (ver lib/nutrition/nutrients.ts#resolveItemReference, item 8).
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | null;
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | "RECIPE" | null;
   food_ref_id?: string | null;
   // FASE 6.5 (item 3) — identidade canonica completa quando food_source e
   // TBCA/IBGE_POF (ex.: "tbca:medidas_caseiras:BRC0001C"). NULL pra item legado.
@@ -1021,6 +1024,28 @@ function buildQuantitySnapshots(item: MealPlanItemPayload, portionsById: Map<str
   };
 }
 
+/**
+ * R6 (seções 47-54) — congela a contribuição nutricional de um item de
+ * RECEITA pra exatamente a quantidade/unidade prescrita, no momento do
+ * save. Reaproveita a MESMA coluna `nutrition_snapshot` (formato
+ * discriminado por `kind`, ver food-snapshot.ts) — nenhum schema novo.
+ * Recalcula a partir do estado ATUAL da receita (o snapshot antigo, se
+ * existir, é substituído por um novo — cada save "re-congela" a versão
+ * vigente; um plano publicado nunca é re-salvo, então seu snapshot fica
+ * parado exatamente como estava na última vez que foi salvo).
+ */
+async function buildRecipeItemSnapshot(item: MealPlanItemPayload): Promise<Pick<MealPlanItemPayload, "food_name_snapshot" | "nutrition_snapshot" | "resolved_grams_snapshot">> {
+  if (!item.food_ref_id) return { food_name_snapshot: null, nutrition_snapshot: null, resolved_grams_snapshot: null };
+  const entry = await getRecipeReferenceEntry(item.food_ref_id);
+  if (!entry) return { food_name_snapshot: null, nutrition_snapshot: null, resolved_grams_snapshot: null };
+  const { values, grams } = resolveRecipeItemNutrients(item.quantity, item.unit, entry);
+  return {
+    food_name_snapshot: item.food,
+    nutrition_snapshot: serializeRecipeItemSnapshot(values as unknown as Record<string, number | null>),
+    resolved_grams_snapshot: grams,
+  };
+}
+
 /** Congela nome + composicao de cada item vinculado (P1-A, FASE 20) e a gramagem da medida caseira selecionada. */
 async function resolveMealsWithSnapshots(meals: MealPlanMealPayload[]): Promise<MealPlanMealPayload[]> {
   const allItems = (meal: MealPlanMealPayload) => [meal.items, ...(meal.options ?? []).map((option) => option.items), ...(meal.choice_groups ?? []).map((group) => group.items)].flat();
@@ -1031,6 +1056,10 @@ async function resolveMealsWithSnapshots(meals: MealPlanMealPayload[]): Promise<
     meals.map(async (meal) => {
       const resolveItems = (items: MealPlanItemPayload[]) => Promise.all(items.map(async (item) => {
           if (!item.food.trim()) return item;
+          if (item.food_source === "RECIPE") {
+            const recipeSnapshot = await buildRecipeItemSnapshot(item);
+            return { ...item, ...recipeSnapshot };
+          }
           const snapshot = await buildItemSnapshot(item.food_source, item.food_ref_id);
           const quantitySnapshot = buildQuantitySnapshots(item, portionsById);
           return { ...item, ...snapshot, ...quantitySnapshot };
@@ -1281,7 +1310,8 @@ export async function generateExchangeGroupsForMealPlanItems(input: {
         skipped++;
         continue;
       }
-      if (!item.food_source || !item.food_ref_id) {
+      if (!item.food_source || item.food_source === "RECIPE" || !item.food_ref_id) {
+        // R6 (seção 40) — item de RECEITA nunca gera grupo de troca automático.
         skipped++;
         continue;
       }

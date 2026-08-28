@@ -15,7 +15,7 @@ export type SummaryItem = {
   // transportada), mas o filtro abaixo (linha ~110) so reconhece
   // TACO/CUSTOM/MANUFACTURER de proposito — item com essas 2 fontes cai
   // como "nao reconhecido", igual USDA ja caia antes desta fase (item 8).
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | null;
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | "RECIPE" | null;
   food_ref_id?: string | null;
   household_measure_id?: string | null;
   resolved_grams_snapshot?: number | null;

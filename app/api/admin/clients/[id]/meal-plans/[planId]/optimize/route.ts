@@ -83,8 +83,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // widenar o tipo compartilhado com o gerador de IA (que nunca deve
         // produzir esses valores ainda, item 25), trata como sem fonte
         // estruturada aqui — mesmo fallback grácil de qualquer item sem match.
-        food_source: item.food_source === "TBCA" || item.food_source === "IBGE_POF" ? null : (item.food_source ?? null),
-        food_ref_id: item.food_source === "TBCA" || item.food_source === "IBGE_POF" ? null : (item.food_ref_id ?? null),
+        // R6 — item de RECEITA também não é ajustável pelo Optimizer (mesmo
+        // fallback gracioso: sem fonte estruturada, nunca uma quebra).
+        food_source: item.food_source === "TBCA" || item.food_source === "IBGE_POF" || item.food_source === "RECIPE" ? null : (item.food_source ?? null),
+        food_ref_id: item.food_source === "TBCA" || item.food_source === "IBGE_POF" || item.food_source === "RECIPE" ? null : (item.food_ref_id ?? null),
         ai_suggested: true as const,
       })),
   }));

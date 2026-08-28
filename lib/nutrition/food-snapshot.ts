@@ -67,6 +67,38 @@ export function buildNutritionSnapshot(reference: MacroReferenceFood): string {
   return JSON.stringify(snapshot);
 }
 
+/**
+ * R6 (seções 47-54) — snapshot de um ITEM DE RECEITA, não de um alimento
+ * por-100g: uma receita não tem densidade fixa (o rateio depende de
+ * rendimento/porções, não de gramas puras), então em vez de congelar uma
+ * "referência por 100g" (que exigiria sempre um equivalente em gramas,
+ * inviável no modo PORTION_COUNT), congela os VALORES JÁ CALCULADOS pra
+ * aquela quantidade exata no momento do save — reaproveitando a MESMA
+ * coluna `nutrition_snapshot`, sem schema novo. Discriminado por `kind`
+ * pra nunca ser confundido com o shape antigo (por-100g) por
+ * `referenceFromSnapshot`.
+ */
+export interface RecipeItemSnapshotPayload {
+  kind: "recipe_item_v1";
+  values: Record<string, number | null>;
+}
+
+export function buildRecipeItemSnapshot(values: Record<string, number | null>): string {
+  return JSON.stringify({ kind: "recipe_item_v1", values } satisfies RecipeItemSnapshotPayload);
+}
+
+/** `null` quando o snapshot não existe, está corrompido, ou não é do shape de item de receita (ex.: snapshot por-100g legado). */
+export function recipeItemValuesFromSnapshot(snapshot: string | null | undefined): Record<string, number | null> | null {
+  if (!snapshot) return null;
+  try {
+    const parsed = JSON.parse(snapshot) as Partial<RecipeItemSnapshotPayload>;
+    if (parsed?.kind !== "recipe_item_v1" || !parsed.values || typeof parsed.values !== "object") return null;
+    return parsed.values;
+  } catch {
+    return null;
+  }
+}
+
 /** Reconstroi um MacroReferenceFood a partir do snapshot historico (read path). */
 export function referenceFromSnapshot(
   food: string,

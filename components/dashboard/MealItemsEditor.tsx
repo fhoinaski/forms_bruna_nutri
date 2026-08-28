@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Beef, Check, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, PanelRightClose, Pencil, Plus, RefreshCw, Save, Sparkles, Star, Trash2, Unlock, Utensils, Wheat, X } from "lucide-react";
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
-import { scaleRecipeIngredientsToPortions } from "@/lib/nutrition/recipes";
+import { scaleRecipeIngredientsToPortions, normalizeIngredientForRead, type RecipeIngredient } from "@/lib/nutrition/recipes";
 import { resolveQuantity, type HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
 import type { FoodSearchResultViewModel } from "@/lib/nutrition/food-search-view-model";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
@@ -31,7 +31,7 @@ export type MealItem = {
   // FASE 6.5 (item 5): TBCA/IBGE_POF aceitos — vem do piloto de busca
   // canonica; identidade transportada, calculo do plano ainda trata como
   // "nao reconhecido" (ver lib/nutrition/nutrients.ts, item 8).
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | null;
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | "RECIPE" | null;
   food_ref_id?: string | null;
   // FASE 6.5 (item 3) — identidade canonica completa, so quando
   // food_source e TBCA/IBGE_POF (ou TACO vindo do piloto canonico).
@@ -94,6 +94,9 @@ type FoodSuggestion = MacroReferenceFood & {
   displayName?: string;
 };
 
+/** R6 — item mínimo da biblioteca de receitas usado só pra escolher qual inserir; nunca acessa ingredientes/macros aqui (o motor recalcula via food_source RECIPE + food_ref_id no save). */
+type RecipeLibraryEntry = { id: string; title: string; meal_group: string; servings: number; per_portion_kcal: number };
+
 const RECORDABLE_FOOD_USAGE_SOURCES = new Set(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]);
 
 /**
@@ -134,7 +137,10 @@ type RecipeLibraryItem = {
   title: string;
   description: string | null;
   meal_group: RecipeMealGroup;
-  ingredients: Array<{ taco_number: number; food_name: string; grams: number }>;
+  // R6 — shape novo (qualquer food_source real) com os campos legados
+  // ainda aceitos (receitas criadas antes desta fase); normalizeIngredientForRead
+  // trata os dois casos uniformemente, nunca assume taco_number obrigatório.
+  ingredients: RecipeIngredient[];
   source_note: string | null;
   per_portion_kcal: number;
   servings: number;
@@ -369,6 +375,10 @@ export function MealItemsEditor({
   const [openSubstitutionsKey, setOpenSubstitutionsKey] = useState("");
   const [openExchangeKey, setOpenExchangeKey] = useState("");
   const [editingItemKey, setEditingItemKey] = useState("");
+  // R6 (seções 33-35) — picker de receita: adiciona um item RECIPE (nunca achatado em alimentos), quantidade em porções por padrão.
+  const [recipePickerMealIndex, setRecipePickerMealIndex] = useState<number | null>(null);
+  const [recipePickerQuery, setRecipePickerQuery] = useState("");
+  const [recipePickerResults, setRecipePickerResults] = useState<RecipeLibraryEntry[]>([]);
   const [exchangeDrawerKey, setExchangeDrawerKey] = useState("");
   // R2.2 (seção 42) — devolve o foco ao botão que abriu o drawer ao fechar,
   // em vez de deixá-lo perdido no <body>.
@@ -722,6 +732,49 @@ export function MealItemsEditor({
     setEditingItemKey(`${mealIndex}:${itemIndex}`);
   }
 
+  /**
+   * R6 (seções 33-36) — insere uma RECEITA como item, nunca achatado em
+   * alimentos: food_source "RECIPE" + food_ref_id (id da receita).
+   * Quantidade padrão "1 porção" — a nutricionista ajusta depois (porções
+   * ou gramas, conforme o rendimento da receita). O motor de nutrição
+   * (lib/nutrition/nutrients.ts) resolve a contribuição real ao salvar.
+   */
+  function addRecipeItem(mealIndex: number, recipe: RecipeLibraryEntry) {
+    const meal = meals[mealIndex];
+    if (!meal) return;
+    updateMeal(mealIndex, {
+      items: [...meal.items, {
+        food: recipe.title,
+        quantity: "1",
+        unit: "porção",
+        notes: null,
+        food_source: "RECIPE",
+        food_ref_id: recipe.id,
+      }],
+    });
+    setRecipePickerMealIndex(null);
+    setRecipePickerQuery("");
+    setRecipePickerResults([]);
+  }
+
+  // R6 — busca na biblioteca de receitas (reaproveita GET /api/admin/recipes já existente, nunca uma busca paralela).
+  useEffect(() => {
+    if (recipePickerMealIndex === null) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams();
+      if (recipePickerQuery.trim()) params.set("q", recipePickerQuery.trim());
+      fetch(`/api/admin/recipes?${params}`, { signal: controller.signal })
+        .then((response) => response.ok ? response.json() : { items: [] })
+        .then((data: { items?: RecipeLibraryEntry[] }) => setRecipePickerResults(data.items ?? []))
+        .catch(() => setRecipePickerResults([]));
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [recipePickerMealIndex, recipePickerQuery]);
+
   function focusFoodField(mealIndex: number, itemIndex: number) {
     const key = `${mealIndex}:${itemIndex}`;
     setActiveFoodField(key);
@@ -795,6 +848,14 @@ export function MealItemsEditor({
 
   function insertRecipe(recipe: RecipeLibraryItem) {
     const mealIndex = meals.length;
+    // R6 — ingredientes normalizados pro shape canônico ANTES de escalar:
+    // receitas novas usam food/quantity/unit/food_source (qualquer fonte
+    // real), receitas legadas usam taco_number/food_name/grams — os dois
+    // shapes precisam virar {food, grams, food_source, food_ref_id}
+    // uniformemente antes do rateio por porção.
+    const normalizedIngredients = recipe.ingredients
+      .map(normalizeIngredientForRead)
+      .map((ingredient) => ({ ...ingredient, grams: ingredient.unit === "g" && ingredient.quantity ? Number(ingredient.quantity) : null }));
     // Insere 1 PORCAO prescrita, nao o lote inteiro da receita: as gramas
     // dos ingredientes vem cadastradas para o RENDIMENTO TOTAL (ex.:
     // servings=4), entao copiar direto fazia o motor calcular e exibir o
@@ -802,7 +863,7 @@ export function MealItemsEditor({
     // 1510 kcal em vez dos 377,5 kcal de 1 porcao). Escala pelo mesmo
     // rendimento cadastrado na receita (lib/nutrition/recipes.ts) — nunca
     // inventa um numero, so aplica a proporcao real porcoes/rendimento.
-    const scaledIngredients = scaleRecipeIngredientsToPortions(recipe.ingredients, recipe.servings, 1);
+    const scaledIngredients = scaleRecipeIngredientsToPortions(normalizedIngredients, recipe.servings, 1);
     const meal: Meal = {
       name: recipe.title,
       suggested_time: "",
@@ -818,20 +879,23 @@ export function MealItemsEditor({
       // (lookup.fuzzyMatch), que falha silenciosamente para nomes que nao
       // batem bem com a descricao TACO — causa raiz de refeicoes com
       // receita mostrando "— kcal" mesmo com ingrediente 100% identificado
-      // no cadastro da receita.
-      items: scaledIngredients.map((ingredient) => ({
-        food: ingredient.food_name,
-        quantity: String(ingredient.grams),
-        unit: "g",
-        notes: null,
-        taco_number: ingredient.taco_number,
-        food_source: "TACO" as const,
-        food_ref_id: String(ingredient.taco_number),
-      })),
+      // no cadastro da receita. Ingrediente sem massa em gramas conhecida
+      // (unidade não-g, ou receita com rendimento só em porções) fica de
+      // fora aqui — nunca uma quantidade inventada.
+      items: scaledIngredients
+        .filter((ingredient) => ingredient.food_ref_id && ingredient.grams)
+        .map((ingredient) => ({
+          food: ingredient.food,
+          quantity: String(ingredient.grams),
+          unit: "g",
+          notes: null,
+          food_source: ingredient.food_source as MealItem["food_source"],
+          food_ref_id: ingredient.food_ref_id,
+        })),
     };
     onChange([...meals, meal]);
-    void Promise.all(recipe.ingredients.map(async (ingredient, itemIndex) => {
-      const response = await fetch(`/api/admin/foods/search?q=${encodeURIComponent(ingredient.food_name)}`, { cache: "no-store" });
+    void Promise.all(normalizedIngredients.map(async (ingredient, itemIndex) => {
+      const response = await fetch(`/api/admin/foods/search?q=${encodeURIComponent(ingredient.food)}`, { cache: "no-store" });
       const data = response.ok ? await response.json() as { items?: FoodSuggestion[] } : { items: [] as FoodSuggestion[] };
       return [`${mealIndex}:${itemIndex}`, data.items ?? []] as const;
     })).then((entries) => {
@@ -1052,6 +1116,37 @@ export function MealItemsEditor({
                 <Plus className="h-4 w-4" />
                 Alimento
               </button>
+              <div className="relative">
+                <button type="button" onClick={() => setRecipePickerMealIndex(recipePickerMealIndex === mealIndex ? null : mealIndex)} title="Adiciona a receita como 1 item desta refeição (referência viva, não expande em alimentos) — diferente de &quot;Inserir receita&quot;, que cria uma refeição nova já expandida." className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]">
+                  <Plus className="h-4 w-4" />
+                  Item de receita
+                </button>
+                {recipePickerMealIndex === mealIndex && (
+                  <div className="absolute right-0 top-[calc(100%+4px)] z-30 w-72 rounded-xl border border-[#EAD8C2] bg-white p-2 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
+                    <input
+                      autoFocus
+                      value={recipePickerQuery}
+                      onChange={(event) => setRecipePickerQuery(event.target.value)}
+                      className="brand-input mb-1.5"
+                      placeholder="Buscar receita..."
+                    />
+                    <div className="max-h-56 overflow-y-auto">
+                      {recipePickerResults.length === 0 && <p className="px-2 py-1.5 text-xs text-[#8C6E52]">Nenhuma receita encontrada.</p>}
+                      {recipePickerResults.map((recipe) => (
+                        <button
+                          key={recipe.id}
+                          type="button"
+                          onClick={() => addRecipeItem(mealIndex, recipe)}
+                          className="block w-full rounded-lg px-2 py-1.5 text-left hover:bg-[#FAF7F2]"
+                        >
+                          <span className="block text-sm font-medium text-[#3A3028]">{recipe.title}</span>
+                          <span className="text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">{recipe.servings} porção(ões) · ~{Math.round(recipe.per_portion_kcal)} kcal/porção</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-1 rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-0.5">
                 <button type="button" onClick={() => onChange(reorderArray(meals, mealIndex, -1))} disabled={mealIndex === 0} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label={`Mover ${meal.name || "refeicao"} para cima`} title="Mover refeicao para cima">
                   <ChevronUp className="h-4 w-4" />
@@ -1540,8 +1635,8 @@ export function MealItemsEditor({
                         // FASE 6.5 (item 13) — substituicoes continuam so pro catalogo
                         // legado; um item TBCA/IBGE_POF aparece aqui como se nao tivesse
                         // fonte estruturada (mesmo fallback de "nao fazer ainda").
-                        itemFoodSource={item.food_source === "TBCA" || item.food_source === "IBGE_POF" ? null : item.food_source}
-                        itemFoodRefId={item.food_source === "TBCA" || item.food_source === "IBGE_POF" ? null : item.food_ref_id}
+                        itemFoodSource={item.food_source === "TBCA" || item.food_source === "IBGE_POF" || item.food_source === "RECIPE" ? null : item.food_source}
+                        itemFoodRefId={item.food_source === "TBCA" || item.food_source === "IBGE_POF" || item.food_source === "RECIPE" ? null : item.food_ref_id}
                         itemGrams={typeof grams === "number" && Number.isFinite(grams) ? grams : null}
                         substitutionsLocked={Boolean(item.substitutions_locked)}
                         currentMeals={meals}
@@ -1568,8 +1663,9 @@ export function MealItemsEditor({
                           mealPlanItemId={item.id ?? null}
                           mealName={meal.name}
                           primaryFoodName={item.food}
-                          primaryFoodSource={item.food_source}
-                          primaryFoodRefId={item.food_ref_id}
+                          // R6 — item de RECEITA não é um alimento de catálogo; nunca abre o motor de troca/equivalência (seção 40).
+                          primaryFoodSource={item.food_source === "RECIPE" ? null : item.food_source}
+                          primaryFoodRefId={item.food_source === "RECIPE" ? null : item.food_ref_id}
                           primaryCanonicalFoodId={item.canonical_food_id}
                           primaryGrams={typeof grams === "number" && Number.isFinite(grams) ? grams : null}
                           group={exchangeEntry?.group ?? null}
@@ -1685,8 +1781,8 @@ export function MealItemsEditor({
                   mealPlanItemId={exchangeDrawerContext.item.id ?? null}
                   mealName={exchangeDrawerContext.meal.name}
                   primaryFoodName={exchangeDrawerContext.item.food}
-                  primaryFoodSource={exchangeDrawerContext.item.food_source}
-                  primaryFoodRefId={exchangeDrawerContext.item.food_ref_id}
+                  primaryFoodSource={exchangeDrawerContext.item.food_source === "RECIPE" ? null : exchangeDrawerContext.item.food_source}
+                  primaryFoodRefId={exchangeDrawerContext.item.food_source === "RECIPE" ? null : exchangeDrawerContext.item.food_ref_id}
                   primaryCanonicalFoodId={exchangeDrawerContext.item.canonical_food_id}
                   primaryGrams={typeof exchangeDrawerContext.grams === "number" && Number.isFinite(exchangeDrawerContext.grams) ? exchangeDrawerContext.grams : null}
                   group={exchangeDrawerContext.exchangeEntry?.group ?? null}
@@ -1701,8 +1797,8 @@ export function MealItemsEditor({
                 <ItemSubstitutionsPanel
                   clientId={clientId ?? ""}
                   itemFood={exchangeDrawerContext.item.food}
-                  itemFoodSource={exchangeDrawerContext.item.food_source === "TBCA" || exchangeDrawerContext.item.food_source === "IBGE_POF" ? null : exchangeDrawerContext.item.food_source}
-                  itemFoodRefId={exchangeDrawerContext.item.food_source === "TBCA" || exchangeDrawerContext.item.food_source === "IBGE_POF" ? null : exchangeDrawerContext.item.food_ref_id}
+                  itemFoodSource={exchangeDrawerContext.item.food_source === "TBCA" || exchangeDrawerContext.item.food_source === "IBGE_POF" || exchangeDrawerContext.item.food_source === "RECIPE" ? null : exchangeDrawerContext.item.food_source}
+                  itemFoodRefId={exchangeDrawerContext.item.food_source === "TBCA" || exchangeDrawerContext.item.food_source === "IBGE_POF" || exchangeDrawerContext.item.food_source === "RECIPE" ? null : exchangeDrawerContext.item.food_ref_id}
                   itemGrams={typeof exchangeDrawerContext.grams === "number" && Number.isFinite(exchangeDrawerContext.grams) ? exchangeDrawerContext.grams : null}
                   substitutionsLocked={Boolean(exchangeDrawerContext.item.substitutions_locked)}
                   currentMeals={meals}

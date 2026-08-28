@@ -10,6 +10,7 @@ import {
 } from "@/lib/protocol-templates/constants";
 import type { Meal } from "@/components/dashboard/MealItemsEditor";
 import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
+import { normalizeIngredientForRead, type RecipeIngredient } from "@/lib/nutrition/recipes";
 import { computeMealPlanReadiness } from "@/lib/ai/agents/nutrition/meal-plan-readiness";
 import {
   selectableMealKeys,
@@ -44,12 +45,8 @@ const MEAL_KEY_TO_RECIPE_GROUP: Record<MealKey, "cafe_da_manha" | "almoco" | "la
   ceia: "lanche",
 };
 
-interface RecipeIngredientPayload {
-  taco_number?: number | null;
-  food_name: string;
-  grams?: number | null;
-  free_text?: string | null;
-}
+/** R6 — aceita o shape novo (food/food_source/food_ref_id, qualquer fonte real) OU o legado (taco_number/food_name/grams), normalizado por normalizeIngredientForRead. */
+type RecipeIngredientPayload = RecipeIngredient;
 
 interface RecipeCandidate {
   id: string;
@@ -247,17 +244,20 @@ function toFriendlyFoodName(technicalName: string): string {
  */
 function expandRecipeIngredientsToItems(recipe: { servings: number; ingredients: RecipeIngredientPayload[] }): DraftMealItem[] {
   const servingCount = Number.isFinite(recipe.servings) && recipe.servings > 0 ? recipe.servings : 1;
+  const draftCompatibleSources = new Set(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]);
   return recipe.ingredients
-    .filter((ing) => ing.taco_number && ing.grams)
+    .map(normalizeIngredientForRead)
+    .map((ing) => ({ ...ing, grams: ing.unit === "g" && ing.quantity ? Number(ing.quantity) : null }))
+    .filter((ing) => ing.food_ref_id && ing.grams && ing.food_source && draftCompatibleSources.has(ing.food_source))
     .map((ing) => {
       const grams = Math.round(((ing.grams ?? 0) / servingCount) * 10) / 10;
       return {
-        food: ing.food_name,
-        displayName: toFriendlyFoodName(ing.food_name),
+        food: ing.food,
+        displayName: toFriendlyFoodName(ing.food),
         quantity: String(grams),
         unit: "g",
-        food_source: "TACO" as const,
-        food_ref_id: String(ing.taco_number),
+        food_source: ing.food_source as "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA",
+        food_ref_id: ing.food_ref_id!,
         ai_suggested: true,
       };
     });
@@ -1546,8 +1546,8 @@ export function AiMealPlanWizard({
                                   <div className="rounded-md bg-white/70 p-1.5 text-[#3A2B1F]">
                                     <p className="font-semibold">Ingredientes:</p>
                                     <ul className="ml-3 list-disc">
-                                      {recipe.ingredients.filter((ing) => ing.taco_number && ing.grams).map((ing, ingIndex) => (
-                                        <li key={ingIndex}>{toFriendlyFoodName(ing.food_name)} — {ing.grams}g{recipe.servings > 1 ? ` (receita completa; escalado a 1 porção ao aplicar)` : ""}</li>
+                                      {recipe.ingredients.map(normalizeIngredientForRead).filter((ing) => ing.food_ref_id && ing.unit === "g" && ing.quantity).map((ing, ingIndex) => (
+                                        <li key={ingIndex}>{toFriendlyFoodName(ing.food)} — {ing.quantity}g{recipe.servings > 1 ? ` (receita completa; escalado a 1 porção ao aplicar)` : ""}</li>
                                       ))}
                                     </ul>
                                     {recipe.preparation_steps && <p className="mt-1.5 whitespace-pre-line">{recipe.preparation_steps}</p>}

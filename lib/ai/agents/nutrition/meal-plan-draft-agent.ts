@@ -9,7 +9,7 @@ import { listPatientClinicalMarkers, type PatientClinicalMarker } from "@/lib/re
 import { getActiveMealPlan } from "@/lib/repositories/meal-plans";
 import { getRecipes, getRecipeById, type RecipePayload } from "@/lib/repositories/recipes";
 import { calculateAgeInYears, calculateBmiValue, formatHeightDisplay } from "@/lib/clinical/anthropometry";
-import { scaleRecipeIngredientsToPortions } from "@/lib/nutrition/recipes";
+import { scaleRecipeIngredientsToPortions, normalizeIngredientForRead } from "@/lib/nutrition/recipes";
 import { toDisplayFoodName, type FoodResolution } from "@/lib/nutrition/food-resolver";
 // FASE 5 (item 1) — resolveFoodWithCanonicalShadow/resolveFoodCandidatesWithCanonicalShadow
 // tem exatamente o mesmo contrato de resolveFoodCandidate(s), so envolvendo
@@ -739,16 +739,29 @@ async function assembleDraft(
   const meals: DraftMeal[] = [];
   pending.forEach((entry, mealIndex) => {
     if (entry.recipe) {
-      const scaled = scaleRecipeIngredientsToPortions(entry.recipe.ingredients, entry.recipe.servings, 1);
+      // R6 — ingredientes agora podem vir em qualquer food_source real
+      // (não só TACO legado); normaliza pro shape canônico antes de
+      // escalar, e só expande os que têm identidade + massa em gramas
+      // conhecidas (nunca inventa quantidade pra um ingrediente sem
+      // massa resolvida — ex.: receita cujo rendimento só é conhecido em
+      // porções). food_source fora do conjunto que o draft aceita (ex.:
+      // TBCA/IBGE_POF/RECIPE aninhada) é ignorado aqui deliberadamente —
+      // o Copilot expande em alimentos simples, nunca em identidade que
+      // o resto do pipeline de draft ainda não consome.
+      const draftCompatibleSources = new Set(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]);
+      const normalizedIngredients = entry.recipe.ingredients
+        .map(normalizeIngredientForRead)
+        .map((ing) => ({ ...ing, grams: ing.unit === "g" && ing.quantity ? Number(ing.quantity) : null }));
+      const scaled = scaleRecipeIngredientsToPortions(normalizedIngredients, entry.recipe.servings, 1);
       const items: DraftMealItem[] = scaled
-        .filter((ing) => ing.taco_number && ing.grams)
+        .filter((ing) => ing.food_ref_id && ing.grams && ing.food_source && draftCompatibleSources.has(ing.food_source))
         .map((ing) => ({
-          food: ing.food_name,
-          displayName: toDisplayFoodName(ing.food_name),
+          food: ing.food,
+          displayName: toDisplayFoodName(ing.food),
           quantity: String(ing.grams),
           unit: "g",
-          food_source: "TACO" as const,
-          food_ref_id: String(ing.taco_number),
+          food_source: ing.food_source as "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA",
+          food_ref_id: ing.food_ref_id!,
           ai_suggested: true as const,
         }));
       if (items.length) {
