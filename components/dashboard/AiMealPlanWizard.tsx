@@ -1014,6 +1014,19 @@ export function AiMealPlanWizard({
     + meal.needsReview.length
     + (meal.options ?? []).reduce((s, option) => s + option.needsReview.length, 0)
     + (meal.choice_groups ?? []).reduce((s, group) => s + group.needsReview.length, 0), 0) ?? 0;
+  // R6.5.4 (seção 59) — chips de resumo da revisão, usando contadores REAIS já
+  // computados (totalNeedsReview, unresolvedCount) — nenhuma telemetria nova.
+  const totalItemsInDraft = draft?.meals.reduce((sum, meal) => sum
+    + meal.items.length
+    + (meal.options ?? []).reduce((s, option) => s + option.items.length, 0)
+    + (meal.choice_groups ?? []).reduce((s, group) => s + group.items.length, 0), 0) ?? 0;
+  const unresolvedCount = draft?.nutrition?.unresolvedCount ?? 0;
+  // needsReview vive numa lista SEPARADA (nunca dentro de .items — só vira item
+  // de verdade depois de resolvido manualmente), então totalItemsInDraft já
+  // exclui esses; só precisa descontar unresolved (que ENTRA em .items, sem
+  // cálculo, ver texto "item(ns) sem correspondência entram como quantidade
+  // sem cálculo" logo abaixo).
+  const resolvedCount = Math.max(0, totalItemsInDraft - unresolvedCount);
   const hasEnergyTarget = target.targetEnergyKcal !== null;
 
   const modal = (
@@ -1080,14 +1093,28 @@ export function AiMealPlanWizard({
                   allergies: context.allergies,
                   restrictions: context.restrictions,
                 });
-                if (readiness.status === "READY") return null;
+                // R6.5.4 (seções 56-57) — badge de prontidão com texto+ícone (nunca só cor)
+                // pros 3 estados reais do motor; antes desta fase o estado READY não mostrava
+                // NADA (early-return null), sem confirmação visual nenhuma.
                 const isBlocking = readiness.status === "NOT_READY";
+                const readinessBadge = readiness.status === "READY"
+                  ? { text: "Pronto", className: "border-[#D9E4D3] bg-[#F5FAF0] text-[#4F7D45]", Icon: Check }
+                  : readiness.status === "READY_WITH_REVIEW"
+                    ? { text: "Pronto com revisão", className: "border-[#F0D4C7] bg-[#FFF7F3] text-[#8C5F50]", Icon: AlertTriangle }
+                    : { text: "Faltam informações", className: "border-red-200 bg-red-50 text-red-700", Icon: AlertTriangle };
                 return (
-                  <div className={`rounded-xl border p-3 text-xs leading-5 ${isBlocking ? "border-red-200 bg-red-50 text-red-700" : "border-[#F0D4C7] bg-[#FFF7F3] text-[#8C5F50]"}`}>
-                    <p className="font-semibold">{readiness.reasons[0]}</p>
-                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                      {readiness.reasons.slice(isBlocking ? 1 : 0).map((reason, index) => <li key={index}>{reason}</li>)}
-                    </ul>
+                  <div className="space-y-2">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${readinessBadge.className}`}>
+                      <readinessBadge.Icon className="h-3.5 w-3.5" /> {readinessBadge.text}
+                    </span>
+                    {readiness.status !== "READY" && (
+                      <div className={`rounded-xl border p-3 text-xs leading-5 ${isBlocking ? "border-red-200 bg-red-50 text-red-700" : "border-[#F0D4C7] bg-[#FFF7F3] text-[#8C5F50]"}`}>
+                        <p className="font-semibold">{readiness.reasons[0]}</p>
+                        <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                          {readiness.reasons.slice(isBlocking ? 1 : 0).map((reason, index) => <li key={index}>{reason}</li>)}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -1239,6 +1266,25 @@ export function AiMealPlanWizard({
 
               {draft && (
                 <>
+                  {/* R6.5.4 (seções 58-60) — resumo compacto de revisão com contadores reais. */}
+                  {draft.meals.length > 0 && (
+                    <div className="flex flex-wrap gap-2" role="status" aria-label="Resumo da revisão">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#F5FAF0] px-2.5 py-1 text-xs font-semibold text-[#4F7D45]">
+                        <Check className="h-3 w-3" /> {resolvedCount} resolvido{resolvedCount === 1 ? "" : "s"}
+                      </span>
+                      {totalNeedsReview > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF7F3] px-2.5 py-1 text-xs font-semibold text-[#B5762F]">
+                          <AlertTriangle className="h-3 w-3" /> {totalNeedsReview} pra revisar
+                        </span>
+                      )}
+                      {unresolvedCount > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                          <AlertTriangle className="h-3 w-3" /> {unresolvedCount} não encontrado{unresolvedCount === 1 ? "" : "s"}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {changeset && (
                     <div className="rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] p-4">
                       <p className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.08em] text-[#4F7D45]">Alterações propostas sobre &ldquo;{sourcePlan?.title}&rdquo;</p>

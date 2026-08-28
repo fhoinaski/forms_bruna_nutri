@@ -1,4 +1,4 @@
-# Meal Plan Composer UX/UI R6.5 — Fechamento Geral (Fases 1 → 3)
+# Meal Plan Composer UX/UI R6.5 — Fechamento Geral (Fases 1 → 4)
 
 ## Histórico de fases
 
@@ -8,12 +8,13 @@
 | R6.5.2 | #11 | 6d8dec8 | Layout 3 colunas (só 2xl+), navegação de refeições, meal ativo, badge de estrutura, divisor "OU" |
 | R6.5.2B | #12 | 1cc9dff | Rótulo COMBINATION, compatibilidade R5 (SIMPLE/OPTIONS/COMBINATION via Copilot real) e R6 (receita), toolbar/inline quantity confirmados |
 | R6.5.2C | #13 | 35aefc3 | Menu de ações da refeição consolidado (⋯, acessível), food row com hover-reveal |
-| R6.5.3 | (esta) | — | Hook de teclado compartilhado; Escape/Tab-trap retrofitado no Copilot e no modal de receita (gap real fechado); bug do "x" corrigido; backdrop normalizado |
+| R6.5.3 | #14 | 0624ef8 | Hook de teclado compartilhado; Escape/Tab-trap retrofitado no Copilot e no modal de receita (gap real fechado); bug do "x" corrigido; backdrop normalizado |
+| R6.5.4 | (esta) | — | Timestamp "Última alteração" no toolbar; badge de prontidão do Copilot (os 3 estados, antes READY não mostrava nada); chips de resumo de revisão (contadores reais) |
 
-Todas as 5 fases fecharam com CI verde na SHA exata e zero regressão
+Todas as 6 fases fecharam com CI verde na SHA exata e zero regressão
 introduzida (confirmado por reexecução ampla a cada fechamento).
 
-## Matriz de requisitos (seção 134 do pedido R6.5.3)
+## Matriz de requisitos (seção 134 do pedido R6.5.3, seção 119 do pedido R6.5.4)
 
 | Requisito (origem) | Fase | Testado | Status |
 | --- | --- | --- | --- |
@@ -40,12 +41,12 @@ introduzida (confirmado por reexecução ampla a cada fechamento).
 | **Reuso R4 — redesign de cards** | — | — | **NÃO IMPLEMENTADO** |
 | **Receitas R6 — redesign de biblioteca/editor completo** | — | — | **NÃO IMPLEMENTADO** |
 | **Copilot — stepper visual** | — | — | **NÃO IMPLEMENTADO** |
-| **Copilot — chips de resumo de revisão (X resolvidos/Y revisar/Z não encontrado)** | — | — | **NÃO EXISTE** (confirmado pela auditoria — nem antes nem depois desta fase) |
-| **Copilot — badges de prontidão com texto+ícone** | — | — | **NÃO IMPLEMENTADO** |
+| Copilot — badge de prontidão com texto+ícone (3 estados reais; READY não mostrava nada antes) | R6.5.4 | E2E | PASS |
+| Copilot — chips de resumo de revisão ("N resolvido(s)/N pra revisar/N não encontrado(s)") | R6.5.4 | E2E | PASS |
 | **Extração de design system (DrawerShell/CompactEmptyState/etc.)** | — | — | **NÃO IMPLEMENTADO** |
 | **Meal-card action menu (seção específica R6.5.2 original)** — consolidação de Duplicar/Copiar/Modelo/Excluir | R6.5.2C | E2E | PASS |
 | **Food row — redesign visual completo (não só hover-reveal)** | — | — | **NÃO IMPLEMENTADO** (só compactação CSS, ver R6.5.2C) |
-| Toolbar — "última alteração" (timestamp) | — | — | **NÃO IMPLEMENTADO** (exigiria mudança de contrato de API) |
+| Toolbar — "última alteração" (timestamp) | R6.5.4 | E2E | PASS (`updated_at` já existia na API, só não era lido) |
 | Tablet/mobile — polish dedicado (além de regression-guard) | — | — | **NÃO IMPLEMENTADO** |
 
 ## Regra de conclusão (seção 146 do pedido)
@@ -69,15 +70,18 @@ MEAL_PLAN_UI_R6_5_COMPLETE: nao
    redesenhados.
 4. Receitas R6: biblioteca (grid de cards) e editor completo
    (ingredientes/rendimento/instruções/nutrição) não redesenhados.
-5. Copilot: sem stepper visual, sem chips de resumo de revisão (que
-   nem existem hoje como conceito), sem badges de prontidão
-   texto+ícone.
+5. Copilot: sem stepper visual (o resto — badge de prontidão, chips
+   de revisão — fechou na R6.5.4).
 6. Nenhuma extração de componentes de design system compartilhados
    (`DrawerShell`, `CompactEmptyState`, `InlineErrorState`,
-   `DrawerSearchField`, segmented control compartilhado).
+   `DrawerSearchField`, segmented control compartilhado, chip/badge
+   compartilhado — os 2 usos novos da R6.5.4 ainda têm só 1
+   consumidor cada, não justificando extração).
 7. Food row: só compactação CSS (hover-reveal), não um redesign
    estrutural completo.
-8. Toolbar: falta o timestamp de "última alteração".
+8. Nenhum sistema formal de loading/empty/error state (os estados
+   existentes continuam consistentes o suficiente na prática, mas
+   não foram unificados em componentes).
 9. Tablet/mobile: nenhum polish dedicado além de confirmar que nada
    quebrou.
 
@@ -85,22 +89,40 @@ MEAL_PLAN_UI_R6_5_COMPLETE: nao
 
 O Composer central (sidebar de nutrição, layout, navegação de
 refeições, meal cards, OPTIONS/COMBINATION, toolbar, compatibilidade
-R3/R4/R5/R6, e agora acessibilidade de teclado unificada em todos os
-diálogos) está genuinamente mais profissional e sem nenhuma
-regressão introduzida em 5 fases consecutivas — cada uma delas
-verificada com CI verde na SHA exata, full Vitest, e broad E2E
+R3/R4/R5/R6, acessibilidade de teclado unificada em todos os
+diálogos, e agora o Assistente de IA com confirmação visual real de
+prontidão e resumo de revisão) está genuinamente mais profissional e
+sem nenhuma regressão introduzida em 6 fases consecutivas — cada uma
+delas verificada com CI verde na SHA exata, full Vitest, e broad E2E
 single-worker + paralelo. As áreas de suporte (Food Search/
-Substituição/Reuso/Receitas/Copilot) continuam funcionalmente
-intactas e agora mais acessíveis por teclado, mas visualmente como
-estavam antes da R6.5.
+Substituição/Reuso/Receitas) continuam funcionalmente intactas e
+mais acessíveis por teclado, mas visualmente como estavam antes da
+R6.5.
 
-## Próximos passos sugeridos (não iniciados)
+## Próximos passos sugeridos (não iniciados) — menor fase de fechamento possível
 
-Uma fase R6.5.4 (ou equivalente) dedicada exclusivamente ao redesign
-visual das 5 áreas de suporte, feita uma de cada vez (não todas
-simultaneamente, dado o histórico de regressões nesta base de código
-quando mudanças amplas são tentadas de uma vez), seria o caminho mais
-seguro pra fechar os gaps acima.
+Dado que 6 fases consecutivas já entregaram tudo que era seguro
+entregar de forma incremental e testada, e que o que resta (redesign
+visual de 4 áreas de suporte inteiras + design system + estados +
+polish responsivo) é genuinamente grande, a recomendação é **não**
+abrir mais uma fase de escopo amplo. Se o objetivo é realmente fechar
+`MEAL_PLAN_UI_R6_5_COMPLETE: sim`, o caminho mais seguro é UMA área
+de suporte por fase, na ordem de menor risco:
+
+1. **Food Search** (maior valor, mas risco alto — combobox mais usado
+   e testado do app; exigiria migrar todos os testes que dependem da
+   estrutura atual do listbox).
+2. **Reuso R4** (risco médio — já tem Escape/foco unificados; cards
+   são o item mais isolado de redesenhar).
+3. **Receitas R6** (risco médio — já tem o bug do "x" e teclado
+   corrigidos; falta só o visual da biblioteca/editor).
+4. **Substituição R3** (risco mais alto — motor de equivalência
+   clínico crítico, mexer no conteúdo do drawer exige cuidado extra
+   mesmo mudando só apresentação).
+5. **Design system + estados formais** — só depois de pelo menos 2
+   das áreas acima estarem redesenhadas, pra ter consumidores reais
+   suficientes que justifiquem a extração (`DrawerShell`,
+   `CompactEmptyState`, etc.), evitando abstração prematura.
 
 ## STOP
 

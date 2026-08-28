@@ -53,6 +53,8 @@ type MealPlan = {
   target_protein_g?: number | null;
   target_carbohydrate_g?: number | null;
   target_fat_g?: number | null;
+  /** R6.5.4 (seção 89) — já vinha na API (MealPlanPayload), só não era lido pelo editor; usado pro rótulo "Última alteração". */
+  updated_at?: string;
   meals: Meal[];
   weekly_slots: WeeklySlot[];
   substitutions: Substitution[];
@@ -89,6 +91,15 @@ type PublicationReview = {
   };
   mealSummary: Array<{ mealName: string; items: number; blockers: number; warnings: number }>;
 };
+
+/** R6.5.4 (seção 89) — mesma convenção de formatação de hora já usada em AiChatWidget.tsx. */
+function formatPlanUpdatedAt(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(new Date(iso));
+  } catch {
+    return "";
+  }
+}
 
 function editablePlanSignature(plan: MealPlan): string {
   return JSON.stringify({
@@ -635,6 +646,10 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               <p className={`mt-0.5 text-xs font-semibold ${hasUnsavedChanges ? "text-[#9A6B28]" : conflict ? "text-red-700" : "text-[#607A56]"}`}>
                 {plan.status === "active" ? "Ativo" : "Rascunho"} - v{plan.version} · {saveStateLabel}
               </p>
+              {/* R6.5.4 (seção 89) — só mostra quando não há edição local pendente (o timestamp do servidor ficaria enganoso nesse caso; "Alterações não salvas" já comunica isso). */}
+              {!hasUnsavedChanges && plan.updated_at && formatPlanUpdatedAt(plan.updated_at) && (
+                <p className="mt-0.5 text-[11px] text-[#9A978A]">Última alteração às {formatPlanUpdatedAt(plan.updated_at)}</p>
+              )}
               {plan.status !== "active" && (
                 <p className="mt-0.5 text-xs text-[#8C6E52]">Portal e impressão oficial continuam usando a versão ativa até este rascunho ser ativado.</p>
               )}
