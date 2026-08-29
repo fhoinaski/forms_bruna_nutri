@@ -23,12 +23,12 @@ test.describe("Meal Plan Reuse R4 — Performance", () => {
       openSamples.push(Date.now() - openStart);
 
       const tabStart = Date.now();
-      await drawer.getByRole("tab", { name: "Modelos de planos" }).click();
+      await drawer.getByRole("tab", { name: "Modelos" }).click();
       await expect(drawer.getByRole("tablist")).toBeVisible();
       tabSwitchSamples.push(Date.now() - tabStart);
 
       const searchStart = Date.now();
-      await drawer.getByLabel("Buscar na biblioteca de reuso").fill("adulto");
+      await drawer.getByLabel("Buscar na biblioteca").fill("adulto");
       await page.waitForTimeout(50);
       searchSamples.push(Date.now() - searchStart);
 
