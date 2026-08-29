@@ -18,6 +18,9 @@ import {
 } from "lucide-react";
 import { ConsultationCopilot } from "@/components/consultation/ConsultationCopilot";
 import { ClinicalMealPlanPreAnalysis } from "@/components/consultation/ClinicalMealPlanPreAnalysis";
+import { ConsultationAnthropometry } from "@/components/consultation/ConsultationAnthropometry";
+import { ConsultationEvolution } from "@/components/consultation/ConsultationEvolution";
+import { ConsultationNotes } from "@/components/consultation/ConsultationNotes";
 import { ConsultationFinishDialog } from "@/components/consultation/ConsultationFinishDialog";
 import type {
   ConsultationWorkspaceDraft,
@@ -43,6 +46,9 @@ const CONSULTATION_STEPS = [
   { id: "recomendacoes", label: "Recomendações", description: "Conduta e metas" },
   { id: "retorno", label: "Retorno", description: "Agenda e próximos passos" },
 ] as const;
+
+const CHANGE_FIELDS = new Set<keyof ConsultationWorkspaceDraft>(["evolution", "adherence", "symptoms"]);
+const RECOMMENDATION_FIELDS = new Set<keyof ConsultationWorkspaceDraft>(["conduct", "goals", "observations"]);
 
 type ConsultationStep = typeof CONSULTATION_STEPS[number]["id"];
 
@@ -93,6 +99,16 @@ function ContextCard({ label, value, detail, action }: { label: string; value: s
       <p className="mt-1 text-sm font-semibold text-[#3A3028]">{value}</p>
       {detail && <p className="mt-1 text-xs leading-5 text-[#75675E]">{detail}</p>}
       {action && <div className="mt-2">{action}</div>}
+    </div>
+  );
+}
+
+function SummaryItem({ label, value, detail }: { label: string; value: string; detail?: string | null }) {
+  return (
+    <div className="border-l-2 border-[#EDE1D6] pl-3">
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C6E52]">{label}</dt>
+      <dd className="mt-1 text-sm font-semibold text-[#3A3028]">{value}</dd>
+      {detail && <dd className="mt-1 text-xs text-[#607A56]">{detail}</dd>}
     </div>
   );
 }
@@ -287,15 +303,15 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
             </div>
             {consultation.readOnlyReason && <p className="mt-2 text-xs font-semibold text-[#9A5C4E]">{consultation.readOnlyReason}</p>}
           </div>
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-            <span aria-live="polite" className="min-h-5 text-xs font-semibold text-[#75675E]">{saveLabel(saveStatus)}</span>
-            <button type="button" disabled={readOnly || saveStatus === "saving" || !dirty} onClick={() => void save()} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50">
-              <Save className="h-4 w-4" /> Salvar
-            </button>
-            <button type="button" disabled={readOnly || saveStatus === "saving"} onClick={() => void openFinish()} className="brand-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
-              Finalizar consulta
-            </button>
-          </div>
+          {readOnly ? (
+            <div className="rounded-md border border-[#D9E4D3] bg-[#F4F8F1] px-3 py-2 text-right"><p className="text-xs font-semibold text-[#4F6847]">Modo histórico</p><p className="mt-0.5 text-xs text-[#75675E]">Consulta concluída · somente leitura</p></div>
+          ) : (
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+              <span aria-live="polite" className="min-h-5 text-xs font-semibold text-[#75675E]">{saveLabel(saveStatus)}</span>
+              <button type="button" disabled={saveStatus === "saving" || !dirty} onClick={() => void save()} className="brand-btn-secondary disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" /> Salvar</button>
+              <button type="button" disabled={saveStatus === "saving"} onClick={() => void openFinish()} className="brand-btn-primary disabled:cursor-not-allowed disabled:opacity-50">Finalizar consulta</button>
+            </div>
+          )}
         </div>
         {actionError && <p className="mt-3 text-xs text-[#9A5C4E]">{actionError}</p>}
       </header>
@@ -390,11 +406,15 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
 
           {activeStep === "resumo" && (
             <section className="space-y-4" aria-label="Resumo da consulta">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <ContextCard label="Objetivo atual" value={workspace.patient.primaryGoal ?? "Anamnese ainda não preenchida"} />
-                <ContextCard label="Última consulta" value={workspace.previousConsultation ? formatDate(workspace.previousConsultation.date) : "Sem consulta anterior"} />
-                <ContextCard label="Plano atual" value={workspace.activeMealPlan ? `${workspace.activeMealPlan.title} · v${workspace.activeMealPlan.version}` : "Nenhum plano ativo"} />
-                <ContextCard label="Última avaliação" value={formatWeight(workspace.latestAnthropometry?.weightKg)} detail={workspace.weightDelta ? `Variação: ${workspace.weightDelta.label}` : null} />
+              <div className="rounded-lg border border-[#EDE1D6] bg-white p-5">
+                <div className="flex items-baseline justify-between gap-3"><h3 className="font-serif text-lg font-semibold text-[#3A3028]">Visão clínica</h3><span className="text-xs text-[#75675E]">Dados atuais da ficha</span></div>
+                <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <SummaryItem label="Objetivo" value={workspace.patient.primaryGoal ?? "Não preenchido"} />
+                  <SummaryItem label="Peso atual" value={formatWeight(workspace.latestAnthropometry?.weightKg)} detail={workspace.weightDelta ? workspace.weightDelta.label : null} />
+                  <SummaryItem label="Plano" value={workspace.activeMealPlan ? `${workspace.activeMealPlan.title} · v${workspace.activeMealPlan.version}` : "Nenhum plano ativo"} />
+                  <SummaryItem label="Última consulta" value={workspace.previousConsultation ? formatDate(workspace.previousConsultation.date) : "Sem consulta anterior"} />
+                  <SummaryItem label="Próximo retorno" value={workspace.appointmentContext ? formatDateTime(workspace.appointmentContext.startsAt) : "Não agendado"} />
+                </dl>
               </div>
               <div className="rounded-lg border border-[#EAD8C2] bg-[#FFF9F1] p-4">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8C6E52]">Precisa de atenção</p>
@@ -413,22 +433,24 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
           )}
 
           {activeStep === "mudancas" && (
-            <section className="rounded-lg border border-[#EDE1D6] bg-white p-5" aria-label="Mudanças desde a última consulta">
-              <h3 className="font-serif text-lg font-semibold text-[#3A3028]">Dados disponíveis desde o último atendimento</h3>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <ContextCard label="Peso" value={workspace.weightDelta ? `${formatWeight(workspace.previousAnthropometry?.weightKg)} → ${formatWeight(workspace.latestAnthropometry?.weightKg)}` : "Sem comparação antropométrica"} detail={workspace.weightDelta ? workspace.weightDelta.label : null} />
-                <ContextCard label="Pré-consulta" value={workspace.intakeSummary ? `Respondida em ${formatDate(workspace.intakeSummary.submittedAt)}` : "Nenhuma resposta disponível"} detail={workspace.intakeSummary?.motivation ?? workspace.intakeSummary?.objective ?? null} />
+            <section className="space-y-4" aria-label="Mudanças desde a última consulta">
+              <div className="rounded-lg border border-[#EDE1D6] bg-white p-5">
+                <div className="flex items-baseline justify-between gap-3"><h3 className="font-serif text-lg font-semibold text-[#3A3028]">O que mudou</h3><span className="text-xs text-[#75675E]">Dados registrados</span></div>
+                <div className="mt-4 divide-y divide-[#EFE2D6]">
+                  <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3 py-3 text-sm"><span className="font-semibold text-[#3A3028]">Peso</span><span>{workspace.weightDelta ? `${formatWeight(workspace.previousAnthropometry?.weightKg)} → ${formatWeight(workspace.latestAnthropometry?.weightKg)} (${workspace.weightDelta.label})` : "Sem comparação antropométrica"}</span></div>
+                  <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3 py-3 text-sm"><span className="font-semibold text-[#3A3028]">Pré-consulta</span><span>{workspace.intakeSummary ? `${workspace.intakeSummary.motivation ?? workspace.intakeSummary.objective ?? "Respondida"} · origem: pré-consulta` : "Nenhuma resposta disponível"}</span></div>
+                </div>
               </div>
-              <p className="mt-3 text-xs text-[#75675E]">Esta etapa mostra somente dados registrados; nenhum resumo clínico é inventado automaticamente.</p>
+              <ConsultationEvolution clientId={clientId} />
             </section>
           )}
 
           {activeStep === "anamnese" && (
-            <ContextCard label="Anamnese" value={workspace.patient.primaryGoal ?? "Ainda não preenchida"} detail="A edição permanece no prontuário existente para preservar versionamento e histórico." action={<button type="button" onClick={() => guardNavigation(() => router.push(`/dashboard/clients/${clientId}?tab=anamnese`))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir anamnese</button>} />
+            <section className="space-y-4"><div className="rounded-lg border border-[#EDE1D6] bg-white p-5"><p className="brand-kicker">Anamnese</p><h3 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">Contexto e notas clínicas</h3><dl className="mt-4 grid gap-3 sm:grid-cols-2"><SummaryItem label="Objetivo" value={workspace.patient.primaryGoal ?? "Ainda não preenchido"} /><SummaryItem label="Pré-consulta" value={workspace.intakeSummary ? `Respondida em ${formatDate(workspace.intakeSummary.submittedAt)}` : "Não respondida"} detail={workspace.intakeSummary?.objective ?? null} /></dl><button type="button" onClick={() => guardNavigation(() => router.push(`/dashboard/clients/${clientId}?tab=anamnese`))} className="mt-4 text-sm font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir prontuário completo →</button></div><ConsultationNotes consultationSessionId={consultation.id} initialNotes={consultation.notes} readOnly={readOnly} onOrganizeWithAI={(notes) => setPendingCopilotMessage(`Organize estas notas da consulta e proponha atualização do prontuário: ${notes}`)} /></section>
           )}
 
           {activeStep === "antropometria" && (
-            <ContextCard label="Antropometria" value={formatWeight(workspace.latestAnthropometry?.weightKg)} detail={workspace.latestAnthropometry?.bmi !== null && workspace.latestAnthropometry?.bmi !== undefined ? `IMC: ${workspace.latestAnthropometry.bmi.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}` : "IMC não disponível"} action={<button type="button" onClick={() => guardNavigation(() => router.push(getAnthropometryHref(clientId, consultation.id)))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Registrar avaliação</button>} />
+            <ConsultationAnthropometry clientId={clientId} birthDate={workspace.patient.birthDate} biologicalSex={null} />
           )}
 
           {activeStep === "plano" && (
@@ -436,10 +458,14 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
           )}
 
           {activeStep === "retorno" && (
-            <ContextCard label="Retorno" value={workspace.appointmentContext ? formatDateTime(workspace.appointmentContext.startsAt) : "Nenhum retorno agendado"} detail={workspace.appointmentContext?.title ?? "A agenda existente continua responsável pelo agendamento."} action={<button type="button" onClick={() => guardNavigation(() => router.push(getScheduleReturnHref(clientId, consultation.id)))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Agendar retorno</button>} />
+            <section className="rounded-lg border border-[#EDE1D6] bg-white p-5">
+              <p className="brand-kicker">Encerramento e retorno</p><h3 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">Próximo passo clínico</h3>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2"><ContextCard label="Próximo retorno" value={workspace.appointmentContext ? formatDateTime(workspace.appointmentContext.startsAt) : "Nenhum retorno agendado"} detail={workspace.appointmentContext?.title ?? "Agende pela Agenda existente."} /><ContextCard label="Revisão da consulta" value={draft.conduct.trim() || draft.goals.trim() ? "Recomendações registradas" : "Recomendações ainda não preenchidas"} detail={workspace.draftMealPlan ? "Plano em rascunho — revise antes de concluir." : "Plano sem rascunho pendente."} /></div>
+              <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => guardNavigation(() => router.push(getScheduleReturnHref(clientId, consultation.id)))} className="brand-btn-primary">Agendar retorno</button><button type="button" onClick={() => void openFinish()} disabled={readOnly} className="brand-btn-secondary disabled:opacity-50">Revisar e concluir</button></div>
+            </section>
           )}
 
-          <section className="rounded-lg border border-[#EDE1D6] bg-white p-5">
+          {(activeStep === "mudancas" || activeStep === "recomendacoes") && <section className="rounded-lg border border-[#EDE1D6] bg-white p-5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="brand-kicker">Consulta atual</p>
@@ -456,7 +482,7 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
               </button>
             </div>
             <div className="mt-5 space-y-4">
-              {DRAFT_FIELDS.map((field) => (
+              {DRAFT_FIELDS.filter((field) => activeStep === "mudancas" ? CHANGE_FIELDS.has(field.key) : RECOMMENDATION_FIELDS.has(field.key)).map((field) => (
                 <label key={field.key} className="block">
                   <span className="text-sm font-semibold text-[#3A3028]">{field.label}</span>
                   <span className="mt-0.5 block text-xs text-[#75675E]">{field.hint}</span>
@@ -470,7 +496,7 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
                 </label>
               ))}
             </div>
-          </section>
+          </section>}
 
           <section className="grid gap-3 md:grid-cols-3">
             <button type="button" onClick={() => guardNavigation(() => router.push(getAnthropometryHref(clientId, consultation.id)))} className="rounded-lg border border-[#EDE1D6] bg-white p-4 text-left hover:bg-[#FBF7F1]">
@@ -496,6 +522,7 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
             <ConsultationCopilot
               clientId={clientId}
               consultationSessionId={consultation.id}
+              activeStep={activeStep}
               externalMessage={pendingCopilotMessage}
               onExternalMessageSent={() => setPendingCopilotMessage(null)}
               onProposalConfirmed={() => void loadWorkspace(consultation.id)}

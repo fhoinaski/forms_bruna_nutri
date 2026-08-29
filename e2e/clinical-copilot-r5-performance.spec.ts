@@ -37,7 +37,7 @@ test.describe("Clinical Copilot R5 — Performance", () => {
       await expect(dialog.getByText(/^\d+ kcal$/).first()).toBeVisible({ timeout: 20_000 });
       generationSamples.push(Date.now() - generationStart);
 
-      await page.getByRole("button", { name: "Fechar" }).click();
+      await page.getByRole("button", { name: "Fechar", exact: true }).click();
     }
 
     function stats(samples: number[]) {
