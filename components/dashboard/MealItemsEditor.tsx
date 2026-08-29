@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, Beef, Check, ChevronDown, ChevronUp, Copy, Flame, Lock, MoreHorizontal, PanelRightClose, Pencil, Plus, RefreshCw, Save, Sparkles, Star, Trash2, Unlock, Utensils, Wheat, X } from "lucide-react";
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
-import { scaleRecipeIngredientsToPortions } from "@/lib/nutrition/recipes";
+import { scaleRecipeIngredientsToPortions, normalizeIngredientForRead, type RecipeIngredient } from "@/lib/nutrition/recipes";
 import { resolveQuantity, type HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
 import type { FoodSearchResultViewModel } from "@/lib/nutrition/food-search-view-model";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
@@ -15,6 +15,7 @@ import { ReuseLibraryDrawer } from "@/components/dashboard/ReuseLibraryDrawer";
 import type { FoodReference } from "@/lib/nutrition/food-catalog";
 import { classifyFoodExchangeGroup, FOOD_GROUP_LABELS, type FoodGroup } from "@/lib/nutrition/food-exchange-hierarchy";
 import { CLINICAL_ROLE_LABELS, type TemplateClinicalRole } from "@/lib/meal-templates/system-template-contract";
+import { useDialogKeyboard } from "@/hooks/use-dialog-keyboard";
 
 export type MealItem = {
   id?: string;
@@ -31,7 +32,7 @@ export type MealItem = {
   // FASE 6.5 (item 5): TBCA/IBGE_POF aceitos — vem do piloto de busca
   // canonica; identidade transportada, calculo do plano ainda trata como
   // "nao reconhecido" (ver lib/nutrition/nutrients.ts, item 8).
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | null;
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | "RECIPE" | null;
   food_ref_id?: string | null;
   // FASE 6.5 (item 3) — identidade canonica completa, so quando
   // food_source e TBCA/IBGE_POF (ou TACO vindo do piloto canonico).
@@ -94,6 +95,9 @@ type FoodSuggestion = MacroReferenceFood & {
   displayName?: string;
 };
 
+/** R6 — item mínimo da biblioteca de receitas usado só pra escolher qual inserir; nunca acessa ingredientes/macros aqui (o motor recalcula via food_source RECIPE + food_ref_id no save). */
+type RecipeLibraryEntry = { id: string; title: string; meal_group: string; servings: number; per_portion_kcal: number };
+
 const RECORDABLE_FOOD_USAGE_SOURCES = new Set(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]);
 
 /**
@@ -102,6 +106,15 @@ const RECORDABLE_FOOD_USAGE_SOURCES = new Set(["TACO", "CUSTOM", "MANUFACTURER",
  * cada tecla digitada). Fire-and-forget: nunca bloqueia nem falha a
  * seleção do alimento em si se a chamada falhar.
  */
+/**
+ * R6.5.2B (seções 22-24) — só mostra o rótulo "Itens fixos" quando a refeição
+ * é COMBINATION e tem de fato grupo(s) de escolha E itens base — evita um
+ * rótulo órfão numa COMBINATION sem itens fixos ou numa refeição SIMPLE/OPTIONS.
+ */
+export function shouldShowFixedItemsLabel(meal: { meal_structure?: string | null; choice_groups?: { items: unknown[] }[] | null; items: unknown[] }): boolean {
+  return meal.meal_structure === "COMBINATION" && (meal.choice_groups?.length ?? 0) > 0 && meal.items.length > 0;
+}
+
 function recordFoodUsageForReuse(source: string, refId: string | null | undefined) {
   if (!refId || !RECORDABLE_FOOD_USAGE_SOURCES.has(source)) return;
   void fetch("/api/admin/foods/recent", {
@@ -134,7 +147,10 @@ type RecipeLibraryItem = {
   title: string;
   description: string | null;
   meal_group: RecipeMealGroup;
-  ingredients: Array<{ taco_number: number; food_name: string; grams: number }>;
+  // R6 — shape novo (qualquer food_source real) com os campos legados
+  // ainda aceitos (receitas criadas antes desta fase); normalizeIngredientForRead
+  // trata os dois casos uniformemente, nunca assume taco_number obrigatório.
+  ingredients: RecipeIngredient[];
   source_note: string | null;
   per_portion_kcal: number;
   servings: number;
@@ -369,6 +385,10 @@ export function MealItemsEditor({
   const [openSubstitutionsKey, setOpenSubstitutionsKey] = useState("");
   const [openExchangeKey, setOpenExchangeKey] = useState("");
   const [editingItemKey, setEditingItemKey] = useState("");
+  // R6 (seções 33-35) — picker de receita: adiciona um item RECIPE (nunca achatado em alimentos), quantidade em porções por padrão.
+  const [recipePickerMealIndex, setRecipePickerMealIndex] = useState<number | null>(null);
+  const [recipePickerQuery, setRecipePickerQuery] = useState("");
+  const [recipePickerResults, setRecipePickerResults] = useState<RecipeLibraryEntry[]>([]);
   const [exchangeDrawerKey, setExchangeDrawerKey] = useState("");
   // R2.2 (seção 42) — devolve o foco ao botão que abriu o drawer ao fechar,
   // em vez de deixá-lo perdido no <body>.
@@ -410,33 +430,9 @@ export function MealItemsEditor({
     loadExchangeGroups();
   }, [loadExchangeGroups]);
 
-  useEffect(() => {
-    if (!exchangeDrawerKey) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeExchangeDrawer();
-        return;
-      }
-      // Focus trap (seção 42) — Tab/Shift+Tab nunca escapam do drawer aberto.
-      if (event.key === "Tab") {
-        const container = exchangeDrawerRef.current;
-        if (!container) return;
-        const focusable = Array.from(container.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter((el) => !el.hasAttribute("disabled"));
-        if (!focusable.length) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [exchangeDrawerKey]);
+  // R6.5.3 — Escape/Tab-trap extraído pro hook compartilhado `useDialogKeyboard`
+  // (mesma lógica que já existia aqui, agora reaproveitada por outros diálogos).
+  useDialogKeyboard(exchangeDrawerRef, closeExchangeDrawer, Boolean(exchangeDrawerKey));
 
   const [activeFoodField, setActiveFoodField] = useState("");
   const [foodSearch, setFoodSearch] = useState<{ key: string; query: string }>({ key: "", query: "" });
@@ -445,6 +441,9 @@ export function MealItemsEditor({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [searchLoadingKey, setSearchLoadingKey] = useState("");
   const [recipeSelectorOpen, setRecipeSelectorOpen] = useState(false);
+  const recipeSelectorRef = useRef<HTMLElement | null>(null);
+  // R6.5.3 — este modal também não tinha Escape/Tab-trap antes desta fase.
+  useDialogKeyboard(recipeSelectorRef, () => setRecipeSelectorOpen(false), recipeSelectorOpen);
   // R4 — biblioteca de reuso (recentes/favoritos/refeições salvas/planos
   // anteriores/modelos de plano), reaproveitando o mesmo padrão de
   // "inserir receita" já existente: insere no estado LOCAL, nunca auto-save.
@@ -464,10 +463,25 @@ export function MealItemsEditor({
   const [measuresByFood, setMeasuresByFood] = useState<Record<string, MealMeasure[]>>({});
   const [openMealMenu, setOpenMealMenu] = useState<number | null>(null);
   const [openItemMenu, setOpenItemMenu] = useState("");
+  const mealMenuTriggerRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     setPortalReady(true);
   }, []);
+
+  /** R6.5.2C (seção 7) — Escape fecha o menu "⋯" da refeição e devolve o foco pro botão que abriu. */
+  useEffect(() => {
+    if (openMealMenu === null) return;
+    const triggerIndex = openMealMenu;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpenMealMenu(null);
+        mealMenuTriggerRefs.current[triggerIndex]?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [openMealMenu]);
 
   useEffect(() => {
     if (!recipeSelectorOpen && !recipeDraft && !exchangeDrawerKey) return;
@@ -722,6 +736,49 @@ export function MealItemsEditor({
     setEditingItemKey(`${mealIndex}:${itemIndex}`);
   }
 
+  /**
+   * R6 (seções 33-36) — insere uma RECEITA como item, nunca achatado em
+   * alimentos: food_source "RECIPE" + food_ref_id (id da receita).
+   * Quantidade padrão "1 porção" — a nutricionista ajusta depois (porções
+   * ou gramas, conforme o rendimento da receita). O motor de nutrição
+   * (lib/nutrition/nutrients.ts) resolve a contribuição real ao salvar.
+   */
+  function addRecipeItem(mealIndex: number, recipe: RecipeLibraryEntry) {
+    const meal = meals[mealIndex];
+    if (!meal) return;
+    updateMeal(mealIndex, {
+      items: [...meal.items, {
+        food: recipe.title,
+        quantity: "1",
+        unit: "porção",
+        notes: null,
+        food_source: "RECIPE",
+        food_ref_id: recipe.id,
+      }],
+    });
+    setRecipePickerMealIndex(null);
+    setRecipePickerQuery("");
+    setRecipePickerResults([]);
+  }
+
+  // R6 — busca na biblioteca de receitas (reaproveita GET /api/admin/recipes já existente, nunca uma busca paralela).
+  useEffect(() => {
+    if (recipePickerMealIndex === null) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams();
+      if (recipePickerQuery.trim()) params.set("q", recipePickerQuery.trim());
+      fetch(`/api/admin/recipes?${params}`, { signal: controller.signal })
+        .then((response) => response.ok ? response.json() : { items: [] })
+        .then((data: { items?: RecipeLibraryEntry[] }) => setRecipePickerResults(data.items ?? []))
+        .catch(() => setRecipePickerResults([]));
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [recipePickerMealIndex, recipePickerQuery]);
+
   function focusFoodField(mealIndex: number, itemIndex: number) {
     const key = `${mealIndex}:${itemIndex}`;
     setActiveFoodField(key);
@@ -795,6 +852,14 @@ export function MealItemsEditor({
 
   function insertRecipe(recipe: RecipeLibraryItem) {
     const mealIndex = meals.length;
+    // R6 — ingredientes normalizados pro shape canônico ANTES de escalar:
+    // receitas novas usam food/quantity/unit/food_source (qualquer fonte
+    // real), receitas legadas usam taco_number/food_name/grams — os dois
+    // shapes precisam virar {food, grams, food_source, food_ref_id}
+    // uniformemente antes do rateio por porção.
+    const normalizedIngredients = recipe.ingredients
+      .map(normalizeIngredientForRead)
+      .map((ingredient) => ({ ...ingredient, grams: ingredient.unit === "g" && ingredient.quantity ? Number(ingredient.quantity) : null }));
     // Insere 1 PORCAO prescrita, nao o lote inteiro da receita: as gramas
     // dos ingredientes vem cadastradas para o RENDIMENTO TOTAL (ex.:
     // servings=4), entao copiar direto fazia o motor calcular e exibir o
@@ -802,7 +867,7 @@ export function MealItemsEditor({
     // 1510 kcal em vez dos 377,5 kcal de 1 porcao). Escala pelo mesmo
     // rendimento cadastrado na receita (lib/nutrition/recipes.ts) — nunca
     // inventa um numero, so aplica a proporcao real porcoes/rendimento.
-    const scaledIngredients = scaleRecipeIngredientsToPortions(recipe.ingredients, recipe.servings, 1);
+    const scaledIngredients = scaleRecipeIngredientsToPortions(normalizedIngredients, recipe.servings, 1);
     const meal: Meal = {
       name: recipe.title,
       suggested_time: "",
@@ -818,20 +883,23 @@ export function MealItemsEditor({
       // (lookup.fuzzyMatch), que falha silenciosamente para nomes que nao
       // batem bem com a descricao TACO — causa raiz de refeicoes com
       // receita mostrando "— kcal" mesmo com ingrediente 100% identificado
-      // no cadastro da receita.
-      items: scaledIngredients.map((ingredient) => ({
-        food: ingredient.food_name,
-        quantity: String(ingredient.grams),
-        unit: "g",
-        notes: null,
-        taco_number: ingredient.taco_number,
-        food_source: "TACO" as const,
-        food_ref_id: String(ingredient.taco_number),
-      })),
+      // no cadastro da receita. Ingrediente sem massa em gramas conhecida
+      // (unidade não-g, ou receita com rendimento só em porções) fica de
+      // fora aqui — nunca uma quantidade inventada.
+      items: scaledIngredients
+        .filter((ingredient) => ingredient.food_ref_id && ingredient.grams)
+        .map((ingredient) => ({
+          food: ingredient.food,
+          quantity: String(ingredient.grams),
+          unit: "g",
+          notes: null,
+          food_source: ingredient.food_source as MealItem["food_source"],
+          food_ref_id: ingredient.food_ref_id,
+        })),
     };
     onChange([...meals, meal]);
-    void Promise.all(recipe.ingredients.map(async (ingredient, itemIndex) => {
-      const response = await fetch(`/api/admin/foods/search?q=${encodeURIComponent(ingredient.food_name)}`, { cache: "no-store" });
+    void Promise.all(normalizedIngredients.map(async (ingredient, itemIndex) => {
+      const response = await fetch(`/api/admin/foods/search?q=${encodeURIComponent(ingredient.food)}`, { cache: "no-store" });
       const data = response.ok ? await response.json() as { items?: FoodSuggestion[] } : { items: [] as FoodSuggestion[] };
       return [`${mealIndex}:${itemIndex}`, data.items ?? []] as const;
     })).then((entries) => {
@@ -1009,7 +1077,10 @@ export function MealItemsEditor({
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Refeicoes</h3>
-        <div className="grid gap-2 sm:flex">
+        {/* R6.5.2 (regressão encontrada no fechamento) — a coluna central ficou mais estreita
+            com a navegação de refeições nova; sem flex-wrap, esses botões extrapolavam a
+            coluna e ficavam por baixo da sidebar de nutrição (clique interceptado). */}
+        <div className="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
           {clientId && mealPlanId && !readOnly && (
             <button type="button" onClick={() => void generateAlternativesForAll()} disabled={bulkGeneratingAlternatives} className="brand-btn-secondary w-full sm:w-auto">
               <Sparkles className="h-4 w-4" />
@@ -1038,12 +1109,18 @@ export function MealItemsEditor({
       </div>
 
       {meals.map((meal, mealIndex) => (
-        <article key={mealIndex} className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_8px_24px_rgba(58,48,40,0.035)]">
+        <article key={mealIndex} id={`meal-card-${mealIndex}`} className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_8px_24px_rgba(58,48,40,0.035)] scroll-mt-24">
           <div className="relative flex flex-col gap-2 border-b border-[#EDE1D6] bg-[#FBF7F1] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-2">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#EAF0E4] text-[#607A56]"><Utensils className="h-4 w-4" /></div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-[#3A3028]">{meal.name || `Refeicao ${mealIndex + 1}`}</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="text-sm font-semibold text-[#3A3028]">{meal.name || `Refeicao ${mealIndex + 1}`}</p>
+                  {/* R6.5.2 (seção 16) — badge discreto de estrutura, puramente visual, não altera meal_structure/cálculo. */}
+                  <span className="rounded-full border border-[#EAD8C2] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#8C6E52]">
+                    {meal.meal_structure === "OPTIONS" ? "Opções" : meal.meal_structure === "COMBINATION" ? "Combinação" : "Simples"}
+                  </span>
+                </div>
                 <p className="text-xs text-[#75675E]">{meal.items.filter((item) => item.food.trim()).length} alimento(s) - {mealMacros[mealIndex]?.kcal ?? 0} kcal estimadas</p>
               </div>
             </div>
@@ -1052,22 +1129,56 @@ export function MealItemsEditor({
                 <Plus className="h-4 w-4" />
                 Alimento
               </button>
-              <div className="flex items-center gap-1 rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] p-0.5">
-                <button type="button" onClick={() => onChange(reorderArray(meals, mealIndex, -1))} disabled={mealIndex === 0} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label={`Mover ${meal.name || "refeicao"} para cima`} title="Mover refeicao para cima">
-                  <ChevronUp className="h-4 w-4" />
+              <div className="relative">
+                <button type="button" onClick={() => setRecipePickerMealIndex(recipePickerMealIndex === mealIndex ? null : mealIndex)} title="Adiciona a receita como 1 item desta refeição (referência viva, não expande em alimentos) — diferente de &quot;Inserir receita&quot;, que cria uma refeição nova já expandida." className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]">
+                  <Plus className="h-4 w-4" />
+                  Item de receita
                 </button>
-                <button type="button" onClick={() => onChange(reorderArray(meals, mealIndex, 1))} disabled={mealIndex === meals.length - 1} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#75675E] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-30" aria-label={`Mover ${meal.name || "refeicao"} para baixo`} title="Mover refeicao para baixo">
-                  <ChevronDown className="h-4 w-4" />
-                </button>
+                {recipePickerMealIndex === mealIndex && (
+                  <div className="absolute right-0 top-[calc(100%+4px)] z-30 w-72 rounded-xl border border-[#EAD8C2] bg-white p-2 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
+                    <input
+                      autoFocus
+                      value={recipePickerQuery}
+                      onChange={(event) => setRecipePickerQuery(event.target.value)}
+                      className="brand-input mb-1.5"
+                      placeholder="Buscar receita..."
+                    />
+                    <div className="max-h-56 overflow-y-auto">
+                      {recipePickerResults.length === 0 && <p className="px-2 py-1.5 text-xs text-[#8C6E52]">Nenhuma receita encontrada.</p>}
+                      {recipePickerResults.map((recipe) => (
+                        <button
+                          key={recipe.id}
+                          type="button"
+                          onClick={() => addRecipeItem(mealIndex, recipe)}
+                          className="block w-full rounded-lg px-2 py-1.5 text-left hover:bg-[#FAF7F2]"
+                        >
+                          <span className="block text-sm font-medium text-[#3A3028]">{recipe.title}</span>
+                          <span className="text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">{recipe.servings} porção(ões) · ~{Math.round(recipe.per_portion_kcal)} kcal/porção</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <button type="button" onClick={() => onChange(duplicateMealAt(meals, mealIndex))} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#607A56] hover:bg-[#EAF0E4]" aria-label={`Duplicar ${meal.name || "refeicao"}`} title="Duplicar refeicao">
-                <Copy className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => setOpenMealMenu((current) => current === mealIndex ? null : mealIndex)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] hover:bg-[#FBF7F1]" aria-label={`Mais ações para ${meal.name || "refeicao"}`} title="Mais ações">
+              {/* R6.5.2C (seções 3-6) — Mover/Duplicar movidos pra dentro do menu "⋯"; mesmos
+                  aria-label/title/handlers de sempre, só a localização visual mudou. */}
+              <button ref={(el) => { mealMenuTriggerRefs.current[mealIndex] = el; }} type="button" onClick={() => setOpenMealMenu((current) => current === mealIndex ? null : mealIndex)} aria-haspopup="menu" aria-expanded={openMealMenu === mealIndex} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] hover:bg-[#FBF7F1]" aria-label={`Ações da refeição ${meal.name || "refeicao"}`} title="Mais ações">
                 <MoreHorizontal className="h-4 w-4" />
               </button>
               {openMealMenu === mealIndex && (
-                <div className="absolute right-3 top-[calc(100%-4px)] z-20 w-56 rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_16px_40px_rgba(58,48,40,0.14)]">
+                <div role="menu" aria-label={`Ações da refeição ${meal.name || "refeicao"}`} className="absolute right-3 top-[calc(100%-4px)] z-20 w-56 rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_16px_40px_rgba(58,48,40,0.14)]">
+                  <button type="button" onClick={() => { setOpenMealMenu(null); onChange(reorderArray(meals, mealIndex, -1)); }} disabled={mealIndex === 0} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Mover ${meal.name || "refeicao"} para cima`} title="Mover refeicao para cima">
+                    <ChevronUp className="h-4 w-4" />
+                    Mover para cima
+                  </button>
+                  <button type="button" onClick={() => { setOpenMealMenu(null); onChange(reorderArray(meals, mealIndex, 1)); }} disabled={mealIndex === meals.length - 1} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Mover ${meal.name || "refeicao"} para baixo`} title="Mover refeicao para baixo">
+                    <ChevronDown className="h-4 w-4" />
+                    Mover para baixo
+                  </button>
+                  <button type="button" onClick={() => { setOpenMealMenu(null); onChange(duplicateMealAt(meals, mealIndex)); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#EAF0E4]" aria-label={`Duplicar ${meal.name || "refeicao"}`} title="Duplicar refeicao">
+                    <Copy className="h-4 w-4" />
+                    Duplicar
+                  </button>
                   <button type="button" onClick={() => { setOpenMealMenu(null); setAiModalMealIndex(mealIndex); }} disabled={!aiEnabled || aiLoadingMeal === mealIndex} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#8C5F50] hover:bg-[#FBF7F1] disabled:cursor-not-allowed disabled:opacity-50">
                     <Sparkles className="h-4 w-4" />
                     {aiLoadingMeal === mealIndex ? "Sugerindo..." : "Sugerir com IA"}
@@ -1082,6 +1193,7 @@ export function MealItemsEditor({
                       Salvar como refeição favorita
                     </button>
                   )}
+                  <div className="my-1 h-px bg-[#F0E2D6]" aria-hidden="true" />
                   <button type="button" onClick={() => { setOpenMealMenu(null); onChange(meals.filter((_, index) => index !== mealIndex)); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">
                     <Trash2 className="h-4 w-4" />
                     Excluir refeição
@@ -1116,7 +1228,16 @@ export function MealItemsEditor({
                 </label>
               </div>
               {meal.meal_structure === "OPTIONS" && <div className="mt-3 space-y-2">
-                {(meal.options ?? []).map((option, optionIndex) => <div key={optionIndex} className="rounded-lg bg-[#FBF7F1] p-2">
+                {(meal.options ?? []).map((option, optionIndex) => <Fragment key={optionIndex}>
+                {/* R6.5.2 (seção 30-31) — divisor "OU" leve entre alternativas; puramente visual, não altera options/aria-label. */}
+                {optionIndex > 0 && (
+                  <div className="flex items-center gap-2 py-0.5" aria-hidden="true">
+                    <span className="h-px flex-1 bg-[#EAD8C2]" />
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#9A6F5E]">ou</span>
+                    <span className="h-px flex-1 bg-[#EAD8C2]" />
+                  </div>
+                )}
+                <div className="rounded-lg border-l-2 border-[#D9E4D3] bg-[#FBF7F1] p-2">
                   <div className="flex gap-2">
                     <input value={option.label} onChange={(event) => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, label: event.target.value } : value) })} className="brand-input" aria-label={`Nome da opção ${optionIndex + 1}`} />
                     <button type="button" onClick={() => updateMeal(mealIndex, { options: duplicateMealOptionAt(meal.options ?? [], optionIndex) })} className="brand-btn-secondary shrink-0" aria-label={`Duplicar ${option.label || `opção ${optionIndex + 1}`}`}>Duplicar</button>
@@ -1130,7 +1251,8 @@ export function MealItemsEditor({
                     </div>)}
                   </div>
                   <button type="button" onClick={() => updateMeal(mealIndex, { options: (meal.options ?? []).map((value, index) => index === optionIndex ? { ...value, items: [...value.items, { food: "", quantity: "", unit: "", notes: "" }] } : value) })} className="mt-2 text-xs font-semibold text-[#607A56]">+ Alimento nesta opção</button>
-                </div>)}
+                </div>
+                </Fragment>)}
                 <button type="button" onClick={() => updateMeal(mealIndex, { options: [...(meal.options ?? []), { label: `Opção ${(meal.options?.length ?? 0) + 1}`, items: [{ food: "", quantity: "", unit: "", notes: "" }] }] })} className="brand-btn-secondary">Adicionar opção</button>
               </div>}
               {meal.meal_structure === "COMBINATION" && <div className="mt-3 space-y-2">
@@ -1172,6 +1294,12 @@ export function MealItemsEditor({
                 <label className="sr-only" htmlFor={`meal-notes-${mealIndex}`}>Observações da refeição</label>
                 <textarea id={`meal-notes-${mealIndex}`} value={meal.notes ?? ""} onChange={(event) => updateMeal(mealIndex, { notes: event.target.value })} className="brand-input mt-2 min-h-14 resize-y" placeholder="Observacoes da refeicao" />
               </>
+            )}
+            {/* R6.5.2B (seções 22-24) — rótulo "Itens fixos" só quando há grupos de escolha
+                (COMBINATION), pra diferenciar visualmente da seção "Escolha X" abaixo. Não
+                reordena nem filtra meal.items — mesma lista, mesmos índices/handlers de sempre. */}
+            {shouldShowFixedItemsLabel(meal) && (
+              <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">Itens fixos</p>
             )}
             <div className="mt-2 space-y-1.5">
               {meal.items.map((item, itemIndex) => {
@@ -1218,7 +1346,7 @@ export function MealItemsEditor({
                 const editingItem = !readOnly && (editingItemKey === key || !item.food.trim());
                 if (!editingItem) {
                   return (
-                    <div key={itemIndex} className="relative grid min-w-0 gap-2 rounded-lg border border-[#EDE1D6] bg-white px-3 py-2 md:grid-cols-[minmax(0,150px)_minmax(0,1fr)_120px_minmax(140px,190px)_auto] md:items-center">
+                    <div key={itemIndex} className="group relative grid min-w-0 gap-2 rounded-lg border border-[#EDE1D6] bg-white px-3 py-2 md:grid-cols-[minmax(0,150px)_minmax(0,1fr)_120px_minmax(140px,190px)_auto] md:items-center">
                       <div className="min-w-0">
                         {slotGroupLabel ? (
                           <span className="block truncate text-[11px] font-bold uppercase tracking-[0.08em] text-[#607A56]">{slotGroupLabel}</span>
@@ -1256,7 +1384,13 @@ export function MealItemsEditor({
                       </div>
                       <div className="relative flex items-center justify-end">
                         {!readOnly && (
-                          <button type="button" onClick={() => setOpenItemMenu((current) => current === key ? "" : key)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Mais ações do alimento" title="Mais ações">
+                          <button
+                            type="button"
+                            onClick={() => setOpenItemMenu((current) => current === key ? "" : key)}
+                            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#EAD8C2] bg-[#FFFDFC] text-[#75675E] transition-opacity hover:bg-[#FBF7F1] md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 ${openItemMenu === key ? "" : "md:opacity-0"}`}
+                            aria-label="Mais ações do alimento"
+                            title="Mais ações"
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </button>
                         )}
@@ -1406,21 +1540,35 @@ export function MealItemsEditor({
                             onClick={() => selectMultiSourceResult(mealIndex, itemIndex, result)}
                             className={`block w-full rounded-lg px-3 py-2 text-left transition-colors ${suggestionIndex === highlightedIndex ? "bg-[#FAF7F2]" : "hover:bg-[#FAF7F2]"}`}
                           >
-                            <span className="block text-sm font-medium text-[#3A3028]">{result.displayName}</span>
+                            {/* R6.5.5 (seção 12) — busca é pra escolher IDENTIDADE, não fazer análise
+                                nutricional; a linha de preview com kcal/P/C/G foi removida, mantendo só
+                                nome + preparo/fonte + porção padrão. Nenhum dado deixou de existir no
+                                objeto (result.nutrientsPreview continua intacto), só não é mais exibido aqui. */}
+                            <span className="flex items-baseline justify-between gap-2">
+                              <span className="min-w-0 truncate text-sm font-medium text-[#3A3028]">{result.displayName}</span>
+                              <span className="shrink-0 text-[11px] font-semibold text-[#607A56]">Adicionar</span>
+                            </span>
                             <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">{result.preparation ?? result.group ?? "Alimento"} · {result.sourceName}</span>
-                            <span className="mt-1 block text-xs text-[#75675E]">{result.defaultPortion.label} = {result.defaultPortion.gramWeight ?? "—"} g · kcal {result.nutrientsPreview.energyKcal ?? "—"} · P {result.nutrientsPreview.proteinG ?? "—"} · C {result.nutrientsPreview.carbohydrateG ?? "—"} · G {result.nutrientsPreview.fatG ?? "—"}</span>
+                            <span className="mt-1 block text-xs text-[#75675E]">{result.defaultPortion.label}{result.defaultPortion.gramWeight ? ` · ${result.defaultPortion.gramWeight} g` : ""}</span>
                           </button>
                         ))}
                       </div>
                     )}
                     {showLoading && (
-                      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-[#EAD8C2] bg-white p-3 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
-                        <p className="text-sm text-[#8C6E52]">Buscando...</p>
+                      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 space-y-1.5 rounded-xl border border-[#EAD8C2] bg-white p-2 shadow-[0_18px_44px_rgba(58,48,40,0.16)]" role="status" aria-label="Buscando alimentos">
+                        {/* R6.5.5 (seção 22) — 3 linhas de skeleton compactas em vez de um spinner grande/texto solto. */}
+                        {[0, 1, 2].map((row) => (
+                          <div key={row} className="animate-pulse space-y-1 rounded-lg px-3 py-2">
+                            <div className="h-3 w-2/3 rounded bg-[#F0E2D6]" />
+                            <div className="h-2 w-1/3 rounded bg-[#F5EAD9]" />
+                          </div>
+                        ))}
                       </div>
                     )}
                     {showEmptyState && (
                       <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-[#EAD8C2] bg-white p-3 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
                         <p className="text-sm text-[#8C6E52]">Nenhum alimento encontrado.</p>
+                        <p className="mt-0.5 text-xs text-[#9A978A]">Tente outro nome ou preparação.</p>
                       </div>
                     )}
                   </div>
@@ -1540,8 +1688,8 @@ export function MealItemsEditor({
                         // FASE 6.5 (item 13) — substituicoes continuam so pro catalogo
                         // legado; um item TBCA/IBGE_POF aparece aqui como se nao tivesse
                         // fonte estruturada (mesmo fallback de "nao fazer ainda").
-                        itemFoodSource={item.food_source === "TBCA" || item.food_source === "IBGE_POF" ? null : item.food_source}
-                        itemFoodRefId={item.food_source === "TBCA" || item.food_source === "IBGE_POF" ? null : item.food_ref_id}
+                        itemFoodSource={item.food_source === "TBCA" || item.food_source === "IBGE_POF" || item.food_source === "RECIPE" ? null : item.food_source}
+                        itemFoodRefId={item.food_source === "TBCA" || item.food_source === "IBGE_POF" || item.food_source === "RECIPE" ? null : item.food_ref_id}
                         itemGrams={typeof grams === "number" && Number.isFinite(grams) ? grams : null}
                         substitutionsLocked={Boolean(item.substitutions_locked)}
                         currentMeals={meals}
@@ -1568,8 +1716,9 @@ export function MealItemsEditor({
                           mealPlanItemId={item.id ?? null}
                           mealName={meal.name}
                           primaryFoodName={item.food}
-                          primaryFoodSource={item.food_source}
-                          primaryFoodRefId={item.food_ref_id}
+                          // R6 — item de RECEITA não é um alimento de catálogo; nunca abre o motor de troca/equivalência (seção 40).
+                          primaryFoodSource={item.food_source === "RECIPE" ? null : item.food_source}
+                          primaryFoodRefId={item.food_source === "RECIPE" ? null : item.food_ref_id}
                           primaryCanonicalFoodId={item.canonical_food_id}
                           primaryGrams={typeof grams === "number" && Number.isFinite(grams) ? grams : null}
                           group={exchangeEntry?.group ?? null}
@@ -1612,7 +1761,7 @@ export function MealItemsEditor({
       )}
 
       {portalReady && exchangeDrawerContext && createPortal(
-        <div role="dialog" aria-modal="true" aria-labelledby="meal-exchange-drawer-title" className="fixed inset-0 z-50 overflow-hidden bg-black/25 backdrop-blur-sm">
+        <div role="dialog" aria-modal="true" aria-labelledby="meal-exchange-drawer-title" className="fixed inset-0 z-50 overflow-hidden bg-black/30 backdrop-blur-sm">
           <button type="button" className="absolute inset-0 h-full w-full cursor-default" aria-hidden="true" tabIndex={-1} onClick={closeExchangeDrawer} />
           {/* R2.2 (seção 40) — mobile: bottom sheet de altura fixa; a partir de
               sm: drawer lateral direito, altura cheia, como antes. */}
@@ -1685,8 +1834,8 @@ export function MealItemsEditor({
                   mealPlanItemId={exchangeDrawerContext.item.id ?? null}
                   mealName={exchangeDrawerContext.meal.name}
                   primaryFoodName={exchangeDrawerContext.item.food}
-                  primaryFoodSource={exchangeDrawerContext.item.food_source}
-                  primaryFoodRefId={exchangeDrawerContext.item.food_ref_id}
+                  primaryFoodSource={exchangeDrawerContext.item.food_source === "RECIPE" ? null : exchangeDrawerContext.item.food_source}
+                  primaryFoodRefId={exchangeDrawerContext.item.food_source === "RECIPE" ? null : exchangeDrawerContext.item.food_ref_id}
                   primaryCanonicalFoodId={exchangeDrawerContext.item.canonical_food_id}
                   primaryGrams={typeof exchangeDrawerContext.grams === "number" && Number.isFinite(exchangeDrawerContext.grams) ? exchangeDrawerContext.grams : null}
                   group={exchangeDrawerContext.exchangeEntry?.group ?? null}
@@ -1701,8 +1850,8 @@ export function MealItemsEditor({
                 <ItemSubstitutionsPanel
                   clientId={clientId ?? ""}
                   itemFood={exchangeDrawerContext.item.food}
-                  itemFoodSource={exchangeDrawerContext.item.food_source === "TBCA" || exchangeDrawerContext.item.food_source === "IBGE_POF" ? null : exchangeDrawerContext.item.food_source}
-                  itemFoodRefId={exchangeDrawerContext.item.food_source === "TBCA" || exchangeDrawerContext.item.food_source === "IBGE_POF" ? null : exchangeDrawerContext.item.food_ref_id}
+                  itemFoodSource={exchangeDrawerContext.item.food_source === "TBCA" || exchangeDrawerContext.item.food_source === "IBGE_POF" || exchangeDrawerContext.item.food_source === "RECIPE" ? null : exchangeDrawerContext.item.food_source}
+                  itemFoodRefId={exchangeDrawerContext.item.food_source === "TBCA" || exchangeDrawerContext.item.food_source === "IBGE_POF" || exchangeDrawerContext.item.food_source === "RECIPE" ? null : exchangeDrawerContext.item.food_ref_id}
                   itemGrams={typeof exchangeDrawerContext.grams === "number" && Number.isFinite(exchangeDrawerContext.grams) ? exchangeDrawerContext.grams : null}
                   substitutionsLocked={Boolean(exchangeDrawerContext.item.substitutions_locked)}
                   currentMeals={meals}
@@ -1727,14 +1876,17 @@ export function MealItemsEditor({
       )}
 
       {portalReady && recipeSelectorOpen && createPortal(
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
-          <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
+        <div role="dialog" aria-modal="true" aria-labelledby="insert-recipe-title" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+          <section ref={recipeSelectorRef} className="flex h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-5 py-4">
               <div>
                 <p className="brand-kicker">Biblioteca de receitas</p>
-                <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Inserir receita</h2>
+                <h2 id="insert-recipe-title" className="font-serif text-2xl font-semibold text-[#3A3028]">Inserir receita</h2>
               </div>
-              <button type="button" onClick={() => setRecipeSelectorOpen(false)} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar" title="Fechar">x</button>
+              {/* R6.5.3 — era o literal "x" (texto), não um ícone; agora consistente com todo o resto do app. */}
+              <button type="button" onClick={() => setRecipeSelectorOpen(false)} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar" title="Fechar">
+                <X className="h-4 w-4" />
+              </button>
             </div>
             <div className="grid shrink-0 gap-3 border-b border-[#EDE1D6] p-4 md:grid-cols-[minmax(0,1fr)_220px]">
               <input value={recipeSearch} onChange={(event) => setRecipeSearch(event.target.value)} className="brand-input" placeholder="Buscar por nome ou tag..." />

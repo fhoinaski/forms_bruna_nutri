@@ -9,6 +9,9 @@ import { getFoodPortionById, toHouseholdMeasureOption } from "@/lib/repositories
 import { listPatientClinicalMarkers } from "@/lib/repositories/patient-clinical-markers";
 import type { MealPlanItemPayload, MealPlanPayload } from "@/lib/repositories/meal-plans";
 import { getMealStructureItems } from "@/lib/meal-plans/flexible-structure";
+import { getRecipeById } from "@/lib/repositories/recipes";
+import { resolveRecipeItemNutrients } from "@/lib/nutrition/nutrients";
+import { recipeItemValuesFromSnapshot } from "@/lib/nutrition/food-snapshot";
 
 export type MealPlanPublicationCode =
   | "UNRESOLVED_FOOD"
@@ -66,7 +69,10 @@ function issue(input: Omit<MealPlanPublicationIssue, "severity" | "blockPublishi
 }
 
 function itemRef(item: MealPlanItemPayload): FoodReference | null {
-  if (!item.food_source || !item.food_ref_id) return null;
+  // R6 — um item de RECEITA não é uma referência de catálogo (não tem
+  // canonicalId/porção canônica) — nunca entra nas checagens que assumem
+  // FoodReference (mesmo tratamento que "sem vínculo", já existente).
+  if (!item.food_source || item.food_source === "RECIPE" || !item.food_ref_id) return null;
   return { source: item.food_source, sourceId: item.food_ref_id, canonicalId: item.canonical_food_id ?? null };
 }
 
@@ -131,6 +137,55 @@ export async function validateMealPlanForPublication(plan: MealPlanPayload): Pro
     for (const item of getMealStructureItems(meal)) {
       if (!item.food.trim()) continue;
       itemCount++;
+
+      // R6 — item de RECEITA segue um caminho de validação próprio: nunca
+      // resolve pelo catálogo (itemRef/getFoodByReference retornam null de
+      // propósito para RECIPE), e sua quantidade é em porções/gramas do
+      // RENDIMENTO da receita, não gramas de um alimento por-100g — usar
+      // toNutritionGrams aqui sempre falharia. "Resolvido"/"calculável"
+      // para uma receita significa: a receita existe, está ativa, e a
+      // quantidade prescrita produz um valor real (via
+      // resolveRecipeItemNutrients ou um snapshot já congelado).
+      if (item.food_source === "RECIPE") {
+        const recipe = item.food_ref_id ? await getRecipeById(item.food_ref_id) : null;
+        if (!recipe) {
+          addIssue(issue({
+            code: "UNRESOLVED_FOOD",
+            mealName: meal.name,
+            itemId: item.id ?? null,
+            foodName: item.food,
+            message: `${item.food}: receita vinculada não encontrada — confirme antes de publicar.`,
+          }));
+        } else if (!recipe.is_active) {
+          addIssue(issue({
+            code: "UNCALCULABLE_FOOD",
+            mealName: meal.name,
+            itemId: item.id ?? null,
+            foodName: item.food,
+            message: `${item.food}: receita foi arquivada — substitua antes de publicar.`,
+          }));
+        } else {
+          const frozen = recipeItemValuesFromSnapshot(item.nutrition_snapshot);
+          const values = frozen ?? resolveRecipeItemNutrients(item.quantity, item.unit, {
+            total: { energyKcal: recipe.per_portion_kcal * recipe.servings, proteinG: recipe.per_portion_protein_g * recipe.servings, carbohydrateG: recipe.per_portion_carbs_g * recipe.servings, fatG: recipe.per_portion_fat_g * recipe.servings, fiberG: null, sodiumMg: null, calciumMg: null, ironMg: null, potassiumMg: null, vitaminCMg: null },
+            servings: recipe.servings,
+            yieldGrams: recipe.yield_mode === "USER_REPORTED" ? recipe.yield_grams : null,
+          }).values;
+          if (values.energyKcal === null || values.energyKcal === undefined) {
+            addIssue(issue({
+              code: "INVALID_QUANTITY",
+              mealName: meal.name,
+              itemId: item.id ?? null,
+              foodName: item.food,
+              message: `${item.food}: informe uma quantidade válida (porções, ou gramas se a receita tiver rendimento em massa).`,
+            }));
+          } else {
+            resolvedItems++;
+          }
+        }
+        continue;
+      }
+
       const ref = itemRef(item);
       if (!ref) {
         addIssue(issue({

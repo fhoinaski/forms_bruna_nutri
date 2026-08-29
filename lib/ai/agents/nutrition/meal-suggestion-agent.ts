@@ -6,6 +6,7 @@ import {
   getAISettings,
 } from "@/lib/repositories/ai-settings";
 import { getRecipeById, getRecipes } from "@/lib/repositories/recipes";
+import { normalizeIngredientForRead } from "@/lib/nutrition/recipes";
 import { searchTacoFoods, getTacoFoodByNumber } from "@/lib/nutrition/taco";
 import {
   aiMealSuggestionContextSchema,
@@ -99,15 +100,19 @@ async function resolveAndValidate(output: AiMealSuggestionOutput, context: AiMea
       const recipe = await getRecipeById(String(item.id));
       if (!recipe) throw new Error(`Receita invalida retornada pela IA: ${String(item.id)}.`);
       sourceRecipeId = recipe.id;
-      for (const ingredient of recipe.ingredients) {
-        if (!ingredient.taco_number || !ingredient.grams) continue;
+      for (const raw of recipe.ingredients) {
+        const ingredient = normalizeIngredientForRead(raw);
+        // Esta ferramenta só sabe expandir ingrediente TACO legado (mesmo
+        // limite de antes desta fase) — ingredientes com outra fonte real
+        // (R6) ficam de fora aqui, nunca uma identidade inventada.
+        if (ingredient.food_source !== "TACO" || !ingredient.food_ref_id || !ingredient.quantity) continue;
         resolvedItems.push({
           source: "recipe",
           id: recipe.id,
-          taco_number: ingredient.taco_number,
-          food: ingredient.food_name,
-          quantity: String(ingredient.grams),
-          unit: "g",
+          taco_number: Number(ingredient.food_ref_id),
+          food: ingredient.food,
+          quantity: ingredient.quantity,
+          unit: ingredient.unit ?? "g",
           notes: `Sugerido por IA a partir da receita "${recipe.title}". Revisar antes de salvar.`,
           ai_suggested: true,
         });

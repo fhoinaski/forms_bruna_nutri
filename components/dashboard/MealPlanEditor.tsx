@@ -7,6 +7,7 @@ import { MealItemsEditor, cleanMealsForSave, sanitizeMealForPlanClone, type Meal
 import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
 import { AiMealPlanWizard } from "@/components/dashboard/AiMealPlanWizard";
 import { MealPlanNutritionWorkspacePanel } from "@/components/nutrition/MealPlanNutritionSummary";
+import { MealNavigationRail } from "@/components/dashboard/MealNavigationRail";
 import { useDebouncedFoodSearch, type FoodSuggestion } from "@/hooks/use-debounced-food-search";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
@@ -52,6 +53,8 @@ type MealPlan = {
   target_protein_g?: number | null;
   target_carbohydrate_g?: number | null;
   target_fat_g?: number | null;
+  /** R6.5.4 (seção 89) — já vinha na API (MealPlanPayload), só não era lido pelo editor; usado pro rótulo "Última alteração". */
+  updated_at?: string;
   meals: Meal[];
   weekly_slots: WeeklySlot[];
   substitutions: Substitution[];
@@ -88,6 +91,15 @@ type PublicationReview = {
   };
   mealSummary: Array<{ mealName: string; items: number; blockers: number; warnings: number }>;
 };
+
+/** R6.5.4 (seção 89) — mesma convenção de formatação de hora já usada em AiChatWidget.tsx. */
+function formatPlanUpdatedAt(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(new Date(iso));
+  } catch {
+    return "";
+  }
+}
 
 function editablePlanSignature(plan: MealPlan): string {
   return JSON.stringify({
@@ -293,6 +305,40 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       onSaved?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível carregar o pré-plano.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  /**
+   * R5 (seções 23-31) — "Usar plano anterior como base": clona o plano de
+   * origem como um NOVO draft (mesmo princípio de `duplicateCurrentPlan`,
+   * R4 — o plano de origem nunca é alterado) e substitui `meals` pelo
+   * resultado já MESCLADO do changeset (KEEP/MODIFY/ADD calculado pelo
+   * wizard) — nunca o draft inteiro do zero. Continua sem auto-save: só
+   * "Salvar rascunho"/"Ativar" persiste de verdade.
+   */
+  async function applyAiChangeset(sourcePlanId: string, mergedMeals: Meal[]) {
+    const source = plans.find((item) => item.id === sourcePlanId) ?? null;
+    setCreating(true);
+    setError("");
+    setMessage("");
+    setConflict("");
+    try {
+      const group = PROTOCOL_TEMPLATE_TARGET_GROUPS.find((item) => item === source?.target_group) ?? targetGroup;
+      const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetGroup: group, title: source ? `${source.title} (Copilot)` : undefined }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Não foi possível aplicar a proposta.");
+      await loadPlans(data.id);
+      setPlan((current) => current && current.id === data.id ? { ...current, meals: mergedMeals } : current);
+      setMessage("Proposta do Copilot aplicada com base no plano anterior. Revise e salve — nada foi ativado.");
+      onSaved?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível aplicar a proposta.");
     } finally {
       setCreating(false);
     }
@@ -600,6 +646,10 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               <p className={`mt-0.5 text-xs font-semibold ${hasUnsavedChanges ? "text-[#9A6B28]" : conflict ? "text-red-700" : "text-[#607A56]"}`}>
                 {plan.status === "active" ? "Ativo" : "Rascunho"} - v{plan.version} · {saveStateLabel}
               </p>
+              {/* R6.5.4 (seção 89) — só mostra quando não há edição local pendente (o timestamp do servidor ficaria enganoso nesse caso; "Alterações não salvas" já comunica isso). */}
+              {!hasUnsavedChanges && plan.updated_at && formatPlanUpdatedAt(plan.updated_at) && (
+                <p className="mt-0.5 text-[11px] text-[#9A978A]">Última alteração às {formatPlanUpdatedAt(plan.updated_at)}</p>
+              )}
               {plan.status !== "active" && (
                 <p className="mt-0.5 text-xs text-[#8C6E52]">Portal e impressão oficial continuam usando a versão ativa até este rascunho ser ativado.</p>
               )}
@@ -608,6 +658,16 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               <button type="button" onClick={() => void createFromTemplate()} disabled={creating || saving || deleting} className="brand-btn-secondary w-full sm:w-auto">
                 <Plus className="h-4 w-4" />
                 Novo plano
+              </button>
+              <button
+                type="button"
+                onClick={() => setAiWizardOpen(true)}
+                disabled={creating || saving || deleting}
+                title={aiEnabled ? undefined : "Configure a chave de IA em Configurações para usar este recurso."}
+                className="brand-btn-secondary w-full sm:w-auto"
+              >
+                <Sparkles className="h-4 w-4" />
+                Criar com IA
               </button>
               <a
                 href={`/dashboard/clients/${clientId}/print?secao=plano-alimentar${plan.status === "active" ? "" : `&planId=${encodeURIComponent(plan.id)}`}`}
@@ -640,7 +700,18 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
 
       {plan && (
         <section className="rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-3 sm:p-4">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+          {/*
+            R6.5.2 (regressão encontrada no fechamento): a coluna central já usa
+            larguras mínimas fixas em px nos food rows (MealItemsEditor) que não
+            cabem numa 3ª coluna à esquerda no breakpoint xl (1280px) — isso causava
+            texto cortado/oculto e cliques interceptados pela sidebar sticky. Por
+            isso a navegação de refeições só entra em 2xl (1536px+), onde há espaço
+            real de sobra; em xl o layout permanece EXATAMENTE o de 2 colunas da R6.5.1.
+          */}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[220px_minmax(0,1fr)_360px]">
+            {/* R6.5.2 (seções 4, 7-13) — navegação de refeições, coluna nova, só desktop largo (2xl+); deriva de plan.meals, sem estado próprio a sincronizar. */}
+            <MealNavigationRail meals={plan.meals} />
+
             <div className="min-w-0 space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
@@ -788,6 +859,8 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
           defaultTargetGroup={plan?.target_group && PROTOCOL_TEMPLATE_TARGET_GROUPS.includes(plan.target_group as ProtocolTemplateTargetGroup) ? plan.target_group as ProtocolTemplateTargetGroup : targetGroup}
           onClose={() => setAiWizardOpen(false)}
           onApply={applyAiDraft}
+          onApplyChangeset={applyAiChangeset}
+          previousPlans={plans}
         />
       )}
 

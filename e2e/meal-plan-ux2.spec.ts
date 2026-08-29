@@ -52,9 +52,10 @@ test.describe("plano alimentar — UX 2.0", () => {
     await addNamedMealWithFreeTextItem(page, "Refeicao Dois");
 
     // A ultima refeicao ("Refeicao Dois") sobe uma posicao, trocando de lugar com "Refeicao Um".
-    // Titulo do botao de refeicao ("Mover refeicao para cima") e mais especifico que o de item
-    // ("Mover para cima") para nao colidir com os botoes de mover ALIMENTO dentro da mesma refeicao.
-    await page.locator("article").last().getByTitle("Mover refeicao para cima").click();
+    // R6.5.2C: Mover/Duplicar da refeicao agora vivem dentro do menu "Acoes da refeicao" (⋯).
+    const lastMealCard = page.locator("article").last();
+    await lastMealCard.getByRole("button", { name: /ações da refeição/i }).click();
+    await lastMealCard.getByTitle("Mover refeicao para cima").click();
     await expect(page.locator("article").nth(-2).getByPlaceholder("Nome da refeicao")).toHaveValue("Refeicao Dois");
     await expect(page.locator("article").last().getByPlaceholder("Nome da refeicao")).toHaveValue("Refeicao Um");
 
@@ -77,7 +78,10 @@ test.describe("plano alimentar — UX 2.0", () => {
     await addMealWithArroz(page, "Lanche da tarde");
     const articlesBefore = await page.locator("article").count();
 
-    await page.locator("article").last().getByRole("button", { name: /duplicar lanche da tarde/i }).click();
+    // R6.5.2C: Duplicar da refeicao agora vive dentro do menu "Acoes da refeicao" (⋯).
+    const mealCard = page.locator("article").last();
+    await mealCard.getByRole("button", { name: /ações da refeição/i }).click();
+    await mealCard.getByRole("button", { name: /duplicar lanche da tarde/i }).click();
     await expect(page.locator("article")).toHaveCount(articlesBefore + 1);
 
     const duplicated = page.locator("article").last();

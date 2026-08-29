@@ -15,7 +15,7 @@ export type SummaryItem = {
   // transportada), mas o filtro abaixo (linha ~110) so reconhece
   // TACO/CUSTOM/MANUFACTURER de proposito — item com essas 2 fontes cai
   // como "nao reconhecido", igual USDA ja caia antes desta fase (item 8).
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | null;
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | "RECIPE" | null;
   food_ref_id?: string | null;
   household_measure_id?: string | null;
   resolved_grams_snapshot?: number | null;
@@ -217,6 +217,23 @@ export function useMealPlanNutritionData({ meals, target }: { meals: SummaryMeal
   };
 }
 
+/** R6.5 (seção 21) — barra de progresso compacta pra 1 nutriente vs. a meta; nunca inventa 0% quando o valor é missing (seção 25). */
+function ProgressBar({ label, percent, valueLabel }: { label: string; percent: number | null; valueLabel: string }) {
+  const clamped = percent === null ? null : Math.max(0, Math.min(percent, 140));
+  const barColor = percent === null ? "bg-[#D9CFC3]" : percent < 85 || percent > 115 ? "bg-[#C9937B]" : "bg-[#7F9A74]";
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">{label}</p>
+        <p className="text-xs text-[#75675E]">{valueLabel}{percent !== null && <span className="ml-1 font-semibold text-[#3A3028]">{percent}%</span>}</p>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#EDE1D6]" role="progressbar" aria-valuenow={clamped ?? undefined} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+        <span className={`block h-full rounded-full transition-[width] ${barColor}`} style={{ width: clamped === null ? "0%" : `${Math.min(clamped, 100)}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: SummaryMeal[]; target: NutrientTarget }) {
   const { flexibleResult, totalItems } = useMealPlanNutritionData({ meals, target });
   const min = roundedNutrients(flexibleResult.total.min);
@@ -224,13 +241,21 @@ export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: Summ
   const isRange = flexibleResult.total.varies;
   const formatValue = (key: NutrientKey) => {
     const low = min[key]; const high = max[key];
-    if (low === null && high === null) return "sem dado";
+    if (low === null && high === null) return "—";
     if (!isRange || low === high) return `${low ?? high} ${NUTRIENT_UNITS[key]}`;
     return `${low ?? "?"}–${high ?? "?"} ${NUTRIENT_UNITS[key]}`;
+  };
+  /** % da meta usando o TETO da faixa (seção 21) — nunca null vira 0%, missing fica sem barra preenchida. */
+  const percentOfTarget = (key: NutrientKey, targetValue: number | null | undefined): number | null => {
+    if (typeof targetValue !== "number" || targetValue <= 0) return null;
+    const value = max[key];
+    if (value === null || value === undefined) return null;
+    return Math.round((value / targetValue) * 100);
   };
   const targetRows = ([
     ["energyKcal", target.energyKcal], ["proteinG", target.proteinG], ["carbohydrateG", target.carbohydrateG], ["fatG", target.fatG],
   ] as Array<[NutrientKey, number | null | undefined]>).filter(([, value]) => typeof value === "number");
+  const energyPercent = percentOfTarget("energyKcal", target.energyKcal);
 
   if (!totalItems) {
     return (
@@ -248,13 +273,20 @@ export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: Summ
           <div>
             <p className="brand-kicker mb-1">Resumo nutricional</p>
             <h3 className="font-serif text-lg font-semibold text-[#3A3028]">Plano do dia</h3>
+            {/* R6.5 (seção 20) — energia no topo, com % da meta quando houver meta definida. */}
+            <p className="mt-0.5 font-serif text-2xl font-semibold leading-tight text-[#3A3028]">
+              {formatValue("energyKcal")}
+              {typeof target.energyKcal === "number" && <span className="ml-1.5 text-base font-normal text-[#8C6E52]">/ {target.energyKcal} kcal</span>}
+            </p>
+            {energyPercent !== null && <p className="text-xs font-semibold text-[#7F9A74]">{energyPercent}% da meta</p>}
           </div>
           <span className="rounded-full border border-[#EAD8C2] px-2.5 py-1 text-[11px] font-semibold text-[#8C6E52] lg:hidden">abrir</span>
         </summary>
 
         <div className="mt-3 space-y-3">
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
-            {PRIMARY_NUTRIENTS.map((key) => {
+            {/* energyKcal já aparece com destaque no header acima (seção 20) — evita duplicar o mesmo valor "X kcal" duas vezes na sidebar. */}
+            {PRIMARY_NUTRIENTS.filter((key) => key !== "energyKcal").map((key) => {
               return (
                 <div key={key} className="rounded-lg border border-[#EDE1D6] bg-[#FAF7F2]/70 px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">{NUTRIENT_LABELS[key]}</p>
@@ -272,16 +304,12 @@ export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: Summ
             </p>
           )}
 
-          <div className="rounded-lg border border-[#EDE1D6] bg-[#FAF7F2]/70 p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">Distribuição de macros</p>
-            <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-[#EDE1D6]" aria-label="Distribuição de proteína, carboidrato e gordura">
-              {(["proteinG", "carbohydrateG", "fatG"] as NutrientKey[]).map((key, index) => {
-                const total = (max.proteinG ?? 0) + (max.carbohydrateG ?? 0) + (max.fatG ?? 0);
-                const value = max[key] ?? 0;
-                return <span key={key} className={["bg-[#607A56]", "bg-[#C9937B]", "bg-[#8C6E52]"][index]} style={{ width: total ? `${(value / total) * 100}%` : "0%" }} />;
-              })}
-            </div>
-            <p className="mt-2 text-[11px] text-[#75675E]">Proteína {formatValue("proteinG")} · Carboidrato {formatValue("carbohydrateG")} · Gordura {formatValue("fatG")}</p>
+          {/* R6.5 (seções 21-22) — 1 barra de progresso por macro vs. a meta (quando houver meta); leitura rápida P/C/G ao lado. */}
+          <div className="space-y-2.5 rounded-lg border border-[#EDE1D6] bg-[#FAF7F2]/70 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">Macronutrientes</p>
+            {(["proteinG", "carbohydrateG", "fatG"] as const).map((key) => (
+              <ProgressBar key={key} label={NUTRIENT_LABELS[key]!} percent={percentOfTarget(key, target[key])} valueLabel={formatValue(key)} />
+            ))}
           </div>
 
           {targetRows.length > 0 && <details className="rounded-lg border border-[#EDE1D6] bg-white p-3" open>
@@ -289,7 +317,7 @@ export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: Summ
             <div className="mt-2 space-y-1.5 text-xs text-[#75675E]">
               {targetRows.map(([key, targetValue]) => {
                 const low = min[key]; const high = max[key];
-                const difference = typeof low !== "number" || typeof high !== "number" ? "sem dado" : `${low - targetValue! > 0 ? "+" : ""}${low - targetValue!}–${high - targetValue! > 0 ? "+" : ""}${high - targetValue!}`;
+                const difference = typeof low !== "number" || typeof high !== "number" ? "—" : `${low - targetValue! > 0 ? "+" : ""}${low - targetValue!}–${high - targetValue! > 0 ? "+" : ""}${high - targetValue!}`;
                 return <p key={key} className="flex justify-between gap-2"><span>{NUTRIENT_LABELS[key]}</span><span><strong className="text-[#3A3028]">{formatValue(key)}</strong> / meta {targetValue} {NUTRIENT_UNITS[key]} · {difference}</span></p>;
               })}
             </div>
@@ -303,8 +331,8 @@ export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: Summ
                 return (
                   <div key={key} className="rounded-lg border border-[#F0E2D6] px-2.5 py-1.5">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9A6F5E]">{NUTRIENT_LABELS[key]}</p>
-                    <p className="text-sm font-semibold text-[#3A3028]">{value === null ? "sem dado" : formatValue(key)}</p>
-                    <p className="text-[10px] text-[#9A978A]">sem dado ≠ zero · cobertura depende da fonte</p>
+                    <p className="text-sm font-semibold text-[#3A3028]">{value === null ? "—" : formatValue(key)}</p>
+                    <p className="text-[10px] text-[#9A978A]">— = sem dado, nunca zero · cobertura depende da fonte</p>
                   </div>
                 );
               })}
@@ -380,7 +408,7 @@ export function MealPlanNutritionSummary({ meals, target }: { meals: SummaryMeal
             return (
               <div key={key} className="rounded-lg border border-[#EDE1D6] bg-white px-2.5 py-1.5">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#9A6F5E]">{NUTRIENT_LABELS[key]}</p>
-                <p className="text-sm font-semibold text-[#3A3028]">{value === null ? "sem dado" : `${value} ${NUTRIENT_UNITS[key]}`}</p>
+                <p className="text-sm font-semibold text-[#3A3028]">{value === null ? "—" : `${value} ${NUTRIENT_UNITS[key]}`}</p>
                 {coverage.known < coverage.total && (
                   <p className="text-[10px] text-[#9A978A]">cobertura {Math.round((coverage.known / coverage.total) * 100)}%</p>
                 )}
