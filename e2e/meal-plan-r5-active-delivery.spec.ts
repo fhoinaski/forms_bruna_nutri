@@ -1,7 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
+import { createActivePortalAccess, createTestPatient } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
@@ -133,11 +133,11 @@ async function generateAndApproveRiceExchange(request: APIRequestContext, patien
   return { approvedName: suggested[0].food_name, rejectedName: suggested[1].food_name };
 }
 
-async function loginPatient(page: import("@playwright/test").Page, email: string, code: string) {
+async function loginPatient(page: import("@playwright/test").Page, email: string, password: string) {
   await page.goto("/portal");
   if (await page.getByText(/ola,/i).isVisible().catch(() => false)) return;
   await page.getByPlaceholder("seunome@email.com").fill(email);
-  await page.getByPlaceholder("BF-0000-0000").fill(code);
+  await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: /acessar meu portal/i }).click();
   await expect(page.getByText(/ola,/i)).toBeVisible();
 }
@@ -150,12 +150,12 @@ function friendlyFoodName(technicalName: string) {
 test.describe("R5 active plan delivery", () => {
   test("portal e print entregam o mesmo active plan, com quantidades exatas e trocas aprovadas", async ({ page, request }, testInfo) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
     const draft = await createTemplatePlan(request, patient.id, "R5 golden");
     const active = await saveGoldenPlan(request, patient.id, draft, "active");
     const exchange = await generateAndApproveRiceExchange(request, patient.id, active);
 
-    await loginPatient(page, patient.email, code);
+    await loginPatient(page, patient.email, password);
     await page.setViewportSize(testInfo.project.name.includes("mobile") ? { width: 390, height: 900 } : { width: 1280, height: 900 });
     const portalPlan = page.locator("#portal-meal-plan");
     await expect(portalPlan).toBeVisible();
@@ -184,13 +184,13 @@ test.describe("R5 active plan delivery", () => {
 
   test("draft não vaza antes da publicação e passa a ser entregue depois de publicar", async ({ page, request }, testInfo) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
     const baseDraft = await createTemplatePlan(request, patient.id, "R5 active isolation");
     const active = await saveGoldenPlan(request, patient.id, baseDraft, "active", "120");
     const newDraft = await createTemplatePlan(request, patient.id, "R5 draft isolation");
     const draft = await saveGoldenPlan(request, patient.id, newDraft, "draft", "150");
 
-    await loginPatient(page, patient.email, code);
+    await loginPatient(page, patient.email, password);
     await expect(page.locator("#portal-meal-plan")).toHaveAttribute("data-version-id", `${active.id}:v${active.version}`);
     await expect(page.locator("#portal-meal-plan").getByText("120 g", { exact: true }).first()).toBeVisible();
     await expect(page.locator("#portal-meal-plan").getByText("150 g", { exact: true })).toHaveCount(1);
@@ -228,8 +228,8 @@ test.describe("R5 active plan delivery", () => {
 
   test("sem plano ativo mostra estado vazio no portal", async ({ page, request }, testInfo) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
-    await loginPatient(page, patient.email, code);
+    const { password } = await createActivePortalAccess(request, patient.id);
+    await loginPatient(page, patient.email, password);
     await expect(page.getByText("Seu plano alimentar ainda não foi publicado.")).toBeVisible();
     await page.screenshot({ path: `reports/screenshots/meal-plan-r5-no-active-${testInfo.project.name}.png`, fullPage: true });
   });

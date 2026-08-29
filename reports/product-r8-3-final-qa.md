@@ -13,3 +13,13 @@ MEAL_PLAN_CODE_CHANGED_BY_R8_3: nao
 FULL_SUITE_FLAKE_CLASSIFICATION: UNKNOWN_FLAKE
 DETERMINISTIC_R8_3_REGRESSION: nao
 PRODUCT_R8_3_CLINICAL_REGRESSION: PASS
+
+## Portal authentication and deployment compatibility
+
+- The final E2E migration uses `createActivePortalAccess`, then the real `/api/portal/login` password/session lifecycle. It no longer uses the retired raw `code` contract or injects a portal session.
+- Focused E2E validation: **38/38 passed** on Chromium Desktop across the portal, active delivery, publication gate, substitutions, AI guardrails, and meal-plan compatibility specs.
+- A production observation showed `GET /api/admin/clients/:id/portal-access` returning HTTP 500 before the R8.3 migration was applied. The cause was a read of R8.3 session/schema fields unavailable in the older database.
+- The endpoint now performs a read-only schema readiness check. Before the approved migration it returns a safe `schema_ready: false` state, disables portal actions in the workspace, and returns HTTP 409 for attempted mutations. No remote migration was applied and no credential, session, or clinical record was changed.
+- React error #418 was traced to server/browser date formatting using different local time zones during hydration. Workspace date formatting is now deterministic in `America/Sao_Paulo`, while date-only values remain calendar dates.
+- Verification after both corrections: `npx tsc --noEmit`, the temporary-password security test, and `npm run build` passed.
+- Full Playwright retry after the changes recorded four failures: the build-freshness check on Desktop and Mobile, a Clinical Copilot R5 UI timeout, and a Meal Plan R3 household-portion fixture collision. The two build-freshness failures were reproduced as a build from the pre-commit SHA, then resolved by rebuilding at `d2ef1f5` and rerunning the check successfully. The remaining failures do not exercise Portal/Auth and are not evidence of a R8.3 clinical regression.

@@ -12,7 +12,6 @@ import {
   Utensils, AlertTriangle, Activity, Stethoscope,
   MoreHorizontal,
 } from "lucide-react";
-import { format, parseISO, isValid } from "date-fns";
 import dynamic from "next/dynamic";
 import { AnthropometryProgressPanel } from "@/components/dashboard/AnthropometryProgressPanel";
 import { NutritionRecordHistory } from "@/components/dashboard/NutritionRecordHistory";
@@ -50,8 +49,18 @@ const MealPlanEditor = dynamic(() => import("@/components/dashboard/MealPlanEdit
 function formatDateSafe(value: string | null, fmt = "dd/MM/yyyy"): string {
   if (!value) return "—";
   try {
-    const d = parseISO(value);
-    return isValid(d) ? format(d, fmt) : "—";
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    const date = dateOnly ? null : new Date(value);
+    if (!dateOnly && (!date || Number.isNaN(date.getTime()))) return "—";
+    const parts = dateOnly
+      ? { year: dateOnly[1], month: dateOnly[2], day: dateOnly[3], hour: "00", minute: "00" }
+      : Object.fromEntries(new Intl.DateTimeFormat("pt-BR", {
+        timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      }).formatToParts(date!).filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+    const replacements: Record<string, string> = {
+      yyyy: parts.year, MM: parts.month, dd: parts.day, HH: parts.hour, mm: parts.minute,
+    };
+    return fmt.replace(/yyyy|MM|dd|HH|mm|'às'|'as'/g, (token) => token === "'às'" ? "às" : token === "'as'" ? "as" : replacements[token]);
   } catch { return "—"; }
 }
 
@@ -108,6 +117,7 @@ interface ClientPayment {
 interface ClientPortalAccessState {
   exists: boolean;
   is_active: boolean;
+  schema_ready?: boolean;
   status?: string;
   last_login_at?: string | null;
   active_sessions?: number;
@@ -2253,13 +2263,13 @@ export default function ClientWorkspace({
               </div>
               {portalLoading && !portalAccess ? <p className="text-sm text-[#75675E]">Carregando acesso do portal...</p> : !portalAccess ? <p className="text-sm text-[#75675E]">O acesso ao portal será carregado ao abrir esta seção.</p> : (
                 <div className="max-w-2xl space-y-4">
-                  <section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Status</p><dl className="mt-3 grid gap-4 text-sm sm:grid-cols-3"><div><dt className="text-[#75675E]">Estado</dt><dd className="mt-1 font-semibold text-[#3A3028]">{({ NO_ACCESS: "Sem acesso", INVITE_PENDING: "Convite pendente", ACTIVE: "Portal ativo", TEMP_PASSWORD: "Senha temporária ativa", PASSWORD_CHANGE_REQUIRED: "Troca de senha necessária", REVOKED: "Acesso revogado", LOCKED: "Bloqueado" } as Record<string, string>)[portalAccess.status ?? "NO_ACCESS"]}</dd></div><div><dt className="text-[#75675E]">Último acesso</dt><dd className="mt-1 font-semibold text-[#3A3028]">{formatDateTime(portalAccess.last_login_at ?? null)}</dd></div><div><dt className="text-[#75675E]">E-mail</dt><dd className="mt-1 break-all font-semibold text-[#3A3028]">{email || "Não informado"}</dd></div></dl></section>
+                  {portalAccess.schema_ready === false ? <section className="rounded-2xl border border-[#E7C9A6] bg-[#FFF9F1] p-5 text-sm text-[#75522E]"><p className="brand-kicker">Atualização pendente</p><h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">O Portal do Paciente aguarda a atualização segura do banco.</h3><p className="mt-2">Nenhuma credencial ou sessão foi alterada. Após a migration aprovada, esta área ficará disponível automaticamente.</p></section> : <><section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Status</p><dl className="mt-3 grid gap-4 text-sm sm:grid-cols-3"><div><dt className="text-[#75675E]">Estado</dt><dd className="mt-1 font-semibold text-[#3A3028]">{({ NO_ACCESS: "Sem acesso", INVITE_PENDING: "Convite pendente", ACTIVE: "Portal ativo", TEMP_PASSWORD: "Senha temporária ativa", PASSWORD_CHANGE_REQUIRED: "Troca de senha necessária", REVOKED: "Acesso revogado", LOCKED: "Bloqueado" } as Record<string, string>)[portalAccess.status ?? "NO_ACCESS"]}</dd></div><div><dt className="text-[#75675E]">Último acesso</dt><dd className="mt-1 font-semibold text-[#3A3028]">{formatDateTime(portalAccess.last_login_at ?? null)}</dd></div><div><dt className="text-[#75675E]">E-mail</dt><dd className="mt-1 break-all font-semibold text-[#3A3028]">{email || "Não informado"}</dd></div></dl></section>
                   {portalError && <p className="rounded-lg bg-[#FFF7F5] p-3 text-sm text-[#9A5C4E]" role="alert">{portalError}</p>}
                   {(portalAccess.status === "NO_ACCESS" || portalAccess.status === "INVITE_PENDING") && <section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Acesso ao portal</p><h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Como deseja liberar o acesso?</h3>{portalAccess.status === "INVITE_PENDING" && <p className="mt-2 text-sm text-[#75675E]">Reenviar o convite invalida o link anterior.</p>}{!email && <p className="mt-2 text-sm text-[#9A5C4E]">E-mail necessário para enviar convite.</p>}<div className="mt-4 flex flex-col gap-3 sm:flex-row"><button type="button" disabled={portalLoading || !email} onClick={() => void generatePortalCode()} className="brand-btn-primary min-h-11">{portalAccess.status === "INVITE_PENDING" ? "Reenviar convite" : "Enviar convite por e-mail"}</button><button type="button" disabled={portalLoading} onClick={() => void generateTemporaryPortalPassword()} className="brand-btn-secondary min-h-11">Gerar senha temporária</button></div></section>}
                   {portalAccess.status === "TEMP_PASSWORD" && <section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Acesso</p><h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Senha temporária ativa</h3><p className="mt-2 text-sm text-[#75675E]">Troca obrigatória no primeiro acesso.</p><div className="mt-4 flex flex-col gap-3 sm:flex-row"><button type="button" disabled={portalLoading} onClick={() => void generateTemporaryPortalPassword()} className="brand-btn-secondary min-h-11">Gerar nova senha temporária</button><button type="button" disabled={portalLoading} onClick={() => void togglePortalAccess(false)} className="brand-btn-secondary min-h-11">Revogar acesso</button></div></section>}
                   {portalAccess.status === "ACTIVE" && <><section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Sessões</p><div className="mt-2 flex flex-wrap items-center justify-between gap-3"><p className="font-serif text-lg font-semibold text-[#3A3028]">Sessões ativas <span className="text-[#607A56]">{portalAccess.active_sessions ?? 0}</span></p><button type="button" onClick={managePortalSessions} className="brand-btn-secondary min-h-11">Gerenciar sessões</button></div></section><section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Segurança e acesso</p><div className="mt-3 flex flex-col gap-3 sm:flex-row"><button type="button" onClick={openResetAccess} className="brand-btn-secondary min-h-11">Redefinir acesso</button><button type="button" onClick={() => void togglePortalAccess(false)} className="brand-btn-secondary min-h-11">Revogar acesso</button></div></section></>}
                   {portalAccess.status === "PASSWORD_CHANGE_REQUIRED" && <p className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5 text-sm text-[#75675E]">A paciente precisa concluir a troca de senha para continuar no portal.</p>}
-                  {(portalAccess.status === "REVOKED" || portalAccess.status === "LOCKED") && <section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Acesso</p><button type="button" disabled={portalLoading || !email} onClick={() => void generatePortalCode()} className="brand-btn-primary mt-3 min-h-11">Enviar novo convite por e-mail</button></section>}
+                  {(portalAccess.status === "REVOKED" || portalAccess.status === "LOCKED") && <section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Acesso</p><button type="button" disabled={portalLoading || !email} onClick={() => void generatePortalCode()} className="brand-btn-primary mt-3 min-h-11">Enviar novo convite por e-mail</button></section>}</>}
                 </div>
               )}
             </div>

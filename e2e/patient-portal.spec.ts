@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 import { adminFixtures } from "./helpers/auth";
-import { createTestAppointment, createTestPatient, createTestTask, enablePortalAccess, seedAiProposal } from "./helpers/test-data";
+import { createActivePortalAccess, createTestAppointment, createTestPatient, createTestTask, seedAiProposal } from "./helpers/test-data";
 
 /**
  * Portal do paciente (secao "Portal" do pedido FASE 1): autenticacao,
@@ -65,14 +65,14 @@ test.describe("portal do paciente", () => {
   test("autentica pelo formulário real do portal, vê o próprio plano ativo, a próxima consulta e as tarefas, e conclui uma tarefa", async ({ page, request }) => {
     await loginRequestAsAdmin(request);
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
     const plan = await activateMealPlan(request, patient.id);
     await createTestAppointment(request, patient.id, { title: "Retorno nutricional E2E" });
     const task = await createTestTask(request, patient.id, { title: "Beber 2L de água por dia" });
 
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByPlaceholder("BF-0000-0000").fill(code);
+    await page.getByLabel("Senha").fill(password);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
 
     await expect(page.getByText(new RegExp(`ola, ${patient.name.split(" ")[0]}`, "i"))).toBeVisible();
@@ -99,7 +99,7 @@ test.describe("portal do paciente", () => {
   test("solicitação de revisão: paciente confirma a própria proposta pelo canal do portal, e a nutricionista vê a solicitação pendente de revisão", async ({ page, request }) => {
     await loginRequestAsAdmin(request);
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
 
     const proposal = await seedAiProposal(request, {
       toolName: "requestProfessionalReview",
@@ -118,7 +118,7 @@ test.describe("portal do paciente", () => {
 
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByPlaceholder("BF-0000-0000").fill(code);
+    await page.getByLabel("Senha").fill(password);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
     await expect(page.getByText(/ola,/i)).toBeVisible();
 
@@ -140,12 +140,12 @@ test.describe("portal do paciente", () => {
     await loginRequestAsAdmin(request);
     const patientA = await createTestPatient(request);
     const patientB = await createTestPatient(request);
-    const [accessA, accessB] = await Promise.all([enablePortalAccess(request, patientA.id), enablePortalAccess(request, patientB.id)]);
+    const [accessA, accessB] = await Promise.all([createActivePortalAccess(request, patientA.id), createActivePortalAccess(request, patientB.id)]);
     const [planA, planB] = await Promise.all([activateMealPlan(request, patientA.id), activateMealPlan(request, patientB.id)]);
     const taskB = await createTestTask(request, patientB.id, { title: "Tarefa exclusiva da paciente B" });
 
     const contextA = await browser.newContext({ storageState: undefined });
-    const loginA = await contextA.request.post("/api/portal/login", { data: { email: patientA.email, code: accessA.code } });
+    const loginA = await contextA.request.post("/api/portal/login", { data: { email: patientA.email, password: accessA.password } });
     expect(loginA.ok()).toBe(true);
 
     const meA = await (await contextA.request.get("/api/portal/me")).json();
@@ -161,7 +161,7 @@ test.describe("portal do paciente", () => {
 
     // A tarefa da paciente B continua intacta (pendente) — confirmado pela propria sessao dela.
     const contextB = await browser.newContext({ storageState: undefined });
-    const loginB = await contextB.request.post("/api/portal/login", { data: { email: patientB.email, code: accessB.code } });
+    const loginB = await contextB.request.post("/api/portal/login", { data: { email: patientB.email, password: accessB.password } });
     expect(loginB.ok()).toBe(true);
     const meB = await (await contextB.request.get("/api/portal/me")).json();
     const taskBAfter = meB.tasks.find((task: { id: string }) => task.id === taskB.id);

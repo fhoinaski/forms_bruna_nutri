@@ -22,7 +22,7 @@ describe("POST /api/admin/clients/[id]/portal-access temporary password", () => 
     vi.doMock("@/lib/repositories/clients", () => ({ getClientById: vi.fn().mockResolvedValue({ id: "client-1", email: "patient@example.com" }) }));
     vi.doMock("@/lib/repositories/patient-portal-auth", () => ({
       getPatientPortalAccess: vi.fn(), getOrCreatePatientPortalAccess: vi.fn().mockResolvedValue({ id: "access-1" }),
-      issuePatientPortalToken: vi.fn(), revokePatientPortalAccess: vi.fn(), revokePatientPortalTokens, revokePatientPortalSessions, setPatientPortalPassword,
+      issuePatientPortalToken: vi.fn(), isPatientPortalAuthSchemaReady: vi.fn().mockResolvedValue(true), revokePatientPortalAccess: vi.fn(), revokePatientPortalTokens, revokePatientPortalSessions, setPatientPortalPassword,
     }));
     vi.doMock("@/lib/auth/patient-portal-credentials", () => ({
       generateTemporaryPatientPortalPassword: vi.fn().mockReturnValue("temporary-secret"),

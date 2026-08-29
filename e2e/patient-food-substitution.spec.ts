@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient, enablePortalAccess, seedAiProposal } from "./helpers/test-data";
+import { createActivePortalAccess, createTestPatient, seedAiProposal } from "./helpers/test-data";
 
 /**
  * Killer Feature 4 — substituicao alimentar segura no portal (PASSO 8 do
@@ -35,7 +35,7 @@ async function createPlanWithRice(request: import("@playwright/test").APIRequest
 test.describe("substituição alimentar segura no portal", () => {
   test("paciente pede troca, engine calcula a quantidade, nada no plano muda automaticamente", async ({ request, browser }) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
     const plan = await createPlanWithRice(request, patient.id);
     const meal = plan.meals[0];
     const item = meal.items[0];
@@ -59,7 +59,7 @@ test.describe("substituição alimentar segura no portal", () => {
 
     // 1-3. Paciente autentica e confirma a proposta pelo canal do portal.
     const portalContext = await browser.newContext({ storageState: undefined });
-    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, code } });
+    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, password } });
     expect(loginResponse.ok()).toBe(true);
 
     const confirmResponse = await portalContext.request.post(`/api/portal/ai/proposals/${proposal.proposalId}/confirm`);
@@ -84,7 +84,7 @@ test.describe("substituição alimentar segura no portal", () => {
 
   test("pedido com sinal clínico não é resolvido automaticamente — vira solicitação para a nutricionista analisar", async ({ request, browser }) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
 
     const proposal = await seedAiProposal(request, {
       toolName: "requestProfessionalReview",
@@ -100,7 +100,7 @@ test.describe("substituição alimentar segura no portal", () => {
     });
 
     const portalContext = await browser.newContext({ storageState: undefined });
-    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, code } });
+    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, password } });
     expect(loginResponse.ok()).toBe(true);
 
     const confirmResponse = await portalContext.request.post(`/api/portal/ai/proposals/${proposal.proposalId}/confirm`);

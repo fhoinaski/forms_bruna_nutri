@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
-import { getPatientPortalAccess, listPatientPortalSessions, revokePatientPortalSessionByRecordId, revokePatientPortalSessions } from "@/lib/repositories/patient-portal-auth";
+import { getPatientPortalAccess, isPatientPortalAuthSchemaReady, listPatientPortalSessions, revokePatientPortalSessionByRecordId, revokePatientPortalSessions } from "@/lib/repositories/patient-portal-auth";
 import { getRequestFingerprint } from "@/lib/security/request";
 import { writeAuditLog } from "@/lib/security/audit";
 
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!await getAdminFromRequest(req)) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
   const { id } = await params;
   if (!await getClientById(id)) return NextResponse.json({ message: "Paciente não encontrado." }, { status: 404 });
+  if (!await isPatientPortalAuthSchemaReady()) return NextResponse.json({ message: "A atualização segura do banco do Portal do Paciente ainda está pendente." }, { status: 409 });
   return NextResponse.json({ sessions: await listPatientPortalSessions(id) });
 }
 
@@ -21,6 +22,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
   const { id } = await params; const parsed = Schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ message: "Dados inválidos." }, { status: 400 });
+  if (!await isPatientPortalAuthSchemaReady()) return NextResponse.json({ message: "A atualização segura do banco do Portal do Paciente ainda está pendente." }, { status: 409 });
   const access = await getPatientPortalAccess(id); if (!access) return NextResponse.json({ success: true });
   const revoked = parsed.data.action === "all" ? (await revokePatientPortalSessions(access.id), true) : await revokePatientPortalSessionByRecordId(id, parsed.data.sessionId!);
   if (!revoked) return NextResponse.json({ message: "Sessão não encontrada." }, { status: 404 });

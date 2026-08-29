@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient, enablePortalAccess, seedAiProposal } from "./helpers/test-data";
+import { createActivePortalAccess, createTestPatient, seedAiProposal } from "./helpers/test-data";
 
 /**
  * Guardrails de IA (secao "IA — Guardrails" do pedido FASE 1): testa o
@@ -179,7 +179,7 @@ test.describe("guardrails de IA", () => {
 
   test("uma proposta gerada pelo admin nunca pode ser confirmada pelo canal do portal do paciente, mesmo pertencendo ao mesmo paciente (isolamento entre canais)", async ({ request, browser }) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
     const plan = await (await request.post(`/api/admin/clients/${patient.id}/meal-plans`, { data: { targetGroup: "ADULTO_SAUDAVEL" } })).json();
 
     const proposal = await seedAiProposal(request, {
@@ -196,7 +196,7 @@ test.describe("guardrails de IA", () => {
     });
 
     const portalContext = await browser.newContext({ storageState: undefined });
-    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, code } });
+    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, password } });
     expect(loginResponse.ok()).toBe(true);
 
     const portalConfirm = await portalContext.request.post(`/api/portal/ai/proposals/${proposal.proposalId}/confirm`);

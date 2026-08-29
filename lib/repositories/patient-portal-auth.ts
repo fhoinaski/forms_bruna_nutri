@@ -52,6 +52,17 @@ export type PatientPortalSession = {
 
 const now = () => new Date().toISOString();
 
+/**
+ * R8.3 adds the password/session columns to the pre-existing portal table.
+ * Keep administrative reads safe while a deployment is waiting for its
+ * separately approved schema migration.
+ */
+export async function isPatientPortalAuthSchemaReady(): Promise<boolean> {
+  const columns = await d1Query<{ name: string }>("PRAGMA table_info(client_portal_access)");
+  const names = new Set(columns.map((column) => column.name));
+  return ["access_status", "password_hash", "password_must_change", "password_expires_at", "last_login_at", "locked_until"].every((name) => names.has(name));
+}
+
 export async function getPatientPortalAccess(clientId: string): Promise<PatientPortalAccess | null> {
   return (await d1Query<PatientPortalAccess>("SELECT * FROM client_portal_access WHERE client_id = ?1 LIMIT 1", [clientId]))[0] ?? null;
 }

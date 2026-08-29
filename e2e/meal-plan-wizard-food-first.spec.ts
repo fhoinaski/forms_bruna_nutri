@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
 import { publishPlan } from "./helpers/meal-plan-editor";
-import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
+import { createActivePortalAccess, createTestPatient } from "./helpers/test-data";
 
 /**
  * Food-First Meal Plan V1 — Fases 2-8: "✨ Sugerir receita" (opcional, nunca
@@ -112,7 +112,7 @@ test.describe("wizard Criar com IA — Food-First V1: receita opcional e substit
   test("Cenário C — sugerir receita, aceitar: substitui os itens pelos ingredientes reais, persiste, print e portal mostram a receita de forma humana", async ({ page, request }) => {
     await createOmeleteRecipe(request);
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
     const dialog = await generateSimpleBreakfastDraft(page, request, patient.id);
 
     const mealCard = dialog.locator("div").filter({ hasText: "Café da manhã" }).first();
@@ -159,7 +159,7 @@ test.describe("wizard Criar com IA — Food-First V1: receita opcional e substit
     const portalPage = await page.context().newPage();
     await portalPage.goto("/portal");
     await portalPage.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await portalPage.getByPlaceholder("BF-0000-0000").fill(code);
+    await portalPage.getByLabel("Senha").fill(password);
     await portalPage.getByRole("button", { name: /acessar meu portal/i }).click();
     await expect(portalPage.getByText(suggestedTitle)).toBeVisible();
     await expect(portalPage.getByText(/ovo,?\s*de galinha,?\s*inteiro,?\s*cru/i).first()).toBeVisible();
