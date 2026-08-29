@@ -12,7 +12,7 @@ const itemSchema = z.object({
   unit: z.string().max(40).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
   is_optional: z.boolean().optional(),
-  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA", "TBCA", "IBGE_POF"]).nullable().optional(),
+  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA", "TBCA", "IBGE_POF", "RECIPE"]).nullable().optional(),
   food_ref_id: z.string().max(120).nullable().optional(),
   canonical_food_id: z.string().max(160).nullable().optional(),
   household_measure_id: z.string().max(120).nullable().optional(),

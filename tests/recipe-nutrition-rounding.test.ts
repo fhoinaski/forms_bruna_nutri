@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { calculateRecipeNutrition, type RecipeIngredient } from "@/lib/nutrition/recipes";
+import { calculateRecipeNutrition } from "@/lib/nutrition/recipes";
+
+/** Shape mínimo aceito pela função legada calculateRecipeNutrition (mantida só pro seed script pré-R6) — nunca o RecipeIngredient completo do domínio novo. */
+type RecipeIngredient = { taco_number?: number | null; food_name: string; grams?: number | null };
 import { TACO_REFERENCES } from "@/lib/nutrition/taco";
 import { estimateFoodMacros, sumMacros } from "@/lib/nutrition/macros";
 
