@@ -2,25 +2,35 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Archive, Edit3, Eye, Plus, Save, Search, Sparkles, Trash2, Utensils, X } from "lucide-react";
+import { AlertTriangle, Archive, Copy, Edit3, Eye, Plus, Save, Search, Sparkles, Trash2, Utensils, X } from "lucide-react";
 import { HelpPopover } from "@/components/dashboard/HelpPopover";
 import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 
+type RecipeYieldMode = "RAW_TOTAL" | "USER_REPORTED" | "PORTION_COUNT";
+
+/** R6 — shape novo (food/food_source/food_ref_id, qualquer fonte real) com os campos legados ainda aceitos em leitura (receitas pré-R6). */
 type RecipeIngredient = {
+  food?: string;
+  quantity?: string | null;
+  unit?: string | null;
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | null;
+  food_ref_id?: string | null;
+  is_optional?: boolean;
+  ai_suggested?: boolean;
+  // Legado — só leitura de receitas antigas.
   taco_number?: number | null;
-  food_name: string;
+  food_name?: string;
   grams?: number | null;
   free_text?: string | null;
-  ai_suggested?: boolean;
 };
 
 type FoodSuggestion = {
-  numero: number;
+  numero: number | string;
   descricao: string;
   grupo: string;
   energia_kcal: number;
-  fonte?: "taco" | "complementar";
+  fonte?: "taco" | "complementar" | "custom" | "manufacturer" | "usda";
 };
 
 type Recipe = {
@@ -30,6 +40,8 @@ type Recipe = {
   meal_group: RecipeMealGroup;
   servings: number;
   portion_grams: number | null;
+  yield_mode: RecipeYieldMode | null;
+  yield_grams: number | null;
   preparation_steps: string | null;
   ingredients: RecipeIngredient[];
   tags: string[];
@@ -47,14 +59,20 @@ type RecipeForm = Omit<Recipe, "id" | "per_portion_kcal" | "per_portion_protein_
   is_active: boolean;
 };
 
+function emptyIngredient(): RecipeIngredient {
+  return { food: "", quantity: "100", unit: "g", food_source: null, food_ref_id: null };
+}
+
 const emptyForm: RecipeForm = {
   title: "",
   description: "",
   meal_group: "lanche",
   servings: 1,
   portion_grams: null,
+  yield_mode: null,
+  yield_grams: null,
   preparation_steps: "",
-  ingredients: [{ taco_number: 0, food_name: "", grams: 100, free_text: null }],
+  ingredients: [emptyIngredient()],
   tags: [],
   tags_text: "",
   source_note: "",
@@ -69,13 +87,25 @@ function recipeToForm(recipe: Recipe): RecipeForm {
     meal_group: recipe.meal_group,
     servings: recipe.servings,
     portion_grams: recipe.portion_grams,
+    yield_mode: recipe.yield_mode,
+    yield_grams: recipe.yield_grams,
     preparation_steps: recipe.preparation_steps ?? "",
-    ingredients: recipe.ingredients.length ? recipe.ingredients : [{ taco_number: 0, food_name: "", grams: 100 }],
+    ingredients: recipe.ingredients.length ? recipe.ingredients : [emptyIngredient()],
     tags: recipe.tags,
     tags_text: recipe.tags.join(", "),
     source_note: recipe.source_note ?? "",
     is_active: Boolean(recipe.is_active),
   };
+}
+
+/** Nome de exibição de um ingrediente, novo ou legado — nunca usado pra resolver identidade. */
+function ingredientDisplayName(item: RecipeIngredient): string {
+  return item.food || item.food_name || item.free_text || "";
+}
+function ingredientQuantityLabel(item: RecipeIngredient): string {
+  const quantity = item.quantity ?? (item.grams != null ? String(item.grams) : null);
+  const unit = item.unit ?? (item.grams != null ? "g" : null);
+  return quantity && unit ? `${quantity} ${unit}` : quantity ?? "";
 }
 
 export default function RecipesPage() {
@@ -90,6 +120,7 @@ export default function RecipesPage() {
   const [portalReady, setPortalReady] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiSuggesting, setAiSuggesting] = useState(false);
@@ -152,12 +183,10 @@ export default function RecipesPage() {
         meal_group: form.meal_group,
         servings: Number(form.servings),
         portion_grams: form.portion_grams ? Number(form.portion_grams) : null,
+        yield_mode: form.yield_mode,
+        yield_grams: form.yield_mode === "USER_REPORTED" ? form.yield_grams : null,
         preparation_steps: form.preparation_steps?.trim() || null,
-        ingredients: form.ingredients.filter((item) => {
-          const hasTaco = item.taco_number && item.food_name.trim() && Number(item.grams) > 0;
-          const hasFreeText = !item.taco_number && item.food_name.trim();
-          return hasTaco || hasFreeText;
-        }),
+        ingredients: form.ingredients.filter((item) => ingredientDisplayName(item).trim()),
         tags: form.tags_text.split(",").map((tag) => tag.trim()).filter(Boolean),
         source_note: form.source_note?.trim() || null,
         is_active: form.is_active,
@@ -195,6 +224,21 @@ export default function RecipesPage() {
     }
   }
 
+  async function duplicateRecipe(id: string) {
+    setDuplicatingId(id);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/recipes/${id}/duplicate`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Não foi possível duplicar a receita.");
+      await loadRecipes();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível duplicar a receita.");
+    } finally {
+      setDuplicatingId(null);
+    }
+  }
+
   async function suggestRecipeIngredients(currentForm: RecipeForm, instructions: string) {
     setAiSuggesting(true);
     setError("");
@@ -217,9 +261,11 @@ export default function RecipesPage() {
         ...currentForm,
         title: currentForm.title || suggested.mealName,
         ingredients: suggested.items.map((item: { taco_number?: number | string; food: string; quantity: string }) => ({
-          taco_number: Number(item.taco_number),
-          food_name: item.food,
-          grams: Number(String(item.quantity).replace(",", ".").match(/[\d.]+/)?.[0] ?? 100),
+          food: item.food,
+          quantity: String(Number(String(item.quantity).replace(",", ".").match(/[\d.]+/)?.[0] ?? 100)),
+          unit: "g",
+          food_source: item.taco_number ? ("TACO" as const) : null,
+          food_ref_id: item.taco_number ? String(item.taco_number) : null,
           ai_suggested: true,
         })),
         preparation_steps: suggested.notes || currentForm.preparation_steps,
@@ -307,7 +353,7 @@ export default function RecipesPage() {
               <Macro label="Carb." value={recipe.per_portion_carbs_g.toFixed(1)} />
               <Macro label="Gord." value={recipe.per_portion_fat_g.toFixed(1)} />
             </div>
-            <div className="mt-auto grid grid-cols-[1fr_1fr_auto] gap-2 pt-5">
+            <div className="mt-auto grid grid-cols-[1fr_1fr_auto_auto] gap-2 pt-5">
               <button type="button" onClick={() => setViewRecipe(recipe)} className="brand-btn-secondary">
                 <Eye className="h-4 w-4" />
                 Ver
@@ -315,6 +361,9 @@ export default function RecipesPage() {
               <button type="button" onClick={() => setForm(recipeToForm(recipe))} className="brand-btn-secondary">
                 <Edit3 className="h-4 w-4" />
                 Editar
+              </button>
+              <button type="button" onClick={() => void duplicateRecipe(recipe.id)} disabled={duplicatingId === recipe.id} className="inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm font-semibold text-[#8C6E52] hover:bg-[#FBF7F1] disabled:opacity-50" title="Duplicar receita" aria-label={`Duplicar ${recipe.title}`}>
+                <Copy className="h-4 w-4" />
               </button>
               <button type="button" onClick={() => setDeleteRecipe(recipe)} className="inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm font-semibold text-[#9A5C4E] hover:bg-[#FFF5F3]" title="Arquivar receita" aria-label={`Arquivar ${recipe.title}`}>
                 <Archive className="h-4 w-4" />
@@ -492,8 +541,35 @@ function RecipeModal({ form, error, saving, aiEnabled, aiSuggesting, setForm, on
             <div className="md:col-span-2"><label className="brand-label">Titulo</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="brand-input" /></div>
             <div><label className="brand-label">Grupo da refeicao</label><select value={form.meal_group} onChange={(e) => setForm({ ...form, meal_group: e.target.value as RecipeMealGroup })} className="brand-input">{RECIPE_MEAL_GROUPS.map((group) => <option key={group} value={group}>{RECIPE_MEAL_GROUP_LABELS[group]}</option>)}</select></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="brand-label">Porcoes</label><input type="number" min={1} value={form.servings} onChange={(e) => setForm({ ...form, servings: Number(e.target.value) })} className="brand-input" /></div>
-              <div><label className="brand-label">Porcao (g)</label><input type="number" min={1} value={form.portion_grams ?? ""} onChange={(e) => setForm({ ...form, portion_grams: e.target.value ? Number(e.target.value) : null })} className="brand-input" /></div>
+              <div><label className="brand-label">Porcoes (rendimento)</label><input type="number" min={1} value={form.servings} onChange={(e) => setForm({ ...form, servings: Number(e.target.value) })} className="brand-input" /></div>
+              <div><label className="brand-label">Porcao (g) — opcional</label><input type="number" min={1} value={form.portion_grams ?? ""} onChange={(e) => setForm({ ...form, portion_grams: e.target.value ? Number(e.target.value) : null })} className="brand-input" /></div>
+            </div>
+            <div className="md:col-span-2 rounded-2xl border border-[#EDE1D6] bg-[#FBF7F1] p-4">
+              <label className="brand-label">Rendimento final (massa) — como calcular a densidade da receita</label>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <select
+                  value={form.yield_mode ?? "RAW_TOTAL"}
+                  onChange={(e) => setForm({ ...form, yield_mode: e.target.value as RecipeYieldMode })}
+                  className="brand-input"
+                >
+                  <option value="RAW_TOTAL">Somar ingredientes crus (base técnica, sem rendimento informado)</option>
+                  <option value="USER_REPORTED">Informar massa final real (ex.: &quot;rendeu 800g&quot;)</option>
+                  <option value="PORTION_COUNT">Só contagem de porções (sem massa — item só calculável em porções)</option>
+                </select>
+                {form.yield_mode === "USER_REPORTED" && (
+                  <input
+                    type="number"
+                    min={1}
+                    value={form.yield_grams ?? ""}
+                    onChange={(e) => setForm({ ...form, yield_grams: e.target.value ? Number(e.target.value) : null })}
+                    className="brand-input"
+                    placeholder="Massa final em gramas"
+                  />
+                )}
+              </div>
+              <p className="mt-2 text-xs leading-5 text-[#75675E]">
+                Nunca inventamos um fator de cocção — sem rendimento informado, a densidade usa a soma bruta dos ingredientes como base técnica.
+              </p>
             </div>
             <div className="md:col-span-2"><label className="brand-label">Descricao</label><textarea value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} className="brand-input min-h-20" /></div>
             <div className="md:col-span-2"><label className="brand-label">Modo de preparo</label><textarea value={form.preparation_steps ?? ""} onChange={(e) => setForm({ ...form, preparation_steps: e.target.value })} className="brand-input min-h-28" /></div>
@@ -505,7 +581,7 @@ function RecipeModal({ form, error, saving, aiEnabled, aiSuggesting, setForm, on
                   <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Ingredientes</h3>
                   <p className="text-xs leading-5 text-[#75675E]">Use a busca TACO quando houver gramatura. Receitas do bonus podem manter ingredientes em texto livre.</p>
                 </div>
-                <button type="button" onClick={() => setForm({ ...form, ingredients: [...form.ingredients, { taco_number: 0, food_name: "", grams: 100, free_text: null }] })} className="brand-btn-secondary"><Plus className="h-4 w-4" />Ingrediente</button>
+                <button type="button" onClick={() => setForm({ ...form, ingredients: [...form.ingredients, emptyIngredient()] })} className="brand-btn-secondary"><Plus className="h-4 w-4" />Ingrediente</button>
               </div>
               <div className="space-y-2">
                 {form.ingredients.map((ingredient, index) => (
@@ -550,12 +626,13 @@ function IngredientRow({ ingredient, onChange, onRemove }: {
 }) {
   const [suggestions, setSuggestions] = useState<FoodSuggestion[]>([]);
   const [open, setOpen] = useState(false);
+  const displayName = ingredientDisplayName(ingredient);
 
   useEffect(() => {
-    if (!open || ingredient.food_name.trim().length < 2) return;
+    if (!open || displayName.trim().length < 2) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      fetch(`/api/admin/foods/search?q=${encodeURIComponent(ingredient.food_name)}`, { signal: controller.signal })
+      fetch(`/api/admin/foods/search?q=${encodeURIComponent(displayName)}`, { signal: controller.signal })
         .then((response) => response.ok ? response.json() : { items: [] })
         .then((data: { items?: FoodSuggestion[] }) => setSuggestions(data.items ?? []))
         .catch(() => setSuggestions([]));
@@ -564,35 +641,45 @@ function IngredientRow({ ingredient, onChange, onRemove }: {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [ingredient.food_name, open]);
+  }, [displayName, open]);
+
+  function foodSourceFor(fonte: FoodSuggestion["fonte"]): RecipeIngredient["food_source"] {
+    if (fonte === "custom") return "CUSTOM";
+    if (fonte === "manufacturer") return "MANUFACTURER";
+    if (fonte === "usda") return "USDA";
+    return "TACO"; // taco/complementar — complementar já resolve pra um numero TACO real.
+  }
 
   return (
-    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_110px_auto_auto]">
+    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_90px_70px_auto_auto]">
       <div className="relative min-w-0">
         <input
-          value={ingredient.food_name}
+          value={displayName}
           onFocus={() => setOpen(true)}
           onBlur={() => window.setTimeout(() => setOpen(false), 140)}
-          onChange={(event) => onChange({ ...ingredient, food_name: event.target.value })}
+          onChange={(event) => onChange({ ...ingredient, food: event.target.value, food_source: null, food_ref_id: null })}
           className="brand-input"
-          placeholder="Buscar alimento na TACO"
+          placeholder="Buscar alimento (TACO, personalizados, fabricantes...)"
         />
+        {ingredient.food_source && ingredient.food_ref_id && (
+          <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-[#607A56]">✓ vinculado ({ingredient.food_source})</span>
+        )}
         {open && suggestions.length > 0 && (
           <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 max-h-56 overflow-y-auto rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
-            {suggestions.map((suggestion) => (
+            {suggestions.map((suggestion, suggestionIndex) => (
               <button
-                key={suggestion.numero}
+                key={`${suggestion.numero}-${suggestionIndex}`}
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
-                  onChange({ ...ingredient, taco_number: Number(suggestion.numero), food_name: suggestion.descricao, free_text: null });
-                  setSuggestions([suggestion]);
+                  onChange({ ...ingredient, food: suggestion.descricao, food_source: foodSourceFor(suggestion.fonte), food_ref_id: String(suggestion.numero) });
+                  setSuggestions([]);
                   setOpen(false);
                 }}
                 className="block w-full rounded-lg px-3 py-2 text-left hover:bg-[#FAF7F2]"
               >
                 <span className="block text-sm font-medium text-[#3A3028]">{suggestion.descricao}</span>
-                <span className="text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">TACO {suggestion.numero} · {suggestion.grupo}{suggestion.fonte === "complementar" ? " · TBCA/USDA" : ""}</span>
+                <span className="text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">{foodSourceFor(suggestion.fonte)} · {suggestion.grupo}</span>
               </button>
             ))}
           </div>
@@ -603,7 +690,8 @@ function IngredientRow({ ingredient, onChange, onRemove }: {
           sugerido por IA
         </span>
       )}
-      <input type="number" min={1} value={ingredient.grams ?? ""} onChange={(event) => onChange({ ...ingredient, grams: event.target.value ? Number(event.target.value) : null })} className="brand-input" placeholder="g" />
+      <input value={ingredient.quantity ?? ""} onChange={(event) => onChange({ ...ingredient, quantity: event.target.value })} className="brand-input" placeholder="qtd." />
+      <input value={ingredient.unit ?? "g"} onChange={(event) => onChange({ ...ingredient, unit: event.target.value })} className="brand-input" placeholder="g" />
       {ingredient.ai_suggested && (
         <span className="hidden min-h-11 items-center rounded-xl bg-[#FFF7F3] px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8C5F50] md:inline-flex">
           IA
@@ -615,8 +703,8 @@ function IngredientRow({ ingredient, onChange, onRemove }: {
 }
 
 function formatIngredientLabel(item: RecipeIngredient): string {
-  if (item.grams && Number(item.grams) > 0) return `${item.food_name} - ${item.grams} g`;
-  return item.food_name;
+  const label = ingredientQuantityLabel(item);
+  return label ? `${ingredientDisplayName(item)} - ${label}` : ingredientDisplayName(item);
 }
 
 function Stat({ label, value }: { label: string; value: number }) {

@@ -51,8 +51,10 @@ test.describe("Meal Plan Composer R2.2 — Food Alternatives Drawer", () => {
     await expect(drawer.getByLabel("Quantidade (g)")).toBeVisible();
     await expect(drawer.getByRole("cell", { name: "Energia", exact: true })).toBeVisible();
     await expect(drawer.getByRole("columnheader", { name: "Diferença" })).toBeVisible();
-    // Linguagem da R2 (seção 9): nunca "Equivalente".
-    await expect(drawer.getByText(/equivalente/i)).toHaveCount(0);
+    // Linguagem da R2 (seção 9): a comparação simples nunca chamava nada de
+    // "equivalente" — o Substitution Engine R3 introduziu deliberadamente
+    // esse vocabulário (quantidade equivalente por critério), então esta
+    // restrição foi superada por design a partir da R3 e não se aplica mais.
 
     const addButton = drawer.getByRole("button", { name: /^adicionar$/i });
     await expect(addButton).toBeEnabled({ timeout: 10_000 });

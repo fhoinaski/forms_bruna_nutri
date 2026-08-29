@@ -37,6 +37,8 @@ export interface DraftMealItem {
   ai_suggested: true;
   /** true quando a identidade foi resolvida mas a segurança clínica não pôde ser confirmada (CLINICAL_UNKNOWN) — conta no cálculo, mas fica destacado na revisão. */
   needsSafetyReview?: boolean;
+  /** R5.1 (COMBINATION) — item opcional dentro de uma refeição combinável (fixed items com is_optional=true), reaproveitando exatamente o mesmo campo do domínio real (lib/meal-plans/flexible-structure.ts) — nunca um conceito paralelo. Sempre `undefined`/false para SIMPLE/OPTIONS. */
+  is_optional?: boolean;
 }
 
 /** Candidato que NÃO virou um item calculável — precisa de decisão humana antes de entrar no plano. */
@@ -52,6 +54,36 @@ export interface DraftMealNeedsReview {
   preparation?: string | null;
   /** Receitas reais que podem representar o preparo — só quando status é PREPARATION_NEEDS_REVIEW; nunca escolhida sozinha. */
   recipeCandidates?: { id: string; title: string; servings: number }[];
+  /**
+   * R5.1 (seção 16) — caminho estável até a posição EXATA de origem deste
+   * item dentro da refeição, para permitir substituir SÓ esse item nested
+   * sem reconstruir a refeição inteira. Formato: "items[N]" (SIMPLE/fixed),
+   * "options[I].items[N]" (OPTIONS) ou "choice_groups[I].items[N]"
+   * (COMBINATION). Opcional (`undefined` para itens legados de
+   * refine/regenerate-meal que não recalculam path) — nunca usado como
+   * único identificador (a posição no array `needsReview` continua sendo a
+   * chave primária de remoção), só como contexto extra pra UI/replacement.
+   */
+  path?: string;
+}
+
+/** R5.1 — uma alternativa completa e mutuamente exclusiva de uma refeição OPTIONS. Reaproveita o mesmo shape de `MealOptionPayload` (lib/meal-plans/flexible-structure.ts), nunca um tipo paralelo. */
+export interface DraftMealOption {
+  /** Identidade temporária estável só para esta sessão de draft (ex.: "option-0") — nunca persistida como id real; o Composer gera seu próprio id ao salvar. */
+  id: string;
+  label: string;
+  items: DraftMealItem[];
+  needsReview: DraftMealNeedsReview[];
+}
+
+/** R5.1 — um grupo de escolha de uma refeição COMBINATION. Reaproveita o mesmo shape de `MealChoiceGroupPayload`. */
+export interface DraftMealChoiceGroup {
+  id: string;
+  title: string;
+  min_selections: number;
+  max_selections: number;
+  items: DraftMealItem[];
+  needsReview: DraftMealNeedsReview[];
 }
 
 export interface DraftMeal {
@@ -60,9 +92,21 @@ export interface DraftMeal {
   name: string;
   suggested_time: string | null;
   source_recipe_id: string | null;
-  /** Só itens com identidade real — é isto (nunca needsReview) que alimenta calculatePlanNutrients. */
+  /**
+   * R5.1 — estrutura da refeição. `undefined`/`null`/"SIMPLE" são
+   * equivalentes (mesma convenção de `MealPlanMealPayload.meal_structure` —
+   * NULL é legado-compatível, sempre interpretado como SIMPLE). Nunca
+   * presente em drafts anteriores a esta fase — backward compatible por
+   * construção.
+   */
+  meal_structure?: "SIMPLE" | "OPTIONS" | "COMBINATION" | null;
+  /** SIMPLE: únicos itens da refeição. COMBINATION: itens FIXOS (alguns podem ter is_optional=true). OPTIONS: só itens fixos adicionais fora das opções (raro; normalmente vazio). Só itens com identidade real — é isto (nunca needsReview) que alimenta o cálculo nutricional. */
   items: DraftMealItem[];
   needsReview: DraftMealNeedsReview[];
+  /** Só presente quando meal_structure é "OPTIONS". */
+  options?: DraftMealOption[];
+  /** Só presente quando meal_structure é "COMBINATION". */
+  choice_groups?: DraftMealChoiceGroup[];
 }
 
 export interface DraftWarning {

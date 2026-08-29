@@ -1,42 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { createRecipe, getRecipes, RECIPE_MEAL_GROUPS } from "@/lib/repositories/recipes";
 import { getRequestFingerprint } from "@/lib/security/request";
 import { writeAuditLog } from "@/lib/security/audit";
+import { recipeSchema } from "@/lib/validators/recipe-schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const ingredientSchema = z.object({
-  taco_number: z.number().int().positive().nullable().optional(),
-  food_name: z.string().min(1).max(300),
-  grams: z.number().positive().nullable().optional(),
-  free_text: z.string().max(300).nullable().optional(),
-}).strict();
-
-const recipeSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).nullable().optional(),
-  meal_group: z.enum(RECIPE_MEAL_GROUPS),
-  servings: z.number().int().positive().max(100),
-  portion_grams: z.number().positive().nullable().optional(),
-  preparation_steps: z.string().max(5000).nullable().optional(),
-  ingredients: z.array(ingredientSchema).min(1).max(80),
-  tags: z.array(z.string().min(1).max(60)).max(20).optional(),
-  source_note: z.string().max(2000).nullable().optional(),
-  nutrition_override: z.object({
-    total_kcal: z.number().nonnegative().optional(),
-    total_protein_g: z.number().nonnegative().optional(),
-    total_carbs_g: z.number().nonnegative().optional(),
-    total_fat_g: z.number().nonnegative().optional(),
-    per_portion_kcal: z.number().nonnegative().optional(),
-    per_portion_protein_g: z.number().nonnegative().optional(),
-    per_portion_carbs_g: z.number().nonnegative().optional(),
-    per_portion_fat_g: z.number().nonnegative().optional(),
-  }).nullable().optional(),
-  is_active: z.boolean().optional(),
-}).strict();
 
 export async function GET(req: NextRequest) {
   const admin = await getAdminFromRequest(req);

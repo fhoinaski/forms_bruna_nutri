@@ -1,6 +1,7 @@
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
 import { findEquivalentFoods, type EquivalentFoodResult } from "@/lib/nutrition/equivalence";
 import { calculateItemNutrients } from "@/lib/nutrition/nutrients";
+import { roundToPracticalQuantity } from "@/lib/nutrition/equivalent-quantity";
 
 /**
  * Substitution Engine — encontra alimentos nutricionalmente equivalentes a
@@ -72,7 +73,6 @@ export const DEFAULT_SUBSTITUTION_TOLERANCES: SubstitutionTolerances = {
 
 const MIN_PLAUSIBLE_GRAMS = 5;
 const MAX_PLAUSIBLE_GRAMS = 1000;
-const PRACTICAL_INCREMENT_GRAMS = 5;
 const DEFAULT_LIMIT = 5;
 
 /**
@@ -202,10 +202,6 @@ function isSameFood(a: MacroReferenceFood, b: MacroReferenceFood): boolean {
   return a.numero !== undefined && a.numero === b.numero && a.fonte === b.fonte;
 }
 
-function roundToPracticalGrams(grams: number): number {
-  return Math.max(PRACTICAL_INCREMENT_GRAMS, Math.round(grams / PRACTICAL_INCREMENT_GRAMS) * PRACTICAL_INCREMENT_GRAMS);
-}
-
 export interface FoodSubstituteResult {
   food: MacroReferenceFood;
   /** Quantidade final PRÁTICA (múltiplo de 5g) — já revalidada pela engine. */
@@ -297,7 +293,7 @@ export function findFoodSubstitutes(options: FindFoodSubstitutesOptions): FoodSu
 
     const rawGrams = (basePrimaryAmount / (candidatePrimaryPer100 as number)) * 100;
     if (rawGrams < MIN_PLAUSIBLE_GRAMS || rawGrams > MAX_PLAUSIBLE_GRAMS) continue;
-    const roundedGrams = roundToPracticalGrams(rawGrams);
+    const roundedGrams = roundToPracticalQuantity(rawGrams);
 
     // Revalidação obrigatória pela engine oficial (seção 7) — os valores
     // finais usados no score/exibição/persistência SEMPRE vêm daqui, nunca

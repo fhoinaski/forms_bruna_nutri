@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanMealsForSave, duplicateItemAt, duplicateMealAt, reorderArray, type Meal, type MealItem } from "@/components/dashboard/MealItemsEditor";
+import { cleanMealsForSave, duplicateItemAt, duplicateMealAt, reorderArray, sanitizeMealForPlanClone, type Meal, type MealItem } from "@/components/dashboard/MealItemsEditor";
 
 /**
  * Helpers puros de reordenar/duplicar do MealPlanEditor UX 2.0. Persistem
@@ -53,6 +53,79 @@ describe("duplicateMealAt", () => {
   it("nao faz nada para um indice fora dos limites", () => {
     const meals = [makeMeal("Cafe da manha")];
     expect(duplicateMealAt(meals, 5)).toBe(meals);
+  });
+
+  it("copia opções (OPTIONS) sem compartilhar array/objeto por referência (R4, seção 12/50)", () => {
+    const meal: Meal = {
+      name: "Almoço",
+      meal_structure: "OPTIONS",
+      items: [],
+      options: [{ label: "Opção 1", items: [{ food: "Arroz", quantity: "100", unit: "g" }] }],
+    };
+    const result = duplicateMealAt([meal], 0);
+    result[1].options![0].items[0].food = "Batata";
+    expect(meal.options![0].items[0].food).toBe("Arroz");
+    // array de opções em si também não é a mesma referência
+    expect(result[1].options).not.toBe(meal.options);
+  });
+
+  it("copia grupos de escolha (COMBINATION) sem compartilhar array/objeto por referência", () => {
+    const meal: Meal = {
+      name: "Jantar",
+      meal_structure: "COMBINATION",
+      items: [{ food: "Alface", quantity: "50", unit: "g" }],
+      choice_groups: [{ title: "Proteína", min_selections: 1, max_selections: 1, items: [{ food: "Frango", quantity: "120", unit: "g" }] }],
+    };
+    const result = duplicateMealAt([meal], 0);
+    result[1].choice_groups![0].items[0].food = "Peixe";
+    expect(meal.choice_groups![0].items[0].food).toBe("Frango");
+  });
+});
+
+describe("sanitizeMealForPlanClone — R4 (seções 17-19): nunca reaproveita nutrição congelada ao clonar um plano", () => {
+  it("remove qualquer snapshot de nutrição/nome que o objeto de origem carregue em runtime (fora do tipo MealItem local)", () => {
+    const itemWithRuntimeSnapshot = {
+      food: "Arroz, tipo 1, cozido",
+      quantity: "100",
+      unit: "g",
+      food_source: "TACO",
+      food_ref_id: "3",
+      // Campos que a API real devolve (MealPlanItemPayload) mas que o tipo
+      // MealItem local do editor não declara — simula o objeto vindo de
+      // GET /api/admin/clients/[id]/meal-plans antes de qualquer edição.
+      food_name_snapshot: "Arroz, tipo 1, cozido (congelado)",
+      nutrition_snapshot: JSON.stringify({ energia_kcal: 999 }),
+      resolved_grams_snapshot: 100,
+      quantity_resolution_snapshot: JSON.stringify({ method: "explicit_grams" }),
+    } as unknown as MealItem;
+    const meal: Meal = { name: "Almoço", items: [itemWithRuntimeSnapshot] };
+    const sanitized = sanitizeMealForPlanClone(meal);
+    const sanitizedItem = sanitized.items[0] as unknown as Record<string, unknown>;
+    expect(sanitizedItem.food_name_snapshot).toBeUndefined();
+    expect(sanitizedItem.nutrition_snapshot).toBeUndefined();
+    expect(sanitizedItem.resolved_grams_snapshot).toBeNull();
+    expect(sanitizedItem.quantity_resolution_snapshot).toBeNull();
+    // Identidade canônica preservada — é isso que permite recalcular pela engine atual.
+    expect(sanitized.items[0].food_source).toBe("TACO");
+    expect(sanitized.items[0].food_ref_id).toBe("3");
+  });
+
+  it("limpa locks (quantity_locked/substitutions_locked) — o clone começa editável", () => {
+    const meal: Meal = { name: "Almoço", items: [{ food: "Arroz", quantity: "100", unit: "g", quantity_locked: true, substitutions_locked: true }] };
+    const sanitized = sanitizeMealForPlanClone(meal);
+    expect(sanitized.items[0].quantity_locked).toBe(false);
+    expect(sanitized.items[0].substitutions_locked).toBe(false);
+  });
+
+  it("também limpa snapshots dentro de options/choice_groups, nunca só nos itens de topo", () => {
+    const meal: Meal = {
+      name: "Jantar",
+      meal_structure: "OPTIONS",
+      items: [],
+      options: [{ label: "Opção 1", items: [{ food: "Arroz", quantity: "100", unit: "g", resolved_grams_snapshot: 100 } as MealItem] }],
+    };
+    const sanitized = sanitizeMealForPlanClone(meal);
+    expect(sanitized.options![0].items[0].resolved_grams_snapshot).toBeNull();
   });
 });
 
