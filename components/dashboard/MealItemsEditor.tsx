@@ -1540,21 +1540,35 @@ export function MealItemsEditor({
                             onClick={() => selectMultiSourceResult(mealIndex, itemIndex, result)}
                             className={`block w-full rounded-lg px-3 py-2 text-left transition-colors ${suggestionIndex === highlightedIndex ? "bg-[#FAF7F2]" : "hover:bg-[#FAF7F2]"}`}
                           >
-                            <span className="block text-sm font-medium text-[#3A3028]">{result.displayName}</span>
+                            {/* R6.5.5 (seção 12) — busca é pra escolher IDENTIDADE, não fazer análise
+                                nutricional; a linha de preview com kcal/P/C/G foi removida, mantendo só
+                                nome + preparo/fonte + porção padrão. Nenhum dado deixou de existir no
+                                objeto (result.nutrientsPreview continua intacto), só não é mais exibido aqui. */}
+                            <span className="flex items-baseline justify-between gap-2">
+                              <span className="min-w-0 truncate text-sm font-medium text-[#3A3028]">{result.displayName}</span>
+                              <span className="shrink-0 text-[11px] font-semibold text-[#607A56]">Adicionar</span>
+                            </span>
                             <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">{result.preparation ?? result.group ?? "Alimento"} · {result.sourceName}</span>
-                            <span className="mt-1 block text-xs text-[#75675E]">{result.defaultPortion.label} = {result.defaultPortion.gramWeight ?? "—"} g · kcal {result.nutrientsPreview.energyKcal ?? "—"} · P {result.nutrientsPreview.proteinG ?? "—"} · C {result.nutrientsPreview.carbohydrateG ?? "—"} · G {result.nutrientsPreview.fatG ?? "—"}</span>
+                            <span className="mt-1 block text-xs text-[#75675E]">{result.defaultPortion.label}{result.defaultPortion.gramWeight ? ` · ${result.defaultPortion.gramWeight} g` : ""}</span>
                           </button>
                         ))}
                       </div>
                     )}
                     {showLoading && (
-                      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-[#EAD8C2] bg-white p-3 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
-                        <p className="text-sm text-[#8C6E52]">Buscando...</p>
+                      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 space-y-1.5 rounded-xl border border-[#EAD8C2] bg-white p-2 shadow-[0_18px_44px_rgba(58,48,40,0.16)]" role="status" aria-label="Buscando alimentos">
+                        {/* R6.5.5 (seção 22) — 3 linhas de skeleton compactas em vez de um spinner grande/texto solto. */}
+                        {[0, 1, 2].map((row) => (
+                          <div key={row} className="animate-pulse space-y-1 rounded-lg px-3 py-2">
+                            <div className="h-3 w-2/3 rounded bg-[#F0E2D6]" />
+                            <div className="h-2 w-1/3 rounded bg-[#F5EAD9]" />
+                          </div>
+                        ))}
                       </div>
                     )}
                     {showEmptyState && (
                       <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-[#EAD8C2] bg-white p-3 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
                         <p className="text-sm text-[#8C6E52]">Nenhum alimento encontrado.</p>
+                        <p className="mt-0.5 text-xs text-[#9A978A]">Tente outro nome ou preparação.</p>
                       </div>
                     )}
                   </div>
