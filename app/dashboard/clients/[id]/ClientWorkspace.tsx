@@ -108,9 +108,18 @@ interface ClientPayment {
 interface ClientPortalAccessState {
   exists: boolean;
   is_active: boolean;
+  status?: string;
+  last_login_at?: string | null;
   last_used_at: string | null;
   updated_at: string | null;
   login_url: string;
+}
+interface ClientPortalSessionState {
+  id: string;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+  user_agent_label: string | null;
 }
 interface NutritionRecord {
   id: string; client_id: string;
@@ -1820,6 +1829,10 @@ export default function ClientWorkspace({
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalCode, setPortalCode] = useState("");
   const [portalError, setPortalError] = useState("");
+  const [portalSessions, setPortalSessions] = useState<ClientPortalSessionState[]>([]);
+  const [portalSessionsOpen, setPortalSessionsOpen] = useState(false);
+  const [portalSessionsLoading, setPortalSessionsLoading] = useState(false);
+  const [portalSessionError, setPortalSessionError] = useState("");
 
 
 
@@ -2015,7 +2028,7 @@ export default function ClientWorkspace({
       const response = await fetch(`/api/admin/clients/${id}/portal-access`, { method: "POST" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message);
-      setPortalCode(result.code);
+      setPortalCode(result.email_sent ? "Convite enviado por e-mail." : "Convite criado; confira a configuração de e-mail.");
       await reloadPortalAccess();
     } catch (err) {
       setPortalError(err instanceof Error ? err.message : "Nao foi possivel gerar o codigo do portal.");
@@ -2039,6 +2052,29 @@ export default function ClientWorkspace({
     } finally {
       setPortalLoading(false);
     }
+  };
+
+  const loadPortalSessions = async () => {
+    setPortalSessionsLoading(true); setPortalSessionError("");
+    try {
+      const response = await fetch(`/api/admin/clients/${id}/portal-sessions`, { cache: "no-store" });
+      if (!response.ok) throw new Error();
+      const payload = await response.json() as { sessions?: ClientPortalSessionState[] };
+      setPortalSessions(payload.sessions ?? []);
+    } catch { setPortalSessionError("Não foi possível carregar as sessões."); }
+    finally { setPortalSessionsLoading(false); }
+  };
+
+  const managePortalSessions = () => { setPortalSessionsOpen(true); void loadPortalSessions(); };
+  const revokePortalSession = async (action: "one" | "all", sessionId?: string) => {
+    const message = action === "all" ? "Encerrar todas as sessões ativas deste paciente?" : "Encerrar esta sessão?";
+    if (!window.confirm(message)) return;
+    setPortalSessionsLoading(true); setPortalSessionError("");
+    try {
+      const response = await fetch(`/api/admin/clients/${id}/portal-sessions`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, sessionId }) });
+      if (!response.ok) throw new Error();
+      await loadPortalSessions();
+    } catch { setPortalSessionError("Não foi possível encerrar a sessão."); setPortalSessionsLoading(false); }
   };
 
 
@@ -2311,7 +2347,7 @@ export default function ClientWorkspace({
                       <p className="flex items-center justify-between gap-3">
                         <span className="text-[#8C6E52]">Status</span>
                         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${portalAccess?.is_active ? "bg-[#D4EDDA] text-[#4A7C59]" : "bg-[#EAD8C2] text-[#8C6E52]"}`}>
-                          {portalAccess?.is_active ? "Ativo" : "Inativo"}
+                          {({ NO_ACCESS: "Sem acesso", INVITE_PENDING: "Convite pendente", ACTIVE: "Ativo", TEMP_PASSWORD: "Senha temporária", PASSWORD_CHANGE_REQUIRED: "Troca de senha necessária", REVOKED: "Acesso revogado", LOCKED: "Bloqueado" } as Record<string, string>)[portalAccess?.status ?? "NO_ACCESS"] ?? "Sem acesso"}
                         </span>
                       </p>
                       <p className="flex items-center justify-between gap-3">
@@ -2324,15 +2360,20 @@ export default function ClientWorkspace({
                   <div className="mt-5 flex flex-wrap gap-3">
                     <button onClick={generatePortalCode} disabled={portalLoading} className="brand-btn-primary">
                       <RefreshCw className="h-4 w-4" />
-                      {portalAccess?.exists ? "Gerar novo codigo" : "Liberar portal"}
+                      {portalAccess?.status === "INVITE_PENDING" ? "Reenviar convite" : "Enviar convite"}
                     </button>
-                    {portalAccess?.exists && (
+                    {portalAccess?.is_active && (
                       <button
                         onClick={() => togglePortalAccess(!portalAccess.is_active)}
                         disabled={portalLoading}
                         className="inline-flex items-center gap-2 rounded-full border border-[#EAD8C2] bg-white px-5 py-2 text-sm font-semibold text-[#8C6E52] hover:bg-[#FAF7F2]"
                       >
-                        {portalAccess.is_active ? "Desativar" : "Ativar"}
+                        Revogar acesso
+                      </button>
+                    )}
+                    {portalAccess?.is_active && (
+                      <button type="button" onClick={managePortalSessions} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#D9E4D3] bg-white px-5 py-2 text-sm font-semibold text-[#607A56] hover:bg-[#EEF3EA]">
+                        Gerenciar sessões
                       </button>
                     )}
                   </div>
@@ -2341,31 +2382,39 @@ export default function ClientWorkspace({
                 <div className="rounded-2xl border border-[#EAD8C2] bg-white p-5">
                   <div className="mb-4 flex items-center gap-2">
                     <KeyRound className="h-5 w-5 text-[#B47F6A]" />
-                    <h3 className="font-serif text-base font-semibold text-[#3A2B1F]">Dados para enviar a paciente</h3>
+                    <h3 className="font-serif text-base font-semibold text-[#3A2B1F]">Convite de acesso</h3>
                   </div>
                   {portalCode ? (
                     <div className="space-y-4">
                       <div className="rounded-xl bg-[#FAF7F2] p-4">
-                        <p className="brand-label">Codigo de acesso</p>
-                        <p className="mt-1 font-mono text-2xl font-semibold tracking-[0.16em] text-[#3A2B1F]">{portalCode}</p>
+                        <p className="brand-label">Status do envio</p>
+                        <p className="mt-1 text-lg font-semibold text-[#3A2B1F]">{portalCode}</p>
                       </div>
                       <div className="rounded-xl border border-[#EAD8C2] p-4 text-sm leading-6 text-[#75675E]">
-                        <p className="font-semibold text-[#3A2B1F]">Mensagem sugerida</p>
-                        <p className="mt-2">
-                          Ola, {name || "tudo bem"}! Seu portal de acompanhamento esta liberado. Acesse {portalAccess?.login_url ?? "https://brunanutri.com.br/portal"} usando seu e-mail cadastrado e o codigo {portalCode}.
-                        </p>
+                        <p className="font-semibold text-[#3A2B1F]">Próximo passo</p>
+                        <p className="mt-2">A paciente receberá um e-mail com um link de uso único para criar a própria senha.</p>
                       </div>
-                      <p className="text-xs text-[#A8927D]">O codigo aparece apenas agora. Ao gerar um novo, o anterior deixa de funcionar.</p>
+                      <p className="text-xs text-[#A8927D]">O convite anterior é invalidado quando um novo é enviado.</p>
                     </div>
                   ) : (
                     <div className="rounded-xl bg-[#FAF7F2] p-5 text-sm leading-6 text-[#75675E]">
-                      <p>Gere um codigo para liberar o primeiro acesso. Por seguranca, o codigo nao fica visivel depois que voce sair desta tela.</p>
+                      <p>Envie um convite para liberar o primeiro acesso. A paciente criará a própria senha por um link seguro.</p>
                       <p className="mt-2">Login da paciente: <strong>{email || "cadastre o e-mail no cliente"}</strong></p>
-                      <p>Endereco: <strong>{portalAccess?.login_url ?? "https://brunanutri.com.br/portal"}</strong></p>
+                      <p>Portal: <strong>{portalAccess?.login_url ?? "https://brunanutri.com.br/portal"}</strong></p>
                     </div>
                   )}
                 </div>
               </div>
+              {portalSessionsOpen && (
+                <section role="dialog" aria-modal="true" aria-label="Sessões ativas do paciente" className="rounded-2xl border border-[#EAD8C2] bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div><p className="brand-kicker">Segurança</p><h3 className="font-serif text-xl font-semibold text-[#3A2B1F]">Sessões ativas</h3></div>
+                    <button type="button" onClick={() => setPortalSessionsOpen(false)} className="min-h-10 rounded-full px-3 text-sm font-semibold text-[#75675E] hover:bg-[#FAF7F2]">Fechar</button>
+                  </div>
+                  {portalSessionsLoading ? <p className="mt-4 text-sm text-[#75675E]">Carregando sessões...</p> : portalSessionError ? <div className="mt-4 text-sm text-red-600"><p>{portalSessionError}</p><button type="button" onClick={() => void loadPortalSessions()} className="mt-2 font-semibold underline">Tentar novamente</button></div> : portalSessions.length === 0 ? <p className="mt-4 text-sm text-[#75675E]">Nenhuma sessão ativa.</p> : <ul className="mt-4 space-y-3">{portalSessions.map((session) => <li key={session.id} className="flex flex-col gap-3 rounded-xl border border-[#EAD8C2] p-4 sm:flex-row sm:items-center sm:justify-between"><div className="text-sm"><p className="font-semibold text-[#3A2B1F]">{session.user_agent_label || "Dispositivo não identificado"}</p><p className="mt-1 text-[#75675E]">Última atividade: {formatDateSafe(session.last_used_at, "dd/MM/yyyy HH:mm")}</p><p className="text-[#75675E]">Criada: {formatDateSafe(session.created_at, "dd/MM/yyyy HH:mm")}</p></div><button type="button" disabled={portalSessionsLoading} onClick={() => void revokePortalSession("one", session.id)} className="min-h-10 rounded-full border border-[#E8C3BA] px-4 text-sm font-semibold text-[#9A5C4E] hover:bg-[#FFF7F5]">Encerrar sessão</button></li>)}</ul>}
+                  {portalSessions.length > 0 && <button type="button" disabled={portalSessionsLoading} onClick={() => void revokePortalSession("all")} className="mt-5 min-h-10 rounded-full border border-[#E8C3BA] px-4 text-sm font-semibold text-[#9A5C4E] hover:bg-[#FFF7F5]">Encerrar todas as sessões</button>}
+                </section>
+              )}
             </div>
           )}
 
