@@ -8,6 +8,7 @@ import {
   PROTOCOL_TEMPLATE_TARGET_GROUPS,
   type ProtocolTemplateTargetGroup,
 } from "@/lib/protocol-templates/constants";
+import type { DraftGenerationReadiness } from "@/lib/clinical/meal-plan-copilot";
 import type { Meal } from "@/components/dashboard/MealItemsEditor";
 import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
 import { normalizeIngredientForRead, type RecipeIngredient } from "@/lib/nutrition/recipes";
@@ -96,6 +97,8 @@ interface DraftMealItem {
   food_ref_id: string | null;
   ai_suggested: true;
   needsSafetyReview?: boolean;
+  /** Intenção de preparo comunicada pela IA; metadado transitório do draft. */
+  preparation?: string | null;
   /** R5.1 — item opcional dentro de uma refeição COMBINATION (mesmo campo do domínio real do Composer). */
   is_optional?: boolean;
 }
@@ -126,6 +129,7 @@ interface DraftNeedsReview {
 interface DraftMealOption {
   id: string;
   label: string;
+  description?: string | null;
   items: DraftMealItem[];
   needsReview: DraftNeedsReview[];
 }
@@ -133,6 +137,7 @@ interface DraftMealOption {
 interface DraftMealChoiceGroup {
   id: string;
   title: string;
+  description?: string | null;
   min_selections: number;
   max_selections: number;
   items: DraftMealItem[];
@@ -190,6 +195,7 @@ interface DraftNutrition {
   perMeal: NutrientValuesLite[];
   unresolvedCount: number;
   targetComparison: TargetComparisonRow[];
+  range?: { min: NutrientValuesLite; max: NutrientValuesLite; varies: boolean };
 }
 interface CriticFinding {
   severity: "INFO" | "REVIEW" | "WARNING";
@@ -269,7 +275,7 @@ function draftItemToEditorItem(item: DraftMealItem): Meal["items"][number] {
     food: item.food,
     quantity: item.quantity,
     unit: item.unit,
-    notes: null,
+    notes: item.preparation ?? null,
     ai_suggested: true,
     food_source: item.food_source,
     food_ref_id: item.food_ref_id,
@@ -293,9 +299,25 @@ function draftMealToEditorMeal(meal: DraftMeal): Meal {
     source_recipe_id: meal.source_recipe_id,
     meal_structure: structure,
     items: meal.items.map(draftItemToEditorItem),
-    ...(structure === "OPTIONS" ? { options: (meal.options ?? []).map((option) => ({ label: option.label, items: option.items.map(draftItemToEditorItem) })) } : {}),
-    ...(structure === "COMBINATION" ? { choice_groups: (meal.choice_groups ?? []).map((group) => ({ title: group.title, min_selections: group.min_selections, max_selections: group.max_selections, items: group.items.map(draftItemToEditorItem) })) } : {}),
+    ...(structure === "OPTIONS" ? { options: (meal.options ?? []).map((option) => ({ label: option.label, description: option.description ?? null, items: option.items.map(draftItemToEditorItem) })) } : {}),
+    ...(structure === "COMBINATION" ? { choice_groups: (meal.choice_groups ?? []).map((group) => ({ title: group.title, description: group.description ?? null, min_selections: group.min_selections, max_selections: group.max_selections, items: group.items.map(draftItemToEditorItem) })) } : {}),
   };
+}
+
+/** Insere a escolha humana exatamente no galho que originou a revisão. */
+function placeResolvedReviewItem(meal: DraftMeal, review: DraftNeedsReview, item: DraftMealItem): DraftMeal {
+  const path = review.path ?? "";
+  const option = path.match(/\.options\[(\d+)]\.items/);
+  const group = path.match(/\.choiceGroups\[(\d+)]\.items/);
+  if (option) {
+    const index = Number(option[1]);
+    return { ...meal, options: (meal.options ?? []).map((entry, i) => i === index ? { ...entry, items: [...entry.items, item] } : entry) };
+  }
+  if (group) {
+    const index = Number(group[1]);
+    return { ...meal, choice_groups: (meal.choice_groups ?? []).map((entry, i) => i === index ? { ...entry, items: [...entry.items, item] } : entry) };
+  }
+  return { ...meal, items: [...meal.items, item] };
 }
 
 const CRITIC_ICON: Record<CriticFinding["severity"], string> = { INFO: "ℹ", REVIEW: "⚠", WARNING: "⚠" };
@@ -348,6 +370,8 @@ export function AiMealPlanWizard({
   const [context, setContext] = useState<DraftContext | null>(null);
   const [contextLoading, setContextLoading] = useState(true);
   const [contextError, setContextError] = useState("");
+  const [generationReadiness, setGenerationReadiness] = useState<DraftGenerationReadiness | null>(null);
+  const [readinessBlockingLabels, setReadinessBlockingLabels] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -357,6 +381,21 @@ export function AiMealPlanWizard({
       .then((data: DraftContext) => { if (!cancelled) setContext(data); })
       .catch((cause) => { if (!cancelled) setContextError(cause instanceof Error ? cause.message : "Falha ao carregar contexto."); })
       .finally(() => { if (!cancelled) setContextLoading(false); });
+    return () => { cancelled = true; };
+  }, [clientId]);
+
+  // Reutiliza o gate determinístico do Workspace; sem análise carregada,
+  // não dispara IA. O editor manual permanece disponível fora deste wizard.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/admin/clients/${clientId}/meal-plans/clinical-copilot`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("readiness unavailable")))
+      .then((data: { generationReadiness?: DraftGenerationReadiness; blockingFacts?: Array<{ label?: string }> }) => {
+        if (cancelled) return;
+        setGenerationReadiness(data.generationReadiness ?? "NOT_READY");
+        setReadinessBlockingLabels((data.blockingFacts ?? []).map((fact) => fact.label).filter((label): label is string => Boolean(label)));
+      })
+      .catch(() => { if (!cancelled) setGenerationReadiness("NOT_READY"); });
     return () => { cancelled = true; };
   }, [clientId]);
 
@@ -862,8 +901,7 @@ export function AiMealPlanWizard({
       ai_suggested: true,
     };
     const nextMeals = draft.meals.map((meal, index) => index !== mealIndex ? meal : {
-      ...meal,
-      items: [...meal.items, newItem],
+      ...placeResolvedReviewItem(meal, review, newItem),
       needsReview: meal.needsReview.filter((_, index2) => index2 !== reviewIndex),
     });
     void recalculate(nextMeals);
@@ -975,7 +1013,7 @@ export function AiMealPlanWizard({
   }
 
   async function handleApply() {
-    if (!draft || !draft.meals.length) return;
+    if (!draft || !draft.meals.length || totalNeedsReview > 0) return;
     setApplying(true);
     try {
       const approvedSubstitutions = substitutionSuggestions
@@ -1002,7 +1040,13 @@ export function AiMealPlanWizard({
     }
   }
 
-  const canGenerate = selectedMeals.size > 0;
+  // "meals" só exige ter escolhido ao menos uma refeição — a pendência
+  // clínica (generationReadiness) só pode bloquear a GERAÇÃO em si
+  // (step "preferences"), nunca a navegação de etapas antes dela; senão um
+  // paciente com dados incompletos nunca alcança a etapa que explica o que
+  // falta ("Completar informações").
+  const canProceedFromMeals = selectedMeals.size > 0;
+  const canGenerate = canProceedFromMeals && generationReadiness !== "NOT_READY";
   // R5 (seções 25/26/29) — changeset SÓ pra exibição/preview: nunca decide
   // sozinho o que aplicar, só resume o que o Copilot está propondo em cima
   // do plano de origem antes da nutricionista confirmar.
@@ -1213,6 +1257,15 @@ export function AiMealPlanWizard({
 
           {step === "preferences" && (
             <div className="space-y-4">
+              {generationReadiness === "NOT_READY" && (
+                <div className="rounded-xl border border-[#F0D4C7] bg-[#FFF7F3] p-3 text-sm text-[#8C5F50]">
+                  <p className="font-semibold">Complete as informações essenciais antes de gerar o rascunho.</p>
+                  {readinessBlockingLabels.length > 0 && <p className="mt-1 text-xs">Pendências: {readinessBlockingLabels.join(", ")}.</p>}
+                </div>
+              )}
+              {generationReadiness === "READY_WITH_REVIEW" && (
+                <div className="rounded-xl border border-[#F0D4C7] bg-[#FFF7F3] p-3 text-sm text-[#8C5F50]">Há dados conflitantes para revisar. O rascunho será uma proposta e exigirá revisão humana.</div>
+              )}
               <div>
                 <label className="brand-label" htmlFor="wizard-prioritize">Alimentos para priorizar (opcional)</label>
                 <input id="wizard-prioritize" value={prioritizeFoods} onChange={(event) => setPrioritizeFoods(event.target.value)} className="brand-input" placeholder="Ex.: arroz, feijão, frango, ovos" />
@@ -1786,14 +1839,14 @@ export function AiMealPlanWizard({
               <button
                 type="button"
                 onClick={() => step === "preferences" ? void generateDraft() : setStep(activeStepOrder[stepIndex + 1])}
-                disabled={step === "meals" && !canGenerate}
+                disabled={(step === "meals" && !canProceedFromMeals) || (step === "preferences" && !canGenerate)}
                 className="brand-btn-primary w-full sm:w-auto"
               >
-                {step === "preferences" ? "Gerar pré-plano" : "Continuar"}
+                {step === "preferences" ? generationReadiness === "NOT_READY" ? "Completar informações" : generationReadiness === "READY_WITH_REVIEW" ? "Gerar pré-plano — revisar dados" : "Gerar pré-plano" : "Continuar"}
               </button>
             )}
             {step === "review" && draft && draft.meals.length > 0 && (
-              <button type="button" onClick={() => void handleApply()} disabled={applying} className="brand-btn-primary w-full sm:w-auto">
+              <button type="button" onClick={() => void handleApply()} disabled={applying || totalNeedsReview > 0} className="brand-btn-primary w-full sm:w-auto">
                 {applying ? "Aplicando..." : "Aplicar ao editor"}
               </button>
             )}

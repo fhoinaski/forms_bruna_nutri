@@ -106,7 +106,8 @@ function describeItem(food: string, quantity?: string | null, unit?: string | nu
 // lib/repositories/recipes.ts também precisa construir um
 // FoodReferenceLookup (pros ingredientes de uma receita), e recipes.ts já
 // é importado por lib/repositories/meal-plans.ts, que este arquivo também
-// importa.
+// importa. `resolveMealPlanChangeReferences` já cobre os itens estruturados
+// aninhados (options[].items/choice_groups[].items), não só `meal.items`.
 export { resolveMealPlanChangeReferences, buildFoodReferenceLookup } from "@/lib/nutrition/food-reference-lookup";
 import { resolveMealPlanChangeReferences, buildFoodReferenceLookup } from "@/lib/nutrition/food-reference-lookup";
 

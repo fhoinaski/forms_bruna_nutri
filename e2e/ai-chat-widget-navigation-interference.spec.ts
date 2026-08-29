@@ -25,6 +25,11 @@ test.describe("AI chat widget clinical navigation", () => {
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
     await page.goto(`/dashboard/clients/${patient.id}`);
 
+    // No viewport mobile o atalho pertence ao drawer lateral; abra-o antes
+    // de interagir para reproduzir o caminho que uma profissional usa.
+    if (testInfo.project.name === "mobile-chrome") {
+      await page.getByRole("button", { name: "Abrir menu" }).click();
+    }
     await page.getByRole("button", { name: "Abrir Assistente de IA", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Assistente do sistema" });
     await expect(dialog).toBeVisible();
@@ -32,9 +37,15 @@ test.describe("AI chat widget clinical navigation", () => {
 
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
+    if (testInfo.project.name === "mobile-chrome") {
+      await page.getByRole("button", { name: "Fechar menu" }).last().click();
+    }
     await page.getByRole("tab", { name: "Antropometria" }).click();
     await expect(page.getByRole("heading", { name: /Antropometria e progresso/i })).toBeVisible();
 
+    if (testInfo.project.name === "mobile-chrome") {
+      await page.getByRole("button", { name: "Abrir menu" }).click();
+    }
     await page.getByRole("button", { name: "Abrir Assistente de IA", exact: true }).click();
     await page.route("**/api/admin/ai/chat", async (route) => {
       await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "IA indisponível" }) });
@@ -42,7 +53,10 @@ test.describe("AI chat widget clinical navigation", () => {
     await page.getByLabel("Mensagem para o assistente").fill("Teste de indisponibilidade");
     await page.getByRole("button", { name: "Enviar" }).click();
     await expect(dialog.getByText(/IA indisponível/i)).toBeVisible();
-    await page.getByRole("button", { name: "Fechar" }).click();
+    await dialog.getByRole("button", { name: "Fechar", exact: true }).click();
+    if (testInfo.project.name === "mobile-chrome") {
+      await page.getByRole("button", { name: "Fechar menu" }).last().click();
+    }
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
     await expect(page.getByRole("button", { name: /criar por modelo/i })).toBeVisible();
     await page.screenshot({ path: `${SCREENSHOT_DIR}/P6.3-03-ai-failure-navigation-${testInfo.project.name}-r${testInfo.retry}.png`, fullPage: true });

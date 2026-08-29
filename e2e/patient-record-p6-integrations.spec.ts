@@ -20,9 +20,12 @@ test.describe("Patient Record P6 final integrations", () => {
     await page.goto(`/dashboard/clients/${patient.id}`);
 
     await expect(page.getByTestId("patient-record-overview")).toBeVisible();
-    await expect(page.getByTestId("patient-record-overview").getByRole("button", { name: "Iniciar consulta" }).first()).toBeVisible();
-    await expect(page.getByTestId("patient-record-overview").getByRole("button", { name: "Nova avaliação" })).toBeVisible();
-    await expect(page.getByTestId("patient-record-overview").getByRole("button", { name: "Abrir plano" })).toBeVisible();
+    // A ação primária do cabeçalho permanece estável para orientação clínica;
+    // as ações complementares continuam disponíveis sem duplicar módulos.
+    const header = page.locator("header");
+    await expect(header.getByRole("button", { name: "Nova consulta" })).toBeVisible();
+    await expect(header.getByRole("button", { name: "Nova avaliação" })).toBeVisible();
+    await expect(header.getByRole("button", { name: "Criar plano" })).toBeVisible();
     await page.getByText("Mais ações", { exact: true }).click();
     await expect(page.getByText("Agendar retorno", { exact: true }).last()).toBeVisible();
     await page.getByText("Agendar retorno", { exact: true }).last().click();
@@ -54,7 +57,11 @@ test.describe("Patient Record P6 final integrations", () => {
 
     await expect(page.getByText("Nenhum protocolo ativo vinculado.")).toBeVisible();
     await expect(page.getByText("Nenhuma suplementação ativa registrada.")).toBeVisible();
-    await expect(page.getByText("Nenhum plano ativo")).toBeVisible();
+    // O card "Plano alimentar" do resumo mostra "Nenhum plano" quando não há
+    // rascunho nem plano ativo (SummaryCard, seção "Resumo do prontuário") —
+    // "Nenhum plano ativo" nunca foi o texto real desse estado, ficou stale
+    // de uma versão anterior do card.
+    await expect(page.getByText("Nenhum plano", { exact: true })).toBeVisible();
     await screenshot(page, `P6.1-01-consultation-context-${testInfo.project.name}-r${testInfo.retry}`);
   });
 });

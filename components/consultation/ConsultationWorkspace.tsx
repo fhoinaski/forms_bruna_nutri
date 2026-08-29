@@ -17,6 +17,7 @@ import {
   Utensils,
 } from "lucide-react";
 import { ConsultationCopilot } from "@/components/consultation/ConsultationCopilot";
+import { ClinicalMealPlanPreAnalysis } from "@/components/consultation/ClinicalMealPlanPreAnalysis";
 import { ConsultationFinishDialog } from "@/components/consultation/ConsultationFinishDialog";
 import type {
   ConsultationWorkspaceDraft,
@@ -370,6 +371,8 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
               <p className="mt-1 text-xs text-[#75675E]">P4 cuidará da UX completa.</p>
             </button>
           </section>
+
+          <ClinicalMealPlanPreAnalysis clientId={clientId} />
 
           <div className="rounded-lg border border-[#EDE1D6] bg-white">
             <ConsultationCopilot

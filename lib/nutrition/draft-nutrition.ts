@@ -2,6 +2,7 @@ import { calculatePlanNutrients, calculateFlexiblePlanNutrients, roundedNutrient
 import { compareTargetVsPrescribed, type NutrientTarget, type TargetComparisonRow } from "@/lib/nutrition/targets";
 import { resolveMealPlanChangeReferences, buildFoodReferenceLookup } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import type { DraftMeal } from "@/lib/nutrition/draft-types";
+import { draftMealToMealFlex } from "@/lib/nutrition/draft-meal-flex";
 
 /**
  * Adaptador: DraftMeal[] → engine nutricional canônica. Este é o passo que
@@ -30,20 +31,28 @@ export interface DraftNutritionSummary {
   perMealRange: { min: NutrientValues; max: NutrientValues; varies: boolean }[];
   unresolvedCount: number;
   targetComparison: TargetComparisonRow[];
+  /** Faixa do Meal Flex; em SIMPLE min=max. OPTIONS nunca é somado. */
+  range?: { min: NutrientValues; max: NutrientValues; varies: boolean };
 }
 
 export async function calculateDraftNutrition(meals: DraftMeal[], target: NutrientTarget): Promise<DraftNutritionSummary> {
-  const plan = { meals };
+  const flexMeals = meals.map(draftMealToMealFlex);
+  const plan = { meals: flexMeals };
   const { references, measuresById } = await resolveMealPlanChangeReferences(plan);
   const lookup = buildFoodReferenceLookup(references, measuresById);
   const result = calculateFlexiblePlanNutrients(plan, lookup);
+  const totalRange = { min: roundedNutrients(result.total.min), max: roundedNutrients(result.total.max), varies: result.total.varies };
   return {
     total: roundedNutrients(result.total.max),
     perMeal: result.perMeal.map((meal) => roundedNutrients(meal.max)),
-    totalRange: { min: roundedNutrients(result.total.min), max: roundedNutrients(result.total.max), varies: result.total.varies },
+    totalRange,
     perMealRange: result.perMeal.map((meal) => ({ min: roundedNutrients(meal.min), max: roundedNutrients(meal.max), varies: meal.varies })),
     unresolvedCount: result.quality.unresolved,
     targetComparison: compareTargetVsPrescribed(target, result.total.max),
+    // Alias retrocompatível com o consumidor Meal Flex que só conhece um
+    // único par min/max (equivalente a totalRange) — nunca uma segunda
+    // engine, só um nome alternativo pro mesmo resultado.
+    range: totalRange,
   };
 }
 
@@ -60,7 +69,7 @@ export async function calculateDraftNutrition(meals: DraftMeal[], target: Nutrie
  * documentado aqui como limite de escopo consciente, não um bug.
  */
 export async function calculateDraftNutritionRaw(meals: DraftMeal[]): Promise<NutrientValues> {
-  const plan = { meals };
+  const plan = { meals: meals.map(draftMealToMealFlex) };
   const { references, measuresById } = await resolveMealPlanChangeReferences(plan);
   const lookup = buildFoodReferenceLookup(references, measuresById);
   return calculatePlanNutrients(plan, lookup).total.values;

@@ -15,6 +15,7 @@ import { toDisplayFoodName, type FoodResolution } from "@/lib/nutrition/food-res
 // tem exatamente o mesmo contrato de resolveFoodCandidate(s), so envolvendo
 // com o shadow do resolver canonico (ver lib/nutrition/canonical-food-shadow.ts).
 import { resolveFoodWithCanonicalShadow, resolveFoodCandidatesWithCanonicalShadow } from "@/lib/nutrition/canonical-food-shadow";
+import { recordStageTiming } from "@/lib/ai/gateway/e2e-stage-timings";
 import {
   MEAL_KEYS,
   MEAL_KEY_LABELS,
@@ -125,6 +126,8 @@ const draftFoodItemSchema = z.object({
   query: z.string().min(1).max(120),
   quantity: z.number().positive().max(5000),
   unit: z.string().min(1).max(20),
+  preparation: z.string().min(1).max(100).nullable().optional(),
+  optional: z.boolean().optional(),
 }).strict();
 
 // R5.1 — SIMPLE continua exatamente igual (mesmos campos/limites de antes),
@@ -150,6 +153,7 @@ const draftMealLlmSimpleSchema = z.object({
 // de 2 opções: uma "opção" única não é uma escolha real.
 const draftMealLlmOptionSchema = z.object({
   label: z.string().min(1).max(80),
+  description: z.string().max(160).nullable().optional(),
   items: z.array(draftFoodItemSchema).min(1).max(6),
 }).strict();
 
@@ -165,6 +169,7 @@ const draftMealLlmOptionsSchema = z.object({
 // MealChoiceGroupPayload (lib/meal-plans/flexible-structure.ts).
 const draftMealLlmChoiceGroupSchema = z.object({
   title: z.string().min(1).max(80),
+  description: z.string().max(160).nullable().optional(),
   min_selections: z.number().int().min(0).max(5),
   max_selections: z.number().int().min(1).max(5),
   items: z.array(draftFoodItemSchema).min(1).max(6),
@@ -204,6 +209,8 @@ Regras absolutas:
 - Só proponha refeições cujas chaves (mealKey) estejam na lista de "Refeições solicitadas" — nunca adicione uma refeição extra.
 - Evite repetir o mesmo alimento em muitas refeições diferentes — priorize variedade quando fizer sentido para o objetivo.
 - Toda refeição usa "structure":"SIMPLE".
+
+Estrutura: prefira SIMPLE. Use OPTIONS somente para duas ou mais alternativas completas da mesma refeição (ex.: café da manhã opção 1 e opção 2). Use COMBINATION somente para uma refeição montável: fixedItems são fixos e choiceGroups são escolhas, por exemplo “1 proteína” e “1 carboidrato”.
 
 Formato de resposta OBRIGATÓRIO — responda APENAS este JSON, sem markdown, sem texto antes ou depois:
 {"meals":[{"structure":"SIMPLE","mealKey":"cafe_da_manha","recipeId":null,"items":[{"query":"arroz branco cozido","quantity":100,"unit":"g"}],"rationale":"texto curto opcional"}]}
@@ -366,7 +373,8 @@ function resolutionToMealParts(
   quantity: string,
   unitRaw: string,
   path: string,
-  isOptional?: boolean
+  isOptional?: boolean,
+  preparation?: string | null
 ): { item: DraftMealItem | null; needsReview: DraftMealNeedsReview | null } {
   const unit = normalizeUnit(unitRaw);
   if (resolution.status === "RESOLVED" || resolution.status === "CLINICAL_UNKNOWN") {
@@ -381,6 +389,7 @@ function resolutionToMealParts(
         ai_suggested: true,
         needsSafetyReview: resolution.status === "CLINICAL_UNKNOWN",
         ...(isOptional ? { is_optional: true } : {}),
+        ...(preparation ? { preparation } : {}),
       },
       needsReview: null,
     };
@@ -402,7 +411,7 @@ function resolutionToMealParts(
 }
 
 /** Item bruto ainda não resolvido (SIMPLE/OPTIONS/COMBINATION, em qualquer nível aninhado) — shape mínimo comum antes da resolução. */
-interface RawFoodCandidate { query: string; quantity: number; unit: string; isOptional?: boolean }
+interface RawFoodCandidate { query: string; quantity: number; unit: string; isOptional?: boolean; preparation?: string | null }
 
 /**
  * Resolve uma lista de candidatos (já com as resoluções em mãos, buscadas
@@ -430,7 +439,7 @@ function resolveItemList(
     const resolution = resolutions.get(`${keyPrefix}:${itemIndex}`);
     if (!resolution) return;
     const path = `${pathPrefix}[${itemIndex}]`;
-    const { item, needsReview: review } = resolutionToMealParts(resolution, String(candidate.quantity), candidate.unit, path, candidate.isOptional);
+    const { item, needsReview: review } = resolutionToMealParts(resolution, String(candidate.quantity), candidate.unit, path, candidate.isOptional, candidate.preparation);
     if (item) items.push(item);
     if (review) needsReview.push(review);
     if (resolution.status !== "RESOLVED") {
@@ -495,6 +504,7 @@ export async function generateMealPlanDraft(input: GenerateMealPlanDraftInput): 
   let data: z.infer<typeof mealPlanDraftLlmSchema> | null = null;
   const preAssembleWarnings: DraftWarning[] = [];
   let fallbackUsed: MealPlanDraftResult["fallbackUsed"] = "none";
+  const generationStartedAt = Date.now();
 
   if (!input.forceMealByMeal) {
     try {
@@ -527,7 +537,9 @@ export async function generateMealPlanDraft(input: GenerateMealPlanDraftInput): 
         timeoutMs: 120_000,
         maxAttempts: 2,
       });
-      data = result.data;
+      // O gateway valida contra a união acima. A normalização adicional aqui
+      // existe para fixtures SIMPLE legadas e não torna o schema permissivo.
+      data = normalizeMealPlanDraftRaw(result.data) as z.infer<typeof mealPlanDraftLlmSchema>;
     } catch (cause) {
       if (cause instanceof AiConfigError || cause instanceof AiProviderError) throw cause;
       if (cause instanceof AiValidationError) {
@@ -567,7 +579,8 @@ export async function generateMealPlanDraft(input: GenerateMealPlanDraftInput): 
     return { meals: fallback.meals, warnings: [...preAssembleWarnings, ...fallback.warnings], fallbackUsed: "meal_by_meal" };
   }
 
-  const assembled = await assembleDraft(data.meals, input.requestedMeals, candidateRecipes, markers, input.adminId);
+  recordStageTiming(input.clientId, { generationMs: Date.now() - generationStartedAt });
+  const assembled = await assembleDraft(data.meals, input.requestedMeals, candidateRecipes, markers, input.adminId, input.clientId);
   return { meals: assembled.meals, warnings: [...preAssembleWarnings, ...assembled.warnings], fallbackUsed };
 }
 
@@ -653,10 +666,10 @@ interface SafeLlmMeal {
   mealKey: MealKey;
   recipeId: string | null;
   items: RawFoodCandidate[];
-  options: { label: string; items: RawFoodCandidate[] }[];
+  options: { label: string; description?: string | null; items: RawFoodCandidate[] }[];
   fixed_items: RawFoodCandidate[];
   optional_items: RawFoodCandidate[];
-  choice_groups: { title: string; min_selections: number; max_selections: number; items: RawFoodCandidate[] }[];
+  choice_groups: { title: string; description?: string | null; min_selections: number; max_selections: number; items: RawFoodCandidate[] }[];
 }
 
 function coerceLlmMeal(meal: LlmMeal): SafeLlmMeal {
@@ -668,12 +681,12 @@ function coerceLlmMeal(meal: LlmMeal): SafeLlmMeal {
     mealKey: meal.mealKey,
     recipeId: typeof raw.recipeId === "string" ? raw.recipeId : null,
     items: asItemArray(raw.items),
-    options: Array.isArray(raw.options) ? (raw.options as { label: string; items: unknown }[]).map((option) => ({ label: option.label, items: asItemArray(option.items) })) : [],
+    options: Array.isArray(raw.options) ? (raw.options as { label: string; description?: string | null; items: unknown }[]).map((option) => ({ label: option.label, description: option.description ?? null, items: asItemArray(option.items) })) : [],
     fixed_items: asItemArray(raw.fixed_items),
     optional_items: asItemArray(raw.optional_items),
     choice_groups: Array.isArray(raw.choice_groups)
-      ? (raw.choice_groups as { title: string; min_selections: number; max_selections: number; items: unknown }[]).map((group) => ({
-          title: group.title, min_selections: group.min_selections, max_selections: group.max_selections, items: asItemArray(group.items),
+      ? (raw.choice_groups as { title: string; description?: string | null; min_selections: number; max_selections: number; items: unknown }[]).map((group) => ({
+          title: group.title, description: group.description ?? null, min_selections: group.min_selections, max_selections: group.max_selections, items: asItemArray(group.items),
         }))
       : [],
   };
@@ -684,7 +697,8 @@ async function assembleDraft(
   requestedMeals: RequestedMeal[],
   candidateRecipes: RecipePayload[],
   markers: PatientClinicalMarker[],
-  adminId?: string | null
+  adminId?: string | null,
+  timingKey?: string
 ): Promise<MealPlanDraftResult> {
   const warnings: DraftWarning[] = [];
   const requestedByKey = new Map(requestedMeals.map((m) => [m.key, m]));
@@ -734,7 +748,9 @@ async function assembleDraft(
       });
     }
   });
+  const resolutionStartedAt = Date.now();
   const resolutions = await resolveFoodCandidatesWithCanonicalShadow(queries, markers, adminId, "meal_plan_ai");
+  if (timingKey) recordStageTiming(timingKey, { resolutionMs: Date.now() - resolutionStartedAt });
 
   const meals: DraftMeal[] = [];
   pending.forEach((entry, mealIndex) => {
@@ -787,7 +803,7 @@ async function assembleDraft(
     if (meal.structure === "OPTIONS") {
       const options: DraftMealOption[] = meal.options.map((option, optionIndex) => {
         const { items, needsReview } = resolveItemList(option.items, resolutions, `${mealIndex}:options:${optionIndex}`, `options[${optionIndex}].items`, warnings, meal.mealKey);
-        return { id: `option-${optionIndex}`, label: option.label, items, needsReview };
+        return { id: `option-${optionIndex}`, label: option.label, description: option.description ?? null, items, needsReview };
       });
       const hasAnyContent = options.some((option) => option.items.length || option.needsReview.length);
       if (!hasAnyContent) {
@@ -810,7 +826,7 @@ async function assembleDraft(
     const { items: fixedAndOptionalItems, needsReview: fixedNeedsReview } = resolveItemList(combinedCandidates, resolutions, `${mealIndex}:items`, "items", warnings, meal.mealKey);
     const choiceGroups: DraftMealChoiceGroup[] = meal.choice_groups.map((group, groupIndex) => {
       const { items, needsReview } = resolveItemList(group.items, resolutions, `${mealIndex}:groups:${groupIndex}`, `choice_groups[${groupIndex}].items`, warnings, meal.mealKey);
-      return { id: `group-${groupIndex}`, title: group.title, min_selections: group.min_selections, max_selections: group.max_selections, items, needsReview };
+      return { id: `group-${groupIndex}`, title: group.title, description: group.description ?? null, min_selections: group.min_selections, max_selections: group.max_selections, items, needsReview };
     });
     const hasAnyContent = fixedAndOptionalItems.length || fixedNeedsReview.length || choiceGroups.some((group) => group.items.length || group.needsReview.length);
     if (!hasAnyContent) {

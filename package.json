@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/write-build-info.mjs",
     "start": "next start",
     "lint": "eslint .",
     "clean": "next clean",
@@ -27,6 +28,9 @@
     "foods:ibge:portions:dry-run": "node scripts/ibge-portion-import.mjs dry-run",
     "foods:ibge:portions:import:test": "node scripts/ibge-portion-import.mjs import:test",
     "foods:search:calibrate": "tsx scripts/food-search-calibrate.ts",
+    "telemetry:food-search:cleanup": "tsx scripts/food-search-telemetry-maintenance.ts cleanup",
+    "telemetry:food-search:aggregate": "tsx scripts/food-search-telemetry-maintenance.ts aggregate",
+    "foods:search:telemetry:report": "tsx scripts/food-search-telemetry-report.ts",
     "food-kb:usda-pilot": "node scripts/usda-pilot-import.mjs",
     "food-kb:usda-allowlist": "node scripts/usda-production-allowlist.mjs",
     "food-kb:usda-staging-benchmark": "node scripts/usda-staging-benchmark.mjs",

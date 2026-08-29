@@ -37,6 +37,8 @@ export interface DraftMealItem {
   ai_suggested: true;
   /** true quando a identidade foi resolvida mas a segurança clínica não pôde ser confirmada (CLINICAL_UNKNOWN) — conta no cálculo, mas fica destacado na revisão. */
   needsSafetyReview?: boolean;
+  /** Intenção de preparo comunicada pela IA; metadado transitório do draft, distinto do `preparation` de `DraftMealNeedsReview` (que é detectado pela Food Preparation Engine V1 a partir do texto da query, não informado pela IA). */
+  preparation?: string | null;
   /** R5.1 (COMBINATION) — item opcional dentro de uma refeição combinável (fixed items com is_optional=true), reaproveitando exatamente o mesmo campo do domínio real (lib/meal-plans/flexible-structure.ts) — nunca um conceito paralelo. Sempre `undefined`/false para SIMPLE/OPTIONS. */
   is_optional?: boolean;
 }
@@ -72,6 +74,7 @@ export interface DraftMealOption {
   /** Identidade temporária estável só para esta sessão de draft (ex.: "option-0") — nunca persistida como id real; o Composer gera seu próprio id ao salvar. */
   id: string;
   label: string;
+  description?: string | null;
   items: DraftMealItem[];
   needsReview: DraftMealNeedsReview[];
 }
@@ -80,6 +83,7 @@ export interface DraftMealOption {
 export interface DraftMealChoiceGroup {
   id: string;
   title: string;
+  description?: string | null;
   min_selections: number;
   max_selections: number;
   items: DraftMealItem[];
@@ -100,12 +104,12 @@ export interface DraftMeal {
    * construção.
    */
   meal_structure?: "SIMPLE" | "OPTIONS" | "COMBINATION" | null;
-  /** SIMPLE: únicos itens da refeição. COMBINATION: itens FIXOS (alguns podem ter is_optional=true). OPTIONS: só itens fixos adicionais fora das opções (raro; normalmente vazio). Só itens com identidade real — é isto (nunca needsReview) que alimenta o cálculo nutricional. */
+  /** SIMPLE: únicos itens da refeição. COMBINATION: itens FIXOS (alguns podem ter is_optional=true). OPTIONS: só itens fixos adicionais fora das opções (raro; normalmente vazio). Só itens com identidade real — é isto (nunca needsReview) que alimenta o cálculo nutricional, seja via `calculatePlanNutrients` seja via `calculateFlexiblePlanNutrients`. */
   items: DraftMealItem[];
   needsReview: DraftMealNeedsReview[];
-  /** Só presente quando meal_structure é "OPTIONS". */
+  /** Só presente quando meal_structure é "OPTIONS". Alternativas completas, nunca aditivas entre si. */
   options?: DraftMealOption[];
-  /** Só presente quando meal_structure é "COMBINATION". */
+  /** Só presente quando meal_structure é "COMBINATION". Grupos de escolha combináveis; os itens fixos continuam em `items`. */
   choice_groups?: DraftMealChoiceGroup[];
 }
 

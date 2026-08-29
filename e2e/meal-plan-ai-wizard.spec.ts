@@ -20,6 +20,23 @@ test.describe("assistente guiado de criacao de plano com IA", () => {
   test("wizard carrega contexto real do paciente, nunca ativa automaticamente, e falha graciosamente sem provedor de IA configurado", async ({ page, request }) => {
     const patient = await createTestPatient(request);
 
+    // A geração agora exige o mínimo clínico do Copilot. O contrato deste
+    // cenário é o fallback do provedor indisponível, portanto o paciente
+    // precisa estar apto a chegar à geração.
+    const initialRecord = await request.get(`/api/admin/clients/${patient.id}/nutrition-record`);
+    expect(initialRecord.ok()).toBe(true);
+    const nutritionResponse = await request.patch(`/api/admin/clients/${patient.id}/nutrition-record`, {
+      data: {
+        expectedVersion: (await initialRecord.json()).version,
+        goals: "Emagrecimento",
+        current_weight_kg: "70",
+        height_cm: "165",
+        eating_routine: "Rotina comercial",
+        allergies: "Nenhuma",
+      },
+    });
+    expect(nutritionResponse.ok(), await nutritionResponse.text()).toBeTruthy();
+
     await page.goto(`/dashboard/clients/${patient.id}`);
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
 
@@ -34,7 +51,8 @@ test.describe("assistente guiado de criacao de plano com IA", () => {
     // Etapa 1: contexto do paciente — 100% deterministico (sem chamar IA).
     await expect(dialog.getByText(/vou usar os dados clínicos/i)).toBeVisible();
     await expect(dialog.getByText(/dados considerados/i)).toBeVisible();
-    await expect(dialog.getByText(/nenhum dado antropométrico cadastrado/i)).toBeVisible();
+    await expect(dialog.getByText("70 kg")).toBeVisible();
+    await expect(dialog.getByText("165 cm")).toBeVisible();
 
     // Nada foi persistido so por abrir o wizard e ver o contexto.
     const plansAfterContext = (await (await request.get(`/api/admin/clients/${patient.id}/meal-plans`)).json()) as unknown[];

@@ -28,7 +28,23 @@ async function createOmeleteRecipe(request: import("@playwright/test").APIReques
   expect(recipeRes.ok(), await recipeRes.text()).toBeTruthy();
 }
 
+/**
+ * Preenche o prontuário mínimo exigido pelo gate determinístico de
+ * pré-análise (generationReadiness) — adicionado depois deste arquivo, sem
+ * o qual "Gerar pré-plano" nunca habilita. Nunca muda o que os testes
+ * verificam (Food-First), só permite alcançar essa etapa.
+ */
+async function ready(request: import("@playwright/test").APIRequestContext, clientId: string) {
+  const current = await request.get(`/api/admin/clients/${clientId}/nutrition-record`);
+  const record = (await current.json()) as { version: number };
+  const update = await request.patch(`/api/admin/clients/${clientId}/nutrition-record`, {
+    data: { expectedVersion: record.version, goals: "Manutenção", current_weight_kg: "70", height_cm: "165", eating_routine: "Rotina comercial", allergies: "Nenhuma" },
+  });
+  expect(update.ok(), await update.text()).toBeTruthy();
+}
+
 async function generateSimpleBreakfastDraft(page: import("@playwright/test").Page, request: import("@playwright/test").APIRequestContext, clientId: string) {
+  await ready(request, clientId);
   const fixtureRes = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
     data: {
       clientId,
@@ -152,6 +168,7 @@ test.describe("wizard Criar com IA — Food-First V1: receita opcional e substit
 
   test("Cenário D — sugerir substituição por item na revisão: nunca entra no total principal do rascunho", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await ready(request, patient.id);
     const fixtureRes1 = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
       data: {
         clientId: patient.id,

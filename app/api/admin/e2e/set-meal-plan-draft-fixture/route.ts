@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
-import { setE2EStructuredFixture } from "@/lib/ai/gateway/e2e-fixtures";
+import { getE2EFixtureTraces, readE2EStructuredFixture, setE2EStructuredFixture } from "@/lib/ai/gateway/e2e-fixtures";
 import { prepareMealRawForParse, mealPlanDraftLlmSchema } from "@/lib/ai/agents/nutrition/meal-plan-draft-agent";
 
 export const runtime = "nodejs";
@@ -50,6 +50,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: validated.error.issues[0]?.message ?? "Fixture não bate com o schema real do agente." }, { status: 400 });
   }
 
-  setE2EStructuredFixture("meal-plan-draft", parsed.data.clientId, validated.data);
-  return NextResponse.json({ ok: true });
+  const registration = setE2EStructuredFixture("meal-plan-draft", parsed.data.clientId, validated.data);
+  const readback = readE2EStructuredFixture("meal-plan-draft", parsed.data.clientId);
+  return NextResponse.json({ ok: true, registration, readback });
+}
+
+/** Guarded diagnostic readback for Playwright only; never available in production. */
+export async function GET(req: NextRequest) {
+  if (process.env.E2E_TEST_MODE !== "1") return NextResponse.json({ message: "Não encontrado." }, { status: 404 });
+  const admin = await getAdminFromRequest(req);
+  if (!admin) return NextResponse.json({ message: "Não autorizado." }, { status: 401 });
+  const clientId = req.nextUrl.searchParams.get("clientId");
+  if (!clientId) return NextResponse.json({ message: "clientId obrigatório." }, { status: 400 });
+  return NextResponse.json({ traces: getE2EFixtureTraces(clientId) });
 }
