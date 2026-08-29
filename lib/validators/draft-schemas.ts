@@ -24,10 +24,12 @@ export const draftItemSchema = z.object({
   // optimize/regenerate-meal) de um draft flexível ou com preparo/opcional,
   // e o cliente caía silenciosamente em "mantém a nutrição anterior".
   preparation: z.string().max(100).nullable().optional(),
+  // R5.1 — item opcional dentro de COMBINATION (mesmo campo do domínio real).
   is_optional: z.boolean().optional(),
 }).strict();
 
 export const draftNeedsReviewSchema = z.object({
+  // R5.1 (seção 16) — caminho estável até a posição original nested; opcional pra não quebrar chamadores anteriores a esta fase.
   path: z.string().max(200).optional(),
   query: z.string().min(1).max(300),
   quantity: z.string().max(80),
@@ -44,26 +46,37 @@ export const draftNeedsReviewSchema = z.object({
   recipeCandidates: z.array(z.object({ id: z.string(), title: z.string(), servings: z.number() })).max(10).optional(),
 }).strict();
 
+// R5.1 — OPTIONS/COMBINATION reaproveitam exatamente o shape de
+// MealOptionPayload/MealChoiceGroupPayload (lib/meal-plans/flexible-structure.ts).
+export const draftOptionSchema = z.object({
+  id: z.string().min(1).max(60),
+  label: z.string().min(1).max(200),
+  description: z.string().max(500).nullable().optional(),
+  items: z.array(draftItemSchema).max(30),
+  needsReview: z.array(draftNeedsReviewSchema).max(30),
+}).strict();
+
+export const draftChoiceGroupSchema = z.object({
+  id: z.string().min(1).max(60),
+  title: z.string().min(1).max(200),
+  description: z.string().max(500).nullable().optional(),
+  min_selections: z.number().int().min(0).max(10),
+  max_selections: z.number().int().min(1).max(10),
+  items: z.array(draftItemSchema).max(30),
+  needsReview: z.array(draftNeedsReviewSchema).max(30),
+}).strict();
+
 export const draftMealSchema = z.object({
   mealKey: z.enum(MEAL_KEYS),
   name: z.string().min(1).max(200),
   suggested_time: z.string().max(20).nullable(),
   source_recipe_id: z.string().max(80).nullable(),
+  // R5.1 — ausente/null é equivalente a "SIMPLE" (mesma convenção do domínio real).
   meal_structure: z.enum(["SIMPLE", "OPTIONS", "COMBINATION"]).nullable().optional(),
   items: z.array(draftItemSchema).max(30),
-  options: z.array(z.object({
-    label: z.string().min(1).max(200),
-    description: z.string().max(500).nullable().optional(),
-    items: z.array(draftItemSchema).max(30),
-  }).strict()).max(10).optional(),
-  choice_groups: z.array(z.object({
-    title: z.string().min(1).max(200),
-    description: z.string().max(500).nullable().optional(),
-    min_selections: z.number().int().min(0),
-    max_selections: z.number().int().min(1),
-    items: z.array(draftItemSchema).max(30),
-  }).strict()).max(10).optional(),
   needsReview: z.array(draftNeedsReviewSchema).max(30),
+  options: z.array(draftOptionSchema).max(10).optional(),
+  choice_groups: z.array(draftChoiceGroupSchema).max(10).optional(),
 }).strict();
 
 export const draftTargetSchema = z.object({

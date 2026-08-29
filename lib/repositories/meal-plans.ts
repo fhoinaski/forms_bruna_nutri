@@ -2,6 +2,9 @@ import { d1Batch, d1Execute, d1Query, type D1Statement } from "@/lib/d1/client";
 import { getAllTemplates, getSlotClassificationBySourceItemId, type ProtocolTemplate } from "@/lib/repositories/protocol-templates";
 import type { ProtocolTemplateTargetGroup } from "@/lib/protocol-templates/constants";
 import { buildItemSnapshot } from "@/lib/nutrition/food-snapshot-server";
+import { buildRecipeItemSnapshot as serializeRecipeItemSnapshot } from "@/lib/nutrition/food-snapshot";
+import { resolveRecipeItemNutrients } from "@/lib/nutrition/nutrients";
+import { getRecipeReferenceEntry } from "@/lib/repositories/recipes";
 import type { MealPlanVersionSource } from "@/lib/repositories/meal-plan-versions";
 import { encryptJsonValue } from "@/lib/security/encrypted-fields";
 import { getFoodPortionById, toHouseholdMeasureOption, type FoodPortion } from "@/lib/repositories/food-portions";
@@ -79,7 +82,7 @@ export type MealPlanItemPayload = {
   // FASE 6.5 (item 5): TBCA/IBGE_POF aceitos aqui — identidade transportada,
   // mas o Nutrition Engine ainda trata como "nao reconhecido" pro calculo
   // (ver lib/nutrition/nutrients.ts#resolveItemReference, item 8).
-  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | null;
+  food_source?: "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA" | "TBCA" | "IBGE_POF" | "RECIPE" | null;
   food_ref_id?: string | null;
   // FASE 6.5 (item 3) — identidade canonica completa quando food_source e
   // TBCA/IBGE_POF (ex.: "tbca:medidas_caseiras:BRC0001C"). NULL pra item legado.
@@ -177,6 +180,42 @@ type MealChoiceGroupRow = Omit<MealChoiceGroupPayload, "items"> & { id: string; 
 type WeeklySlotRow = MealPlanWeeklySlotPayload & { id: string; meal_plan_id: string; sort_order: number };
 type SubstitutionRow = MealPlanSubstitutionPayload & { id: string; meal_plan_id: string; sort_order: number };
 type SupplementRow = MealPlanSupplementPayload & { id: string; meal_plan_id: string; sort_order: number };
+
+/**
+ * SQLite grava booleanos como inteiro 0/1 — sem essa coerção explícita
+ * campo a campo, um item dentro de `options`/`choice_groups` (Meal Flex)
+ * voltava pro cliente com `quantity_locked`/`substitutions_locked` como
+ * NUMBER cru (bug real: achado auditando save de um plano grande — o
+ * client reenviava esse número puro, e o schema estrito do PUT rejeitava
+ * com "expected boolean, received number"). Um único mapeador pros 3
+ * lugares que leem ItemRow (items/options/choice_groups) garante que os 3
+ * nunca mais divirjam de novo.
+ */
+function mapItemRowForResponse(item: ItemRow) {
+  return {
+    id: item.id,
+    food: item.food,
+    quantity: item.quantity,
+    unit: item.unit,
+    notes: item.notes,
+    food_source: item.food_source ?? null,
+    food_ref_id: item.food_ref_id ?? null,
+    canonical_food_id: item.canonical_food_id ?? null,
+    household_measure_id: item.household_measure_id ?? null,
+    food_name_snapshot: item.food_name_snapshot ?? null,
+    nutrition_snapshot: item.nutrition_snapshot ?? null,
+    resolved_grams_snapshot: item.resolved_grams_snapshot ?? null,
+    quantity_resolution_snapshot: item.quantity_resolution_snapshot ?? null,
+    quantity_locked: Boolean(item.quantity_locked),
+    substitutions_locked: Boolean(item.substitutions_locked),
+    slot_food_group: item.slot_food_group ?? null,
+    slot_food_subgroup: item.slot_food_subgroup ?? null,
+    slot_nutritional_role: item.slot_nutritional_role ?? null,
+    template_slot_id: item.template_slot_id ?? null,
+    slot_exchange_eligible: item.slot_exchange_eligible === null || item.slot_exchange_eligible === undefined ? null : Boolean(item.slot_exchange_eligible),
+    is_optional: Boolean(item.is_optional),
+  };
+}
 type DietTemplateMealRow = Omit<MealPlanMealPayload, "items"> & { id: string; template_id: string; sort_order: number };
 type DietTemplateItemRow = MealPlanItemPayload & { id: string; meal_id: string; sort_order: number };
 type DietTemplateSubstitutionRow = MealPlanSubstitutionPayload & { id: string; template_id: string; sort_order: number };
@@ -389,6 +428,19 @@ async function getRelationalDietTemplates(templateIds: string[]): Promise<Map<st
   return grouped;
 }
 
+/**
+ * R4 (seções 8-9/30-31) — refeições prescritas de UM modelo específico,
+ * já no formato `MealPlanMealPayload` (mesma estrutura de meal_plans.meals),
+ * pra "Modelos de planos" na biblioteca de reuso poder mostrar preview e
+ * aplicar no draft local — reaproveita 100% `getRelationalDietTemplates`
+ * (a mesma fonte usada por `createMealPlanFromTemplates`), nunca uma
+ * segunda leitura de diet_template_meals/items.
+ */
+export async function getTemplateFlatMeals(templateId: string): Promise<MealPlanMealPayload[]> {
+  const grouped = await getRelationalDietTemplates([templateId]);
+  return grouped.get(templateId)?.meals ?? [];
+}
+
 export interface MealPlanMetrics {
   total: number;
   active: number;
@@ -510,37 +562,15 @@ async function hydrateMealPlans(rows: MealPlanRow[]): Promise<MealPlanPayload[]>
       source_recipe_id: meal.source_recipe_id,
       meal_structure: getMealStructure(meal),
       patient_instruction: meal.patient_instruction ?? null,
-      items: (itemsByMeal.get(meal.id) ?? []).filter((item) => !item.meal_option_id && !item.choice_group_id).map((item) => ({
-        id: item.id,
-        food: item.food,
-        quantity: item.quantity,
-        unit: item.unit,
-        notes: item.notes,
-        food_source: item.food_source ?? null,
-        food_ref_id: item.food_ref_id ?? null,
-        canonical_food_id: item.canonical_food_id ?? null,
-        household_measure_id: item.household_measure_id ?? null,
-        food_name_snapshot: item.food_name_snapshot ?? null,
-        nutrition_snapshot: item.nutrition_snapshot ?? null,
-        resolved_grams_snapshot: item.resolved_grams_snapshot ?? null,
-        quantity_resolution_snapshot: item.quantity_resolution_snapshot ?? null,
-        quantity_locked: Boolean(item.quantity_locked),
-        substitutions_locked: Boolean(item.substitutions_locked),
-        slot_food_group: item.slot_food_group ?? null,
-        slot_food_subgroup: item.slot_food_subgroup ?? null,
-        slot_nutritional_role: item.slot_nutritional_role ?? null,
-        template_slot_id: item.template_slot_id ?? null,
-        slot_exchange_eligible: item.slot_exchange_eligible === null || item.slot_exchange_eligible === undefined ? null : Boolean(item.slot_exchange_eligible),
-        is_optional: Boolean(item.is_optional),
-        })),
+      items: (itemsByMeal.get(meal.id) ?? []).filter((item) => !item.meal_option_id && !item.choice_group_id).map(mapItemRowForResponse),
       options: (optionsByMeal.get(meal.id) ?? []).map((option) => ({
         id: option.id, label: option.label, description: option.description ?? null,
-        items: (itemsByOption.get(option.id) ?? []).map((item) => ({ ...item, is_optional: Boolean(item.is_optional) })),
+        items: (itemsByOption.get(option.id) ?? []).map(mapItemRowForResponse),
       })),
       choice_groups: (groupsByMeal.get(meal.id) ?? []).map((group) => ({
         id: group.id, title: group.title, description: group.description ?? null,
         min_selections: group.min_selections, max_selections: group.max_selections,
-        items: (itemsByChoiceGroup.get(group.id) ?? []).map((item) => ({ ...item, is_optional: Boolean(item.is_optional) })),
+        items: (itemsByChoiceGroup.get(group.id) ?? []).map(mapItemRowForResponse),
       })),
       })),
     weekly_slots: (weeklySlotsByPlan.get(row.id) ?? []).map(({ id, weekday, meal_type, title, notes, source_meal_id }) => ({
@@ -994,6 +1024,28 @@ function buildQuantitySnapshots(item: MealPlanItemPayload, portionsById: Map<str
   };
 }
 
+/**
+ * R6 (seções 47-54) — congela a contribuição nutricional de um item de
+ * RECEITA pra exatamente a quantidade/unidade prescrita, no momento do
+ * save. Reaproveita a MESMA coluna `nutrition_snapshot` (formato
+ * discriminado por `kind`, ver food-snapshot.ts) — nenhum schema novo.
+ * Recalcula a partir do estado ATUAL da receita (o snapshot antigo, se
+ * existir, é substituído por um novo — cada save "re-congela" a versão
+ * vigente; um plano publicado nunca é re-salvo, então seu snapshot fica
+ * parado exatamente como estava na última vez que foi salvo).
+ */
+async function buildRecipeItemSnapshot(item: MealPlanItemPayload): Promise<Pick<MealPlanItemPayload, "food_name_snapshot" | "nutrition_snapshot" | "resolved_grams_snapshot">> {
+  if (!item.food_ref_id) return { food_name_snapshot: null, nutrition_snapshot: null, resolved_grams_snapshot: null };
+  const entry = await getRecipeReferenceEntry(item.food_ref_id);
+  if (!entry) return { food_name_snapshot: null, nutrition_snapshot: null, resolved_grams_snapshot: null };
+  const { values, grams } = resolveRecipeItemNutrients(item.quantity, item.unit, entry);
+  return {
+    food_name_snapshot: item.food,
+    nutrition_snapshot: serializeRecipeItemSnapshot(values as unknown as Record<string, number | null>),
+    resolved_grams_snapshot: grams,
+  };
+}
+
 /** Congela nome + composicao de cada item vinculado (P1-A, FASE 20) e a gramagem da medida caseira selecionada. */
 async function resolveMealsWithSnapshots(meals: MealPlanMealPayload[]): Promise<MealPlanMealPayload[]> {
   const allItems = (meal: MealPlanMealPayload) => [meal.items, ...(meal.options ?? []).map((option) => option.items), ...(meal.choice_groups ?? []).map((group) => group.items)].flat();
@@ -1004,6 +1056,10 @@ async function resolveMealsWithSnapshots(meals: MealPlanMealPayload[]): Promise<
     meals.map(async (meal) => {
       const resolveItems = (items: MealPlanItemPayload[]) => Promise.all(items.map(async (item) => {
           if (!item.food.trim()) return item;
+          if (item.food_source === "RECIPE") {
+            const recipeSnapshot = await buildRecipeItemSnapshot(item);
+            return { ...item, ...recipeSnapshot };
+          }
           const snapshot = await buildItemSnapshot(item.food_source, item.food_ref_id);
           const quantitySnapshot = buildQuantitySnapshots(item, portionsById);
           return { ...item, ...snapshot, ...quantitySnapshot };
@@ -1254,7 +1310,8 @@ export async function generateExchangeGroupsForMealPlanItems(input: {
         skipped++;
         continue;
       }
-      if (!item.food_source || !item.food_ref_id) {
+      if (!item.food_source || item.food_source === "RECIPE" || !item.food_ref_id) {
+        // R6 (seção 40) — item de RECEITA nunca gera grupo de troca automático.
         skipped++;
         continue;
       }

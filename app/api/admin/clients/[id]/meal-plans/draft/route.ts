@@ -8,6 +8,7 @@ import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { writeAuditLog } from "@/lib/security/audit";
 import { calculateDraftNutrition } from "@/lib/nutrition/draft-nutrition";
 import { critiqueDraft } from "@/lib/nutrition/draft-critic";
+import { draftMealSchema } from "@/lib/validators/draft-schemas";
 import { recordStageTiming, takeStageTimings } from "@/lib/ai/gateway/e2e-stage-timings";
 
 export const runtime = "nodejs";
@@ -27,6 +28,15 @@ const GenerateDraftSchema = z.object({
   useRecipes: z.boolean(),
   /** Botão manual "Gerar refeição por refeição" no wizard (seção 20 do pedido de robustez) — pula direto pro fallback menor em vez de tentar o plano completo de novo. */
   forceMealByMeal: z.boolean().optional(),
+  /**
+   * R5 (seção 24) — "Usar plano anterior como base": refeições NÃO
+   * selecionadas do plano de origem, passadas só como contexto de
+   * variedade pro Copilot (mesmo parâmetro que `regenerateMealInDraft` já
+   * usa internamente) — nunca usado pra decidir o que persistir.
+   */
+  otherMealsContext: z.array(draftMealSchema).max(6).optional(),
+  /** R5.1 (seção 4) — opt-in explícito: sem isto, o Copilot continua gerando só SIMPLE (comportamento anterior, sem regressão). */
+  allowFlexibleStructure: z.boolean().optional(),
 }).strict();
 
 /**

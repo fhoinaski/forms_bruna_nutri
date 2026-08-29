@@ -6,7 +6,7 @@ export function fieldAfterLabel(page: Page, label: string, tag: "input" | "texta
 }
 
 export async function addMeal(page: Page, name?: string) {
-  await page.getByRole("button", { name: /^refeicao$/i }).click();
+  await page.getByRole("button", { name: /^adicionar refeição$/i }).click();
   const meal = page.locator("article").last();
   if (name) await meal.getByPlaceholder("Nome da refeicao").fill(name);
   return meal;

@@ -99,79 +99,17 @@ function describeItem(food: string, quantity?: string | null, unit?: string | nu
  * preciso quanto o que a UI ja mostra) e busca tudo de uma vez — nunca N+1,
  * nunca dentro do loop sincrono de aplicacao.
  */
-export async function resolveMealPlanChangeReferences(
-  plan: Pick<MealPlanPayload, "meals">,
-  changes: MealPlanChangeOperation[] = []
-): Promise<{ references: MacroReferenceFood[]; measuresById: Map<string, FoodPortion> }> {
-  const customRefIds = new Set<string>();
-  const measureIds = new Set<string>();
-
-  for (const change of changes) {
-    if ("food" in change && (change.food.source === "CUSTOM" || change.food.source === "MANUFACTURER")) {
-      customRefIds.add(change.food.refId);
-    }
-    if ("optionFood" in change && (change.optionFood.source === "CUSTOM" || change.optionFood.source === "MANUFACTURER")) {
-      customRefIds.add(change.optionFood.refId);
-    }
-    if ("householdMeasureId" in change && change.householdMeasureId) {
-      measureIds.add(change.householdMeasureId);
-    }
-  }
-  // FASE 4B: tambem os itens JA EXISTENTES no plano (nao so os tocados por
-  // `changes`) — sem isso, um item CUSTOM/MANUFACTURER que a mudanca atual
-  // nao toca ficava sem referencia estruturada disponivel (caindo pra fuzzy
-  // match por texto em vez do vinculo exato), tanto no preview de "antes"
-  // quanto no calculo de totalVsTarget.
-  for (const meal of plan.meals) {
-    const structuredItems = [meal.items, ...(meal.options ?? []).map((option) => option.items), ...(meal.choice_groups ?? []).map((group) => group.items)].flat();
-    for (const item of structuredItems) {
-      if ((item.food_source === "CUSTOM" || item.food_source === "MANUFACTURER") && item.food_ref_id) {
-        customRefIds.add(item.food_ref_id);
-      }
-      if (item.household_measure_id) measureIds.add(item.household_measure_id);
-    }
-  }
-
-  const [customFoods, portions] = await Promise.all([
-    Promise.all(Array.from(customRefIds).map((id) => getCustomFoodById(id))),
-    Promise.all(Array.from(measureIds).map((id) => getFoodPortionById(id))),
-  ]);
-
-  const references: MacroReferenceFood[] = [
-    ...TACO_REFERENCES,
-    ...customFoods.filter((food): food is NonNullable<typeof food> => Boolean(food)).map(toMacroReferenceFood),
-  ];
-  const measuresById = new Map<string, FoodPortion>();
-  for (const portion of portions) {
-    if (portion) measuresById.set(portion.id, portion);
-  }
-  return { references, measuresById };
-}
-
-/**
- * FASE 4B: adapta `references`/`measuresById` (ja resolvidos, sem I/O
- * adicional) para o formato `FoodReferenceLookup` que o motor central de
- * nutrientes (lib/nutrition/nutrients.ts#calculatePlanNutrients) espera —
- * a MESMA engine usada pelo resto do sistema, nunca um calculo paralelo
- * para a IA. `byUsdaId` fica deliberadamente ausente: nao existe hoje
- * nenhum repositorio/fonte de dado USDA no projeto (auditado nesta fase) —
- * um item com food_source "USDA" cai no fallback fuzzyMatch, mesmo
- * comportamento de antes desta correcao, nunca um dado inventado.
- */
-export function buildFoodReferenceLookup(
-  references: MacroReferenceFood[],
-  measuresById: Map<string, FoodPortion>
-): FoodReferenceLookup {
-  return {
-    byTacoNumber: (numero) => getTacoFoodByNumber(numero),
-    byCustomId: (id) => references.find((reference) => (reference.fonte === "custom" || reference.fonte === "manufacturer") && String(reference.numero ?? "") === id) ?? null,
-    fuzzyMatch: (food) => findBestFoodReference(food, references),
-    byMeasureId: (id) => {
-      const portion = measuresById.get(id);
-      return portion ? toHouseholdMeasureOption(portion) : null;
-    },
-  };
-}
+// R6 — movidos pra lib/nutrition/food-reference-lookup.ts (módulo neutro),
+// importados E reexportados aqui por compatibilidade — nenhum importador
+// existente precisa mudar, e este arquivo continua usando os dois
+// internamente. A extração evitou um import circular real:
+// lib/repositories/recipes.ts também precisa construir um
+// FoodReferenceLookup (pros ingredientes de uma receita), e recipes.ts já
+// é importado por lib/repositories/meal-plans.ts, que este arquivo também
+// importa. `resolveMealPlanChangeReferences` já cobre os itens estruturados
+// aninhados (options[].items/choice_groups[].items), não só `meal.items`.
+export { resolveMealPlanChangeReferences, buildFoodReferenceLookup } from "@/lib/nutrition/food-reference-lookup";
+import { resolveMealPlanChangeReferences, buildFoodReferenceLookup } from "@/lib/nutrition/food-reference-lookup";
 
 /**
  * Valida que todo `food` referenciado nas mudancas corresponde a um
@@ -522,7 +460,10 @@ export function applyMealPlanChangesWithPreview(
         // IBGE_POF (transportada pelo piloto de busca administrativa) ainda
         // não pode virar substituição por este caminho — nunca "ativar
         // canonical em meal_plan_ai" nesta fase.
-        if (item.food_source === "TBCA" || item.food_source === "IBGE_POF") {
+        // R6 (seção 40) — item de RECEITA nunca é tratado automaticamente
+        // como alimento substituível por um alimento canônico: fica
+        // REVIEW_REQUIRED/N-A por decisão explícita desta fase.
+        if (item.food_source === "TBCA" || item.food_source === "IBGE_POF" || item.food_source === "RECIPE") {
           throw new MealPlanChangeValidationError(`"${item.food}" ainda não suporta substituição automática por este assistente — edite manualmente pelo editor de plano.`);
         }
         const baseFood = findFoodReferenceByIdentity(references, item.food_source, item.food_ref_id);

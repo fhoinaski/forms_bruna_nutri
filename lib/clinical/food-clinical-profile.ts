@@ -3,6 +3,7 @@ import { getTacoFoodByNumber } from "@/lib/nutrition/taco";
 import { getCustomFoodById } from "@/lib/repositories/custom-foods";
 import { listFoodClinicalTraits } from "@/lib/repositories/food-clinical-traits";
 import { getRecipeById, type RecipePayload } from "@/lib/repositories/recipes";
+import { normalizeIngredientForRead } from "@/lib/nutrition/recipes";
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
 import type { FoodReference } from "@/lib/nutrition/food-catalog";
 
@@ -39,7 +40,7 @@ async function getPersistedFoodClinicalProfile(foodSource: "CUSTOM" | "MANUFACTU
 
 function aggregateRecipeTraits(recipe: RecipePayload, ingredientProfiles: FoodClinicalProfile[]): FoodClinicalProfile {
   const reasons: string[] = [];
-  if (recipe.ingredients.some((ingredient) => !ingredient.taco_number)) {
+  if (recipe.ingredients.map(normalizeIngredientForRead).some((ingredient) => ingredient.food_source !== "TACO" || !ingredient.food_ref_id)) {
     reasons.push("recipe_has_free_text_ingredient");
   }
 
@@ -70,11 +71,12 @@ async function getRecipeClinicalProfile(foodId: string): Promise<FoodClinicalPro
   const recipe = await getRecipeById(foodId);
   if (!recipe) return { foodSource: "RECIPE", foodId, traits: [], completeness: "unknown", reasons: ["recipe_not_found"] };
   const profiles: FoodClinicalProfile[] = [];
-  for (const ingredient of recipe.ingredients) {
-    if (!ingredient.taco_number) continue;
-    const taco = getTacoFoodByNumber(ingredient.taco_number);
+  for (const raw of recipe.ingredients) {
+    const ingredient = normalizeIngredientForRead(raw);
+    if (ingredient.food_source !== "TACO" || !ingredient.food_ref_id) continue;
+    const taco = getTacoFoodByNumber(ingredient.food_ref_id);
     if (!taco) {
-      profiles.push({ foodSource: "TACO", foodId: String(ingredient.taco_number), traits: [], completeness: "unknown", reasons: ["recipe_taco_ingredient_not_found"] });
+      profiles.push({ foodSource: "TACO", foodId: ingredient.food_ref_id, traits: [], completeness: "unknown", reasons: ["recipe_taco_ingredient_not_found"] });
       continue;
     }
     profiles.push(buildCuratedTacoClinicalProfile(taco));

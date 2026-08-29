@@ -1,26 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { mealPlanDraftLlmSchema } from "@/lib/ai/agents/nutrition/meal-plan-draft-agent";
+import { draftMealLlmSchema, prepareMealRawForParse } from "@/lib/ai/agents/nutrition/meal-plan-draft-agent";
 import { draftMealToMealFlex } from "@/lib/nutrition/draft-meal-flex";
 import { calculateMealNutritionRange } from "@/lib/meal-plans/flexible-structure";
 
 const item = { query: "arroz branco cozido", quantity: 100, unit: "g" };
-const mealBase = { mealKey: "almoco", recipeId: null };
+const mealKey = "almoco";
 
 describe("R1.2.3 flexible draft contract", () => {
   it("accepts each explicit structured shape and rejects mixed/unknown ones", () => {
     // Mesmo formato SIMPLE legado usado pelas fixtures E2E é normalizado na
-    // própria fronteira Zod antes de qualquer chamada ao provider.
-    expect(mealPlanDraftLlmSchema.safeParse({ meals: [{ ...mealBase, items: [item] }] }).success).toBe(true);
-    expect(mealPlanDraftLlmSchema.safeParse({ meals: [{ ...mealBase, structureType: "SIMPLE", items: [item] }] }).success).toBe(true);
-    expect(mealPlanDraftLlmSchema.safeParse({ meals: [{ ...mealBase, structureType: "OPTIONS", options: [{ label: "A", items: [item] }, { label: "B", items: [item] }] }] }).success).toBe(true);
-    expect(mealPlanDraftLlmSchema.safeParse({ meals: [{ ...mealBase, structureType: "COMBINATION", fixedItems: [], choiceGroups: [{ label: "Proteína", minSelections: 1, maxSelections: 1, items: [item] }] }] }).success).toBe(true);
-    expect(mealPlanDraftLlmSchema.safeParse({ meals: [{ ...mealBase, structureType: "SIMPLE", items: [item], options: [] }] }).success).toBe(false);
-    expect(mealPlanDraftLlmSchema.safeParse({ meals: [{ ...mealBase, structureType: "UNKNOWN", items: [item] }] }).success).toBe(false);
+    // própria fronteira (`prepareMealRawForParse`) antes do parse Zod real.
+    expect(draftMealLlmSchema.safeParse(prepareMealRawForParse({ mealKey, recipeId: null, items: [item] })).success).toBe(true);
+    expect(draftMealLlmSchema.safeParse({ mealKey, recipeId: null, structure: "SIMPLE", items: [item] }).success).toBe(true);
+    // OPTIONS/COMBINATION nunca carregam "recipeId"/"items" de nível de refeição (só os campos da própria estrutura).
+    expect(draftMealLlmSchema.safeParse({ mealKey, structure: "OPTIONS", options: [{ label: "A", items: [item] }, { label: "B", items: [item] }] }).success).toBe(true);
+    expect(draftMealLlmSchema.safeParse({ mealKey, structure: "COMBINATION", fixed_items: [], choice_groups: [{ title: "Proteína", min_selections: 1, max_selections: 1, items: [item] }] }).success).toBe(true);
+    expect(draftMealLlmSchema.safeParse({ mealKey, recipeId: null, structure: "SIMPLE", items: [item], options: [] }).success).toBe(false);
+    expect(draftMealLlmSchema.safeParse({ mealKey, recipeId: null, structure: "UNKNOWN", items: [item] }).success).toBe(false);
   });
 
   it("maps nested resolved items to the existing Meal Flex payload without flattening", () => {
     const food = { food: "Arroz, branco, cozido", displayName: "Arroz branco cozido", quantity: "100", unit: "g", food_source: "TACO" as const, food_ref_id: "1", ai_suggested: true as const, preparation: "cozido", is_optional: true };
-    const mapped = draftMealToMealFlex({ mealKey: "almoco", name: "Almoço", suggested_time: "12:00", source_recipe_id: null, meal_structure: "COMBINATION", items: [food], choice_groups: [{ title: "Proteína", min_selections: 1, max_selections: 1, items: [food] }], needsReview: [] });
+    const mapped = draftMealToMealFlex({
+      mealKey: "almoco", name: "Almoço", suggested_time: "12:00", source_recipe_id: null, meal_structure: "COMBINATION",
+      items: [food],
+      choice_groups: [{ id: "group-0", title: "Proteína", min_selections: 1, max_selections: 1, items: [food], needsReview: [] }],
+      needsReview: [],
+    });
     expect(mapped.meal_structure).toBe("COMBINATION");
     expect(mapped.items[0].is_optional).toBe(true);
     expect(mapped.items[0].notes).toBe("cozido");

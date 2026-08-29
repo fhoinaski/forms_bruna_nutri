@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { calculateMealNutritionRange, getMealStructure, getMealStructureItems, validateMealStructure } from "@/lib/meal-plans/flexible-structure";
-import { cleanMealsForSave } from "@/components/dashboard/MealItemsEditor";
+import { cleanMealsForSave, duplicateMealOptionAt } from "@/components/dashboard/MealItemsEditor";
 
 const item = (food: string, kcal: number, optional = false) => ({ food, is_optional: optional, notes: String(kcal) });
 const values = (value: { notes?: string | null }) => ({ energyKcal: Number(value.notes ?? 0), proteinG: 0, carbohydrateG: 0, fatG: 0, fiberG: 0 });
@@ -43,5 +43,12 @@ describe("flexible meal structure", () => {
   it("rejects invalid group bounds and empty options", () => {
     expect(validateMealStructure({ name: "x", meal_structure: "OPTIONS", items: [] }).length).toBeGreaterThan(0);
     expect(validateMealStructure({ name: "x", meal_structure: "COMBINATION", items: [], choice_groups: [{ title: "x", min_selections: 2, max_selections: 1, items: [] }] }).length).toBeGreaterThan(0);
+  });
+  it("duplicates an option branch without sharing its item objects", () => {
+    const options = [{ label: "Opção 1", items: [{ food: "Ovo", quantity: "1", unit: "un" }] }];
+    const copy = duplicateMealOptionAt(options, 0);
+    expect(copy).toHaveLength(2);
+    expect(copy[1]?.label).toContain("cópia");
+    expect(copy[1]?.items[0]).not.toBe(options[0]?.items[0]);
   });
 });
