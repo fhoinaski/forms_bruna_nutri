@@ -104,7 +104,7 @@ test.describe("Modo Consulta", () => {
 
     // Sai e tenta iniciar de novo — nunca cria uma segunda sessão in_progress.
     await page.goto(`/dashboard/clients/${patient.id}`);
-    await page.getByRole("button", { name: "Continuar consulta" }).click();
+    await page.locator(".brand-card > header").getByRole("button", { name: "Continuar consulta" }).click();
     await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta$`));
 
     const secondResponse = await page.request.get(`/api/admin/clients/${patient.id}/consultation`);
