@@ -129,7 +129,7 @@ test.describe("R6 publication gate", () => {
     const { code } = await enablePortalAccess(request, patient.id);
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByPlaceholder("BF-0000-0000").fill(code);
+    await page.getByLabel("Senha").fill(code);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
     await expect(page.getByText("Seu plano alimentar ainda não foi publicado.")).toBeVisible();
 

@@ -159,7 +159,7 @@ test.describe("wizard Criar com IA — Food-First V1: receita opcional e substit
     const portalPage = await page.context().newPage();
     await portalPage.goto("/portal");
     await portalPage.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await portalPage.getByPlaceholder("BF-0000-0000").fill(code);
+    await portalPage.getByLabel("Senha").fill(code);
     await portalPage.getByRole("button", { name: /acessar meu portal/i }).click();
     await expect(portalPage.getByText(suggestedTitle)).toBeVisible();
     await expect(portalPage.getByText(/ovo,?\s*de galinha,?\s*inteiro,?\s*cru/i).first()).toBeVisible();

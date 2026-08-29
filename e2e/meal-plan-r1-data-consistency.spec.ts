@@ -78,7 +78,7 @@ test.describe("R1 data consistency", () => {
 
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByPlaceholder("BF-0000-0000").fill(code);
+    await page.getByLabel("Senha").fill(code);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
     await expect(page.getByText("Plano alimentar", { exact: true })).toBeVisible();
     await expect(page.getByText("v2", { exact: true })).toBeVisible();

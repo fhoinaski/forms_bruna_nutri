@@ -196,7 +196,7 @@ test.describe("guardrails de IA", () => {
     });
 
     const portalContext = await browser.newContext({ storageState: undefined });
-    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, code } });
+    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, password: code } });
     expect(loginResponse.ok()).toBe(true);
 
     const portalConfirm = await portalContext.request.post(`/api/portal/ai/proposals/${proposal.proposalId}/confirm`);

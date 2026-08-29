@@ -72,7 +72,7 @@ test.describe("portal do paciente", () => {
 
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByPlaceholder("BF-0000-0000").fill(code);
+    await page.getByLabel("Senha").fill(code);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
 
     await expect(page.getByText(new RegExp(`ola, ${patient.name.split(" ")[0]}`, "i"))).toBeVisible();
@@ -118,7 +118,7 @@ test.describe("portal do paciente", () => {
 
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByPlaceholder("BF-0000-0000").fill(code);
+    await page.getByLabel("Senha").fill(code);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
     await expect(page.getByText(/ola,/i)).toBeVisible();
 
@@ -145,7 +145,7 @@ test.describe("portal do paciente", () => {
     const taskB = await createTestTask(request, patientB.id, { title: "Tarefa exclusiva da paciente B" });
 
     const contextA = await browser.newContext({ storageState: undefined });
-    const loginA = await contextA.request.post("/api/portal/login", { data: { email: patientA.email, code: accessA.code } });
+    const loginA = await contextA.request.post("/api/portal/login", { data: { email: patientA.email, password: accessA.code } });
     expect(loginA.ok()).toBe(true);
 
     const meA = await (await contextA.request.get("/api/portal/me")).json();
@@ -161,7 +161,7 @@ test.describe("portal do paciente", () => {
 
     // A tarefa da paciente B continua intacta (pendente) — confirmado pela propria sessao dela.
     const contextB = await browser.newContext({ storageState: undefined });
-    const loginB = await contextB.request.post("/api/portal/login", { data: { email: patientB.email, code: accessB.code } });
+    const loginB = await contextB.request.post("/api/portal/login", { data: { email: patientB.email, password: accessB.code } });
     expect(loginB.ok()).toBe(true);
     const meB = await (await contextB.request.get("/api/portal/me")).json();
     const taskBAfter = meB.tasks.find((task: { id: string }) => task.id === taskB.id);

@@ -95,7 +95,7 @@ test.describe("plano alimentar", () => {
     // Portal do paciente mostra a versao ativa correta.
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByPlaceholder("BF-0000-0000").fill(code);
+    await page.getByLabel("Senha").fill(code);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
 
     await expect(page.getByRole("heading", { name: "Plano alimentar" })).toBeVisible();

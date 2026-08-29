@@ -130,7 +130,7 @@ async function publishPlanByApi(request: APIRequestContext, patientId: string, p
 async function loginPatient(page: Page, email: string, code: string) {
   await page.goto("/portal");
   await page.getByPlaceholder("seunome@email.com").fill(email);
-  await page.getByPlaceholder("BF-0000-0000").fill(code);
+  await page.getByLabel("Senha").fill(code);
   await page.getByRole("button", { name: /acessar meu portal/i }).click();
   await expect(page.getByText(/ola,/i)).toBeVisible();
 }

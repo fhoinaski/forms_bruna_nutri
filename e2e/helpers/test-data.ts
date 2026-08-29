@@ -95,11 +95,19 @@ export async function createTestSubmission(api: APIRequestContext, overrides: Pa
   return { id: body.id, patientName: nome, email };
 }
 
-export async function enablePortalAccess(api: APIRequestContext, clientId: string): Promise<{ code: string }> {
-  const response = await api.post(`/api/admin/clients/${clientId}/portal-access`);
+export const E2E_PORTAL_PASSWORD = "E2ePortal!2026Senha";
+
+/** Creates a real ACTIVE R8.3 credential. Login remains the production path. */
+export async function createActivePortalAccess(api: APIRequestContext, clientId: string, password = E2E_PORTAL_PASSWORD): Promise<{ password: string }> {
+  const response = await api.post("/api/admin/e2e/portal-credentials", { data: { clientId, password } });
   await expectOk(response, "enablePortalAccess");
-  const body = (await response.json()) as { code: string };
-  return { code: body.code };
+  return { password };
+}
+
+/** @deprecated Migrate callers to createActivePortalAccess and its `password` field. */
+export async function enablePortalAccess(api: APIRequestContext, clientId: string): Promise<{ code: string }> {
+  const { password } = await createActivePortalAccess(api, clientId);
+  return { code: password };
 }
 
 export async function createTestTask(api: APIRequestContext, clientId: string, overrides: Partial<{ title: string }> = {}) {

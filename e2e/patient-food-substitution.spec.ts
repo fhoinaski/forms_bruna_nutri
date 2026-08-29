@@ -59,7 +59,7 @@ test.describe("substituição alimentar segura no portal", () => {
 
     // 1-3. Paciente autentica e confirma a proposta pelo canal do portal.
     const portalContext = await browser.newContext({ storageState: undefined });
-    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, code } });
+    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, password: code } });
     expect(loginResponse.ok()).toBe(true);
 
     const confirmResponse = await portalContext.request.post(`/api/portal/ai/proposals/${proposal.proposalId}/confirm`);
@@ -100,7 +100,7 @@ test.describe("substituição alimentar segura no portal", () => {
     });
 
     const portalContext = await browser.newContext({ storageState: undefined });
-    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, code } });
+    const loginResponse = await portalContext.request.post("/api/portal/login", { data: { email: patient.email, password: code } });
     expect(loginResponse.ok()).toBe(true);
 
     const confirmResponse = await portalContext.request.post(`/api/portal/ai/proposals/${proposal.proposalId}/confirm`);
