@@ -1708,10 +1708,13 @@ export default function ClientWorkspace({
 
   async function startConsultation() {
     if (patientSummary.patient.status === "arquivado") return;
+    let sessionId: string | null = null;
     try {
-      await fetch(`/api/admin/clients/${id}/consultation`, { method: "POST" });
+      const response = await fetch(`/api/admin/clients/${id}/consultation`, { method: "POST" });
+      const data = await response.json().catch(() => null) as { workspace?: { consultation?: { id?: string } } } | null;
+      sessionId = data?.workspace?.consultation?.id ?? null;
     } finally {
-      router.push(`/dashboard/clients/${id}/consulta`);
+      router.push(`/dashboard/clients/${id}/consulta${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`);
     }
   }
 

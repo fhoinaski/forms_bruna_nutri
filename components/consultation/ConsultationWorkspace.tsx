@@ -34,6 +34,22 @@ const DRAFT_FIELDS: Array<{ key: keyof ConsultationWorkspaceDraft; label: string
   { key: "observations", label: "Observações livres", hint: "Notas adicionais exatamente como registradas pela nutricionista.", rows: 4 },
 ];
 
+const CONSULTATION_STEPS = [
+  { id: "resumo", label: "Resumo", description: "Contexto clínico e pendências" },
+  { id: "mudancas", label: "Mudanças", description: "Desde o último atendimento" },
+  { id: "anamnese", label: "Anamnese", description: "Prontuário e informações faltantes" },
+  { id: "antropometria", label: "Antropometria", description: "Avaliação e evolução" },
+  { id: "plano", label: "Plano", description: "Plano alimentar existente" },
+  { id: "recomendacoes", label: "Recomendações", description: "Conduta e metas" },
+  { id: "retorno", label: "Retorno", description: "Agenda e próximos passos" },
+] as const;
+
+type ConsultationStep = typeof CONSULTATION_STEPS[number]["id"];
+
+function isConsultationStep(value: string | null): value is ConsultationStep {
+  return CONSULTATION_STEPS.some((step) => step.id === value);
+}
+
 type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 
 function formatDate(value: string | null | undefined, options: Intl.DateTimeFormatOptions = { day: "2-digit", month: "2-digit", year: "numeric" }) {
@@ -85,6 +101,8 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
+  const requestedStep = searchParams.get("step");
+  const activeStep: ConsultationStep = isConsultationStep(requestedStep) ? requestedStep : "resumo";
   const [workspace, setWorkspace] = useState<PatientConsultationWorkspaceViewModel | null>(null);
   const [draft, setDraft] = useState<ConsultationWorkspaceDraft | null>(null);
   const [lastSavedDraft, setLastSavedDraft] = useState<ConsultationWorkspaceDraft | null>(null);
@@ -137,6 +155,14 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
   function guardNavigation(next: () => void) {
     if (dirty && !window.confirm("Existem alterações não salvas nesta consulta. Sair sem salvar?")) return;
     next();
+  }
+
+  function selectStep(step: ConsultationStep) {
+    const params = new URLSearchParams();
+    const currentSessionId = sessionId ?? consultation?.id;
+    if (currentSessionId) params.set("sessionId", currentSessionId);
+    params.set("step", step);
+    guardNavigation(() => router.push(`/dashboard/clients/${clientId}/consulta?${params.toString()}`));
   }
 
   async function startSession() {
@@ -271,6 +297,26 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
         {actionError && <p className="mt-3 text-xs text-[#9A5C4E]">{actionError}</p>}
       </header>
 
+      <nav aria-label="Etapas da consulta" className="overflow-x-auto rounded-lg border border-[#EDE1D6] bg-white p-2">
+        <ol className="flex min-w-max gap-1">
+          {CONSULTATION_STEPS.map((step, index) => {
+            const current = activeStep === step.id;
+            return (
+              <li key={step.id}>
+                <button
+                  type="button"
+                  aria-current={current ? "step" : undefined}
+                  onClick={() => selectStep(step.id)}
+                  className={`min-h-11 rounded-md px-3 py-2 text-left text-xs transition ${current ? "bg-[#EEF3EA] font-semibold text-[#3A3028]" : "text-[#75675E] hover:bg-[#FBF7F1]"}`}
+                >
+                  <span className="mr-1 text-[10px] text-[#8C6E52]">{index + 1}</span>{step.label}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+
       <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start" aria-label="Contexto do paciente">
           <ContextCard label="Objetivo" value={workspace.patient.primaryGoal ?? "Anamnese ainda não preenchida"} action={
@@ -321,11 +367,55 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
         </aside>
 
         <main className="space-y-4">
+          <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-4" aria-labelledby="consultation-step-title">
+            <p className="brand-kicker">Etapa {CONSULTATION_STEPS.findIndex((step) => step.id === activeStep) + 1} de {CONSULTATION_STEPS.length}</p>
+            <h2 id="consultation-step-title" className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">
+              {CONSULTATION_STEPS.find((step) => step.id === activeStep)?.label}
+            </h2>
+            <p className="mt-1 text-sm text-[#75675E]">{CONSULTATION_STEPS.find((step) => step.id === activeStep)?.description}</p>
+          </section>
+
+          {activeStep === "resumo" && (
+            <section className="grid gap-3 sm:grid-cols-2" aria-label="Resumo da consulta">
+              <ContextCard label="Objetivo atual" value={workspace.patient.primaryGoal ?? "Anamnese ainda não preenchida"} />
+              <ContextCard label="Última consulta" value={workspace.previousConsultation ? formatDate(workspace.previousConsultation.date) : "Sem consulta anterior"} />
+              <ContextCard label="Plano atual" value={workspace.activeMealPlan ? `${workspace.activeMealPlan.title} · v${workspace.activeMealPlan.version}` : "Nenhum plano ativo"} />
+              <ContextCard label="Última avaliação" value={formatWeight(workspace.latestAnthropometry?.weightKg)} detail={workspace.weightDelta ? `Variação: ${workspace.weightDelta.label}` : null} />
+            </section>
+          )}
+
+          {activeStep === "mudancas" && (
+            <section className="rounded-lg border border-[#EDE1D6] bg-white p-5" aria-label="Mudanças desde a última consulta">
+              <h3 className="font-serif text-lg font-semibold text-[#3A3028]">Dados disponíveis desde o último atendimento</h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <ContextCard label="Peso" value={workspace.weightDelta ? `${formatWeight(workspace.previousAnthropometry?.weightKg)} → ${formatWeight(workspace.latestAnthropometry?.weightKg)}` : "Sem comparação antropométrica"} detail={workspace.weightDelta ? workspace.weightDelta.label : null} />
+                <ContextCard label="Pré-consulta" value={workspace.intakeSummary ? `Respondida em ${formatDate(workspace.intakeSummary.submittedAt)}` : "Nenhuma resposta disponível"} detail={workspace.intakeSummary?.motivation ?? workspace.intakeSummary?.objective ?? null} />
+              </div>
+              <p className="mt-3 text-xs text-[#75675E]">Esta etapa mostra somente dados registrados; nenhum resumo clínico é inventado automaticamente.</p>
+            </section>
+          )}
+
+          {activeStep === "anamnese" && (
+            <ContextCard label="Anamnese" value={workspace.patient.primaryGoal ?? "Ainda não preenchida"} detail="A edição permanece no prontuário existente para preservar versionamento e histórico." action={<button type="button" onClick={() => guardNavigation(() => router.push(`/dashboard/clients/${clientId}?tab=anamnese`))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir anamnese</button>} />
+          )}
+
+          {activeStep === "antropometria" && (
+            <ContextCard label="Antropometria" value={formatWeight(workspace.latestAnthropometry?.weightKg)} detail={workspace.latestAnthropometry?.bmi !== null && workspace.latestAnthropometry?.bmi !== undefined ? `IMC: ${workspace.latestAnthropometry.bmi.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}` : "IMC não disponível"} action={<button type="button" onClick={() => guardNavigation(() => router.push(getAnthropometryHref(clientId, consultation.id)))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Registrar avaliação</button>} />
+          )}
+
+          {activeStep === "plano" && (
+            <ContextCard label="Plano alimentar" value={workspace.activeMealPlan ? `${workspace.activeMealPlan.title} · ativo` : workspace.draftMealPlan ? `${workspace.draftMealPlan.title} · rascunho` : "Nenhum plano criado"} detail={workspace.draftMealPlan ? `Rascunho v${workspace.draftMealPlan.version}; a consulta nunca o publica automaticamente.` : null} action={<button type="button" onClick={() => guardNavigation(() => router.push(getMealPlanHref(clientId, { consultationId: consultation.id, draft: Boolean(workspace.draftMealPlan) })))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Abrir plano alimentar</button>} />
+          )}
+
+          {activeStep === "retorno" && (
+            <ContextCard label="Retorno" value={workspace.appointmentContext ? formatDateTime(workspace.appointmentContext.startsAt) : "Nenhum retorno agendado"} detail={workspace.appointmentContext?.title ?? "A agenda existente continua responsável pelo agendamento."} action={<button type="button" onClick={() => guardNavigation(() => router.push(getScheduleReturnHref(clientId, consultation.id)))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">Agendar retorno</button>} />
+          )}
+
           <section className="rounded-lg border border-[#EDE1D6] bg-white p-5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="brand-kicker">Consulta atual</p>
-                <h2 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">Registro clínico</h2>
+                <h2 className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">{activeStep === "recomendacoes" ? "Recomendações e conduta" : "Registro clínico"}</h2>
                 <p className="mt-1 text-sm text-[#75675E]">Campos salvos explicitamente nesta sessão. A IA pode apoiar, mas não salva nem calcula dados.</p>
               </div>
               <button
