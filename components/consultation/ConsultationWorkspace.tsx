@@ -266,7 +266,7 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
-      <header className="rounded-lg border border-[#EDE1D6] bg-white p-4">
+      <header className="sticky top-2 z-20 rounded-lg border border-[#EDE1D6] bg-white/95 p-4 shadow-sm backdrop-blur">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <nav className="mb-2 flex flex-wrap items-center gap-1 text-xs text-[#75675E]" aria-label="Breadcrumb">
@@ -279,9 +279,12 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
               <span>Consulta</span>
             </nav>
             <h1 className="font-serif text-2xl font-semibold text-[#3A3028]">{workspace.patient.name}</h1>
-            <p className="mt-1 text-sm text-[#75675E]">
-              {consultation.appointmentType ?? "Consulta"} · {formatDateTime(consultation.appointmentDate ?? consultation.startedAt)} · {statusLabel(consultation.status)}
-            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#75675E]">
+              <span>{consultation.appointmentType ?? "Consulta"} · {formatDateTime(consultation.appointmentDate ?? consultation.startedAt)}</span>
+              <span className="inline-flex items-center gap-1 font-semibold text-[#607A56]"><span className="h-2 w-2 rounded-full bg-[#607A56]" /> {statusLabel(consultation.status)}</span>
+              {workspace.patient.primaryGoal && <span>Objetivo: {workspace.patient.primaryGoal}</span>}
+              {workspace.previousConsultation && <span>Último atendimento: {formatDate(workspace.previousConsultation.date)}</span>}
+            </div>
             {consultation.readOnlyReason && <p className="mt-2 text-xs font-semibold text-[#9A5C4E]">{consultation.readOnlyReason}</p>}
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
@@ -297,7 +300,7 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
         {actionError && <p className="mt-3 text-xs text-[#9A5C4E]">{actionError}</p>}
       </header>
 
-      <nav aria-label="Etapas da consulta" className="overflow-x-auto rounded-lg border border-[#EDE1D6] bg-white p-2">
+      <nav aria-label="Etapas da consulta" className="overflow-x-auto rounded-lg border border-[#EDE1D6] bg-white p-2 xl:hidden">
         <ol className="flex min-w-max gap-1">
           {CONSULTATION_STEPS.map((step, index) => {
             const current = activeStep === step.id;
@@ -317,8 +320,18 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
         </ol>
       </nav>
 
-      <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start" aria-label="Contexto do paciente">
+      <div className="grid gap-4 xl:grid-cols-[190px_minmax(0,1fr)_280px]">
+        <nav className="hidden xl:sticky xl:top-28 xl:order-1 xl:block xl:self-start" aria-label="Etapas da consulta">
+          <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8C6E52]">Consulta</p>
+          <ol className="space-y-1 rounded-lg border border-[#EDE1D6] bg-white p-2">
+            {CONSULTATION_STEPS.map((step, index) => {
+              const current = activeStep === step.id;
+              return <li key={step.id}><button type="button" aria-current={current ? "step" : undefined} onClick={() => selectStep(step.id)} className={`flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-left text-sm transition ${current ? "bg-[#EEF3EA] font-semibold text-[#3A3028]" : "text-[#75675E] hover:bg-[#FBF7F1]"}`}><span className="text-xs text-[#8C6E52]">{index + 1}</span>{step.label}</button></li>;
+            })}
+          </ol>
+        </nav>
+
+        <aside className="order-3 space-y-3 xl:sticky xl:top-28 xl:self-start" aria-label="Contexto do paciente">
           <ContextCard label="Objetivo" value={workspace.patient.primaryGoal ?? "Anamnese ainda não preenchida"} action={
             <button type="button" onClick={() => guardNavigation(() => router.push(`/dashboard/clients/${clientId}?tab=anamnese`))} className="text-xs font-semibold text-[#607A56] hover:text-[#3A3028]">
               {workspace.patient.primaryGoal ? "Ver anamnese" : "Preencher anamnese"}
@@ -366,7 +379,7 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
           </button>
         </aside>
 
-        <main className="space-y-4">
+        <main className="order-2 min-w-0 space-y-4">
           <section className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] p-4" aria-labelledby="consultation-step-title">
             <p className="brand-kicker">Etapa {CONSULTATION_STEPS.findIndex((step) => step.id === activeStep) + 1} de {CONSULTATION_STEPS.length}</p>
             <h2 id="consultation-step-title" className="mt-1 font-serif text-xl font-semibold text-[#3A3028]">
@@ -376,11 +389,26 @@ export function ConsultationWorkspace({ clientId }: { clientId: string }) {
           </section>
 
           {activeStep === "resumo" && (
-            <section className="grid gap-3 sm:grid-cols-2" aria-label="Resumo da consulta">
-              <ContextCard label="Objetivo atual" value={workspace.patient.primaryGoal ?? "Anamnese ainda não preenchida"} />
-              <ContextCard label="Última consulta" value={workspace.previousConsultation ? formatDate(workspace.previousConsultation.date) : "Sem consulta anterior"} />
-              <ContextCard label="Plano atual" value={workspace.activeMealPlan ? `${workspace.activeMealPlan.title} · v${workspace.activeMealPlan.version}` : "Nenhum plano ativo"} />
-              <ContextCard label="Última avaliação" value={formatWeight(workspace.latestAnthropometry?.weightKg)} detail={workspace.weightDelta ? `Variação: ${workspace.weightDelta.label}` : null} />
+            <section className="space-y-4" aria-label="Resumo da consulta">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ContextCard label="Objetivo atual" value={workspace.patient.primaryGoal ?? "Anamnese ainda não preenchida"} />
+                <ContextCard label="Última consulta" value={workspace.previousConsultation ? formatDate(workspace.previousConsultation.date) : "Sem consulta anterior"} />
+                <ContextCard label="Plano atual" value={workspace.activeMealPlan ? `${workspace.activeMealPlan.title} · v${workspace.activeMealPlan.version}` : "Nenhum plano ativo"} />
+                <ContextCard label="Última avaliação" value={formatWeight(workspace.latestAnthropometry?.weightKg)} detail={workspace.weightDelta ? `Variação: ${workspace.weightDelta.label}` : null} />
+              </div>
+              <div className="rounded-lg border border-[#EAD8C2] bg-[#FFF9F1] p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8C6E52]">Precisa de atenção</p>
+                <ul className="mt-2 space-y-2 text-sm text-[#3A3028]">
+                  {!workspace.latestAnthropometry && <li>Sem avaliação antropométrica registrada nesta ficha.</li>}
+                  {workspace.draftMealPlan && <li>Plano alimentar em rascunho: a consulta não o publica automaticamente.</li>}
+                  {!workspace.appointmentContext && <li>Retorno ainda não agendado.</li>}
+                  {!workspace.latestAnthropometry && !workspace.draftMealPlan && !workspace.appointmentContext && <li>Nenhuma pendência automática identificada nos dados disponíveis.</li>}
+                </ul>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => guardNavigation(() => router.push(getAnthropometryHref(clientId, consultation.id)))} className="brand-btn-secondary">Atualizar antropometria</button>
+                  <button type="button" onClick={() => guardNavigation(() => router.push(getScheduleReturnHref(clientId, consultation.id)))} className="brand-btn-secondary">Agendar retorno</button>
+                </div>
+              </div>
             </section>
           )}
 
