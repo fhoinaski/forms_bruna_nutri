@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { getClientPortalAccess } from "@/lib/repositories/client-portal";
+import { getActivePatientPortalSession, getPatientPortalAccess } from "@/lib/repositories/patient-portal-auth";
 
 const COOKIE_NAME = "bruna_nutri_client_portal";
 const MAX_AGE = 60 * 60 * 24 * 7;
@@ -16,10 +16,12 @@ export interface ClientPortalSession {
   sub: string;
   type: "client_portal";
   sessionVersion: number;
+  sid?: string;
+  mustChangePassword?: boolean;
 }
 
-export async function createClientPortalToken(clientId: string, sessionVersion: number): Promise<string> {
-  return new SignJWT({ sub: clientId, type: "client_portal", sessionVersion })
+export async function createClientPortalToken(clientId: string, sessionVersion: number, sessionId: string): Promise<string> {
+  return new SignJWT({ sub: clientId, type: "client_portal", sessionVersion, sid: sessionId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
@@ -32,12 +34,14 @@ export async function verifyClientPortalToken(token: string): Promise<ClientPort
     if (
       payload.type !== "client_portal" ||
       typeof payload.sub !== "string" ||
-      typeof payload.sessionVersion !== "number"
+      typeof payload.sessionVersion !== "number" ||
+      typeof payload.sid !== "string"
     ) return null;
-    const access = await getClientPortalAccess(payload.sub);
-    if (!access || access.is_active !== 1) return null;
+    const [access, session] = await Promise.all([getPatientPortalAccess(payload.sub), getActivePatientPortalSession(payload.sid)]);
+    if (!access || !session || session.client_id !== payload.sub || session.access_id !== access.id) return null;
+    if (access.is_active !== 1 || !["ACTIVE", "TEMP_PASSWORD", "PASSWORD_CHANGE_REQUIRED"].includes(access.access_status)) return null;
     if (access.session_version !== payload.sessionVersion) return null;
-    return { sub: payload.sub, type: "client_portal", sessionVersion: payload.sessionVersion };
+    return { sub: payload.sub, type: "client_portal", sessionVersion: payload.sessionVersion, sid: payload.sid, mustChangePassword: access.password_must_change === 1 };
   } catch {
     return null;
   }
@@ -63,15 +67,17 @@ export function clearClientPortalCookie(response: NextResponse) {
   });
 }
 
-export async function getClientPortalSessionFromCookies(): Promise<ClientPortalSession | null> {
+export async function getClientPortalSessionFromCookies(allowPasswordChange = false): Promise<ClientPortalSession | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
-  return verifyClientPortalToken(token);
+  const session = await verifyClientPortalToken(token);
+  return session?.mustChangePassword && !allowPasswordChange ? null : session;
 }
 
-export async function getClientPortalSessionFromRequest(request: NextRequest): Promise<ClientPortalSession | null> {
+export async function getClientPortalSessionFromRequest(request: NextRequest, allowPasswordChange = false): Promise<ClientPortalSession | null> {
   const token = request.cookies.get(COOKIE_NAME)?.value;
   if (!token) return null;
-  return verifyClientPortalToken(token);
+  const session = await verifyClientPortalToken(token);
+  return session?.mustChangePassword && !allowPasswordChange ? null : session;
 }

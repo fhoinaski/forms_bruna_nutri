@@ -117,6 +117,24 @@ export function portalAccessEmail(input: {
   });
 }
 
+export function patientPortalInviteEmail(input: { clientName: string; acceptUrl: string }) {
+  const body = `
+    <p style="margin:0 0 18px;">Olá, ${escapeHtml(input.clientName.split(" ")[0] || input.clientName)}.</p>
+    <p style="margin:0 0 22px;">Você recebeu acesso ao seu acompanhamento nutricional com a Bruna Flores Nutri.</p>
+    <p style="margin:0 0 22px;"><a href="${escapeHtml(input.acceptUrl)}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#607A56;color:#fff;text-decoration:none;font-weight:700;">Criar minha senha</a></p>
+    <p style="margin:0;color:#75675E;font-size:13px;">Por segurança, este link expira em 48 horas e só pode ser usado uma vez.</p>`;
+  return brandedEmailLayout({ title: "Seu acesso ao portal", preview: "Crie sua senha para acessar seu acompanhamento.", body });
+}
+
+export function patientPortalPasswordResetEmail(input: { clientName: string; resetUrl: string }) {
+  const body = `
+    <p style="margin:0 0 18px;">Olá, ${escapeHtml(input.clientName.split(" ")[0] || input.clientName)}.</p>
+    <p style="margin:0 0 22px;">Recebemos um pedido para redefinir a senha do seu portal.</p>
+    <p style="margin:0 0 22px;"><a href="${escapeHtml(input.resetUrl)}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#607A56;color:#fff;text-decoration:none;font-weight:700;">Redefinir minha senha</a></p>
+    <p style="margin:0;color:#75675E;font-size:13px;">Se não foi você, ignore este e-mail. O link expira em uma hora.</p>`;
+  return brandedEmailLayout({ title: "Redefinição de senha", preview: "Use este link para redefinir sua senha.", body });
+}
+
 export function overduePaymentEmail(input: {
   clientName: string;
   description: string;

@@ -157,7 +157,7 @@ function localDateKey(date: Date) {
 
 export default function ClientPortalPage() {
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [data, setData] = useState<PortalSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -218,12 +218,16 @@ export default function ClientPortalPage() {
     const response = await fetch("/api/portal/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, code }),
+      body: JSON.stringify({ email, password }),
     });
     const result = await response.json();
     if (!response.ok) {
       setError(result.message ?? "Nao foi possivel acessar o portal.");
       setSubmitting(false);
+      return;
+    }
+    if (result.mustChangePassword) {
+      window.location.assign("/portal/trocar-senha");
       return;
     }
     await loadPortal();
@@ -233,7 +237,7 @@ export default function ClientPortalPage() {
   async function logout() {
     await fetch("/api/portal/logout", { method: "POST" });
     setData(null);
-    setCode("");
+    setPassword("");
   }
 
   async function updateTaskStatus(taskId: string, status: "pendente" | "concluida") {
@@ -313,7 +317,7 @@ export default function ClientPortalPage() {
             </div>
 
             <p className="text-xs text-[#9A8B80]">
-              O acesso e individual. Use o e-mail cadastrado e o codigo enviado pela nutricionista.
+              O acesso é individual. Use o e-mail e a senha definidos para o seu portal.
             </p>
           </div>
 
@@ -325,19 +329,20 @@ export default function ClientPortalPage() {
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="brand-label">E-mail</label>
-                  <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" className="brand-input" placeholder="seunome@email.com" />
+                  <label className="brand-label" htmlFor="portal-email">E-mail</label>
+                  <input id="portal-email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" type="email" className="brand-input" placeholder="seunome@email.com" required />
                 </div>
                 <div>
-                  <label className="brand-label">Codigo de acesso</label>
-                  <input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} className="brand-input tracking-[0.18em]" placeholder="BF-0000-0000" />
+                  <label className="brand-label" htmlFor="portal-password">Senha</label>
+                  <input id="portal-password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" type="password" className="brand-input" required />
                 </div>
               </div>
-              {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+              {error && <p className="mt-4 text-sm text-red-600" role="alert">{error}</p>}
               <button disabled={submitting} className="brand-btn-primary mt-6 w-full justify-center">
                 <Mail className="h-4 w-4" />
                 {submitting ? "Entrando..." : "Acessar meu portal"}
               </button>
+              <a className="mt-4 block text-center text-sm font-semibold text-[#607A56] hover:underline" href="/portal/esqueci-senha">Esqueci minha senha</a>
             </form>
           </div>
         </section>
@@ -360,6 +365,7 @@ export default function ClientPortalPage() {
             <LogOut className="h-4 w-4" />
             Sair
           </button>
+          <a href="/portal/minha-conta" className="ml-2 inline-flex min-h-10 items-center rounded-full px-3 text-sm font-medium text-[#607A56] hover:bg-white">Minha conta</a>
         </div>
       </header>
 
