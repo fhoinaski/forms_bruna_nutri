@@ -9,6 +9,8 @@ import {
   getOrCreatePatientPortalAccess,
   issuePatientPortalToken,
   revokePatientPortalAccess,
+  revokePatientPortalSessions,
+  revokePatientPortalTokens,
   setPatientPortalPassword,
 } from "@/lib/repositories/patient-portal-auth";
 import { sendEmail } from "@/lib/email/client";
@@ -74,9 +76,17 @@ export async function POST(
   if (parsed.data.action === "temporary_password") {
     const temporaryPassword = generateTemporaryPatientPortalPassword();
     const access = await getOrCreatePatientPortalAccess(id);
-    await setPatientPortalPassword({ accessId: access.id, passwordHash: await hashPatientPortalPassword(temporaryPassword), mustChangePassword: true, passwordExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString() });
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+    // A newly provisioned temporary credential supersedes every incomplete
+    // credential flow and any session authenticated with an older credential.
+    await Promise.all([
+      revokePatientPortalTokens(access.id),
+      revokePatientPortalSessions(access.id),
+    ]);
+    await setPatientPortalPassword({ accessId: access.id, passwordHash: await hashPatientPortalPassword(temporaryPassword), mustChangePassword: true, passwordExpiresAt: expiresAt });
     await writeAuditLog({ action: "PATIENT_TEMP_PASSWORD_CREATED", adminId: admin.sub, entityType: "client", entityId: id, ipHash: getRequestFingerprint(req).ipHash });
-    return NextResponse.json({ temporary_password: temporaryPassword, expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString() });
+    // Plaintext only exists in this immediate response; it is neither logged nor persisted.
+    return NextResponse.json({ temporary_password: temporaryPassword, expires_at: expiresAt });
   }
   const result = await issuePatientPortalToken({ clientId: id, purpose: "invite", expiresInMs: 48 * 60 * 60 * 1000 });
   let emailSent = false;
