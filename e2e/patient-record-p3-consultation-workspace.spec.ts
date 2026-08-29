@@ -167,14 +167,15 @@ test.describe("Patient Record P3 consultation workspace", () => {
 
     await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${patient.sessionId}`);
 
-    await expect(page.getByText("Reduzir gordura corporal")).toBeVisible();
-    await expect(page.getByText("68,4 kg")).toBeVisible();
-    await expect(page.getByText("-1,4 kg")).toBeVisible();
-    await expect(page.getByText("Ativo v2")).toBeVisible();
-    await expect(page.getByText("Rascunho v2 em andamento")).toBeVisible();
-    await expect(page.getByText("Intolerância à lactose")).toBeVisible();
-    await expect(page.getByText("Respondida em")).toBeVisible();
-    await expect(page.getByText("Protocolo P3 ativo")).toBeVisible();
+    const context = page.getByLabel("Contexto do paciente");
+    await expect(context.getByText("Reduzir gordura corporal")).toBeVisible();
+    await expect(context.getByText("68,4 kg")).toBeVisible();
+    await expect(context.getByText("-1,4 kg")).toBeVisible();
+    await expect(context.getByText("Ativo v2")).toBeVisible();
+    await expect(context.getByText("Rascunho v2 em andamento")).toBeVisible();
+    await expect(context.getByText("Intolerância à lactose")).toBeVisible();
+    await expect(context.getByText("Respondida em")).toBeVisible();
+    await expect(context.getByText("Protocolo P3 ativo")).toBeVisible();
     await screenshot(page, "P3-03-patient-context", testInfo.project.name, testInfo.retry);
     await screenshot(page, "P3-04-pre-consultation-summary", testInfo.project.name, testInfo.retry);
   });
@@ -280,9 +281,10 @@ test.describe("Patient Record P3 consultation workspace", () => {
 
     await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${session.id}`);
 
-    await expect(page.getByText("Sem avaliação registrada")).toBeVisible();
-    await expect(page.getByText("Nenhum plano ativo")).toBeVisible();
-    await expect(page.getByText("Anamnese ainda não preenchida")).toBeVisible();
+    const context = page.getByLabel("Contexto do paciente");
+    await expect(context.getByText("Sem avaliação registrada")).toBeVisible();
+    await expect(context.getByText("Nenhum plano ativo")).toBeVisible();
+    await expect(context.getByText("Anamnese ainda não preenchida")).toBeVisible();
     await expect(page.getByText("0 kg")).toHaveCount(0);
     await screenshot(page, "P3-05-no-anthropometry", testInfo.project.name, testInfo.retry);
     await screenshot(page, "P3-06-no-meal-plan", testInfo.project.name, testInfo.retry);
