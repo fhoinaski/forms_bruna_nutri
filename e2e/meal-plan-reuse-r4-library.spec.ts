@@ -45,14 +45,14 @@ test.describe("Meal Plan Reuse R4 — Biblioteca de reuso", () => {
     let drawer = await openLibrary(page);
     await expect(drawer.getByText(/arroz/i).first()).toBeVisible({ timeout: 10_000 });
     await drawer.getByRole("button", { name: /favoritar/i }).first().click();
-    await drawer.getByRole("tab", { name: "Favoritos" }).click();
+    await drawer.getByRole("button", { name: "Favoritos", exact: true }).click();
     await expect(drawer.getByText(/arroz/i).first()).toBeVisible({ timeout: 10_000 });
 
     // Fecha e reabre — favorito continua lá (persistiu no banco, não só em memória).
     await page.keyboard.press("Escape");
     await expect(drawer).not.toBeVisible();
     drawer = await openLibrary(page);
-    await drawer.getByRole("tab", { name: "Favoritos" }).click();
+    await drawer.getByRole("button", { name: "Favoritos", exact: true }).click();
     await expect(drawer.getByText(/arroz/i).first()).toBeVisible({ timeout: 10_000 });
   });
 
@@ -65,11 +65,19 @@ test.describe("Meal Plan Reuse R4 — Biblioteca de reuso", () => {
     await selectFood(page, meal, "Arroz, tipo 1, cozido", /arroz/i);
     await setLastQuantity(meal, "100");
 
-    await meal.getByRole("button", { name: /mais ações para/i }).click();
+    // Nome único por execução: "/api/admin/saved-meals" é uma lista global
+    // (não escopada por paciente), então um literal fixo colide entre
+    // retries do Playwright e entre projetos rodando em paralelo (o
+    // registro salvo de uma tentativa anterior não é limpo antes da
+    // próxima), causando strict-mode violation ao localizar o botão.
+    const savedName = `Refeição modelo R4 salva ${patient.id}`;
+
+    // R6.5.2C: aria-label do gatilho do menu da refeição passou a "Ações da refeição {nome}".
+    await meal.getByRole("button", { name: /ações da refeição/i }).click();
     await page.getByRole("button", { name: "Salvar como refeição favorita" }).click();
     const saveDialog = page.getByRole("dialog", { name: "Salvar refeição favorita" });
     await expect(saveDialog).toBeVisible();
-    await saveDialog.getByLabel("Nome").fill("Refeição modelo R4 salva");
+    await saveDialog.getByLabel("Nome").fill(savedName);
     await saveDialog.getByRole("button", { name: "Salvar", exact: true }).click();
     await expect(page.getByText("Refeição salva na biblioteca de reuso.")).toBeVisible({ timeout: 10_000 });
 
@@ -79,11 +87,11 @@ test.describe("Meal Plan Reuse R4 — Biblioteca de reuso", () => {
     await openMealPlanTab(page, patient2.id);
 
     const drawer = await openLibrary(page);
-    await drawer.getByRole("tab", { name: "Minhas refeições" }).click();
+    await drawer.getByRole("tab", { name: "Refeições" }).click();
     // O nome exibido na biblioteca é o rótulo dado ao salvar ("... salva");
     // o nome DA REFEIÇÃO em si (meal.name) é preservado como estava — só a
     // estrutura é reaproveitada, nunca renomeia a refeição capturada.
-    await drawer.getByRole("button", { name: /refeição modelo r4 salva/i }).click();
+    await drawer.getByRole("button", { name: new RegExp(savedName, "i") }).click();
     await expect(drawer).not.toBeVisible();
 
     const insertedMeal = page.locator("article").filter({ hasText: "Refeição modelo R4" }).last();
@@ -117,7 +125,7 @@ test.describe("Meal Plan Reuse R4 — Biblioteca de reuso", () => {
     await openMealPlanTab(page, patient.id);
 
     const drawer = await openLibrary(page);
-    await drawer.getByRole("tab", { name: "Planos anteriores" }).click();
+    await drawer.getByRole("tab", { name: "Planos" }).click();
     await expect(drawer.getByText("R4 copy source")).toBeVisible({ timeout: 10_000 });
     await drawer.getByText("R4 copy source").click();
     await drawer.getByRole("button", { name: /refeição de origem r4/i }).click();
@@ -131,7 +139,7 @@ test.describe("Meal Plan Reuse R4 — Biblioteca de reuso", () => {
     await openMealPlanTab(page, patient.id);
 
     const drawer = await openLibrary(page);
-    await drawer.getByRole("tab", { name: "Modelos de planos" }).click();
+    await drawer.getByRole("tab", { name: "Modelos" }).click();
     const firstTemplate = drawer.locator("li button").first();
     await expect(firstTemplate).toBeVisible({ timeout: 10_000 });
     await firstTemplate.click();
@@ -172,7 +180,7 @@ test.describe("Meal Plan Reuse R4 — Biblioteca de reuso", () => {
     await openMealPlanTab(page, patient.id);
 
     const drawer = await openLibrary(page);
-    await drawer.getByRole("tab", { name: "Planos anteriores" }).click();
+    await drawer.getByRole("tab", { name: "Planos" }).click();
     await expect(drawer.getByText(/nenhum outro plano/i)).toBeVisible({ timeout: 10_000 });
   });
 });
