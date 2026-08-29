@@ -27,7 +27,7 @@ test.describe("Modo Consulta", () => {
     await page.goto(`/dashboard/clients/${patient.id}`);
     await page.getByRole("button", { name: "Iniciar primeira consulta" }).click();
 
-    await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta$`));
+    await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta\\?sessionId=`));
     await expect(page.getByRole("heading", { level: 1, name: patient.name })).toBeVisible();
     await expect(page.getByText(/em atendimento/i)).toBeVisible();
 
@@ -39,8 +39,8 @@ test.describe("Modo Consulta", () => {
     // mais parte do contrato.
     await expect(page.getByRole("complementary", { name: "Contexto do paciente" })).toBeVisible();
     await expect(page.getByText("Registro clínico")).toBeVisible();
-    await expect(page.getByText("Sem avaliação registrada")).toBeVisible();
-    await expect(page.getByText("Nenhum plano ativo")).toBeVisible();
+    await expect(page.getByLabel("Contexto do paciente").getByText("Sem avaliação registrada")).toBeVisible();
+    await expect(page.getByLabel("Contexto do paciente").getByText("Nenhum plano ativo")).toBeVisible();
     await expect(page.getByText("Nenhum protocolo ativo")).toBeVisible();
     await expect(page.getByRole("button", { name: "Nova avaliação" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Abrir plano alimentar" })).toBeVisible();
@@ -97,7 +97,7 @@ test.describe("Modo Consulta", () => {
 
     await page.goto(`/dashboard/clients/${patient.id}`);
     await page.getByRole("button", { name: "Iniciar primeira consulta" }).click();
-    await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta$`));
+    await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta\\?sessionId=`));
 
     const firstResponse = await page.request.get(`/api/admin/clients/${patient.id}/consultation`);
     const firstSession = (await firstResponse.json()).session;
@@ -105,10 +105,46 @@ test.describe("Modo Consulta", () => {
     // Sai e tenta iniciar de novo — nunca cria uma segunda sessão in_progress.
     await page.goto(`/dashboard/clients/${patient.id}`);
     await page.locator(".brand-card > header").getByRole("button", { name: "Continuar consulta" }).click();
-    await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta$`));
+    await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta\\?sessionId=`));
 
     const secondResponse = await page.request.get(`/api/admin/clients/${patient.id}/consultation`);
     const secondSession = (await secondResponse.json()).session;
     expect(secondSession.id).toBe(firstSession.id);
+  });
+
+  test("navega pelas sete etapas preservando sessão, deep link, reload e histórico", async ({ page, request }) => {
+    const patient = await createTestPatient(request);
+    await suppressDailyBriefingPopup(page);
+
+    await page.goto(`/dashboard/clients/${patient.id}`);
+    await page.getByRole("button", { name: "Iniciar primeira consulta" }).click();
+    await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}/consulta\\?sessionId=`));
+
+    const sessionId = new URL(page.url()).searchParams.get("sessionId");
+    expect(sessionId).not.toBeNull();
+    const steps = ["Resumo", "Mudanças", "Anamnese", "Antropometria", "Plano", "Recomendações", "Retorno"];
+    const stepIds = ["resumo", "mudancas", "anamnese", "antropometria", "plano", "recomendacoes", "retorno"];
+    const stepNavigation = page.getByRole("navigation", { name: "Etapas da consulta" });
+
+    await expect(stepNavigation).toBeVisible();
+    await expect(stepNavigation.getByRole("button", { name: /Resumo$/ })).toHaveAttribute("aria-current", "step");
+
+    for (const [index, step] of steps.entries()) {
+      const stepButton = stepNavigation.getByRole("button", { name: new RegExp(`${step}$`) });
+      await stepButton.click();
+      await expect(page).toHaveURL(new RegExp(`sessionId=${sessionId}.*step=${stepIds[index]}`));
+      await expect(stepButton).toHaveAttribute("aria-current", "step");
+    }
+
+    await page.reload();
+    await expect(page).toHaveURL(new RegExp(`sessionId=${sessionId}.*step=retorno`));
+    await expect(stepNavigation.getByRole("button", { name: /Retorno$/ })).toHaveAttribute("aria-current", "step");
+
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`sessionId=${sessionId}.*step=recomendacoes`));
+    await expect(stepNavigation.getByRole("button", { name: /Recomendações$/ })).toHaveAttribute("aria-current", "step");
+
+    await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${sessionId}&step=antropometria`);
+    await expect(stepNavigation.getByRole("button", { name: /Antropometria$/ })).toHaveAttribute("aria-current", "step");
   });
 });
