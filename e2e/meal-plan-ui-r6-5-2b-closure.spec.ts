@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient } from "./helpers/test-data";
+import { createTestPatient, seedNutritionRecordForReadiness } from "./helpers/test-data";
 import { openMealPlanTab } from "./helpers/meal-plan-editor";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
@@ -37,6 +37,7 @@ async function openWizardAndGenerate(page: Page, patientId: string, { flexible }
 test.describe("Meal Plan Composer R6.5.2B — fechamento de gaps (R5/R6/COMBINATION)", () => {
   test("R5 SIMPLE: Copilot sem estrutura flexível continua gerando e aplicando SIMPLE, sem regressão", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await seedNutritionRecordForReadiness(request, patient.id);
     await setFixture(request, patient.id, { mealKey: "almoco", recipeId: null, items: [{ query: "Arroz, tipo 1, cozido", quantity: 100, unit: "g" }], rationale: null });
 
     const dialog = await openWizardAndGenerate(page, patient.id, { flexible: false });
@@ -49,6 +50,7 @@ test.describe("Meal Plan Composer R6.5.2B — fechamento de gaps (R5/R6/COMBINAT
 
   test("R5 OPTIONS: Copilot gera 2 alternativas resolvidas, aplica ao Composer com badge Opções e divisor OU", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await seedNutritionRecordForReadiness(request, patient.id);
     await setFixture(request, patient.id, {
       structure: "OPTIONS",
       mealKey: "cafe_da_manha",
@@ -76,6 +78,7 @@ test.describe("Meal Plan Composer R6.5.2B — fechamento de gaps (R5/R6/COMBINAT
 
   test("R5 COMBINATION: Copilot gera item fixo + grupo de escolha resolvidos, aplica ao Composer com badge Combinação e rótulo Itens fixos", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await seedNutritionRecordForReadiness(request, patient.id);
     await setFixture(request, patient.id, {
       structure: "COMBINATION",
       mealKey: "almoco",

@@ -129,6 +129,35 @@ export async function seedAiProposal(
   return response.json();
 }
 
+/**
+ * Preenche os 5 fatos "obrigatorios" do prontuario
+ * (goals/current_weight_kg/height_cm/eating_routine/allergies) exigidos pelo
+ * gate deterministico de pre-analise clinica (generationReadiness, ver
+ * lib/clinical/meal-plan-copilot.ts#buildMealPlanCopilotAnalysis) — sem isso
+ * o botao "Gerar pre-plano" do wizard de IA nunca habilita
+ * (generationReadiness fica "NOT_READY"). createTestPatient nunca preenche
+ * prontuario algum, entao qualquer teste que abra o wizard de IA e clique em
+ * "Gerar pre-plano" precisa chamar isto primeiro — exceto os testes que
+ * verificam o proprio estado NOT_READY/prontuario incompleto, que devem
+ * seguir sem prontuario.
+ */
+export async function seedNutritionRecordForReadiness(api: APIRequestContext, clientId: string): Promise<void> {
+  const current = await api.get(`/api/admin/clients/${clientId}/nutrition-record`);
+  await expectOk(current, "seedNutritionRecordForReadiness (get)");
+  const record = (await current.json()) as { version: number };
+  const update = await api.patch(`/api/admin/clients/${clientId}/nutrition-record`, {
+    data: {
+      expectedVersion: record.version,
+      goals: "Manutenção",
+      current_weight_kg: "70",
+      height_cm: "165",
+      eating_routine: "Rotina comercial",
+      allergies: "Nenhuma",
+    },
+  });
+  await expectOk(update, "seedNutritionRecordForReadiness (patch)");
+}
+
 export async function startConsultationSession(api: APIRequestContext, clientId: string) {
   const response = await api.post(`/api/admin/clients/${clientId}/consultation`);
   await expectOk(response, "startConsultationSession");

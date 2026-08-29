@@ -1,7 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient } from "./helpers/test-data";
+import { createTestPatient, seedNutritionRecordForReadiness } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
@@ -34,6 +34,7 @@ async function openWizardAndReachPreferences(page: import("@playwright/test").Pa
 test.describe("Clinical Copilot R5.1 — OPTIONS/COMBINATION/nested review", () => {
   test("OPTIONS: gera 2 alternativas, aplica ao Composer preservando meal_structure e options (nunca achatado)", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await seedNutritionRecordForReadiness(request, patient.id);
     await setFixture(request, patient.id, {
       structure: "OPTIONS",
       mealKey: "cafe_da_manha",
@@ -67,6 +68,7 @@ test.describe("Clinical Copilot R5.1 — OPTIONS/COMBINATION/nested review", () 
 
   test("COMBINATION: item NOT_FOUND dentro do grupo de escolha vira revisão aninhada; resolver manualmente não afeta o item fixo", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await seedNutritionRecordForReadiness(request, patient.id);
     await setFixture(request, patient.id, {
       structure: "COMBINATION",
       mealKey: "almoco",
@@ -93,6 +95,7 @@ test.describe("Clinical Copilot R5.1 — OPTIONS/COMBINATION/nested review", () 
 
   test("desmarcado (padrão): Copilot continua gerando só SIMPLE — sem regressão", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await seedNutritionRecordForReadiness(request, patient.id);
     await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
       data: { clientId: patient.id, meals: [{ mealKey: "almoco", recipeId: null, items: [{ query: "Arroz, tipo 1, cozido", quantity: 100, unit: "g" }], rationale: null }] },
     });

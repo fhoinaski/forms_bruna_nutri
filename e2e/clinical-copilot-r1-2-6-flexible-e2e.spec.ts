@@ -1,18 +1,9 @@
 import { execSync } from "node:child_process";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient } from "./helpers/test-data";
+import { createTestPatient, seedNutritionRecordForReadiness } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
-
-async function ready(request: import("@playwright/test").APIRequestContext, clientId: string) {
-  const current = await request.get(`/api/admin/clients/${clientId}/nutrition-record`);
-  const record = (await current.json()) as { version: number };
-  const update = await request.patch(`/api/admin/clients/${clientId}/nutrition-record`, {
-    data: { expectedVersion: record.version, goals: "Flexibilidade alimentar", current_weight_kg: "70", height_cm: "165", eating_routine: "Rotina comercial", allergies: "Nenhuma" },
-  });
-  expect(update.ok(), await update.text()).toBeTruthy();
-}
 
 async function generate(page: import("@playwright/test").Page, patientId: string) {
   await page.goto(`/dashboard/clients/${patientId}`);
@@ -49,9 +40,9 @@ test.describe("Clinical Copilot R1.2.6 — build freshness", () => {
 test.describe("Clinical Copilot R1.2.6 — SIMPLE smoke", () => {
   test("SIMPLE full flow: fixture -> gateway -> resolução -> nutrição -> editor -> salvar -> recarregar", async ({ page, request }) => {
     const patient = await createTestPatient(request);
-    await ready(request, patient.id);
+    await seedNutritionRecordForReadiness(request, patient.id);
     const fixture = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
-      data: { clientId: patient.id, meals: [{ mealKey: "almoco", recipeId: null, structureType: "SIMPLE", items: [{ query: "Arroz, tipo 1, cozido", quantity: 100, unit: "g", preparation: "cozido" }] }] },
+      data: { clientId: patient.id, meals: [{ mealKey: "almoco", recipeId: null, structure: "SIMPLE", items: [{ query: "Arroz, tipo 1, cozido", quantity: 100, unit: "g", preparation: "cozido" }] }] },
     });
     expect(fixture.ok(), await fixture.text()).toBeTruthy();
     const dialog = await generate(page, patient.id);
@@ -65,15 +56,14 @@ test.describe("Clinical Copilot R1.2.6 — SIMPLE smoke", () => {
 test.describe("Clinical Copilot R1.2.6 — nested REVIEW_REQUIRED / NOT_FOUND", () => {
   test("OPTIONS com um item ambíguo aninhado gera REVIEW_REQUIRED só naquele item, em caminho estável, sem achatar a estrutura", async ({ page, request }) => {
     const patient = await createTestPatient(request);
-    await ready(request, patient.id);
+    await seedNutritionRecordForReadiness(request, patient.id);
     const fixture = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
       data: {
         clientId: patient.id,
         meals: [
           {
             mealKey: "almoco",
-            recipeId: null,
-            structureType: "OPTIONS",
+            structure: "OPTIONS",
             options: [
               { label: "Opção arroz", items: [{ query: "Arroz, tipo 1, cozido", quantity: 100, unit: "g", preparation: "cozido" }] },
               // "batata" (sem qualificador) é genuinamente ambígua no catálogo real
@@ -88,7 +78,7 @@ test.describe("Clinical Copilot R1.2.6 — nested REVIEW_REQUIRED / NOT_FOUND", 
     const dialog = await generate(page, patient.id);
 
     await expect(dialog.getByText("Opção arroz")).toBeVisible();
-    await expect(dialog.getByText("Opção batata")).toBeVisible();
+    await expect(dialog.getByText("Opção batata").first()).toBeVisible();
     await expect(dialog.getByText("Precisa de revisão")).toBeVisible();
     await expect(dialog.getByText(/^"batata"/)).toBeVisible();
     // O item AUTO_MATCH (arroz) nunca aparece na lista de revisão — só o ambíguo.
@@ -107,7 +97,7 @@ test.describe("Clinical Copilot R1.2.6 — nested REVIEW_REQUIRED / NOT_FOUND", 
     // Estrutura OPTIONS sobrevive à resolução — continua OPTIONS, nunca achatada.
     await expect(dialog.getByText("Precisa de revisão")).not.toBeVisible();
     await expect(dialog.getByText("Opção arroz")).toBeVisible();
-    await expect(dialog.getByText("Opção batata")).toBeVisible();
+    await expect(dialog.getByText("Opção batata").first()).toBeVisible();
     // Nutrição recalculada após a resolução (kcal segue visível/atualizado).
     await expect(dialog.getByText(/^\d+ kcal$/).first()).toBeVisible();
     await expect(applyButton).toBeEnabled();
@@ -120,21 +110,20 @@ test.describe("Clinical Copilot R1.2.6 — nested REVIEW_REQUIRED / NOT_FOUND", 
 
   test("item aninhado sem candidato vira NOT_FOUND visível, bloqueia aplicar até ser resolvido/removido", async ({ page, request }) => {
     const patient = await createTestPatient(request);
-    await ready(request, patient.id);
+    await seedNutritionRecordForReadiness(request, patient.id);
     const fixture = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", {
       data: {
         clientId: patient.id,
         meals: [
           {
             mealKey: "almoco",
-            recipeId: null,
-            structureType: "COMBINATION",
-            fixedItems: [{ query: "Arroz, tipo 1, cozido", quantity: 80, unit: "g", preparation: "cozido" }],
-            choiceGroups: [
+            structure: "COMBINATION",
+            fixed_items: [{ query: "Arroz, tipo 1, cozido", quantity: 80, unit: "g", preparation: "cozido" }],
+            choice_groups: [
               {
-                label: "Escolha uma proteína",
-                minSelections: 1,
-                maxSelections: 1,
+                title: "Escolha uma proteína",
+                min_selections: 1,
+                max_selections: 1,
                 items: [
                   { query: "Frango, peito, sem pele, grelhado", quantity: 100, unit: "g" },
                   // Query sem nenhuma correspondência real no catálogo canônico.
@@ -149,7 +138,7 @@ test.describe("Clinical Copilot R1.2.6 — nested REVIEW_REQUIRED / NOT_FOUND", 
     expect(fixture.ok(), await fixture.text()).toBeTruthy();
     const dialog = await generate(page, patient.id);
 
-    await expect(dialog.getByText("Escolha uma proteína")).toBeVisible();
+    await expect(dialog.getByText("Escolha uma proteína").first()).toBeVisible();
     await expect(dialog.getByText("Precisa de revisão")).toBeVisible();
     await expect(dialog.getByText(/^"xyzabc alimento inexistente 12345"/)).toBeVisible();
 
@@ -162,6 +151,6 @@ test.describe("Clinical Copilot R1.2.6 — nested REVIEW_REQUIRED / NOT_FOUND", 
 
     await expect(dialog.getByText("Precisa de revisão")).not.toBeVisible();
     await expect(applyButton).toBeEnabled();
-    await expect(dialog.getByText("Escolha uma proteína")).toBeVisible();
+    await expect(dialog.getByText("Escolha uma proteína").first()).toBeVisible();
   });
 });

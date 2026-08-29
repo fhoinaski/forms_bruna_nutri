@@ -1,17 +1,8 @@
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient } from "./helpers/test-data";
+import { createTestPatient, seedNutritionRecordForReadiness } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
-
-async function ready(request: import("@playwright/test").APIRequestContext, clientId: string) {
-  const current = await request.get(`/api/admin/clients/${clientId}/nutrition-record`);
-  const record = await current.json() as { version: number };
-  const update = await request.patch(`/api/admin/clients/${clientId}/nutrition-record`, {
-    data: { expectedVersion: record.version, goals: "Flexibilidade alimentar", current_weight_kg: "70", height_cm: "165", eating_routine: "Rotina comercial", allergies: "Nenhuma" },
-  });
-  expect(update.ok(), await update.text()).toBeTruthy();
-}
 
 async function generate(page: import("@playwright/test").Page, patientId: string) {
   await page.goto(`/dashboard/clients/${patientId}`);
@@ -36,9 +27,9 @@ async function saveAndReload(page: import("@playwright/test").Page, dialog: impo
 test.describe("Clinical Copilot flexible drafts", () => {
   test("OPTIONS survives generation, editor, save and reload without summing alternatives", async ({ page, request }) => {
     const patient = await createTestPatient(request);
-    await ready(request, patient.id);
+    await seedNutritionRecordForReadiness(request, patient.id);
     const fixture = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", { data: { clientId: patient.id, meals: [{
-      mealKey: "almoco", recipeId: null, structureType: "OPTIONS",
+      mealKey: "almoco", structure: "OPTIONS",
       options: [
         { label: "Opção arroz", items: [{ query: "Arroz, tipo 1, cozido", quantity: 100, unit: "g", preparation: "cozido" }] },
         { label: "Opção banana", items: [{ query: "Banana, prata, crua", quantity: 100, unit: "g", optional: true }] },
@@ -61,11 +52,11 @@ test.describe("Clinical Copilot flexible drafts", () => {
 
   test("COMBINATION survives generation, editor, save and reload", async ({ page, request }) => {
     const patient = await createTestPatient(request);
-    await ready(request, patient.id);
+    await seedNutritionRecordForReadiness(request, patient.id);
     const fixture = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", { data: { clientId: patient.id, meals: [{
-      mealKey: "almoco", recipeId: null, structureType: "COMBINATION",
-      fixedItems: [{ query: "Arroz, tipo 1, cozido", quantity: 80, unit: "g", preparation: "cozido" }],
-      choiceGroups: [{ label: "Escolha uma proteína", minSelections: 1, maxSelections: 1, items: [
+      mealKey: "almoco", structure: "COMBINATION",
+      fixed_items: [{ query: "Arroz, tipo 1, cozido", quantity: 80, unit: "g", preparation: "cozido" }],
+      choice_groups: [{ title: "Escolha uma proteína", min_selections: 1, max_selections: 1, items: [
         { query: "Frango, peito, sem pele, grelhado", quantity: 100, unit: "g" },
         { query: "Ovo, de galinha, inteiro, cozido", quantity: 100, unit: "g", optional: true },
       ] }],

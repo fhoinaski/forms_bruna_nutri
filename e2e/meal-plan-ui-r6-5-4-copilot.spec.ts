@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient } from "./helpers/test-data";
+import { createTestPatient, seedNutritionRecordForReadiness } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
@@ -46,6 +46,7 @@ test.describe("Meal Plan Composer R6.5.4 — Copilot: prontidão + chips de revi
 
   test("chips de resumo de revisão: refeição totalmente resolvida mostra 'N resolvido(s)', sem chip de revisar/não encontrado", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await seedNutritionRecordForReadiness(request, patient.id);
     await setFixture(request, patient.id, { mealKey: "almoco", recipeId: null, items: [{ query: "Arroz, tipo 1, cozido", quantity: 100, unit: "g" }], rationale: null });
 
     const dialog = await openWizardAndGenerate(page, patient.id);
@@ -58,6 +59,7 @@ test.describe("Meal Plan Composer R6.5.4 — Copilot: prontidão + chips de revi
 
   test("chips de resumo de revisão: item COMBINATION não resolvido mostra chip 'pra revisar' com contagem real", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await seedNutritionRecordForReadiness(request, patient.id);
     await setFixture(request, patient.id, {
       structure: "COMBINATION",
       mealKey: "almoco",

@@ -36,8 +36,10 @@ test.describe("Meal Plan Composer R2.2 — Food Alternatives Drawer", () => {
     const drawer = await openDrawerFor(page, /revisar trocas de Arroz integral cozido/i, /arroz integral cozido/i);
 
     // Não navega para fora do Composer (seção 35) — a URL do dashboard do
-    // paciente continua a mesma.
-    await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}$`));
+    // paciente continua a mesma (a query string ?tab=... reflete a aba ativa
+    // persistida na URL, uma feature separada reconciliada nesta mesma
+    // linhagem — não é navegação pra fora do Composer).
+    await expect(page).toHaveURL(new RegExp(`/dashboard/clients/${patient.id}(\\?.*)?$`));
 
     await drawer.getByRole("button", { name: /adicionar outra/i }).click();
     await drawer.getByLabel("Pesquisar alimento").fill("mandioca");

@@ -1,12 +1,13 @@
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient } from "./helpers/test-data";
+import { createTestPatient, seedNutritionRecordForReadiness } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
 test.describe("Clinical Copilot R5 — Performance", () => {
   test("desempenho: montagem de contexto e geração completa (amostra local)", async ({ page, request }, testInfo) => {
     const patient = await createTestPatient(request);
+    await seedNutritionRecordForReadiness(request, patient.id);
 
     const contextSamples: number[] = [];
     const generationSamples: number[] = [];

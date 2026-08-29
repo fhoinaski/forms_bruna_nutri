@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient } from "./helpers/test-data";
+import { createTestPatient, seedNutritionRecordForReadiness } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 test.describe.configure({ timeout: 180_000 });
@@ -16,25 +16,25 @@ test.describe.configure({ timeout: 180_000 });
 // pedido: baseline apenas, amostra representativa, sem invenção de SLA.
 const SAMPLES_PER_STRUCTURE = 6;
 
-type Fixture = { mealKey: string; recipeId: null; structureType: "SIMPLE" | "OPTIONS" | "COMBINATION" } & Record<string, unknown>;
+type Fixture = { mealKey: string; structure: "SIMPLE" | "OPTIONS" | "COMBINATION" } & Record<string, unknown>;
 
 const FIXTURES: Record<"SIMPLE" | "OPTIONS" | "COMBINATION", Fixture> = {
   SIMPLE: {
-    mealKey: "almoco", recipeId: null, structureType: "SIMPLE",
+    mealKey: "almoco", recipeId: null, structure: "SIMPLE",
     items: [{ query: "Arroz, tipo 1, cozido", quantity: 100, unit: "g", preparation: "cozido" }],
   },
   OPTIONS: {
-    mealKey: "almoco", recipeId: null, structureType: "OPTIONS",
+    mealKey: "almoco", structure: "OPTIONS",
     options: [
       { label: "Opção arroz", items: [{ query: "Arroz, tipo 1, cozido", quantity: 100, unit: "g", preparation: "cozido" }] },
       { label: "Opção banana", items: [{ query: "Banana, prata, crua", quantity: 100, unit: "g", optional: true }] },
     ],
   },
   COMBINATION: {
-    mealKey: "almoco", recipeId: null, structureType: "COMBINATION",
-    fixedItems: [{ query: "Alface, crua", quantity: 80, unit: "g", preparation: "crua" }],
-    choiceGroups: [{
-      label: "Escolha uma proteína", minSelections: 1, maxSelections: 1,
+    mealKey: "almoco", structure: "COMBINATION",
+    fixed_items: [{ query: "Alface, crua", quantity: 80, unit: "g", preparation: "crua" }],
+    choice_groups: [{
+      title: "Escolha uma proteína", min_selections: 1, max_selections: 1,
       items: [
         { query: "Frango, peito, sem pele, grelhado", quantity: 100, unit: "g" },
         { query: "Ovo, de galinha, inteiro, cozido", quantity: 100, unit: "g", optional: true },
@@ -58,15 +58,6 @@ function stats(values: number[]) {
   return { count: values.length, p50: percentile(values, 0.5), p95: percentile(values, 0.95), max: values.length ? Math.max(...values) : 0 };
 }
 
-async function ready(request: import("@playwright/test").APIRequestContext, clientId: string) {
-  const current = await request.get(`/api/admin/clients/${clientId}/nutrition-record`);
-  const record = (await current.json()) as { version: number };
-  const update = await request.patch(`/api/admin/clients/${clientId}/nutrition-record`, {
-    data: { expectedVersion: record.version, goals: "Flexibilidade alimentar", current_weight_kg: "70", height_cm: "165", eating_routine: "Rotina comercial", allergies: "Nenhuma" },
-  });
-  expect(update.ok(), await update.text()).toBeTruthy();
-}
-
 test("R1.2.6 performance: geração, resolução e nutrição medidas separadamente por estrutura", async ({ request }, testInfo) => {
   const generationMs: number[] = [];
   const resolutionMs: number[] = [];
@@ -81,7 +72,7 @@ test("R1.2.6 performance: geração, resolução e nutrição medidas separadame
     const structureGenerationMs: number[] = [];
     for (let sample = 0; sample < SAMPLES_PER_STRUCTURE; sample++) {
       const patient = await createTestPatient(request);
-      await ready(request, patient.id);
+      await seedNutritionRecordForReadiness(request, patient.id);
       const fixture = await request.post("/api/admin/e2e/set-meal-plan-draft-fixture", { data: { clientId: patient.id, meals: [FIXTURES[structureType]] } });
       expect(fixture.ok(), await fixture.text()).toBeTruthy();
 

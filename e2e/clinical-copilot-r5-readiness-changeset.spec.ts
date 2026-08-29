@@ -1,7 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient } from "./helpers/test-data";
+import { createTestPatient, seedNutritionRecordForReadiness } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
@@ -58,6 +58,7 @@ test.describe("Clinical Copilot R5 — Readiness e Previous Plan Changeset", () 
 
   test("changeset: regenerar só o Almoço mostra o diff correto e aplica sem tocar o plano original", async ({ page, request }) => {
     const patient = await createTestPatient(request);
+    await seedNutritionRecordForReadiness(request, patient.id);
     const sourcePlan = await createTemplatePlan(request, patient.id, "R5 changeset source");
     const originalMealsJson = JSON.stringify(sourcePlan.meals);
 
