@@ -15,6 +15,7 @@ import { ReuseLibraryDrawer } from "@/components/dashboard/ReuseLibraryDrawer";
 import type { FoodReference } from "@/lib/nutrition/food-catalog";
 import { classifyFoodExchangeGroup, FOOD_GROUP_LABELS, type FoodGroup } from "@/lib/nutrition/food-exchange-hierarchy";
 import { CLINICAL_ROLE_LABELS, type TemplateClinicalRole } from "@/lib/meal-templates/system-template-contract";
+import { useDialogKeyboard } from "@/hooks/use-dialog-keyboard";
 
 export type MealItem = {
   id?: string;
@@ -429,33 +430,9 @@ export function MealItemsEditor({
     loadExchangeGroups();
   }, [loadExchangeGroups]);
 
-  useEffect(() => {
-    if (!exchangeDrawerKey) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeExchangeDrawer();
-        return;
-      }
-      // Focus trap (seção 42) — Tab/Shift+Tab nunca escapam do drawer aberto.
-      if (event.key === "Tab") {
-        const container = exchangeDrawerRef.current;
-        if (!container) return;
-        const focusable = Array.from(container.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter((el) => !el.hasAttribute("disabled"));
-        if (!focusable.length) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [exchangeDrawerKey]);
+  // R6.5.3 — Escape/Tab-trap extraído pro hook compartilhado `useDialogKeyboard`
+  // (mesma lógica que já existia aqui, agora reaproveitada por outros diálogos).
+  useDialogKeyboard(exchangeDrawerRef, closeExchangeDrawer, Boolean(exchangeDrawerKey));
 
   const [activeFoodField, setActiveFoodField] = useState("");
   const [foodSearch, setFoodSearch] = useState<{ key: string; query: string }>({ key: "", query: "" });
@@ -464,6 +441,9 @@ export function MealItemsEditor({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [searchLoadingKey, setSearchLoadingKey] = useState("");
   const [recipeSelectorOpen, setRecipeSelectorOpen] = useState(false);
+  const recipeSelectorRef = useRef<HTMLElement | null>(null);
+  // R6.5.3 — este modal também não tinha Escape/Tab-trap antes desta fase.
+  useDialogKeyboard(recipeSelectorRef, () => setRecipeSelectorOpen(false), recipeSelectorOpen);
   // R4 — biblioteca de reuso (recentes/favoritos/refeições salvas/planos
   // anteriores/modelos de plano), reaproveitando o mesmo padrão de
   // "inserir receita" já existente: insere no estado LOCAL, nunca auto-save.
@@ -1560,21 +1540,35 @@ export function MealItemsEditor({
                             onClick={() => selectMultiSourceResult(mealIndex, itemIndex, result)}
                             className={`block w-full rounded-lg px-3 py-2 text-left transition-colors ${suggestionIndex === highlightedIndex ? "bg-[#FAF7F2]" : "hover:bg-[#FAF7F2]"}`}
                           >
-                            <span className="block text-sm font-medium text-[#3A3028]">{result.displayName}</span>
+                            {/* R6.5.5 (seção 12) — busca é pra escolher IDENTIDADE, não fazer análise
+                                nutricional; a linha de preview com kcal/P/C/G foi removida, mantendo só
+                                nome + preparo/fonte + porção padrão. Nenhum dado deixou de existir no
+                                objeto (result.nutrientsPreview continua intacto), só não é mais exibido aqui. */}
+                            <span className="flex items-baseline justify-between gap-2">
+                              <span className="min-w-0 truncate text-sm font-medium text-[#3A3028]">{result.displayName}</span>
+                              <span className="shrink-0 text-[11px] font-semibold text-[#607A56]">Adicionar</span>
+                            </span>
                             <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">{result.preparation ?? result.group ?? "Alimento"} · {result.sourceName}</span>
-                            <span className="mt-1 block text-xs text-[#75675E]">{result.defaultPortion.label} = {result.defaultPortion.gramWeight ?? "—"} g · kcal {result.nutrientsPreview.energyKcal ?? "—"} · P {result.nutrientsPreview.proteinG ?? "—"} · C {result.nutrientsPreview.carbohydrateG ?? "—"} · G {result.nutrientsPreview.fatG ?? "—"}</span>
+                            <span className="mt-1 block text-xs text-[#75675E]">{result.defaultPortion.label}{result.defaultPortion.gramWeight ? ` · ${result.defaultPortion.gramWeight} g` : ""}</span>
                           </button>
                         ))}
                       </div>
                     )}
                     {showLoading && (
-                      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-[#EAD8C2] bg-white p-3 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
-                        <p className="text-sm text-[#8C6E52]">Buscando...</p>
+                      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 space-y-1.5 rounded-xl border border-[#EAD8C2] bg-white p-2 shadow-[0_18px_44px_rgba(58,48,40,0.16)]" role="status" aria-label="Buscando alimentos">
+                        {/* R6.5.5 (seção 22) — 3 linhas de skeleton compactas em vez de um spinner grande/texto solto. */}
+                        {[0, 1, 2].map((row) => (
+                          <div key={row} className="animate-pulse space-y-1 rounded-lg px-3 py-2">
+                            <div className="h-3 w-2/3 rounded bg-[#F0E2D6]" />
+                            <div className="h-2 w-1/3 rounded bg-[#F5EAD9]" />
+                          </div>
+                        ))}
                       </div>
                     )}
                     {showEmptyState && (
                       <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-[#EAD8C2] bg-white p-3 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
                         <p className="text-sm text-[#8C6E52]">Nenhum alimento encontrado.</p>
+                        <p className="mt-0.5 text-xs text-[#9A978A]">Tente outro nome ou preparação.</p>
                       </div>
                     )}
                   </div>
@@ -1767,7 +1761,7 @@ export function MealItemsEditor({
       )}
 
       {portalReady && exchangeDrawerContext && createPortal(
-        <div role="dialog" aria-modal="true" aria-labelledby="meal-exchange-drawer-title" className="fixed inset-0 z-50 overflow-hidden bg-black/25 backdrop-blur-sm">
+        <div role="dialog" aria-modal="true" aria-labelledby="meal-exchange-drawer-title" className="fixed inset-0 z-50 overflow-hidden bg-black/30 backdrop-blur-sm">
           <button type="button" className="absolute inset-0 h-full w-full cursor-default" aria-hidden="true" tabIndex={-1} onClick={closeExchangeDrawer} />
           {/* R2.2 (seção 40) — mobile: bottom sheet de altura fixa; a partir de
               sm: drawer lateral direito, altura cheia, como antes. */}
@@ -1882,14 +1876,17 @@ export function MealItemsEditor({
       )}
 
       {portalReady && recipeSelectorOpen && createPortal(
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
-          <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
+        <div role="dialog" aria-modal="true" aria-labelledby="insert-recipe-title" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+          <section ref={recipeSelectorRef} className="flex h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-5 py-4">
               <div>
                 <p className="brand-kicker">Biblioteca de receitas</p>
-                <h2 className="font-serif text-2xl font-semibold text-[#3A3028]">Inserir receita</h2>
+                <h2 id="insert-recipe-title" className="font-serif text-2xl font-semibold text-[#3A3028]">Inserir receita</h2>
               </div>
-              <button type="button" onClick={() => setRecipeSelectorOpen(false)} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar" title="Fechar">x</button>
+              {/* R6.5.3 — era o literal "x" (texto), não um ícone; agora consistente com todo o resto do app. */}
+              <button type="button" onClick={() => setRecipeSelectorOpen(false)} className="rounded-lg p-2 text-[#75675E] hover:bg-[#FBF7F1]" aria-label="Fechar" title="Fechar">
+                <X className="h-4 w-4" />
+              </button>
             </div>
             <div className="grid shrink-0 gap-3 border-b border-[#EDE1D6] p-4 md:grid-cols-[minmax(0,1fr)_220px]">
               <input value={recipeSearch} onChange={(event) => setRecipeSearch(event.target.value)} className="brand-input" placeholder="Buscar por nome ou tag..." />
