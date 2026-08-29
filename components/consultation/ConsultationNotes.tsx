@@ -15,10 +15,12 @@ export function ConsultationNotes({
   consultationSessionId,
   initialNotes,
   onOrganizeWithAI,
+  readOnly = false,
 }: {
   consultationSessionId: string;
   initialNotes: string;
   onOrganizeWithAI: (notes: string) => void;
+  readOnly?: boolean;
 }) {
   const [notes, setNotes] = useState(initialNotes);
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -59,13 +61,14 @@ export function ConsultationNotes({
       <textarea
         value={notes}
         onChange={(event) => handleChange(event.target.value)}
+        disabled={readOnly}
         rows={6}
         placeholder="Escreva livremente durante o atendimento: sintomas, alimentação, adesão, atividade física, o que combinar..."
         className="brand-input w-full resize-y"
       />
       <button
         type="button"
-        disabled={!notes.trim()}
+        disabled={readOnly || !notes.trim()}
         onClick={() => onOrganizeWithAI(notes)}
         className="inline-flex items-center gap-1.5 rounded-full border border-[#D9E4D3] bg-[#EEF3EA] px-3 py-1.5 text-xs font-semibold text-[#4F6847] hover:bg-[#E1EBDB] disabled:opacity-50"
       >

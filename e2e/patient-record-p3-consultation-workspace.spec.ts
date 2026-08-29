@@ -140,9 +140,12 @@ async function seedCompleteWorkspacePatient(request: APIRequestContext, options:
 }
 
 async function fillConsultationDraft(page: Page) {
+  await page.getByRole("navigation", { name: "Etapas da consulta" }).getByRole("button", { name: /Mudanças$/ }).click();
   await page.getByLabel("Evolução desde a última consulta").fill("Evoluiu bem desde julho.");
   await page.getByLabel("Adesão").fill("Boa adesão ao plano, dificuldade no jantar.");
   await page.getByLabel("Sintomas e queixas").fill("Sem queixas gastrointestinais.");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("navigation", { name: "Etapas da consulta" }).getByRole("button", { name: /Recomendações$/ }).click();
   await page.getByLabel("Conduta").fill("Ajustar distribuição proteica.");
   await page.getByLabel("Metas").fill("Planejar lanches por 7 dias.");
 }
@@ -155,8 +158,7 @@ test.describe("Patient Record P3 consultation workspace", () => {
     await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${patient.sessionId}`);
 
     await expect(page.getByRole("heading", { level: 1, name: /Patient Consultation P3 Test/ })).toBeVisible();
-    await expect(page.getByText("Consulta atual")).toBeVisible();
-    await expect(page.getByText("Registro clínico")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visão clínica" })).toBeVisible();
     await expect(page.getByText("Contexto do paciente")).toHaveCount(0);
     await screenshot(page, "P3-01-workspace-desktop-complete", testInfo.project.name, testInfo.retry);
   });
@@ -191,7 +193,9 @@ test.describe("Patient Record P3 consultation workspace", () => {
     await expect(page.getByText("Salvo").first()).toBeVisible();
     await page.reload();
 
+    await page.getByRole("navigation", { name: "Etapas da consulta" }).getByRole("button", { name: /Mudanças$/ }).click();
     await expect(page.getByLabel("Evolução desde a última consulta")).toHaveValue("Evoluiu bem desde julho.");
+    await page.getByRole("navigation", { name: "Etapas da consulta" }).getByRole("button", { name: /Recomendações$/ }).click();
     await expect(page.getByLabel("Conduta")).toHaveValue("Ajustar distribuição proteica.");
     await expect(page.getByLabel("Metas")).toHaveValue("Planejar lanches por 7 dias.");
     await screenshot(page, "P3-02-consultation-editing", testInfo.project.name, testInfo.retry);
@@ -202,6 +206,7 @@ test.describe("Patient Record P3 consultation workspace", () => {
     await suppressDailyBriefingPopup(page);
     await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${patient.sessionId}`);
 
+    await page.getByRole("navigation", { name: "Etapas da consulta" }).getByRole("button", { name: /Recomendações$/ }).click();
     await page.getByLabel("Conduta").fill("Texto não salvo.");
     page.once("dialog", async (dialog) => {
       expect(dialog.message()).toContain("alterações não salvas");
@@ -219,6 +224,7 @@ test.describe("Patient Record P3 consultation workspace", () => {
     await suppressDailyBriefingPopup(page);
     await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${patient.sessionId}`);
 
+    await page.getByRole("navigation", { name: "Etapas da consulta" }).getByRole("button", { name: /Mudanças$/ }).click();
     await page.getByLabel("Evolução desde a última consulta").fill("Fechamento da consulta P3.");
     await page.getByRole("button", { name: "Finalizar consulta" }).click();
     await expect(page.getByRole("dialog").getByRole("heading", { name: "Finalizar consulta" })).toBeVisible();
@@ -241,8 +247,10 @@ test.describe("Patient Record P3 consultation workspace", () => {
     await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${patient.sessionId}`);
 
     await expect(page.getByText("Consulta finalizada. Os dados ficam disponíveis apenas para leitura.")).toBeVisible();
+    await page.getByRole("navigation", { name: "Etapas da consulta" }).getByRole("button", { name: /Recomendações$/ }).click();
     await expect(page.getByLabel("Conduta")).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Finalizar consulta" })).toBeDisabled();
+    await expect(page.getByText("Modo histórico")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Finalizar consulta" })).toHaveCount(0);
     await screenshot(page, "P3-07-completed-consultation-read-only", testInfo.project.name, testInfo.retry);
   });
 
@@ -308,6 +316,7 @@ test.describe("Patient Record P3 consultation workspace", () => {
     await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${patient.sessionId}`);
 
     await expect(page.getByRole("heading", { level: 1, name: /Patient Consultation P3 Test/ })).toBeVisible();
+    await page.getByRole("navigation", { name: "Etapas da consulta" }).getByRole("button", { name: /Mudanças$/ }).click();
     await expect(page.getByLabel("Evolução desde a última consulta")).toBeVisible();
     await screenshot(page, "P3-08-mobile-390", testInfo.project.name, testInfo.retry);
   });
@@ -319,7 +328,7 @@ test.describe("Patient Record P3 consultation workspace", () => {
 
     await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${patient.sessionId}`);
 
-    await expect(page.getByText("Registro clínico")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visão clínica" })).toBeVisible();
     await expect(page.getByText("Plano alimentar", { exact: true }).first()).toBeVisible();
     await screenshot(page, "P3-09-tablet", testInfo.project.name, testInfo.retry);
   });
