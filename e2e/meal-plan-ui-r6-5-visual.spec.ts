@@ -89,7 +89,7 @@ test.describe("Meal Plan Composer R6.5 — sidebar de nutrição profissionaliza
 
     await page.goto(`/dashboard/clients/${patient.id}`);
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
-    await expect(page.getByText("Refeição 8")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Refeição 1")).toBeVisible();
+    await expect(page.getByRole("article").filter({ hasText: "Refeição 8" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("article").filter({ hasText: "Refeição 1" })).toBeVisible();
   });
 });
