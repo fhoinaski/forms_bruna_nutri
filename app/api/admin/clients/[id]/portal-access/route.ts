@@ -8,6 +8,7 @@ import {
   getPatientPortalAccess,
   getOrCreatePatientPortalAccess,
   issuePatientPortalToken,
+  listPatientPortalSessions,
   revokePatientPortalAccess,
   revokePatientPortalSessions,
   revokePatientPortalTokens,
@@ -46,6 +47,7 @@ export async function GET(
   if (!client) return NextResponse.json({ message: "Cliente nao encontrado." }, { status: 404 });
 
   const access = await getPatientPortalAccess(id);
+  const activeSessions = access ? await listPatientPortalSessions(id) : [];
   return NextResponse.json({
     exists: Boolean(access),
     is_active: access?.is_active === 1,
@@ -53,6 +55,7 @@ export async function GET(
     last_used_at: access?.last_used_at ?? null,
     last_login_at: access?.last_login_at ?? null,
     updated_at: access?.updated_at ?? null,
+    active_sessions: activeSessions.length,
     login_url: portalLoginUrl(),
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -110,6 +110,7 @@ interface ClientPortalAccessState {
   is_active: boolean;
   status?: string;
   last_login_at?: string | null;
+  active_sessions?: number;
   last_used_at: string | null;
   updated_at: string | null;
   login_url: string;
@@ -1832,6 +1833,11 @@ export default function ClientWorkspace({
   const [temporaryPortalPassword, setTemporaryPortalPassword] = useState("");
   const [temporaryPasswordOpen, setTemporaryPasswordOpen] = useState(false);
   const [temporaryPasswordCopied, setTemporaryPasswordCopied] = useState(false);
+  const [resetAccessOpen, setResetAccessOpen] = useState(false);
+  const [confirmTemporaryResetOpen, setConfirmTemporaryResetOpen] = useState(false);
+  const temporaryPasswordCloseRef = useRef<HTMLButtonElement>(null);
+  const resetAccessCloseRef = useRef<HTMLButtonElement>(null);
+  const lastPortalActionRef = useRef<HTMLElement | null>(null);
   const [portalSessions, setPortalSessions] = useState<ClientPortalSessionState[]>([]);
   const [portalSessionsOpen, setPortalSessionsOpen] = useState(false);
   const [portalSessionsLoading, setPortalSessionsLoading] = useState(false);
@@ -2080,6 +2086,7 @@ export default function ClientWorkspace({
     setTemporaryPasswordOpen(false);
     setTemporaryPortalPassword("");
     setTemporaryPasswordCopied(false);
+    lastPortalActionRef.current?.focus();
   };
 
   const copyTemporaryPassword = async () => {
@@ -2104,6 +2111,30 @@ export default function ClientWorkspace({
   };
 
   const managePortalSessions = () => { setPortalSessionsOpen(true); void loadPortalSessions(); };
+  const openResetAccess = (event: React.MouseEvent<HTMLButtonElement>) => { lastPortalActionRef.current = event.currentTarget; setResetAccessOpen(true); };
+  const closeResetAccess = () => { setResetAccessOpen(false); setConfirmTemporaryResetOpen(false); lastPortalActionRef.current?.focus(); };
+  const requestTemporaryReset = () => { setResetAccessOpen(false); setConfirmTemporaryResetOpen(true); };
+  const confirmTemporaryReset = async () => { setConfirmTemporaryResetOpen(false); await generateTemporaryPortalPassword(); };
+  useEffect(() => {
+    if (!temporaryPasswordOpen && !resetAccessOpen && !confirmTemporaryResetOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (temporaryPasswordOpen) closeTemporaryPassword(); else closeResetAccess();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const target = temporaryPasswordOpen ? temporaryPasswordCloseRef.current : resetAccessCloseRef.current;
+    target?.focus();
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [temporaryPasswordOpen, resetAccessOpen, confirmTemporaryResetOpen]);
+  const trapDialogFocus = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const dialog = event.currentTarget;
+    const focusable = Array.from(dialog.querySelectorAll<HTMLElement>("button:not([disabled]), [href], input:not([disabled])"));
+    if (!focusable.length) return;
+    const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+    if (event.shiftKey && currentIndex <= 0) { event.preventDefault(); focusable.at(-1)?.focus(); }
+    if (!event.shiftKey && currentIndex === focusable.length - 1) { event.preventDefault(); focusable[0]?.focus(); }
+  };
   const revokePortalSession = async (action: "one" | "all", sessionId?: string) => {
     const message = action === "all" ? "Encerrar todas as sessões ativas deste paciente?" : "Encerrar esta sessão?";
     if (!window.confirm(message)) return;
@@ -2221,23 +2252,15 @@ export default function ClientWorkspace({
                 <p className="mt-2 text-sm text-[#75675E]">Gerencie o estado do portal sem sair da ficha clínica.</p>
               </div>
               {portalLoading && !portalAccess ? <p className="text-sm text-[#75675E]">Carregando acesso do portal...</p> : !portalAccess ? <p className="text-sm text-[#75675E]">O acesso ao portal será carregado ao abrir esta seção.</p> : (
-                <section className="max-w-2xl rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5">
-                  <dl className="grid gap-4 text-sm sm:grid-cols-2">
-                    <div><dt className="text-[#75675E]">Estado</dt><dd className="mt-1 font-semibold text-[#3A3028]">{({ NO_ACCESS: "Sem acesso", INVITE_PENDING: "Convite pendente", ACTIVE: "Portal ativo", TEMP_PASSWORD: "Senha temporária ativa", PASSWORD_CHANGE_REQUIRED: "Troca de senha necessária", REVOKED: "Acesso revogado", LOCKED: "Bloqueado" } as Record<string, string>)[portalAccess.status ?? "NO_ACCESS"]}</dd></div>
-                    <div><dt className="text-[#75675E]">Último acesso</dt><dd className="mt-1 font-semibold text-[#3A3028]">{formatDateTime(portalAccess.last_used_at)}</dd></div>
-                    <div><dt className="text-[#75675E]">E-mail</dt><dd className="mt-1 font-semibold text-[#3A3028]">{email || "Não informado"}</dd></div>
-                  </dl>
-                  {portalError && <p className="mt-4 rounded-lg bg-[#FFF7F5] p-3 text-sm text-[#9A5C4E]" role="alert">{portalError}</p>}
-                  {(portalAccess.status === "NO_ACCESS" || portalAccess.status === "INVITE_PENDING") && <div className="mt-5"><p className="text-sm font-semibold text-[#3A3028]">Como deseja liberar o acesso?</p><div className="mt-3 flex flex-col gap-3 sm:flex-row"><button type="button" disabled={portalLoading} onClick={() => void generatePortalCode()} className="brand-btn-primary min-h-11">{portalAccess.status === "INVITE_PENDING" ? "Reenviar convite por e-mail" : "Enviar convite por e-mail"}</button><button type="button" disabled={portalLoading} onClick={() => void generateTemporaryPortalPassword()} className="brand-btn-secondary min-h-11">Gerar senha temporária</button></div></div>}
-                  {portalAccess.status === "TEMP_PASSWORD" && <div className="mt-5"><p className="text-sm text-[#75675E]">Troca obrigatória no primeiro acesso.</p><div className="mt-3 flex flex-col gap-3 sm:flex-row"><button type="button" disabled={portalLoading} onClick={() => void generateTemporaryPortalPassword()} className="brand-btn-secondary min-h-11">Gerar nova senha temporária</button><button type="button" disabled={portalLoading} onClick={() => void togglePortalAccess(false)} className="brand-btn-secondary min-h-11">Revogar acesso</button></div></div>}
-                  {portalAccess.status === "ACTIVE" && <p className="mt-5 text-sm text-[#75675E]">Para recuperar o acesso de forma administrativa, revogue o acesso e use um novo convite.</p>}
-                  {portalAccess.status === "PASSWORD_CHANGE_REQUIRED" && <p className="mt-5 text-sm text-[#75675E]">A paciente precisa concluir a troca de senha para continuar no portal.</p>}
-                  {(portalAccess.status === "REVOKED" || portalAccess.status === "LOCKED") && <div className="mt-5"><button type="button" disabled={portalLoading} onClick={() => void generatePortalCode()} className="brand-btn-primary min-h-11">Enviar novo convite por e-mail</button></div>}
-                  {portalAccess.is_active && portalAccess.status !== "TEMP_PASSWORD" && <div className="mt-5 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => void togglePortalAccess(false)} className="brand-btn-secondary min-h-11">Revogar acesso</button>
-                    <button type="button" onClick={managePortalSessions} className="brand-btn-secondary min-h-11">Gerenciar sessões</button>
-                  </div>}
-                </section>
+                <div className="max-w-2xl space-y-4">
+                  <section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Status</p><dl className="mt-3 grid gap-4 text-sm sm:grid-cols-3"><div><dt className="text-[#75675E]">Estado</dt><dd className="mt-1 font-semibold text-[#3A3028]">{({ NO_ACCESS: "Sem acesso", INVITE_PENDING: "Convite pendente", ACTIVE: "Portal ativo", TEMP_PASSWORD: "Senha temporária ativa", PASSWORD_CHANGE_REQUIRED: "Troca de senha necessária", REVOKED: "Acesso revogado", LOCKED: "Bloqueado" } as Record<string, string>)[portalAccess.status ?? "NO_ACCESS"]}</dd></div><div><dt className="text-[#75675E]">Último acesso</dt><dd className="mt-1 font-semibold text-[#3A3028]">{formatDateTime(portalAccess.last_login_at ?? null)}</dd></div><div><dt className="text-[#75675E]">E-mail</dt><dd className="mt-1 break-all font-semibold text-[#3A3028]">{email || "Não informado"}</dd></div></dl></section>
+                  {portalError && <p className="rounded-lg bg-[#FFF7F5] p-3 text-sm text-[#9A5C4E]" role="alert">{portalError}</p>}
+                  {(portalAccess.status === "NO_ACCESS" || portalAccess.status === "INVITE_PENDING") && <section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Acesso ao portal</p><h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Como deseja liberar o acesso?</h3>{portalAccess.status === "INVITE_PENDING" && <p className="mt-2 text-sm text-[#75675E]">Reenviar o convite invalida o link anterior.</p>}{!email && <p className="mt-2 text-sm text-[#9A5C4E]">E-mail necessário para enviar convite.</p>}<div className="mt-4 flex flex-col gap-3 sm:flex-row"><button type="button" disabled={portalLoading || !email} onClick={() => void generatePortalCode()} className="brand-btn-primary min-h-11">{portalAccess.status === "INVITE_PENDING" ? "Reenviar convite" : "Enviar convite por e-mail"}</button><button type="button" disabled={portalLoading} onClick={() => void generateTemporaryPortalPassword()} className="brand-btn-secondary min-h-11">Gerar senha temporária</button></div></section>}
+                  {portalAccess.status === "TEMP_PASSWORD" && <section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Acesso</p><h3 className="mt-1 font-serif text-lg font-semibold text-[#3A3028]">Senha temporária ativa</h3><p className="mt-2 text-sm text-[#75675E]">Troca obrigatória no primeiro acesso.</p><div className="mt-4 flex flex-col gap-3 sm:flex-row"><button type="button" disabled={portalLoading} onClick={() => void generateTemporaryPortalPassword()} className="brand-btn-secondary min-h-11">Gerar nova senha temporária</button><button type="button" disabled={portalLoading} onClick={() => void togglePortalAccess(false)} className="brand-btn-secondary min-h-11">Revogar acesso</button></div></section>}
+                  {portalAccess.status === "ACTIVE" && <><section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Sessões</p><div className="mt-2 flex flex-wrap items-center justify-between gap-3"><p className="font-serif text-lg font-semibold text-[#3A3028]">Sessões ativas <span className="text-[#607A56]">{portalAccess.active_sessions ?? 0}</span></p><button type="button" onClick={managePortalSessions} className="brand-btn-secondary min-h-11">Gerenciar sessões</button></div></section><section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Segurança e acesso</p><div className="mt-3 flex flex-col gap-3 sm:flex-row"><button type="button" onClick={openResetAccess} className="brand-btn-secondary min-h-11">Redefinir acesso</button><button type="button" onClick={() => void togglePortalAccess(false)} className="brand-btn-secondary min-h-11">Revogar acesso</button></div></section></>}
+                  {portalAccess.status === "PASSWORD_CHANGE_REQUIRED" && <p className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5 text-sm text-[#75675E]">A paciente precisa concluir a troca de senha para continuar no portal.</p>}
+                  {(portalAccess.status === "REVOKED" || portalAccess.status === "LOCKED") && <section className="rounded-2xl border border-[#EDE1D6] bg-[#FFFDFC] p-5"><p className="brand-kicker">Acesso</p><button type="button" disabled={portalLoading || !email} onClick={() => void generatePortalCode()} className="brand-btn-primary mt-3 min-h-11">Enviar novo convite por e-mail</button></section>}
+                </div>
               )}
             </div>
           )}
@@ -2863,7 +2886,7 @@ export default function ClientWorkspace({
         </Tabs>
       </div>
       {temporaryPasswordOpen && temporaryPortalPassword && (
-        <div role="dialog" aria-modal="true" aria-labelledby="temporary-password-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
+        <div role="dialog" aria-modal="true" aria-labelledby="temporary-password-title" onKeyDown={trapDialogFocus} className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
           <section className="w-full max-w-md rounded-3xl border border-[#EDE1D6] bg-[#FFFDFC] p-6 shadow-[0_28px_90px_rgba(58,48,40,0.24)]">
             <p className="brand-kicker">Portal do paciente</p>
             <h2 id="temporary-password-title" className="mt-1 font-serif text-2xl font-semibold text-[#3A3028]">Senha temporária criada</h2>
@@ -2871,11 +2894,19 @@ export default function ClientWorkspace({
             <output aria-label="Senha temporária" className="mt-5 block break-all rounded-xl border border-[#D9E4D3] bg-[#EEF3EA] px-4 py-3 font-mono text-base font-semibold tracking-wide text-[#3A3028]">{temporaryPortalPassword}</output>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => void copyTemporaryPassword()} className="brand-btn-secondary min-h-11">{temporaryPasswordCopied ? "Copiado" : "Copiar senha"}</button>
-              <button type="button" onClick={closeTemporaryPassword} className="brand-btn-primary min-h-11">Fechar</button>
+              <button ref={temporaryPasswordCloseRef} type="button" onClick={closeTemporaryPassword} className="brand-btn-primary min-h-11">Fechar</button>
             </div>
             <p className="mt-3 min-h-5 text-sm text-[#607A56]" role="status" aria-live="polite">{temporaryPasswordCopied ? "Senha copiada para a área de transferência." : ""}</p>
           </section>
         </div>
+      )}
+      {resetAccessOpen && (
+        <div role="dialog" aria-modal="true" aria-labelledby="reset-access-title" onKeyDown={trapDialogFocus} className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
+          <section className="w-full max-w-md rounded-3xl border border-[#EDE1D6] bg-[#FFFDFC] p-6 shadow-[0_28px_90px_rgba(58,48,40,0.24)]"><p className="brand-kicker">Segurança e acesso</p><h2 id="reset-access-title" className="mt-1 font-serif text-2xl font-semibold text-[#3A3028]">Redefinir acesso do paciente</h2><p className="mt-3 text-sm text-[#75675E]">Escolha como deseja redefinir o acesso.</p><div className="mt-5 grid gap-3"><button type="button" disabled={!email || portalLoading} onClick={() => { closeResetAccess(); void generatePortalCode(); }} className="brand-btn-primary min-h-11">Enviar novo convite por e-mail</button><button type="button" disabled={portalLoading} onClick={requestTemporaryReset} className="brand-btn-secondary min-h-11">Gerar nova senha temporária</button><button ref={resetAccessCloseRef} type="button" onClick={closeResetAccess} className="min-h-11 text-sm font-semibold text-[#75675E]">Cancelar</button></div></section>
+        </div>
+      )}
+      {confirmTemporaryResetOpen && (
+        <div role="dialog" aria-modal="true" aria-labelledby="confirm-temp-reset-title" onKeyDown={trapDialogFocus} className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm"><section className="w-full max-w-md rounded-3xl border border-[#EDE1D6] bg-[#FFFDFC] p-6 shadow-[0_28px_90px_rgba(58,48,40,0.24)]"><p className="brand-kicker">Confirmação necessária</p><h2 id="confirm-temp-reset-title" className="mt-1 font-serif text-2xl font-semibold text-[#3A3028]">Gerar uma nova senha temporária?</h2><p className="mt-3 text-sm leading-6 text-[#75675E]">As sessões ativas serão encerradas e o paciente precisará criar uma nova senha no próximo acesso.</p><div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end"><button ref={resetAccessCloseRef} type="button" onClick={closeResetAccess} className="brand-btn-secondary min-h-11">Cancelar</button><button type="button" onClick={() => void confirmTemporaryReset()} className="brand-btn-primary min-h-11">Gerar senha temporária</button></div></section></div>
       )}
       {deleteDialogOpen && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-4 py-6 backdrop-blur-sm">
