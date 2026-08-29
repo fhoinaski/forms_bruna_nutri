@@ -1,8 +1,12 @@
 "use client";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
 export default function ResetPortalPasswordPage() {
+  return <Suspense fallback={null}><ResetPortalPasswordForm /></Suspense>;
+}
+
+function ResetPortalPasswordForm() {
   const token = useSearchParams().get("token") ?? "";
   const [password, setPassword] = useState(""); const [confirmPassword, setConfirmPassword] = useState(""); const [message, setMessage] = useState(""); const [submitting, setSubmitting] = useState(false);
   async function submit(event: React.FormEvent) {
