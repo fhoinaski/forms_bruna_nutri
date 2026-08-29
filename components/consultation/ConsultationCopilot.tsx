@@ -63,14 +63,15 @@ function describeAppliedProposal(proposal: ProposedActionLike): string {
   return "Aplicado com sucesso.";
 }
 
-const QUICK_SUGGESTIONS = [
-  "Preparar consulta",
-  "Resumir histórico",
-  "Comparar evolução",
-  "Ver pendências",
-  "Analisar plano atual",
-  "Revisar protocolo",
-];
+const STEP_SUGGESTIONS: Record<string, string[]> = {
+  resumo: ["Resumir histórico", "Listar pontos para revisar", "Ver pendências"],
+  mudancas: ["Resumir alterações", "Comparar evolução", "Destacar mudanças relevantes"],
+  anamnese: ["Verificar informações faltantes", "Organizar notas da consulta", "Resumir hábitos e rotina"],
+  antropometria: ["Resumir evolução antropométrica", "Comparar medidas", "Preparar orientação para a consulta"],
+  plano: ["Analisar plano atual", "Sugerir revisão do plano", "Verificar aderência ao plano"],
+  recomendacoes: ["Organizar orientações", "Resumir conduta", "Propor metas revisáveis"],
+  retorno: ["Resumir consulta", "Listar próximos passos", "Ver pendências antes de concluir"],
+};
 
 /**
  * Copiloto do Modo Consulta (Área C, secao 6/24/25). Painel lateral
@@ -87,12 +88,14 @@ const QUICK_SUGGESTIONS = [
 export function ConsultationCopilot({
   clientId,
   consultationSessionId,
+  activeStep,
   externalMessage,
   onExternalMessageSent,
   onProposalConfirmed,
 }: {
   clientId: string;
   consultationSessionId: string;
+  activeStep: string;
   externalMessage: string | null;
   onExternalMessageSent: () => void;
   onProposalConfirmed: (kind: string) => void;
@@ -104,6 +107,7 @@ export function ConsultationCopilot({
   const [proposal, setProposal] = useState<ProposedActionLike | null>(null);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [error, setError] = useState("");
+  const quickSuggestions = STEP_SUGGESTIONS[activeStep] ?? STEP_SUGGESTIONS.resumo;
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -207,7 +211,7 @@ export function ConsultationCopilot({
           <div className="space-y-2">
             <p className="text-xs text-[#75675E]">Pergunte em linguagem natural ou use um atalho:</p>
             <div className="flex flex-wrap gap-1.5">
-              {QUICK_SUGGESTIONS.map((suggestion) => (
+              {quickSuggestions.map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"

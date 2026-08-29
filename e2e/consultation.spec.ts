@@ -38,7 +38,7 @@ test.describe("Modo Consulta", () => {
     // as tabs antigas de antropometria, consulta, plano e protocolo não são
     // mais parte do contrato.
     await expect(page.getByRole("complementary", { name: "Contexto do paciente" })).toBeVisible();
-    await expect(page.getByText("Registro clínico")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visão clínica" })).toBeVisible();
     await expect(page.getByLabel("Contexto do paciente").getByText("Sem avaliação registrada")).toBeVisible();
     await expect(page.getByLabel("Contexto do paciente").getByText("Nenhum plano ativo")).toBeVisible();
     await expect(page.getByText("Nenhum protocolo ativo")).toBeVisible();
@@ -47,23 +47,28 @@ test.describe("Modo Consulta", () => {
     await expect(page.getByRole("button", { name: "Ver anamnese" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Abrir protocolos" })).toBeVisible();
 
-    // O registro clínico substitui a antiga aba Consulta e persiste todos os
-    // campos explicitamente na sessão atual.
+    // O registro clínico fica organizado pelas etapas Mudanças e Recomendações.
+    const stepNavigation = page.getByRole("navigation", { name: "Etapas da consulta" });
+    await stepNavigation.getByRole("button", { name: /Mudanças$/ }).click();
     await clinicalField(page, "Evolução desde a última consulta").fill("Paciente relata boa adesão ao plano.");
     await clinicalField(page, "Adesão").fill("Sem intercorrências.");
+    page.once("dialog", (dialog) => dialog.accept());
+    await stepNavigation.getByRole("button", { name: /Recomendações$/ }).click();
     await clinicalField(page, "Conduta").fill("Manter organização das refeições.");
     await expect(page.getByText("Alterações não salvas").first()).toBeVisible();
     await page.getByRole("button", { name: "Salvar" }).first().click();
     await expect(page.getByText("Salvo").first()).toBeVisible();
     await page.reload();
+    await stepNavigation.getByRole("button", { name: /Mudanças$/ }).click();
     await expect(clinicalField(page, "Evolução desde a última consulta")).toHaveValue("Paciente relata boa adesão ao plano.");
+    await stepNavigation.getByRole("button", { name: /Recomendações$/ }).click();
     await expect(clinicalField(page, "Conduta")).toHaveValue("Manter organização das refeições.");
 
     // Ações P6 substituem as tabs e preservam o vínculo de retorno da sessão.
     await page.getByRole("button", { name: "Nova avaliação" }).click();
     await expect(page).toHaveURL(new RegExp(`tab=antropometria.*consultationId=${activeSessionId}`));
     await page.goto(`/dashboard/clients/${patient.id}/consulta?sessionId=${activeSessionId}`);
-    await expect(page.getByText("Registro clínico")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visão clínica" })).toBeVisible();
 
     await page.getByRole("button", { name: "Abrir plano alimentar" }).click();
     await expect(page).toHaveURL(new RegExp(`tab=plano-alimentar.*consultationId=${activeSessionId}`));
