@@ -2,12 +2,32 @@ import type { FoodReference, PersistedMealFoodSource } from "@/lib/nutrition/foo
 import { getFoodByReference } from "@/lib/nutrition/food-catalog";
 import { toDisplayFoodName } from "@/lib/nutrition/food-terminology";
 import { getPrescribedQuantity, toNutritionGrams } from "@/lib/nutrition/prescribed-quantity";
-import { calculatePlanNutrients, roundedNutrients } from "@/lib/nutrition/nutrients";
+import { calculatePlanNutrients, roundedNutrients, resolveRecipeItemNutrients } from "@/lib/nutrition/nutrients";
+import { recipeItemValuesFromSnapshot } from "@/lib/nutrition/food-snapshot";
+import type { QuantityResolution } from "@/lib/nutrition/quantity-resolution";
 import { getFoodPortionById, toHouseholdMeasureOption } from "@/lib/repositories/food-portions";
 import { getApprovedMealPlanAlternatives, type ApprovedMealPlanAlternative } from "@/lib/repositories/meal-plan-alternatives";
 import { getActiveMealPlanVersion, getMealPlanVersionById, type MealPlanItemPayload, type MealPlanPayload } from "@/lib/repositories/meal-plans";
 import { buildFoodReferenceLookup, resolveMealPlanChangeReferences } from "@/lib/ai/agents/nutrition/meal-plan-change-agent";
 import { calculateMealNutritionRange } from "@/lib/meal-plans/flexible-structure";
+import { getRecipeById, getRecipeReferenceEntriesByIds } from "@/lib/repositories/recipes";
+
+/** R6 — resolução de quantidade pra um item de RECEITA (porções, ou gramas quando há rendimento em massa) — nunca via toNutritionGrams (que assume base por-100g). Snapshot congelado vence sempre que existir (imutabilidade). */
+async function resolveRecipeItemQuantityForViewModel(item: MealPlanItemPayload): Promise<QuantityResolution> {
+  const frozen = recipeItemValuesFromSnapshot(item.nutrition_snapshot);
+  if (frozen) {
+    const grams = item.resolved_grams_snapshot ?? null;
+    return { grams, method: "estimated", confidence: "medium" };
+  }
+  const recipe = item.food_ref_id ? await getRecipeById(item.food_ref_id) : null;
+  if (!recipe) return { grams: null, method: "unresolved", confidence: "none" };
+  const { grams, resolution } = resolveRecipeItemNutrients(item.quantity, item.unit, {
+    total: { energyKcal: recipe.per_portion_kcal * recipe.servings, proteinG: recipe.per_portion_protein_g * recipe.servings, carbohydrateG: recipe.per_portion_carbs_g * recipe.servings, fatG: recipe.per_portion_fat_g * recipe.servings, fiberG: null, sodiumMg: null, calciumMg: null, ironMg: null, potassiumMg: null, vitaminCMg: null },
+    servings: recipe.servings,
+    yieldGrams: recipe.yield_mode === "USER_REPORTED" ? recipe.yield_grams : null,
+  });
+  return { grams, method: resolution.method, confidence: resolution.confidence };
+}
 
 export type MealPlanViewModelStatus = "draft" | "active" | "archived";
 export type MealPlanFoodIdentityStatus = "RESOLVED" | "NEEDS_CONFIRMATION" | "UNRESOLVED";
@@ -49,7 +69,7 @@ export interface MealPlanItemViewModel {
   };
   foodIdentity: {
     status: MealPlanFoodIdentityStatus;
-    source: PersistedMealFoodSource | null;
+    source: PersistedMealFoodSource | "RECIPE" | null;
     refId: string | null;
     canonicalFoodId: string | null;
   };
@@ -75,11 +95,21 @@ function alternativeKey(foodName: string): string {
 }
 
 function itemRef(item: MealPlanItemPayload): FoodReference | null {
-  if (!item.food_source || !item.food_ref_id) return null;
+  // R6 — item de RECEITA não é uma referência de catálogo (mesmo tratamento de "sem vínculo").
+  if (!item.food_source || item.food_source === "RECIPE" || !item.food_ref_id) return null;
   return { source: item.food_source, sourceId: item.food_ref_id, canonicalId: item.canonical_food_id ?? null };
 }
 
 async function resolveFoodIdentityStatus(item: MealPlanItemPayload): Promise<{ status: MealPlanFoodIdentityStatus; reason: string }> {
+  // R6 — item de RECEITA nunca passa pelo catálogo de alimentos (getFoodByReference);
+  // é resolvido pela receita existir/estar ativa, não por um vínculo canônico.
+  if (item.food_source === "RECIPE") {
+    if (!item.food_ref_id) return { status: "UNRESOLVED", reason: "Item de receita sem vínculo persistido." };
+    const recipe = await getRecipeById(item.food_ref_id);
+    if (recipe?.is_active) return { status: "RESOLVED", reason: "Receita vinculada e ativa." };
+    if (recipe) return { status: "NEEDS_CONFIRMATION", reason: "Receita vinculada foi arquivada." };
+    return { status: "NEEDS_CONFIRMATION", reason: "Receita vinculada não encontrada." };
+  }
   const ref = itemRef(item);
   if (!ref) return { status: "UNRESOLVED", reason: "Item sem food_source/food_ref_id persistidos." };
   const details = await getFoodByReference(ref);
@@ -94,13 +124,20 @@ async function buildItemViewModel(
   const householdMeasure = item.household_measure_id
     ? await getFoodPortionById(item.household_measure_id).then((portion) => portion ? toHouseholdMeasureOption(portion) : null)
     : null;
-  const quantityResolution = toNutritionGrams({
-    quantity: item.quantity,
-    unit: item.unit,
-    householdMeasure,
-    resolvedGramsSnapshot: item.resolved_grams_snapshot,
-    quantityResolutionSnapshot: item.quantity_resolution_snapshot,
-  });
+  // R6 — item de RECEITA nunca é gramas-por-100g: a quantidade é em
+  // porções (ou gramas, quando a receita tem rendimento em massa) do
+  // RENDIMENTO da receita. toNutritionGrams não entende isso (sempre
+  // devolveria "unresolved"); usa o mesmo caminho de resolução real do
+  // item (snapshot congelado ou lookup ao vivo pela receita).
+  const quantityResolution = item.food_source === "RECIPE"
+    ? await resolveRecipeItemQuantityForViewModel(item)
+    : toNutritionGrams({
+        quantity: item.quantity,
+        unit: item.unit,
+        householdMeasure,
+        resolvedGramsSnapshot: item.resolved_grams_snapshot,
+        quantityResolutionSnapshot: item.quantity_resolution_snapshot,
+      });
   const identity = await resolveFoodIdentityStatus(item);
   const { prescribedQuantity, prescribedUnit } = getPrescribedQuantity(item);
   const displayName = item.food_name_snapshot?.trim() || toDisplayFoodName(item.food);
@@ -160,8 +197,9 @@ export async function buildMealPlanViewModel(plan: MealPlanPayload): Promise<Mea
     meals.push({ id: meal.id ?? null, name: meal.name, time: meal.suggested_time ?? null, items });
   }
 
-  const { references, measuresById } = await resolveMealPlanChangeReferences(plan);
-  const lookup = buildFoodReferenceLookup(references, measuresById);
+  const { references, measuresById, recipeIds } = await resolveMealPlanChangeReferences(plan);
+  const recipesById = await getRecipeReferenceEntriesByIds(recipeIds ?? []);
+  const lookup = buildFoodReferenceLookup(references, measuresById, recipesById);
   const nutrition = calculatePlanNutrients(plan, lookup);
   const totals = roundedNutrients(nutrition.total.values);
   const range = plan.meals.reduce((total, meal) => {

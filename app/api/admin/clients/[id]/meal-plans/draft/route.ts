@@ -34,6 +34,8 @@ const GenerateDraftSchema = z.object({
    * usa internamente) — nunca usado pra decidir o que persistir.
    */
   otherMealsContext: z.array(draftMealSchema).max(6).optional(),
+  /** R5.1 (seção 4) — opt-in explícito: sem isto, o Copilot continua gerando só SIMPLE (comportamento anterior, sem regressão). */
+  allowFlexibleStructure: z.boolean().optional(),
 }).strict();
 
 /**

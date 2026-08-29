@@ -23,7 +23,7 @@ const itemSchema = z.object({
   // "onde a identidade e transportada"), nunca em substitutionSchema
   // abaixo (item 13: substitutions continua so TACO/CUSTOM/MANUFACTURER/USDA
   // nesta fase).
-  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA", "TBCA", "IBGE_POF"]).nullable().optional(),
+  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA", "TBCA", "IBGE_POF", "RECIPE"]).nullable().optional(),
   food_ref_id: z.string().max(120).nullable().optional(),
   // FASE 6.5 (item 3) — identidade canonica completa (ex.:
   // "tbca:medidas_caseiras:BRC0001C"), separada de food_ref_id

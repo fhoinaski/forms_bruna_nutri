@@ -1,7 +1,7 @@
 import type { MacroReferenceFood } from "@/lib/nutrition/macros";
 import { resolveQuantity, type HouseholdMeasureOption, type QuantityResolution } from "@/lib/nutrition/quantity-resolution";
 import type { MealPlanPayload } from "@/lib/repositories/meal-plans";
-import { referenceFromSnapshot } from "@/lib/nutrition/food-snapshot";
+import { referenceFromSnapshot, recipeItemValuesFromSnapshot } from "@/lib/nutrition/food-snapshot";
 import { NUTRIENT_DEFINITIONS, type NutrientCode, type NutrientUnit } from "@/lib/nutrition/nutrient-vocabulary";
 
 /**
@@ -399,6 +399,78 @@ export interface FoodReferenceLookup {
    * disponivel — cai para a conversao generica/estimada, nunca quebra.
    */
   byMeasureId?(id: string): HouseholdMeasureOption | null;
+  /**
+   * R6 (seções 12, 22-23, 33) — totais de uma receita JÁ calculados pelo
+   * mesmo motor (soma dos ingredientes via `calculateItemNutrients`, nunca
+   * um segundo calculador) mais o contrato de rendimento necessário pra
+   * ratear a porção pedida no item. Opcional: lookups que nunca lidam com
+   * itens de receita (testes antigos, TACO_ONLY_LOOKUP) simplesmente nunca
+   * resolvem — item de receita cai como "não reconhecido", nunca quebra.
+   */
+  byRecipeId?(id: string): RecipeReferenceEntry | null;
+}
+
+/** R6 — entrada pronta pra ratear a porção de uma receita num item de refeição. `total` é a soma BRUTA (sem arredondar) dos ingredientes, calculada pelo motor real — nunca um número gravado manualmente. */
+export interface RecipeReferenceEntry {
+  total: NutrientValues;
+  /** Rendimento em porções (sempre ≥ 1) — mesmo campo que já existia como `servings`. */
+  servings: number;
+  /** Massa final em gramas, quando conhecida (RAW_TOTAL somado ou USER_REPORTED informado) — `null` quando o rendimento só é conhecido em porções (PORTION_COUNT), e então só quantidade em porções é calculável. */
+  yieldGrams: number | null;
+}
+
+const PORTION_UNIT_ALIASES = new Set(["porção", "porcao", "porções", "porcoes", "unidade", "unidades", "un", "un."]);
+
+/** Unidades que representam "N porções desta receita" — nunca uma medida caseira genérica; a receita não tem catálogo de porções próprio, só a divisão pelo rendimento declarado. */
+function isRecipePortionUnit(unit: string | null | undefined): boolean {
+  if (!unit) return false;
+  return PORTION_UNIT_ALIASES.has(unit.trim().toLowerCase());
+}
+
+function scaleNutrientValues(values: NutrientValues, factor: number): NutrientValues {
+  const result = { ...EMPTY_NUTRIENTS } as NutrientValues;
+  for (const key of NUTRIENT_KEYS) result[key] = scale(values[key], factor);
+  return result;
+}
+
+function parseNumericQuantity(quantity: string | number | null | undefined): number | null {
+  if (typeof quantity === "number") return Number.isFinite(quantity) ? quantity : null;
+  const trimmed = String(quantity ?? "").trim().replace(",", ".");
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Resolve a contribuição nutricional de UM item de refeição que referencia
+ * uma RECEITA (food_source "RECIPE") — nunca soma alternativas, nunca
+ * inventa uma conversão gramas/porção: quando o rendimento só é conhecido
+ * em porções (sem massa) e a unidade pedida é g/ml, o item fica
+ * `unresolved` (missing≠zero), nunca um chute. Reaproveita SÓ os totais já
+ * calculados pelo motor (seção 12) — esta função é a divisão/rateio pelo
+ * rendimento (seções 22-23), não um segundo cálculo nutricional a partir
+ * de ingredientes.
+ */
+export function resolveRecipeItemNutrients(
+  quantity: string | number | null | undefined,
+  unit: string | null | undefined,
+  entry: RecipeReferenceEntry | null
+): { values: NutrientValues; grams: number | null; resolution: QuantityResolution } {
+  const qty = parseNumericQuantity(quantity);
+  if (!entry || qty === null || qty <= 0) {
+    return { values: { ...EMPTY_NUTRIENTS }, grams: null, resolution: { grams: null, method: "unresolved", confidence: "none" } };
+  }
+  const servings = entry.servings > 0 ? entry.servings : 1;
+  if (isRecipePortionUnit(unit)) {
+    const factor = qty / servings;
+    const grams = entry.yieldGrams !== null ? (entry.yieldGrams / servings) * qty : null;
+    return { values: scaleNutrientValues(entry.total, factor), grams, resolution: { grams, method: "estimated", confidence: "medium" } };
+  }
+  if (entry.yieldGrams === null) {
+    return { values: { ...EMPTY_NUTRIENTS }, grams: null, resolution: { grams: null, method: "unresolved", confidence: "none", warning: "Rendimento da receita só é conhecido em porções — quantidade em g/ml não pode ser calculada." } };
+  }
+  const factor = qty / entry.yieldGrams;
+  return { values: scaleNutrientValues(entry.total, factor), grams: qty, resolution: { grams: qty, method: "estimated", confidence: "medium" } };
 }
 
 export function resolveItemReference(item: MealPlanItemLike, lookup: FoodReferenceLookup): MacroReferenceFood | null {
@@ -496,6 +568,41 @@ function boundAcrossAlternatives(ranges: Array<{ min: NutrientValues; max: Nutri
   return values;
 }
 
+/**
+ * Calcula um item comum (TACO/CUSTOM/MANUFACTURER/USDA/TBCA/IBGE_POF) OU um
+ * item de RECEITA (R6) — ponto ÚNICO de decisão entre os dois caminhos,
+ * reaproveitado por `calculatePlanNutrients`/`calculateFlexiblePlanNutrients`
+ * pra nunca duplicar essa checagem. Um item de receita nunca passa por
+ * `resolveItemReference`/`calculateItemNutrients` (que assumem base por
+ * 100g) — usa `resolveRecipeItemNutrients`, que rateia os totais JÁ
+ * calculados da receita pelo rendimento (nunca um segundo cálculo a partir
+ * de ingredientes aqui).
+ */
+function calculateAnyItemNutrients(
+  item: MealPlanItemLike,
+  lookup: FoodReferenceLookup
+): { values: NutrientValues; resolution: QuantityResolution } {
+  if (item.food_source === "RECIPE" && item.food_ref_id) {
+    // Snapshot congelado no save (seções 47-54) — nunca recalcula a partir
+    // do estado ATUAL da receita quando já existe um valor congelado pra
+    // exatamente esta quantidade; editar a receita depois não muda
+    // retroativamente um plano já salvo/publicado.
+    const frozen = recipeItemValuesFromSnapshot(item.nutrition_snapshot);
+    if (frozen) {
+      return { values: frozen as unknown as NutrientValues, resolution: { grams: item.resolved_grams_snapshot ?? null, method: "estimated", confidence: "medium" } };
+    }
+    const entry = lookup.byRecipeId?.(item.food_ref_id) ?? null;
+    const { values, resolution } = resolveRecipeItemNutrients(item.quantity, item.unit, entry);
+    return { values, resolution };
+  }
+  const householdMeasure = item.household_measure_id ? lookup.byMeasureId?.(item.household_measure_id) ?? null : null;
+  const { values, resolution } = calculateItemNutrients(item.quantity, item.unit, resolveItemReference(item, lookup), householdMeasure, {
+    resolvedGramsSnapshot: item.resolved_grams_snapshot,
+    quantityResolutionSnapshot: item.quantity_resolution_snapshot,
+  });
+  return { values, resolution };
+}
+
 /** Calculates SIMPLE totals and OPTIONS/COMBINATION bounds without summing alternatives. */
 export function calculateFlexiblePlanNutrients(
   plan: Pick<MealPlanPayload, "meals">,
@@ -503,11 +610,7 @@ export function calculateFlexiblePlanNutrients(
 ): FlexiblePlanNutritionResult {
   const quality: QuantityQualitySummary = { total: 0, highConfidence: 0, estimated: 0, unresolved: 0 };
   const resolve = (item: MealPlanItemLike): NutrientValues => {
-    const householdMeasure = item.household_measure_id ? lookup.byMeasureId?.(item.household_measure_id) ?? null : null;
-    const calculated = calculateItemNutrients(item.quantity, item.unit, resolveItemReference(item, lookup), householdMeasure, {
-      resolvedGramsSnapshot: item.resolved_grams_snapshot,
-      quantityResolutionSnapshot: item.quantity_resolution_snapshot,
-    });
+    const calculated = calculateAnyItemNutrients(item, lookup);
     quality.total += 1;
     if (calculated.resolution.method === "unresolved") quality.unresolved += 1;
     else if (calculated.resolution.method === "estimated") quality.estimated += 1;
@@ -547,11 +650,7 @@ export function calculatePlanNutrients(
     const itemValues = meal.items
       .filter((item) => item.food.trim())
       .map((item) => {
-        const householdMeasure = item.household_measure_id ? lookup.byMeasureId?.(item.household_measure_id) ?? null : null;
-        const { values, resolution } = calculateItemNutrients(item.quantity, item.unit, resolveItemReference(item, lookup), householdMeasure, {
-          resolvedGramsSnapshot: item.resolved_grams_snapshot,
-          quantityResolutionSnapshot: item.quantity_resolution_snapshot,
-        });
+        const { values, resolution } = calculateAnyItemNutrients(item, lookup);
         quality.total += 1;
         // Mesmo criterio do badge por item (MealItemsEditor): gramas explicitas,
         // conversao generica seguran (kg) e medida caseira especifica contam

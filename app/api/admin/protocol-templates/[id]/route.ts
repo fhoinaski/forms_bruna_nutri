@@ -14,7 +14,7 @@ const mealItemSchema = z.object({
   quantity: z.string().max(80).nullable().optional(),
   unit: z.string().max(40).nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
-  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA", "TBCA", "IBGE_POF"]).nullable().optional(),
+  food_source: z.enum(["TACO", "CUSTOM", "MANUFACTURER", "USDA", "TBCA", "IBGE_POF", "RECIPE"]).nullable().optional(),
   food_ref_id: z.string().max(120).nullable().optional(),
   canonical_food_id: z.string().max(160).nullable().optional(),
   slot_food_group: z.string().max(40).nullable().optional(),

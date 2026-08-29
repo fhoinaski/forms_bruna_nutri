@@ -10,7 +10,9 @@ import {
 } from "@/lib/protocol-templates/constants";
 import type { Meal } from "@/components/dashboard/MealItemsEditor";
 import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
+import { normalizeIngredientForRead, type RecipeIngredient } from "@/lib/nutrition/recipes";
 import { computeMealPlanReadiness } from "@/lib/ai/agents/nutrition/meal-plan-readiness";
+import { useDialogKeyboard } from "@/hooks/use-dialog-keyboard";
 import {
   selectableMealKeys,
   computeMealPlanChangeset,
@@ -44,12 +46,8 @@ const MEAL_KEY_TO_RECIPE_GROUP: Record<MealKey, "cafe_da_manha" | "almoco" | "la
   ceia: "lanche",
 };
 
-interface RecipeIngredientPayload {
-  taco_number?: number | null;
-  food_name: string;
-  grams?: number | null;
-  free_text?: string | null;
-}
+/** R6 — aceita o shape novo (food/food_source/food_ref_id, qualquer fonte real) OU o legado (taco_number/food_name/grams), normalizado por normalizeIngredientForRead. */
+type RecipeIngredientPayload = RecipeIngredient;
 
 interface RecipeCandidate {
   id: string;
@@ -98,6 +96,8 @@ interface DraftMealItem {
   food_ref_id: string | null;
   ai_suggested: true;
   needsSafetyReview?: boolean;
+  /** R5.1 — item opcional dentro de uma refeição COMBINATION (mesmo campo do domínio real do Composer). */
+  is_optional?: boolean;
 }
 interface DraftNeedsReviewCandidate {
   ref: { source: string; sourceId: string; canonicalId?: string | null };
@@ -119,6 +119,24 @@ interface DraftNeedsReview {
   candidates: DraftNeedsReviewCandidate[];
   preparation?: string | null;
   recipeCandidates?: DraftNeedsReviewRecipeCandidate[];
+  /** R5.1 (seção 16) — caminho estável até a posição original nested (ex.: "options[1].items[0]"). */
+  path?: string;
+}
+/** R5.1 — uma alternativa completa de uma refeição OPTIONS. */
+interface DraftMealOption {
+  id: string;
+  label: string;
+  items: DraftMealItem[];
+  needsReview: DraftNeedsReview[];
+}
+/** R5.1 — um grupo de escolha de uma refeição COMBINATION. */
+interface DraftMealChoiceGroup {
+  id: string;
+  title: string;
+  min_selections: number;
+  max_selections: number;
+  items: DraftMealItem[];
+  needsReview: DraftNeedsReview[];
 }
 interface OptimizerAdjustment {
   mealIndex: number;
@@ -141,8 +159,12 @@ interface DraftMeal {
   name: string;
   suggested_time: string | null;
   source_recipe_id: string | null;
+  /** R5.1 — ausente/null equivale a "SIMPLE" (mesma convenção do Composer). */
+  meal_structure?: "SIMPLE" | "OPTIONS" | "COMBINATION" | null;
   items: DraftMealItem[];
   needsReview: DraftNeedsReview[];
+  options?: DraftMealOption[];
+  choice_groups?: DraftMealChoiceGroup[];
 }
 interface DraftWarning {
   level: "info" | "warning";
@@ -223,37 +245,56 @@ function toFriendlyFoodName(technicalName: string): string {
  */
 function expandRecipeIngredientsToItems(recipe: { servings: number; ingredients: RecipeIngredientPayload[] }): DraftMealItem[] {
   const servingCount = Number.isFinite(recipe.servings) && recipe.servings > 0 ? recipe.servings : 1;
+  const draftCompatibleSources = new Set(["TACO", "CUSTOM", "MANUFACTURER", "USDA"]);
   return recipe.ingredients
-    .filter((ing) => ing.taco_number && ing.grams)
+    .map(normalizeIngredientForRead)
+    .map((ing) => ({ ...ing, grams: ing.unit === "g" && ing.quantity ? Number(ing.quantity) : null }))
+    .filter((ing) => ing.food_ref_id && ing.grams && ing.food_source && draftCompatibleSources.has(ing.food_source))
     .map((ing) => {
       const grams = Math.round(((ing.grams ?? 0) / servingCount) * 10) / 10;
       return {
-        food: ing.food_name,
-        displayName: toFriendlyFoodName(ing.food_name),
+        food: ing.food,
+        displayName: toFriendlyFoodName(ing.food),
         quantity: String(grams),
         unit: "g",
-        food_source: "TACO" as const,
-        food_ref_id: String(ing.taco_number),
+        food_source: ing.food_source as "TACO" | "CUSTOM" | "MANUFACTURER" | "USDA",
+        food_ref_id: ing.food_ref_id!,
         ai_suggested: true,
       };
     });
 }
 
+function draftItemToEditorItem(item: DraftMealItem): Meal["items"][number] {
+  return {
+    food: item.food,
+    quantity: item.quantity,
+    unit: item.unit,
+    notes: null,
+    ai_suggested: true,
+    food_source: item.food_source,
+    food_ref_id: item.food_ref_id,
+    ...(item.is_optional ? { is_optional: true } : {}),
+  };
+}
+
+/**
+ * R5.1 (seções 20/21/38/39) — carrega meal_structure/options/choice_groups
+ * intactos pro mesmo shape que o Composer já entende nativamente (nunca
+ * achata OPTIONS/COMBINATION pra texto/instructions só pra caber no fluxo
+ * anterior). O Composer (MealItemsEditor.tsx) já sabe renderizar/editar/
+ * salvar essa estrutura — reaproveitada 100%, nenhum código novo lá.
+ */
 function draftMealToEditorMeal(meal: DraftMeal): Meal {
+  const structure = meal.meal_structure ?? "SIMPLE";
   return {
     name: meal.name,
     suggested_time: meal.suggested_time,
     notes: null,
     source_recipe_id: meal.source_recipe_id,
-    items: meal.items.map((item) => ({
-      food: item.food,
-      quantity: item.quantity,
-      unit: item.unit,
-      notes: null,
-      ai_suggested: true,
-      food_source: item.food_source,
-      food_ref_id: item.food_ref_id,
-    })),
+    meal_structure: structure,
+    items: meal.items.map(draftItemToEditorItem),
+    ...(structure === "OPTIONS" ? { options: (meal.options ?? []).map((option) => ({ label: option.label, items: option.items.map(draftItemToEditorItem) })) } : {}),
+    ...(structure === "COMBINATION" ? { choice_groups: (meal.choice_groups ?? []).map((group) => ({ title: group.title, min_selections: group.min_selections, max_selections: group.max_selections, items: group.items.map(draftItemToEditorItem) })) } : {}),
   };
 }
 
@@ -345,6 +386,8 @@ export function AiMealPlanWizard({
   // o padrão — receita é um recurso opcional que a nutricionista liga
   // deliberadamente, nunca o comportamento automático do gerador.
   const [useRecipes, setUseRecipes] = useState(false);
+  /** R5.1 (seção 4) — opt-in explícito: sem marcar, o Copilot continua gerando só SIMPLE (comportamento anterior, sem regressão). */
+  const [allowFlexibleStructure, setAllowFlexibleStructure] = useState(false);
 
   const [generateError, setGenerateError] = useState("");
   const [generateErrorReason, setGenerateErrorReason] = useState<string | null>(null);
@@ -432,6 +475,12 @@ export function AiMealPlanWizard({
   // novo — só o resultado da chamada MAIS recente é aplicado.
   const generationRequestRef = useRef(0);
   const generationInFlightRef = useRef(false);
+  // R6.5.3 (seção 89) — o wizard não tinha nenhum tratamento de teclado antes
+  // desta fase (só fechava pelo botão "x"/"Cancelar"); Escape + Tab-trap
+  // agora reaproveitam o mesmo hook já usado pelo drawer de trocas e pela
+  // biblioteca de reuso.
+  const wizardContainerRef = useRef<HTMLElement | null>(null);
+  useDialogKeyboard(wizardContainerRef, onClose, true);
 
   // Objetivo/meta/refeições/horários/preferências ficam no state do
   // próprio componente — um retry (ou o botão "Gerar refeição por
@@ -473,6 +522,7 @@ export function AiMealPlanWizard({
           prioritizeFoods: prioritizeFoods.trim() || null,
           avoidFoods: avoidFoods.trim() || null,
           useRecipes,
+          allowFlexibleStructure,
           forceMealByMeal: options?.forceMealByMeal ?? false,
           ...(otherMealsContext?.length ? { otherMealsContext } : {}),
         }),
@@ -869,6 +919,61 @@ export function AiMealPlanWizard({
     void recalculate(nextMeals);
   }
 
+  /**
+   * R5.1 (seção 18) — resolve/remove um item de revisão ANINHADO (dentro de
+   * uma option de OPTIONS ou de um choice_group de COMBINATION) substituindo
+   * só a entrada exata correspondente — nunca reconstrói a refeição inteira
+   * nem afeta as outras options/grupos.
+   */
+  function nestedScopeItems(meal: DraftMeal, scope: "options" | "choice_groups", scopeIndex: number): { items: DraftMealItem[]; needsReview: DraftNeedsReview[] } {
+    const entry = scope === "options" ? meal.options?.[scopeIndex] : meal.choice_groups?.[scopeIndex];
+    return { items: entry?.items ?? [], needsReview: entry?.needsReview ?? [] };
+  }
+
+  function replaceNestedScope(meal: DraftMeal, scope: "options" | "choice_groups", scopeIndex: number, next: { items: DraftMealItem[]; needsReview: DraftNeedsReview[] }): DraftMeal {
+    if (scope === "options") {
+      return { ...meal, options: (meal.options ?? []).map((option, index) => index !== scopeIndex ? option : { ...option, ...next }) };
+    }
+    return { ...meal, choice_groups: (meal.choice_groups ?? []).map((group, index) => index !== scopeIndex ? group : { ...group, ...next }) };
+  }
+
+  function pickCandidateNested(mealIndex: number, scope: "options" | "choice_groups", scopeIndex: number, reviewIndex: number, candidate: DraftNeedsReviewCandidate, remember = false) {
+    if (!draft) return;
+    const meal = draft.meals[mealIndex];
+    const { items, needsReview } = nestedScopeItems(meal, scope, scopeIndex);
+    const review = needsReview[reviewIndex];
+    if (!review) return;
+    const newItem: DraftMealItem = {
+      food: candidate.name,
+      displayName: candidate.displayName,
+      quantity: review.quantity,
+      unit: review.unit,
+      food_source: candidate.ref.source === "CUSTOM" || candidate.ref.source === "MANUFACTURER" || candidate.ref.source === "USDA" ? candidate.ref.source : "TACO",
+      food_ref_id: candidate.ref.sourceId,
+      ai_suggested: true,
+    };
+    const nextMeals = draft.meals.map((m, index) => index !== mealIndex ? m : replaceNestedScope(m, scope, scopeIndex, {
+      items: [...items, newItem],
+      needsReview: needsReview.filter((_, index2) => index2 !== reviewIndex),
+    }));
+    void recalculate(nextMeals);
+    if (remember) {
+      void fetch("/api/admin/food-preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: review.query, foodSource: candidate.ref.source, foodRefId: candidate.ref.sourceId, foodNameSnapshot: candidate.displayName }),
+      }).catch(() => undefined);
+    }
+  }
+
+  function removeNeedsReviewNested(mealIndex: number, scope: "options" | "choice_groups", scopeIndex: number, reviewIndex: number) {
+    if (!draft) return;
+    const meal = draft.meals[mealIndex];
+    const { items, needsReview } = nestedScopeItems(meal, scope, scopeIndex);
+    const nextMeals = draft.meals.map((m, index) => index !== mealIndex ? m : replaceNestedScope(m, scope, scopeIndex, { items, needsReview: needsReview.filter((_, index2) => index2 !== reviewIndex) }));
+    void recalculate(nextMeals);
+  }
+
   async function handleApply() {
     if (!draft || !draft.meals.length) return;
     setApplying(true);
@@ -904,12 +1009,29 @@ export function AiMealPlanWizard({
   const changeset: MealPlanChangeset | null = sourceMode === "previous" && draft
     ? computeMealPlanChangeset(existingPlanMeals, draft.meals, draft.meals.map((meal) => meal.mealKey))
     : null;
-  const totalNeedsReview = draft?.meals.reduce((sum, meal) => sum + meal.needsReview.length, 0) ?? 0;
+  // R5.1 (seção 30) — contadores incluem itens nested (dentro de OPTIONS/COMBINATION), nunca só o nível de refeição.
+  const totalNeedsReview = draft?.meals.reduce((sum, meal) => sum
+    + meal.needsReview.length
+    + (meal.options ?? []).reduce((s, option) => s + option.needsReview.length, 0)
+    + (meal.choice_groups ?? []).reduce((s, group) => s + group.needsReview.length, 0), 0) ?? 0;
+  // R6.5.4 (seção 59) — chips de resumo da revisão, usando contadores REAIS já
+  // computados (totalNeedsReview, unresolvedCount) — nenhuma telemetria nova.
+  const totalItemsInDraft = draft?.meals.reduce((sum, meal) => sum
+    + meal.items.length
+    + (meal.options ?? []).reduce((s, option) => s + option.items.length, 0)
+    + (meal.choice_groups ?? []).reduce((s, group) => s + group.items.length, 0), 0) ?? 0;
+  const unresolvedCount = draft?.nutrition?.unresolvedCount ?? 0;
+  // needsReview vive numa lista SEPARADA (nunca dentro de .items — só vira item
+  // de verdade depois de resolvido manualmente), então totalItemsInDraft já
+  // exclui esses; só precisa descontar unresolved (que ENTRA em .items, sem
+  // cálculo, ver texto "item(ns) sem correspondência entram como quantidade
+  // sem cálculo" logo abaixo).
+  const resolvedCount = Math.max(0, totalItemsInDraft - unresolvedCount);
   const hasEnergyTarget = target.targetEnergyKcal !== null;
 
   const modal = (
-    <div role="dialog" aria-modal="true" aria-labelledby="ai-wizard-title" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/35 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
-      <section className="flex h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
+    <div role="dialog" aria-modal="true" aria-labelledby="ai-wizard-title" className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/30 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-6">
+      <section ref={wizardContainerRef} className="flex h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[1.25rem] border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_28px_90px_rgba(58,48,40,0.24)] sm:h-auto sm:max-h-[calc(100dvh-3rem)]">
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDE1D6] px-5 py-4">
           <div>
             <p className="brand-kicker flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Assistente guiado</p>
@@ -971,14 +1093,28 @@ export function AiMealPlanWizard({
                   allergies: context.allergies,
                   restrictions: context.restrictions,
                 });
-                if (readiness.status === "READY") return null;
+                // R6.5.4 (seções 56-57) — badge de prontidão com texto+ícone (nunca só cor)
+                // pros 3 estados reais do motor; antes desta fase o estado READY não mostrava
+                // NADA (early-return null), sem confirmação visual nenhuma.
                 const isBlocking = readiness.status === "NOT_READY";
+                const readinessBadge = readiness.status === "READY"
+                  ? { text: "Pronto", className: "border-[#D9E4D3] bg-[#F5FAF0] text-[#4F7D45]", Icon: Check }
+                  : readiness.status === "READY_WITH_REVIEW"
+                    ? { text: "Pronto com revisão", className: "border-[#F0D4C7] bg-[#FFF7F3] text-[#8C5F50]", Icon: AlertTriangle }
+                    : { text: "Faltam informações", className: "border-red-200 bg-red-50 text-red-700", Icon: AlertTriangle };
                 return (
-                  <div className={`rounded-xl border p-3 text-xs leading-5 ${isBlocking ? "border-red-200 bg-red-50 text-red-700" : "border-[#F0D4C7] bg-[#FFF7F3] text-[#8C5F50]"}`}>
-                    <p className="font-semibold">{readiness.reasons[0]}</p>
-                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                      {readiness.reasons.slice(isBlocking ? 1 : 0).map((reason, index) => <li key={index}>{reason}</li>)}
-                    </ul>
+                  <div className="space-y-2">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${readinessBadge.className}`}>
+                      <readinessBadge.Icon className="h-3.5 w-3.5" /> {readinessBadge.text}
+                    </span>
+                    {readiness.status !== "READY" && (
+                      <div className={`rounded-xl border p-3 text-xs leading-5 ${isBlocking ? "border-red-200 bg-red-50 text-red-700" : "border-[#F0D4C7] bg-[#FFF7F3] text-[#8C5F50]"}`}>
+                        <p className="font-semibold">{readiness.reasons[0]}</p>
+                        <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                          {readiness.reasons.slice(isBlocking ? 1 : 0).map((reason, index) => <li key={index}>{reason}</li>)}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -1093,6 +1229,13 @@ export function AiMealPlanWizard({
                   <p className="mt-0.5 text-xs text-[#8C6E52]">Desligado por padrão — o gerador prioriza alimentos individuais simples (ex.: &ldquo;2 ovos, pão integral, mamão&rdquo;), não pratos elaborados.</p>
                 </div>
               </div>
+              <div className="flex items-center gap-3 rounded-xl border border-[#EAD8C2] bg-[#FFFDFC] p-3">
+                <input type="checkbox" id="wizard-allow-flexible" checked={allowFlexibleStructure} onChange={(event) => setAllowFlexibleStructure(event.target.checked)} className="h-4 w-4 accent-[#7A9A74]" />
+                <div>
+                  <label htmlFor="wizard-allow-flexible" className="text-sm font-semibold text-[#3A3028]">Permitir estrutura flexível (opções/combinação)</label>
+                  <p className="mt-0.5 text-xs text-[#8C6E52]">Desligado por padrão. Quando ligado, o Copilot também pode propor refeições com alternativas completas (ex.: &ldquo;ovos OU iogurte&rdquo;) ou com grupo de escolha (ex.: arroz fixo + escolha de 1 proteína) — a soma nutricional nunca soma alternativas, mostra uma faixa min/máx.</p>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1123,6 +1266,25 @@ export function AiMealPlanWizard({
 
               {draft && (
                 <>
+                  {/* R6.5.4 (seções 58-60) — resumo compacto de revisão com contadores reais. */}
+                  {draft.meals.length > 0 && (
+                    <div className="flex flex-wrap gap-2" role="status" aria-label="Resumo da revisão">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#F5FAF0] px-2.5 py-1 text-xs font-semibold text-[#4F7D45]">
+                        <Check className="h-3 w-3" /> {resolvedCount} resolvido{resolvedCount === 1 ? "" : "s"}
+                      </span>
+                      {totalNeedsReview > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF7F3] px-2.5 py-1 text-xs font-semibold text-[#B5762F]">
+                          <AlertTriangle className="h-3 w-3" /> {totalNeedsReview} pra revisar
+                        </span>
+                      )}
+                      {unresolvedCount > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                          <AlertTriangle className="h-3 w-3" /> {unresolvedCount} não encontrado{unresolvedCount === 1 ? "" : "s"}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {changeset && (
                     <div className="rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] p-4">
                       <p className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.08em] text-[#4F7D45]">Alterações propostas sobre &ldquo;{sourcePlan?.title}&rdquo;</p>
@@ -1330,6 +1492,49 @@ export function AiMealPlanWizard({
                             </ul>
                           )}
 
+                          {/* R5.1 (seções 20/21) — exibe OPTIONS/COMBINATION por inteiro, nunca achatado em texto. */}
+                          {meal.meal_structure === "OPTIONS" && (meal.options?.length ?? 0) > 0 && (
+                            <div className="mt-2 space-y-1.5">
+                              {meal.options!.map((option) => (
+                                <div key={option.id} className="rounded-lg border border-[#EAD8C2] bg-white/60 p-2">
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#8C6E52]">{option.label}</p>
+                                  {option.items.length > 0 && (
+                                    <ul className="mt-1 space-y-0.5 text-xs text-[#75675E]">
+                                      {option.items.map((item, itemIndex) => (
+                                        <li key={itemIndex} className="flex items-center justify-between gap-2">
+                                          <span>{item.displayName}</span>
+                                          <span>{item.quantity} {item.unit}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              ))}
+                              <p className="text-[11px] italic text-[#8C6E52]">Alternativas mutuamente exclusivas — nunca somadas no cálculo nutricional (mostra faixa mín./máx.).</p>
+                            </div>
+                          )}
+                          {meal.meal_structure === "COMBINATION" && (meal.choice_groups?.length ?? 0) > 0 && (
+                            <div className="mt-2 space-y-1.5">
+                              {meal.choice_groups!.map((group) => (
+                                <div key={group.id} className="rounded-lg border border-[#EAD8C2] bg-white/60 p-2">
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#8C6E52]">
+                                    {group.title} <span className="font-normal normal-case text-[#B08A63]">(escolha {group.min_selections === group.max_selections ? group.min_selections : `${group.min_selections}–${group.max_selections}`})</span>
+                                  </p>
+                                  {group.items.length > 0 && (
+                                    <ul className="mt-1 space-y-0.5 text-xs text-[#75675E]">
+                                      {group.items.map((item, itemIndex) => (
+                                        <li key={itemIndex} className="flex items-center justify-between gap-2">
+                                          <span>{item.displayName}</span>
+                                          <span>{item.quantity} {item.unit}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
                           {substitutionSuggestions.some((sub) => sub.mealKey === meal.mealKey) && (
                             <div className="mt-2 space-y-1.5 rounded-lg border border-[#EAD8C2] bg-[#FAF7F2] p-2">
                               <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-[#8C6E52]">Sugestões de substituição</p>
@@ -1394,8 +1599,8 @@ export function AiMealPlanWizard({
                                   <div className="rounded-md bg-white/70 p-1.5 text-[#3A2B1F]">
                                     <p className="font-semibold">Ingredientes:</p>
                                     <ul className="ml-3 list-disc">
-                                      {recipe.ingredients.filter((ing) => ing.taco_number && ing.grams).map((ing, ingIndex) => (
-                                        <li key={ingIndex}>{toFriendlyFoodName(ing.food_name)} — {ing.grams}g{recipe.servings > 1 ? ` (receita completa; escalado a 1 porção ao aplicar)` : ""}</li>
+                                      {recipe.ingredients.map(normalizeIngredientForRead).filter((ing) => ing.food_ref_id && ing.unit === "g" && ing.quantity).map((ing, ingIndex) => (
+                                        <li key={ingIndex}>{toFriendlyFoodName(ing.food)} — {ing.quantity}g{recipe.servings > 1 ? ` (receita completa; escalado a 1 porção ao aplicar)` : ""}</li>
                                       ))}
                                     </ul>
                                     {recipe.preparation_steps && <p className="mt-1.5 whitespace-pre-line">{recipe.preparation_steps}</p>}
@@ -1478,6 +1683,52 @@ export function AiMealPlanWizard({
                               ))}
                             </div>
                           )}
+
+                          {/* R5.1 (seções 14-18) — revisão ANINHADA: mesmo tratamento (AMBIGUOUS/NOT_FOUND/CLINICAL_CONFLICT), mas com breadcrumb até a posição exata e resolução que só afeta aquele item nested. */}
+                          {(["options", "choice_groups"] as const).flatMap((scope) => {
+                            const entries = scope === "options" ? (meal.options ?? []) : (meal.choice_groups ?? []);
+                            return entries.map((entry, scopeIndex) => entry.needsReview.length > 0 ? (
+                              <div key={`${scope}-${scopeIndex}`} className="mt-2 space-y-2 rounded-lg border border-[#F0D4C7] bg-[#FFF7F3] p-2.5">
+                                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-[#8C5F50]">
+                                  <Info className="h-3 w-3" /> Precisa de revisão — {meal.name} → {scope === "options" ? (entry as DraftMealOption).label : (entry as DraftMealChoiceGroup).title}
+                                </p>
+                                {entry.needsReview.map((review, reviewIndex) => (
+                                  <div key={reviewIndex} className="rounded-md bg-white/70 p-2 text-xs">
+                                    <p className="font-semibold text-[#3A2B1F]">&ldquo;{review.query}&rdquo; — {review.quantity} {review.unit}</p>
+                                    <p className="mt-0.5 text-[#8C5F50]">{review.reason}</p>
+                                    {review.status === "AMBIGUOUS" && review.candidates.length > 0 && (
+                                      <div className="mt-1.5 space-y-1">
+                                        {review.candidates.map((candidate, candidateIndex) => (
+                                          <div key={candidateIndex} className="flex flex-wrap items-center gap-1.5 rounded-md border border-[#D9C4B2] bg-white px-2 py-1.5">
+                                            <span className="mr-auto text-[11px] font-semibold text-[#3A2B1F]">
+                                              {candidate.displayName}
+                                              <span className="ml-1 font-normal text-[#8C6E52]">· {candidate.sourceLabel}</span>
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => pickCandidateNested(mealIndex, scope, scopeIndex, reviewIndex, candidate)}
+                                              disabled={recalculating}
+                                              className="rounded-full border border-[#D9C4B2] px-2.5 py-1 text-[11px] font-semibold text-[#8C6E52] hover:bg-[#FBF7F1] disabled:opacity-50"
+                                            >
+                                              Selecionar
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => removeNeedsReviewNested(mealIndex, scope, scopeIndex, reviewIndex)}
+                                      disabled={recalculating}
+                                      className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 hover:underline disabled:opacity-50"
+                                    >
+                                      <Trash2 className="h-3 w-3" /> Remover
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null);
+                          })}
                         </div>
                       );
                     })}
