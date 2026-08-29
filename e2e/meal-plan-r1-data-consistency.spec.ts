@@ -1,7 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
+import { createActivePortalAccess, createTestPatient } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
@@ -45,7 +45,7 @@ function planPayload(status: "draft" | "active", expectedVersion: number, quanti
 test.describe("R1 data consistency", () => {
   test("active antigo e draft por modelo ficam explícitos; portal/print oficial não usam draft antes da publicação", async ({ page, request }) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
 
     const activeDraft = await createTemplatePlan(request, patient.id, "Plano ativo antigo");
     const publishActive = await request.put(`/api/admin/clients/${patient.id}/meal-plans/${activeDraft.id}`, {
@@ -78,7 +78,7 @@ test.describe("R1 data consistency", () => {
 
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByLabel("Senha").fill(code);
+    await page.getByLabel("Senha").fill(password);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
     await expect(page.getByText("Plano alimentar", { exact: true })).toBeVisible();
     await expect(page.getByText("v2", { exact: true })).toBeVisible();

@@ -2,7 +2,7 @@ import type { APIRequestContext, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
 import { addMeal, saveDraft, selectFood, selectLastGrams, setLastQuantity } from "./helpers/meal-plan-editor";
-import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
+import { createActivePortalAccess, createTestPatient } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
@@ -127,10 +127,10 @@ async function publishPlanByApi(request: APIRequestContext, patientId: string, p
   return response.json() as Promise<PlanResponse>;
 }
 
-async function loginPatient(page: Page, email: string, code: string) {
+async function loginPatient(page: Page, email: string, password: string) {
   await page.goto("/portal");
   await page.getByPlaceholder("seunome@email.com").fill(email);
-  await page.getByLabel("Senha").fill(code);
+  await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: /acessar meu portal/i }).click();
   await expect(page.getByText(/ola,/i)).toBeVisible();
 }
@@ -219,13 +219,13 @@ test.describe("substituições nutricionais equivalentes", () => {
 
   test("portal mostra a troca aprovada", async ({ page, request }) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
     const plan = await createTemplatePlan(request, patient.id, "Substituição portal");
     const group = await generateGroup(request, patient.id, plan, /Arroz integral/i);
     const approved = await approveFirstSuggestion(request, patient.id, group);
     const active = await publishPlanByApi(request, patient.id, plan);
 
-    await loginPatient(page, patient.email, code);
+    await loginPatient(page, patient.email, password);
     const portalPlan = page.locator("#portal-meal-plan");
     await expect(portalPlan).toHaveAttribute("data-version-id", `${active.id}:v${active.version}`);
     await expect(portalPlan.getByText("Trocas disponíveis")).toBeVisible();
@@ -234,13 +234,13 @@ test.describe("substituições nutricionais equivalentes", () => {
 
   test("pilot crítico: template, gera, aprova, publica, portal e print sem termos internos", async ({ page, request }) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
     const plan = await createTemplatePlan(request, patient.id, "Substituição validação");
     const group = await generateGroup(request, patient.id, plan, /Arroz integral/i);
     const approved = await approveFirstSuggestion(request, patient.id, group);
     await publishPlanByApi(request, patient.id, plan);
 
-    await loginPatient(page, patient.email, code);
+    await loginPatient(page, patient.email, password);
     await expect(page.locator("#portal-meal-plan").getByText(friendlyFoodName(approved.food_name))).toBeVisible();
     await expectNoPatientDebugWords(page);
 

@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
 import { addMeal, fieldAfterLabel, openMealPlanTab, publishPlan, saveDraft, selectFood, selectLastGrams, setLastQuantity } from "./helpers/meal-plan-editor";
-import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
+import { createActivePortalAccess, createTestPatient } from "./helpers/test-data";
 
 /**
  * Planos alimentares (secao 8 do pedido FASE 1): criar, adicionar refeicao e
@@ -70,7 +70,7 @@ test.describe("plano alimentar", () => {
 
   test("ativa o plano no portal, versiona ao editar de novo e mostra a versão ativa no portal do paciente", async ({ page, request }) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
 
     await openMealPlanTab(page, patient.id);
     await page.getByRole("button", { name: /^criar por modelo$/i }).click();
@@ -95,7 +95,7 @@ test.describe("plano alimentar", () => {
     // Portal do paciente mostra a versao ativa correta.
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByLabel("Senha").fill(code);
+    await page.getByLabel("Senha").fill(password);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
 
     await expect(page.getByRole("heading", { name: "Plano alimentar" })).toBeVisible();

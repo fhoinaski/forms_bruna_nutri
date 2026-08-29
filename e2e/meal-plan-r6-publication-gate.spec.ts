@@ -1,7 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
+import { createActivePortalAccess, createTestPatient } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
@@ -126,10 +126,10 @@ async function ensureRiceStaleExchange(request: APIRequestContext, patientId: st
 test.describe("R6 publication gate", () => {
   test("review all-good publica e portal passa a receber o novo active", async ({ page, request }, testInfo) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByLabel("Senha").fill(code);
+    await page.getByLabel("Senha").fill(password);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
     await expect(page.getByText("Seu plano alimentar ainda não foi publicado.")).toBeVisible();
 

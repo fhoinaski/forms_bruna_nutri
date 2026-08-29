@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
+import { createActivePortalAccess, createTestPatient } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
@@ -35,7 +35,7 @@ function findItem(plan: PlanResponse, food: RegExp) {
 test.describe("R2 template integrity", () => {
   test("Adulto saudável cria plano íntegro, preserva save/reload e publica com roles/quantidades corretas", async ({ page, request }) => {
     const patient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
 
     const create = await request.post(`/api/admin/clients/${patient.id}/meal-plans`, {
       data: { targetGroup: "ADULTO_SAUDAVEL", title: "R2 Adulto saudável" },
@@ -87,7 +87,7 @@ test.describe("R2 template integrity", () => {
 
     await page.goto("/portal");
     await page.getByPlaceholder("seunome@email.com").fill(patient.email);
-    await page.getByLabel("Senha").fill(code);
+    await page.getByLabel("Senha").fill(password);
     await page.getByRole("button", { name: /acessar meu portal/i }).click();
     await expect(page.getByText("Plano alimentar", { exact: true })).toBeVisible();
     await expect(page.getByText("50 g", { exact: true })).toBeVisible();

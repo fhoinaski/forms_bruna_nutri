@@ -7,6 +7,7 @@ import { getClientById } from "@/lib/repositories/clients";
 import {
   getPatientPortalAccess,
   getOrCreatePatientPortalAccess,
+  isPatientPortalAuthSchemaReady,
   issuePatientPortalToken,
   listPatientPortalSessions,
   revokePatientPortalAccess,
@@ -35,6 +36,13 @@ function portalInviteUrl(token: string) {
   return `${portalLoginUrl()}/aceitar-convite?token=${encodeURIComponent(token)}`;
 }
 
+function schemaUpdateRequired() {
+  return NextResponse.json({
+    message: "A atualização segura do banco do Portal do Paciente ainda está pendente. O acesso ficará disponível após a migration aprovada.",
+    schema_ready: false,
+  }, { status: 409 });
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -45,6 +53,20 @@ export async function GET(
   const { id } = await params;
   const client = await getClientById(id);
   if (!client) return NextResponse.json({ message: "Cliente nao encontrado." }, { status: 404 });
+
+  if (!await isPatientPortalAuthSchemaReady()) {
+    return NextResponse.json({
+      exists: false,
+      is_active: false,
+      status: "SCHEMA_UPDATE_REQUIRED",
+      schema_ready: false,
+      last_used_at: null,
+      last_login_at: null,
+      updated_at: null,
+      active_sessions: 0,
+      login_url: portalLoginUrl(),
+    });
+  }
 
   const access = await getPatientPortalAccess(id);
   const activeSessions = access ? await listPatientPortalSessions(id) : [];
@@ -70,6 +92,7 @@ export async function POST(
   const { id } = await params;
   const client = await getClientById(id);
   if (!client) return NextResponse.json({ message: "Cliente nao encontrado." }, { status: 404 });
+  if (!await isPatientPortalAuthSchemaReady()) return schemaUpdateRequired();
   if (!client.email) {
     return NextResponse.json({ message: "Cadastre um e-mail no cliente antes de liberar o portal." }, { status: 400 });
   }
@@ -138,6 +161,7 @@ export async function PATCH(
   const { id } = await params;
   const client = await getClientById(id);
   if (!client) return NextResponse.json({ message: "Cliente nao encontrado." }, { status: 404 });
+  if (!await isPatientPortalAuthSchemaReady()) return schemaUpdateRequired();
 
   const parsed = PatchSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ message: "Dados invalidos." }, { status: 400 });

@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { ADMIN_STORAGE_STATE } from "./helpers/auth";
-import { createTestPatient, enablePortalAccess } from "./helpers/test-data";
+import { createActivePortalAccess, createTestPatient } from "./helpers/test-data";
 
 test.use({ storageState: ADMIN_STORAGE_STATE });
 
@@ -186,10 +186,10 @@ async function getGroup(request: APIRequestContext, patientId: string, planId: s
   return group!;
 }
 
-async function loginPortal(page: Page, email: string, code: string) {
+async function loginPortal(page: Page, email: string, password: string) {
   await page.goto("/portal");
   await page.getByPlaceholder("seunome@email.com").fill(email);
-  await page.getByLabel("Senha").fill(code);
+  await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: /acessar meu portal/i }).click();
   await expect(page.getByRole("button", { name: /^Sair$/i })).toBeVisible();
 }
@@ -218,7 +218,7 @@ test.describe("R7 final meal plan QA", () => {
 
     const patient = await createTestPatient(request);
     const otherPatient = await createTestPatient(request);
-    const { code } = await enablePortalAccess(request, patient.id);
+    const { password } = await createActivePortalAccess(request, patient.id);
 
     const activeSeed = await createTemplatePlan(request, patient.id, "R7 active seed");
     const active = await savePlan(request, patient.id, activeSeed, "active", "120", "R7 active golden 120");
@@ -257,7 +257,7 @@ test.describe("R7 final meal plan QA", () => {
       expect(values).toContain("150");
     }).toPass();
 
-    await loginPortal(page, patient.email, code);
+    await loginPortal(page, patient.email, password);
     await expect(page.locator("#portal-meal-plan")).toHaveAttribute("data-version-id", `${active.id}:v${active.version}`);
     await expect(page.locator("#portal-meal-plan").getByText("120 g", { exact: true }).first()).toBeVisible();
     await expect(page.locator("#portal-meal-plan").getByText("150 g", { exact: true })).toHaveCount(1);
