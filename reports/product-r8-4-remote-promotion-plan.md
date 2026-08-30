@@ -17,7 +17,7 @@ No `wrangler.toml`, `wrangler.json`, `wrangler.jsonc`, Cloudflare Worker/Pages p
 
 ## 2. Environment identity
 
-`REMOTE_ENVIRONMENT: unknown`  
+`REMOTE_ENVIRONMENT: unknown`
 `REMOTE_ENVIRONMENT_CONFIDENCE: LOW`
 
 The repository specifies intended identities, not observed remote state: the runbook requires `forms_bruna_nutri_staging` in GitHub Environment `staging` and `forms_bruna_nutri` in `production`. The checkout has no `.env.local` and none of the three Cloudflare credentials is exported. GitHub Environment secrets, Vercel project/environment bindings, Cloudflare account configuration, and current deployments were therefore not readable here.
