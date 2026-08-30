@@ -26,7 +26,7 @@ type S3GetBody = { transformToWebStream?: () => ReadableStream<Uint8Array> };
 const REQUIRED_R2_ENV = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_PATIENT_FILES_BUCKET"] as const;
 let testStorage: PatientFilesStorage | undefined;
 
-export function getPatientFilesStorageConfig(env: NodeJS.ProcessEnv = process.env): PatientFilesStorageConfig {
+export function getPatientFilesStorageConfig(env: Record<string, string | undefined> = process.env): PatientFilesStorageConfig {
   const missing = REQUIRED_R2_ENV.filter((key) => !env[key]?.trim());
   if (missing.length) {
     throw new Error(`Private patient-file storage is unavailable: missing server configuration (${missing.join(", ")}).`);

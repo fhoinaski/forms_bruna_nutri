@@ -32,12 +32,16 @@ function main() {
   // Turbopack in Next 16 no longer emits .next/BUILD_ID for this output mode.
   // Keep the E2E freshness contract by deriving a stable identifier from a
   // required build artifact rather than treating an old Next convention as a failure.
+  const manifest = existsSync(buildManifestPath) ? readFileSync(buildManifestPath) : null;
   const buildId = existsSync(buildIdPath)
     ? readFileSync(buildIdPath, "utf8").trim()
-    : existsSync(buildManifestPath)
-      ? `manifest-${createHash("sha256").update(readFileSync(buildManifestPath)).digest("hex").slice(0, 16)}`
+    : manifest
+      ? `manifest-${createHash("sha256").update(manifest).digest("hex").slice(0, 16)}`
       : null;
   if (!buildId) throw new Error("[write-build-info] nenhum artefato de build identificável foi produzido.");
+  // Next 16.3 Turbopack omitted this legacy file, but `next start` still
+  // requires it for the repository's production E2E server contract.
+  if (!existsSync(buildIdPath)) writeFileSync(buildIdPath, `${buildId}\n`);
   const info = {
     buildId,
     gitSha: gitSha(),
