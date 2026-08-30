@@ -9,6 +9,7 @@
 // SHA atual do git e compara com o valor gravado aqui; qualquer
 // divergência significa build obsoleto, não bug de produto.
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +17,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const nextDir = join(root, ".next");
 const buildIdPath = join(nextDir, "BUILD_ID");
+const buildManifestPath = join(nextDir, "build-manifest.json");
 const outPath = join(nextDir, "e2e-build-info.json");
 
 function gitSha() {
@@ -27,11 +29,15 @@ function gitSha() {
 }
 
 function main() {
-  if (!existsSync(buildIdPath)) {
-    console.warn("[write-build-info] .next/BUILD_ID não encontrado — pulando (build sem output standalone?).");
-    return;
-  }
-  const buildId = readFileSync(buildIdPath, "utf8").trim();
+  // Turbopack in Next 16 no longer emits .next/BUILD_ID for this output mode.
+  // Keep the E2E freshness contract by deriving a stable identifier from a
+  // required build artifact rather than treating an old Next convention as a failure.
+  const buildId = existsSync(buildIdPath)
+    ? readFileSync(buildIdPath, "utf8").trim()
+    : existsSync(buildManifestPath)
+      ? `manifest-${createHash("sha256").update(readFileSync(buildManifestPath)).digest("hex").slice(0, 16)}`
+      : null;
+  if (!buildId) throw new Error("[write-build-info] nenhum artefato de build identificável foi produzido.");
   const info = {
     buildId,
     gitSha: gitSha(),

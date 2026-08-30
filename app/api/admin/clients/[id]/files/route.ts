@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
 import { createPatientFile, listPatientFiles, setPatientFileStatus } from "@/lib/repositories/patient-deliverables";
-import { getPatientFilesBucket, isAllowedPatientFile, patientFileObjectKey, safePatientFilename } from "@/lib/storage/patient-files";
+import { getPatientFilesStorage, isAllowedPatientFile, patientFileObjectKey, safePatientFilename } from "@/lib/storage/patient-files";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,12 +20,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const form = await req.formData().catch(() => null); const file = form?.get("file");
   if (!(file instanceof File) || !isAllowedPatientFile(file)) return NextResponse.json({ message: "Arquivo invalido. Envie PDF, JPG, PNG ou WEBP de ate 10 MB." }, { status: 400 });
   const id = crypto.randomUUID(); const objectKey = patientFileObjectKey(patientId, id, file.type);
-  const bucket = getPatientFilesBucket();
-  await bucket.put(objectKey, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
+  let storage;
+  try {
+    storage = getPatientFilesStorage();
+    await storage.put(objectKey, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
+  } catch {
+    return NextResponse.json({ message: "Armazenamento privado indisponivel. Tente novamente mais tarde." }, { status: 503 });
+  }
   try {
     await createPatientFile({ id, patient_id: patientId, object_key: objectKey, original_filename: safePatientFilename(file.name), mime_type: file.type, byte_size: file.size });
   } catch (error) {
-    await bucket.delete(objectKey).catch(() => undefined);
+    await storage.delete(objectKey).catch(() => undefined);
     throw error;
   }
   return NextResponse.json({ id, status: "PRIVATE" }, { status: 201 });

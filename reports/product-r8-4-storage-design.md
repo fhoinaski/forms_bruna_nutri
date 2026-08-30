@@ -2,7 +2,7 @@
 
 ## Scope and authorization boundary
 
-Patient files use one private Cloudflare R2 binding named `PATIENT_FILES_BUCKET`. The application stores only an internal, generated `object_key`; it never persists, returns, or relies on a public bucket URL, public domain, or permanent signed URL.
+Patient files use one private Cloudflare R2 S3-compatible storage adapter in the Vercel Node runtime. The application stores only an internal, generated `object_key`; it never persists, returns, or relies on a public bucket URL, public domain, or permanent signed URL.
 
 This implementation does not create a bucket, alter remote bindings, apply a remote migration, or write production objects. Those operations remain explicit deployment work outside this change.
 
@@ -16,7 +16,9 @@ Metadata insertion follows object storage. If the database write fails, the obje
 
 ## Runtime and test adapter
 
-`lib/storage/patient-files.ts` is the sole storage contract. Production requires the private runtime binding to be made available as `PATIENT_FILES_BUCKET`; missing configuration fails closed. The in-memory adapter is injectable only while `NODE_ENV=test` and cannot be enabled in production code paths.
+`lib/storage/patient-files.ts` is the sole storage contract. Production creates an AWS SDK v3 S3 client for the account-scoped endpoint `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`; it never relies on a Worker global binding. Required server-only Vercel environment variables are `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_PATIENT_FILES_BUCKET`. Missing or invalid configuration fails closed; API callers receive a generic 503 response and no secret is returned.
+
+The R2 token must have Object Read & Write permission restricted to the selected private bucket. It must not use a `NEXT_PUBLIC_` name, a public custom domain, or browser credentials. Downloads stream through the already-authorized server route; no presigned URL is generated or persisted.
 
 ## Publication model
 
