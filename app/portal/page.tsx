@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   CalendarDays,
   CheckCircle2,
   ClipboardList,
   HeartHandshake,
+  FileText,
+  BookOpen,
   Leaf,
   LogOut,
   Mail,
@@ -121,6 +124,8 @@ type AvailableDay = {
   date: string;
   slots: string[];
 };
+type PortalOrientation = { id: string; snapshot_title: string; snapshot_category: string; snapshot_summary: string; snapshot_sections_json: string; published_at: string | null };
+type PortalFile = { id: string; original_filename: string; mime_type: string; byte_size: number; published_at: string | null };
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -151,11 +156,19 @@ function friendlyFoodName(technicalName: string) {
   return parts.length > 1 ? parts.join(" ") : technicalName.trim();
 }
 
+function orientationContent(value: string) {
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return Object.values(parsed).filter((item): item is string => typeof item === "string" && item.trim().length > 0).join("\n");
+  } catch { return ""; }
+}
+
 function localDateKey(date: Date) {
   return getSaoPauloDateKey(date);
 }
 
 export default function ClientPortalPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [data, setData] = useState<PortalSummary | null>(null);
@@ -168,6 +181,8 @@ export default function ClientPortalPage() {
   const [scheduling, setScheduling] = useState(false);
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [error, setError] = useState("");
+  const [orientations, setOrientations] = useState<PortalOrientation[]>([]);
+  const [portalFiles, setPortalFiles] = useState<PortalFile[]>([]);
 
   async function loadPortal() {
     setLoading(true);
@@ -203,6 +218,14 @@ export default function ClientPortalPage() {
       .catch(() => setAvailableDays([]));
   }, [data]);
 
+  useEffect(() => {
+    if (!data) { setOrientations([]); setPortalFiles([]); return; }
+    void Promise.all([
+      fetch("/api/portal/orientations", { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<{ items: PortalOrientation[] }> : { items: [] }),
+      fetch("/api/portal/files", { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<{ items: PortalFile[] }> : { items: [] }),
+    ]).then(([orientationResult, fileResult]) => { setOrientations(orientationResult.items); setPortalFiles(fileResult.items); }).catch(() => { setOrientations([]); setPortalFiles([]); });
+  }, [data]);
+
   const pendingTasks = useMemo(
     () => data?.tasks.filter((task) => task.status === "pendente") ?? [],
     [data]
@@ -227,7 +250,7 @@ export default function ClientPortalPage() {
       return;
     }
     if (result.mustChangePassword) {
-      window.location.assign("/portal/trocar-senha");
+      router.push("/portal/trocar-senha");
       return;
     }
     await loadPortal();
@@ -353,7 +376,7 @@ export default function ClientPortalPage() {
   return (
     <main className="min-h-screen bg-[#F7F0E8] text-[#3A3028]">
       <header className="border-b border-[#E8D9CA] bg-white/70 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4">
           <div className="flex items-center gap-3">
             <Image src="/brand/bruna-flores-nutri-simbolo.webp" alt="" width={38} height={50} sizes="38px" className="h-12 w-10 object-contain" />
             <div>
@@ -361,7 +384,8 @@ export default function ClientPortalPage() {
               <p className="text-xs text-[#607A56]">Area de acompanhamento</p>
             </div>
           </div>
-          <button onClick={logout} className="inline-flex items-center gap-2 rounded-full border border-[#E2CFC0] px-4 py-2 text-sm font-medium text-[#75675E] hover:bg-white">
+          <nav aria-label="Navegação do portal" className="order-3 flex w-full gap-1 overflow-x-auto text-sm sm:order-none sm:w-auto"><a href="#portal-home" className="min-h-11 whitespace-nowrap rounded-full px-3 py-2 text-[#607A56] hover:bg-white">Início</a><a href="#portal-meal-plan" className="min-h-11 whitespace-nowrap rounded-full px-3 py-2 text-[#607A56] hover:bg-white">Plano</a><a href="#portal-orientations" className="min-h-11 whitespace-nowrap rounded-full px-3 py-2 text-[#607A56] hover:bg-white">Orientações</a><a href="#portal-files" className="min-h-11 whitespace-nowrap rounded-full px-3 py-2 text-[#607A56] hover:bg-white">Arquivos</a></nav>
+          <button onClick={logout} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-[#E2CFC0] px-4 py-2 text-sm font-medium text-[#75675E] hover:bg-white">
             <LogOut className="h-4 w-4" />
             Sair
           </button>
@@ -369,7 +393,7 @@ export default function ClientPortalPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-6xl px-5 py-8">
+      <div id="portal-home" className="mx-auto max-w-6xl px-5 py-8">
         <section className="mb-6 rounded-[28px] bg-[#3F4F3A] p-6 text-white shadow-[0_22px_70px_rgba(63,79,58,0.22)] md:p-8">
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#EAD8C2]">Ola, {firstName(data.client.name)}</p>
           <div className="grid gap-6 md:grid-cols-[1.3fr_0.7fr] md:items-end">
@@ -517,6 +541,17 @@ export default function ClientPortalPage() {
             )}
           </section>
         )}
+
+        <section className="mb-5 grid gap-5 lg:grid-cols-2">
+          <div id="portal-orientations" className="rounded-2xl border border-[#E6D5C5] bg-white/80 p-5">
+            <div className="mb-4 flex items-center gap-2"><BookOpen className="h-5 w-5 text-[#607A56]" /><h2 className="font-serif text-xl font-semibold">Orientações</h2></div>
+            {orientations.length === 0 ? <p className="text-sm text-[#75675E]">Nenhuma orientação disponível no momento.</p> : <div className="space-y-3">{orientations.map((item) => <article key={item.id} className="rounded-xl border border-[#EFE2D6] bg-[#FBF7F1] p-4"><p className="font-semibold">{item.snapshot_title}</p>{item.snapshot_category && <p className="mt-1 text-xs font-medium uppercase tracking-wide text-[#607A56]">{item.snapshot_category}</p>}{item.snapshot_summary && <p className="mt-2 text-sm leading-6 text-[#75675E]">{item.snapshot_summary}</p>}{orientationContent(item.snapshot_sections_json) && <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#75675E]">{orientationContent(item.snapshot_sections_json)}</p>}<p className="mt-2 text-xs text-[#9A8B80]">Publicada em {formatDate(item.published_at?.slice(0, 10) ?? null)}</p></article>)}</div>}
+          </div>
+          <div id="portal-files" className="rounded-2xl border border-[#E6D5C5] bg-white/80 p-5">
+            <div className="mb-4 flex items-center gap-2"><FileText className="h-5 w-5 text-[#607A56]" /><h2 className="font-serif text-xl font-semibold">Arquivos</h2></div>
+            {portalFiles.length === 0 ? <p className="text-sm text-[#75675E]">Nenhum material disponível no momento.</p> : <ul className="space-y-3">{portalFiles.map((file) => <li key={file.id} className="flex items-center justify-between gap-3 rounded-xl border border-[#EFE2D6] bg-[#FBF7F1] p-4"><div className="min-w-0"><p className="truncate font-semibold">{file.original_filename}</p><p className="mt-1 text-xs text-[#9A8B80]">{file.mime_type} · {Math.ceil(file.byte_size / 1024)} KB</p></div><a href={`/api/portal/files/${file.id}/download`} className="min-h-11 shrink-0 rounded-full bg-[#607A56] px-4 py-3 text-xs font-semibold text-white hover:bg-[#4F6847]">Baixar</a></li>)}</ul>}
+          </div>
+        </section>
 
         <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
           <div id="portal-appointments" className="space-y-5">
