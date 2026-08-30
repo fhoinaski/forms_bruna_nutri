@@ -9,7 +9,7 @@ Audit date: 2026-08-30. Scope: repository and deployment configuration inspectio
 | FRONTEND_RUNTIME | `package.json`, `next.config.ts` | Next.js 16 / React 19, Node.js runtime routes. |
 | BACKEND_RUNTIME | App Router route handlers declare `runtime = "nodejs"` | Same Next.js application process. |
 | D1_RUNTIME | `lib/d1/client.ts` | Cloudflare D1 HTTP API, configured by `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_D1_DATABASE_ID`, and `CLOUDFLARE_D1_API_TOKEN`; it is not a Worker binding. |
-| R2_RUNTIME | `lib/storage/patient-files.ts` | Code expects a Cloudflare-runtime global binding named `PATIENT_FILES_BUCKET`. |
+| R2_RUNTIME | `lib/storage/patient-files.ts` | Vercel Node adapter using Cloudflare R2's S3-compatible API and server-only `R2_*` credentials; no Worker global binding. |
 | DEPLOY_PLATFORM | `.github/workflows/deploy.yml` | Vercel: preview via `vercel deploy`, production via `vercel deploy --prod`. |
 | DEPLOY_WORKFLOW | `.github/workflows/ci.yml`, `.github/workflows/deploy.yml` | CI on `main`; deploy workflow starts after successful CI on `main` or manually. |
 

@@ -25,3 +25,35 @@ Server-only Vercel configuration: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRE
 - No R2 bucket was created or configured remotely.
 - No remote R8.4 migration was applied.
 - No production object or patient data was written.
+
+## Final validation record
+
+The original R8.4 storage implementation assumed a Cloudflare Worker binding.
+That assumption was corrected to the Vercel Node runtime with Cloudflare R2 via
+the S3-compatible API. The resulting adapter has server-only credentials, no
+public object URL, and fails closed when configuration is missing.
+
+The production-runtime build contract also required Webpack: Turbopack output
+was not compatible with this repository's `next start` and Playwright flow.
+The build command is therefore `next build --webpack`. Its post-build step
+generated the native `BUILD_ID` `E-ELqfsdlakr5dkAEeeEk`.
+
+The final typecheck fix changed `getPatientFilesStorageConfig` to accept
+`Record<string, string | undefined>` rather than `NodeJS.ProcessEnv`, which
+keeps test environments compatible without broadening runtime configuration.
+
+| Gate | Final result |
+| --- | --- |
+| Vitest | 820 files / 2060 tests / 2060 PASS / 0 FAIL / 0 SKIP |
+| Playwright | 520 PASS / 1 FLAKY / 1 SKIP / 0 FAIL |
+| Playwright flake | `PARALLEL_COLLISION / FIXTURE_COLLISION`; no product, R2-adapter, or clinical regression evidence |
+| Production build | PASS — `next build --webpack` |
+| Post-build | PASS |
+| Runtime build ID | `E-ELqfsdlakr5dkAEeeEk` |
+| R2 Node adapter | PASS |
+| Worker binding dependency | removed |
+| Server-only credentials / fail-closed config | PASS |
+
+No remote R2 bucket, credentials, Vercel environment variables, migration
+promotion, deployment, or production write was performed during this code
+validation.

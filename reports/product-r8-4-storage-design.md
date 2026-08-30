@@ -20,6 +20,19 @@ Metadata insertion follows object storage. If the database write fails, the obje
 
 The R2 token must have Object Read & Write permission restricted to the selected private bucket. It must not use a `NEXT_PUBLIC_` name, a public custom domain, or browser credentials. Downloads stream through the already-authorized server route; no presigned URL is generated or persisted.
 
+## Build and configuration compatibility
+
+The adapter is designed for Vercel's Node runtime, not Cloudflare Workers. An
+earlier Worker global-binding assumption was removed in favor of Cloudflare
+R2's S3-compatible API. `getPatientFilesStorageConfig` accepts
+`Record<string, string | undefined>` so test configuration can be partial
+while production still validates every required server-only value and fails
+closed when one is absent.
+
+The repository production build uses `next build --webpack`. This preserves
+the `next start` and Playwright production-runtime contract and emits the
+native Next build identifier consumed by the post-build metadata step.
+
 ## Publication model
 
 Files are `PRIVATE` on upload and become visible only after an explicit admin `PUBLISHED` transition. They can be `REVOKED`; listing and download queries accept only `PUBLISHED` content owned by the session patient. Orientations follow the same explicit publication pattern, with content snapshots preserved at creation so later edits to the global education catalog do not rewrite material already delivered.
