@@ -19,8 +19,14 @@ export interface PatientFile {
 export async function listPatientPortalOrientations(patientId: string): Promise<PatientEducationPublication[]> {
   return d1Query<PatientEducationPublication>("SELECT * FROM patient_education_publications WHERE patient_id = ?1 AND status = 'PUBLISHED' ORDER BY published_at DESC, created_at DESC", [patientId]);
 }
+export async function listPatientEducationPublications(patientId: string): Promise<PatientEducationPublication[]> {
+  return d1Query<PatientEducationPublication>("SELECT * FROM patient_education_publications WHERE patient_id = ?1 ORDER BY created_at DESC", [patientId]);
+}
 export async function listPatientPortalFiles(patientId: string): Promise<PatientFile[]> {
   return d1Query<PatientFile>("SELECT * FROM patient_files WHERE patient_id = ?1 AND status = 'PUBLISHED' ORDER BY published_at DESC, created_at DESC", [patientId]);
+}
+export async function listPatientFiles(patientId: string): Promise<PatientFile[]> {
+  return d1Query<PatientFile>("SELECT * FROM patient_files WHERE patient_id = ?1 ORDER BY created_at DESC", [patientId]);
 }
 export async function getPatientPortalFile(patientId: string, fileId: string): Promise<PatientFile | null> {
   const rows = await d1Query<PatientFile>("SELECT * FROM patient_files WHERE id = ?1 AND patient_id = ?2 AND status = 'PUBLISHED' LIMIT 1", [fileId, patientId]);

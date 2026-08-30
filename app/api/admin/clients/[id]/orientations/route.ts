@@ -3,12 +3,16 @@ import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
 import { getPatientEducationCardById } from "@/lib/repositories/patient-education-cards";
-import { createEducationPublication, setEducationPublicationStatus } from "@/lib/repositories/patient-deliverables";
+import { createEducationPublication, listPatientEducationPublications, setEducationPublicationStatus } from "@/lib/repositories/patient-deliverables";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const inputSchema = z.object({ education_card_id: z.string().uuid() }).strict();
 const statusSchema = z.object({ id: z.string().uuid(), status: z.enum(["DRAFT", "PUBLISHED", "REVOKED"]) }).strict();
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req); if (!admin) return NextResponse.json({ message: "Nao autorizado." }, { status: 401 });
+  const { id } = await params; return NextResponse.json({ items: await listPatientEducationPublications(id) });
+}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await getAdminFromRequest(req); if (!admin) return NextResponse.json({ message: "Nao autorizado." }, { status: 401 });

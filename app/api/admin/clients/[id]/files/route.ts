@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
-import { createPatientFile, setPatientFileStatus } from "@/lib/repositories/patient-deliverables";
+import { createPatientFile, listPatientFiles, setPatientFileStatus } from "@/lib/repositories/patient-deliverables";
 import { getPatientFilesBucket, isAllowedPatientFile, patientFileObjectKey, safePatientFilename } from "@/lib/storage/patient-files";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const statusSchema = z.object({ id: z.string().uuid(), status: z.enum(["PRIVATE", "PUBLISHED", "REVOKED"]) }).strict();
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req); if (!admin) return NextResponse.json({ message: "Nao autorizado." }, { status: 401 });
+  const { id } = await params; const items = await listPatientFiles(id); return NextResponse.json({ items: items.map(({ object_key: _objectKey, ...item }) => item) });
+}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await getAdminFromRequest(req); if (!admin) return NextResponse.json({ message: "Nao autorizado." }, { status: 401 });
