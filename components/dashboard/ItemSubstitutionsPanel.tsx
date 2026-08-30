@@ -45,6 +45,8 @@ interface SuggestResult {
   quality: "EXCELLENT" | "GOOD" | "REVIEW" | "UNSUITABLE";
 }
 
+type NutrientValues = SuggestResult["nutrition"];
+
 const QUALITY_LABEL: Record<string, string> = {
   EXCELLENT: "Equivalência excelente",
   GOOD: "Equivalência boa",
@@ -101,6 +103,7 @@ export function ItemSubstitutionsPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [suggestions, setSuggestions] = useState<SuggestResult[]>([]);
+  const [suggestionBaseNutrition, setSuggestionBaseNutrition] = useState<NutrientValues | null>(null);
   const [needsReview, setNeedsReview] = useState<{ query: string; reason: string }[]>([]);
   const [simulating, setSimulating] = useState<number | null>(null);
   const [simulationResult, setSimulationResult] = useState<{ index: number; data: SimulationResult } | null>(null);
@@ -152,6 +155,7 @@ export function ItemSubstitutionsPanel({
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? "Não foi possível buscar substituições.");
       setSuggestions(data.results ?? []);
+      setSuggestionBaseNutrition(data.baseFood?.nutrition ?? null);
       setNeedsReview((data.needsReview ?? []).map((r: { query: string; reason: string }) => ({ query: r.query, reason: r.reason })));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível buscar substituições.");
@@ -323,16 +327,15 @@ export function ItemSubstitutionsPanel({
           )}
 
           {suggestions.length > 0 && (
-            <div className="mt-2 space-y-1">
+            <div className="mt-3 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-[#8C6E52]">Comparação com a porção prescrita</p>
               {suggestions.map((result, index) => (
-                <div key={index} className="flex items-center justify-between gap-2 rounded-md bg-white px-2 py-1.5">
-                  <span className="text-[#3A2B1F]">
-                    {result.displayName} — {result.quantityGrams} g
-                    <span className={`ml-1.5 ${QUALITY_STYLE[result.quality]}`}>· {QUALITY_LABEL[result.quality]}</span>
-                  </span>
-                  <button type="button" onClick={() => addSuggestion(result, true)} className="brand-btn-secondary h-7 px-2 text-[11px]">
-                    + adicionar
-                  </button>
+                <div key={index} className="rounded-lg border border-[#EDE1D6] bg-white p-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0"><p className="truncate font-semibold text-[#3A2B1F]">{result.displayName}</p><p className="mt-0.5 text-[11px] text-[#75675E]">Porção equivalente: {result.quantityGrams} g <span className={QUALITY_STYLE[result.quality]}>· {QUALITY_LABEL[result.quality]}</span></p></div>
+                    <button type="button" onClick={() => addSuggestion(result, true)} className="brand-btn-secondary h-8 shrink-0 px-2 text-[11px]">Adicionar</button>
+                  </div>
+                  <NutrientDeltas base={suggestionBaseNutrition} option={result.nutrition} />
                 </div>
               ))}
             </div>
@@ -343,7 +346,28 @@ export function ItemSubstitutionsPanel({
   );
 }
 
+function NutrientDeltas({ base, option }: { base: NutrientValues | null; option: NutrientValues }) {
+  if (!base) return <p className="mt-2 text-[10px] text-[#8C6E52]">Comparação nutricional indisponível.</p>;
+  const fields: Array<{ label: string; base: number | null; option: number | null; unit: string; decimals: number }> = [
+    { label: "Energia", base: base.energyKcal, option: option.energyKcal, unit: "kcal", decimals: 0 },
+    { label: "Proteína", base: base.proteinG, option: option.proteinG, unit: "g", decimals: 1 },
+    { label: "Carboidrato", base: base.carbohydrateG, option: option.carbohydrateG, unit: "g", decimals: 1 },
+    { label: "Gordura", base: base.fatG, option: option.fatG, unit: "g", decimals: 1 },
+  ];
+  return <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4">{fields.map((field) => {
+    const delta = field.base === null || field.option === null ? null : field.option - field.base;
+    const neutral = delta === null || Math.abs(delta) < 0.05;
+    const label = delta === null ? "sem dado" : `${delta > 0 ? "+" : ""}${delta.toLocaleString("pt-BR", { maximumFractionDigits: field.decimals })} ${field.unit}`;
+    return <span key={field.label} className={`rounded-md px-2 py-1 text-[10px] font-semibold ${neutral ? "bg-[#F5F1EC] text-[#75675E]" : delta > 0 ? "bg-[#FFF3D8] text-[#9A6B20]" : "bg-[#EAF0E4] text-[#4F7D45]"}`} title={`${field.label}: valor da opção menos a porção prescrita`}>{field.label}: {label}</span>;
+  })}</div>;
+}
+
 const fmtNum = (v: number | null, decimals = 0) => v === null ? "sem informação" : v.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+const fmtDelta = (before: number | null, after: number | null, decimals = 0) => {
+  if (before === null || after === null) return "sem dado";
+  const delta = after - before;
+  return `${delta > 0 ? "+" : ""}${delta.toLocaleString("pt-BR", { maximumFractionDigits: decimals })}`;
+};
 
 /** Comparação "total do plano antes / se usar esta alternativa" (seção 3/17/18) — nunca altera o plano, só mostra o resultado de uma simulação já calculada pela engine real no servidor. NULL nunca vira 0. */
 function SimulationSummary({ result }: { result: SimulationResult }) {
@@ -352,13 +376,13 @@ function SimulationSummary({ result }: { result: SimulationResult }) {
       <p className="font-semibold">Total do plano</p>
       <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
         <span className="text-[#8C6E52]">Energia</span>
-        <span>{fmtNum(result.totalBefore.energyKcal)} → {fmtNum(result.totalAfter.energyKcal)} kcal</span>
+        <span>{fmtNum(result.totalBefore.energyKcal)} → {fmtNum(result.totalAfter.energyKcal)} kcal <strong className="text-[#607A56]">({fmtDelta(result.totalBefore.energyKcal, result.totalAfter.energyKcal)} kcal)</strong></span>
         <span className="text-[#8C6E52]">Proteína</span>
-        <span>{fmtNum(result.totalBefore.proteinG, 1)} → {fmtNum(result.totalAfter.proteinG, 1)} g</span>
+        <span>{fmtNum(result.totalBefore.proteinG, 1)} → {fmtNum(result.totalAfter.proteinG, 1)} g ({fmtDelta(result.totalBefore.proteinG, result.totalAfter.proteinG, 1)} g)</span>
         <span className="text-[#8C6E52]">Carboidrato</span>
-        <span>{fmtNum(result.totalBefore.carbohydrateG, 1)} → {fmtNum(result.totalAfter.carbohydrateG, 1)} g</span>
+        <span>{fmtNum(result.totalBefore.carbohydrateG, 1)} → {fmtNum(result.totalAfter.carbohydrateG, 1)} g ({fmtDelta(result.totalBefore.carbohydrateG, result.totalAfter.carbohydrateG, 1)} g)</span>
         <span className="text-[#8C6E52]">Gordura</span>
-        <span>{fmtNum(result.totalBefore.fatG, 1)} → {fmtNum(result.totalAfter.fatG, 1)} g</span>
+        <span>{fmtNum(result.totalBefore.fatG, 1)} → {fmtNum(result.totalAfter.fatG, 1)} g ({fmtDelta(result.totalBefore.fatG, result.totalAfter.fatG, 1)} g)</span>
       </div>
       <p className="mt-1 text-[10px] text-[#8C6E52]">Simulação apenas — o plano não foi alterado.</p>
     </div>

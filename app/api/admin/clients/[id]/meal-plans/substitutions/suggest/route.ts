@@ -7,6 +7,7 @@ import { toDisplayFoodName, type FoodResolution } from "@/lib/nutrition/food-res
 import { resolveFoodCandidatesWithCanonicalShadow } from "@/lib/nutrition/canonical-food-shadow";
 import { listPatientClinicalMarkers } from "@/lib/repositories/patient-clinical-markers";
 import { findFoodSubstitutes, type EquivalenceMode } from "@/lib/nutrition/substitution-engine";
+import { calculateItemNutrients } from "@/lib/nutrition/nutrients";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { writeAuditLog } from "@/lib/security/audit";
 
@@ -95,6 +96,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     candidates: candidateFoods.map((d) => d.macroReference),
     mode: input.mode as EquivalenceMode,
   });
+  // A UI compara cada opção com a porção prescrita usando esta mesma engine.
+  // Assim, os sinais +/− nunca são uma estimativa visual separada.
+  const baseNutrition = calculateItemNutrients(String(input.baseQuantity), "g", baseDetails.macroReference).values;
 
   await writeAuditLog({
     action: "meal_plan_substitution_suggested",
@@ -112,7 +116,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
 
   return NextResponse.json({
-    baseFood: { displayName: toDisplayFoodName(baseDetails.macroReference.descricao), ref: baseRef },
+    baseFood: { displayName: toDisplayFoodName(baseDetails.macroReference.descricao), ref: baseRef, nutrition: baseNutrition },
     results: results
       .map((result) => ({ result, persistedSource: toPersistedMealFoodSource(sourceFromMacroReference(result.food)) }))
       // Só fontes que a engine/persistência realmente suportam num item de

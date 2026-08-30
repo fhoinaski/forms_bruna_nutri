@@ -1136,11 +1136,11 @@ export function MealItemsEditor({
               </div>
             </div>
             {!readOnly && <div className="flex shrink-0 flex-wrap items-center gap-1.5 self-end sm:self-auto">
-              <button type="button" onClick={() => addItemForEditing(mealIndex)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]">
+              <button type="button" onClick={() => addItemForEditing(mealIndex)} className="hidden">
                 <Plus className="h-4 w-4" />
                 Alimento
               </button>
-              <div className="relative">
+              <div className="hidden">
                 <button type="button" onClick={() => setRecipePickerMealIndex(recipePickerMealIndex === mealIndex ? null : mealIndex)} title="Adiciona a receita como 1 item desta refeição (referência viva, não expande em alimentos) — diferente de &quot;Inserir receita&quot;, que cria uma refeição nova já expandida." className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#D9E4D3] bg-[#FFFDFC] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]">
                   <Plus className="h-4 w-4" />
                   Item de receita
@@ -1357,7 +1357,8 @@ export function MealItemsEditor({
                 const editingItem = !readOnly && (editingItemKey === key || !item.food.trim());
                 if (!editingItem) {
                   return (
-                    <div key={itemIndex} className="group relative grid min-w-0 gap-2 rounded-lg border border-[#EDE1D6] bg-white px-3 py-2 md:grid-cols-[minmax(0,150px)_minmax(0,1fr)_120px_minmax(140px,190px)_auto] md:items-center">
+                    <div key={itemIndex} className="space-y-1.5">
+                    <div className="group relative grid min-w-0 gap-2 rounded-lg border border-[#EDE1D6] bg-white px-3 py-2 md:grid-cols-[minmax(92px,110px)_minmax(120px,1fr)_80px_minmax(104px,130px)_auto] md:items-center">
                       <div className="min-w-0">
                         {slotGroupLabel ? (
                           <span className="block truncate text-[11px] font-bold uppercase tracking-[0.08em] text-[#607A56]">{slotGroupLabel}</span>
@@ -1441,10 +1442,20 @@ export function MealItemsEditor({
                         )}
                       </div>
                     </div>
+                    {(itemSubstitutions.filter((sub) => sub.approved_by_professional !== false).length > 0 || visibleExchangeAlternatives.filter((alternative) => alternative.state === "APPROVED").length > 0) && (
+                      <div className="ml-3 border-l-2 border-[#D9E4D3] pl-3">
+                        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#607A56]">ou escolha uma alternativa</p>
+                        <div className="space-y-1">
+                          {itemSubstitutions.filter((sub) => sub.approved_by_professional !== false).map((sub, substitutionIndex) => <div key={`local-${sub.id ?? substitutionIndex}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md bg-[#F8FBF5] px-2.5 py-1.5 text-xs"><span className="font-medium text-[#3A3028]">{sub.option_food}</span><span className="text-[#607A56]">{sub.quantity ? `${sub.quantity} ${sub.unit ?? "g"}` : "porção equivalente"}</span></div>)}
+                          {visibleExchangeAlternatives.filter((alternative) => alternative.state === "APPROVED").map((alternative) => <div key={`exchange-${alternative.id}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md bg-[#F8FBF5] px-2.5 py-1.5 text-xs"><span className="font-medium text-[#3A3028]">{alternative.food_name}</span><span className="text-[#607A56]">{Math.round(alternative.quantity_grams * 10) / 10} g{alternative.energy_kcal !== null ? ` · ${Math.round(alternative.energy_kcal)} kcal` : ""}</span></div>)}
+                        </div>
+                      </div>
+                    )}
+                    </div>
                   );
                 }
                 return (
-                <div key={itemIndex} className="relative grid min-w-0 gap-1.5 rounded-lg border border-transparent bg-white/70 p-1.5 md:grid-cols-[minmax(240px,1fr)_190px] md:items-start xl:grid-cols-[minmax(260px,1fr)_190px_180px_auto]">
+                <div key={itemIndex} className="relative grid min-w-0 gap-1.5 rounded-lg border border-transparent bg-white/70 p-1.5 md:grid-cols-[minmax(240px,1fr)_190px] md:items-start 2xl:grid-cols-[minmax(260px,1fr)_190px_180px_auto]">
                   <div className="relative min-w-0">
                     {slotGroupLabel && (
                       <span className="mb-1 block w-fit rounded-full bg-[#EEF3EA] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#607A56]">
@@ -1624,7 +1635,7 @@ export function MealItemsEditor({
                       <p className="mt-1 text-[10px] font-medium text-[#9A8B80]">≈ {Math.round(grams * 10) / 10} g</p>
                     )}
                   </div>
-                  <div className="flex min-w-0 items-center justify-between gap-2 md:col-span-2 xl:col-span-1 xl:justify-end">
+                  <div className="flex min-w-0 items-center justify-between gap-2 md:col-span-2 2xl:col-span-1 2xl:justify-end">
                     {clientId ? (
                       <button
                         type="button"
@@ -1745,9 +1756,7 @@ export function MealItemsEditor({
                 </div>
                 );
               })}
-              <button type="button" onClick={() => addItemForEditing(mealIndex)} className="text-xs font-semibold text-[#607A56]">
-                + adicionar alimento
-              </button>
+              {!readOnly && <div className="mt-2 flex items-center justify-between gap-3 border-t border-dashed border-[#EDE1D6] pt-2"><p className="text-[11px] text-[#9A8B80]">Adicione os alimentos desta refeição aqui.</p><button type="button" onClick={() => addItemForEditing(mealIndex)} className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[#D9E4D3] bg-[#F8FBF5] px-3 text-xs font-semibold text-[#607A56] transition hover:bg-[#EAF0E4]"><Plus className="h-3.5 w-3.5" /> Adicionar alimento</button></div>}
             </div>
           </div>
         </article>

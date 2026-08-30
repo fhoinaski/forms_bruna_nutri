@@ -59,6 +59,7 @@ export interface MealPlanDraftContext {
   restrictions: string | null;
   foodPreferences: string | null;
   foodAversions: string | null;
+  eatingRoutine: string | null;
   clinicalMarkers: { type: string; label: string; severity: string; status: string }[];
   activePlan: { title: string; targetEnergyKcal: number | null } | null;
 }
@@ -93,6 +94,7 @@ export async function buildMealPlanDraftContext(clientId: string): Promise<MealP
     restrictions: record?.restrictions ?? null,
     foodPreferences: record?.food_preferences ?? null,
     foodAversions: record?.food_aversions ?? null,
+    eatingRoutine: record?.eating_routine ?? null,
     clinicalMarkers: markers.map((marker) => ({ type: marker.type, label: marker.label ?? marker.normalized_code, severity: marker.severity, status: marker.status })),
     activePlan: activePlan ? { title: activePlan.title, targetEnergyKcal: activePlan.target_energy_kcal ?? null } : null,
   };
@@ -108,6 +110,7 @@ function formatContextForPrompt(context: MealPlanDraftContext): string {
   if (context.lifeStage) lines.push(`Fase do cuidado: ${context.lifeStage}`);
   if (context.goals) lines.push(`Objetivos registrados: ${context.goals}`);
   if (context.allergies) lines.push(`Alergias registradas: ${context.allergies}`);
+  if (context.eatingRoutine) lines.push(`Rotina alimentar: ${context.eatingRoutine}`);
   if (context.restrictions) lines.push(`Restrições registradas: ${context.restrictions}`);
   if (context.foodPreferences) lines.push(`Preferências alimentares registradas: ${context.foodPreferences}`);
   if (context.foodAversions) lines.push(`Aversões alimentares registradas: ${context.foodAversions}`);

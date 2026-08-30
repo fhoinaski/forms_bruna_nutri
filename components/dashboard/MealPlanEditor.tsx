@@ -7,7 +7,6 @@ import { MealItemsEditor, cleanMealsForSave, sanitizeMealForPlanClone, type Meal
 import type { ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
 import { AiMealPlanWizard } from "@/components/dashboard/AiMealPlanWizard";
 import { MealPlanNutritionWorkspacePanel } from "@/components/nutrition/MealPlanNutritionSummary";
-import { MealNavigationRail } from "@/components/dashboard/MealNavigationRail";
 import { useDebouncedFoodSearch, type FoodSuggestion } from "@/hooks/use-debounced-food-search";
 import {
   PROTOCOL_TEMPLATE_GROUP_LABELS,
@@ -380,8 +379,8 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
     }
   }
 
-  async function save(nextStatus?: MealPlanStatus) {
-    if (!plan) return;
+  async function save(nextStatus?: MealPlanStatus): Promise<boolean> {
+    if (!plan) return false;
     setSaving(true);
     setError("");
     setMessage("");
@@ -445,7 +444,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       if (!response.ok) {
         if (response.status === 409) {
           setConflict(data.message ?? "O plano alimentar foi atualizado em outra sessao. Recarregue antes de salvar.");
-          return;
+          return false;
         }
         if (data.code === "MEAL_PLAN_PUBLICATION_BLOCKED") {
           setPublicationReview({
@@ -468,11 +467,22 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       }
       setMessage(nextStatus === "active" ? "Plano ativado no portal do cliente." : "Plano alimentar salvo.");
       onSaved?.();
+      return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Nao foi possivel salvar o plano.");
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function openPlanPreview() {
+    if (!plan) return;
+    // A impressão é uma página de servidor. Salvar antes de abrir garante que
+    // ela receba o mesmo rascunho e as mesmas substituições visíveis no editor.
+    if (hasUnsavedChanges && !(await save())) return;
+    const href = `/dashboard/clients/${clientId}/print?secao=plano-alimentar${plan.status === "active" ? "" : `&planId=${encodeURIComponent(plan.id)}`}`;
+    window.open(href, "_blank", "noopener,noreferrer");
   }
 
   async function reviewPublication() {
@@ -569,40 +579,18 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
 
   return (
     <div className="w-full min-w-0 space-y-5">
-      {!plan && <section className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/70 p-5">
-        <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0">
-            <p className="brand-kicker mb-1">Plano alimentar individual</p>
-            <h2 className="font-serif text-xl font-semibold text-[#3A3028] sm:text-2xl">Prescricao visual para o cliente</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#75675E]">
-              Use um modelo como ponto de partida, ajuste alimentos, quantidades, suplementos e substituicoes, depois ative no portal.
-            </p>
-            {!aiEnabled && (
-              <p className="mt-2 text-xs text-[#8C5F50]">
-                Para usar Sugerir com IA, configure a chave em <a href="/dashboard/settings/ai" className="font-semibold underline">Inteligencia artificial</a>.
-              </p>
-            )}
-          </div>
-          <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,220px)_auto] xl:shrink-0">
-            <select value={targetGroup} onChange={(event) => setTargetGroup(event.target.value as ProtocolTemplateTargetGroup)} className="brand-input">
-              {PROTOCOL_TEMPLATE_TARGET_GROUPS.map((group) => <option key={group} value={group}>{PROTOCOL_TEMPLATE_GROUP_LABELS[group]}</option>)}
-            </select>
-            <button type="button" onClick={() => void createFromTemplate()} disabled={creating} className="brand-btn-primary w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              {creating ? "Criando..." : "Criar por modelo"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setAiWizardOpen(true)}
-              disabled={creating}
-              title={aiEnabled ? undefined : "Configure a chave de IA em Configurações para usar este recurso."}
-              className="brand-btn-secondary w-full sm:w-auto"
-            >
-              <Sparkles className="h-4 w-4" />
-              Criar com IA
-            </button>
+      {!plan && <section className="rounded-2xl border border-[#EAD8C2] bg-[#FAF7F2]/70 p-5 sm:p-6">
+        <p className="brand-kicker">Novo plano alimentar</p>
+        <h2 className="mt-1 font-serif text-xl font-semibold text-[#3A3028] sm:text-2xl">Como deseja começar?</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#75675E]">Escolha o perfil da paciente e inicie com uma estrutura pronta ou uma proposta guiada. Você poderá editar refeições, porções e substituições em seguida.</p>
+        <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+          <div className="rounded-xl border border-[#EAD8C2] bg-white p-4"><label className="brand-label" htmlFor="meal-plan-target-group">Perfil do plano</label><select id="meal-plan-target-group" value={targetGroup} onChange={(event) => setTargetGroup(event.target.value as ProtocolTemplateTargetGroup)} className="brand-input"><option value="">Selecione o perfil</option>{PROTOCOL_TEMPLATE_TARGET_GROUPS.map((group) => <option key={group} value={group}>{PROTOCOL_TEMPLATE_GROUP_LABELS[group]}</option>)}</select><p className="mt-2 text-xs leading-5 text-[#75675E]">Isso define a estrutura inicial. Nada é publicado automaticamente.</p></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button type="button" onClick={() => void createFromTemplate()} disabled={creating || !targetGroup} className="group rounded-xl border border-[#B9C9B2] bg-[#F7FBF4] p-4 text-left transition hover:border-[#7F9A74] hover:bg-[#EEF5E9] disabled:cursor-not-allowed disabled:opacity-60"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#EAF0E4] text-[#607A56]"><Plus className="h-5 w-5" /></span><span className="mt-3 block text-sm font-semibold text-[#3A3028]">Começar por modelo</span><span className="mt-1 block text-xs leading-5 text-[#75675E]">Cria uma base organizada para você preencher e ajustar.</span><span className="mt-3 inline-flex text-xs font-semibold text-[#607A56]">{creating ? "Criando..." : "Usar este perfil →"}</span></button>
+            <button type="button" onClick={() => setAiWizardOpen(true)} disabled={creating} title={aiEnabled ? undefined : "Configure a chave de IA em Configurações para usar este recurso."} className="group rounded-xl border border-[#EAD8C2] bg-white p-4 text-left transition hover:border-[#CDAE8E] hover:bg-[#FFFDFC] disabled:cursor-not-allowed disabled:opacity-60"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#FFF3D8] text-[#9A6B20]"><Sparkles className="h-5 w-5" /></span><span className="mt-3 block text-sm font-semibold text-[#3A3028]">Criar proposta com IA</span><span className="mt-1 block text-xs leading-5 text-[#75675E]">Use o prontuário para montar um rascunho que você revisa antes de salvar.</span><span className="mt-3 inline-flex text-xs font-semibold text-[#9A6B20]">Abrir assistente →</span></button>
           </div>
         </div>
+        {!aiEnabled && <p className="mt-3 text-xs text-[#8C5F50]">Para usar a proposta com IA, configure a chave em <a href="/dashboard/settings/ai" className="font-semibold underline">Inteligência artificial</a>.</p>}
       </section>}
 
       {message && <p className="rounded-xl border border-[#D9E4D3] bg-[#F5FAF0] px-4 py-3 text-sm text-[#607A56]">{message}</p>}
@@ -640,7 +628,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
 
       {plan && (
         <div className="sticky top-2 z-30 rounded-xl border border-[#D9C4B2] bg-[#FFFDFC]/95 p-2.5 shadow-[0_12px_34px_rgba(58,48,40,0.12)] backdrop-blur-xl">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-[#3A3028]">{plan.title}</p>
               <p className={`mt-0.5 text-xs font-semibold ${hasUnsavedChanges ? "text-[#9A6B28]" : conflict ? "text-red-700" : "text-[#607A56]"}`}>
@@ -654,8 +642,8 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                 <p className="mt-0.5 text-xs text-[#8C6E52]">Portal e impressão oficial continuam usando a versão ativa até este rascunho ser ativado.</p>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
-              <button type="button" onClick={() => void createFromTemplate()} disabled={creating || saving || deleting} className="brand-btn-secondary w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-1.5 xl:justify-end">
+              <button type="button" onClick={() => void createFromTemplate()} disabled={creating || saving || deleting} className="brand-btn-secondary !min-h-9 px-3 py-2 text-xs">
                 <Plus className="h-4 w-4" />
                 Novo plano
               </button>
@@ -664,32 +652,32 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
                 onClick={() => setAiWizardOpen(true)}
                 disabled={creating || saving || deleting}
                 title={aiEnabled ? undefined : "Configure a chave de IA em Configurações para usar este recurso."}
-                className="brand-btn-secondary w-full sm:w-auto"
+                className="brand-btn-secondary !min-h-9 px-3 py-2 text-xs"
               >
                 <Sparkles className="h-4 w-4" />
                 Criar com IA
               </button>
-              <a
-                href={`/dashboard/clients/${clientId}/print?secao=plano-alimentar${plan.status === "active" ? "" : `&planId=${encodeURIComponent(plan.id)}`}`}
-                target="_blank"
-                rel="noreferrer"
-                className="brand-btn-secondary w-full sm:w-auto"
+              <button
+                type="button"
+                onClick={() => void openPlanPreview()}
+                disabled={saving || deleting}
+                className="brand-btn-secondary !min-h-9 px-3 py-2 text-xs"
                 title={plan.status === "active" ? "Imprime a versão ativa no portal." : "Abre uma prévia explícita deste rascunho; o portal continua usando o plano ativo."}
               >
                 <Printer className="h-4 w-4" />
                 {plan.status === "active" ? "Imprimir ativo" : "Prévia do rascunho"}
-              </a>
+              </button>
               {plan.status === "active" && (
-                <button type="button" onClick={() => void duplicateCurrentPlan()} disabled={saving || deleting || creating || plan.meals.length === 0} className="brand-btn-secondary w-full sm:w-auto">
+                <button type="button" onClick={() => void duplicateCurrentPlan()} disabled={saving || deleting || creating || plan.meals.length === 0} className="brand-btn-secondary !min-h-9 px-3 py-2 text-xs">
                   <Copy className="h-4 w-4" />
                   Editar
                 </button>
               )}
-              <button type="button" onClick={() => void save()} disabled={saving || deleting || !hasUnsavedChanges || plan.status === "active"} className="brand-btn-secondary w-full sm:w-auto">
+              <button type="button" onClick={() => void save()} disabled={saving || deleting || !hasUnsavedChanges || plan.status === "active"} className="brand-btn-secondary !min-h-9 px-3 py-2 text-xs">
                 <Save className="h-4 w-4" />
                 {saving ? "Salvando..." : "Salvar"}
               </button>
-              <button type="button" onClick={() => void reviewPublication()} disabled={saving || deleting || reviewing || plan.status === "active"} className="brand-btn-primary w-full sm:w-auto">
+              <button type="button" onClick={() => void reviewPublication()} disabled={saving || deleting || reviewing || plan.status === "active"} className="brand-btn-primary !min-h-9 px-3 py-2 text-xs">
                 <CheckCircle2 className="h-4 w-4" />
                 {plan.status === "active" ? "Ativo" : reviewing ? "Revisando..." : "Revisar"}
               </button>
@@ -700,18 +688,7 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
 
       {plan && (
         <section className="rounded-2xl border border-[#EAD8C2] bg-[#FFFDFC] p-3 sm:p-4">
-          {/*
-            R6.5.2 (regressão encontrada no fechamento): a coluna central já usa
-            larguras mínimas fixas em px nos food rows (MealItemsEditor) que não
-            cabem numa 3ª coluna à esquerda no breakpoint xl (1280px) — isso causava
-            texto cortado/oculto e cliques interceptados pela sidebar sticky. Por
-            isso a navegação de refeições só entra em 2xl (1536px+), onde há espaço
-            real de sobra; em xl o layout permanece EXATAMENTE o de 2 colunas da R6.5.1.
-          */}
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[220px_minmax(0,1fr)_360px]">
-            {/* R6.5.2 (seções 4, 7-13) — navegação de refeições, coluna nova, só desktop largo (2xl+); deriva de plan.meals, sem estado próprio a sincronizar. */}
-            <MealNavigationRail meals={plan.meals} />
-
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
             <div className="min-w-0 space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
@@ -822,16 +799,16 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
               {deleting ? "Excluindo..." : "Excluir plano"}
             </button>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <a
-                href={`/dashboard/clients/${clientId}/print?secao=plano-alimentar${plan.status === "active" ? "" : `&planId=${encodeURIComponent(plan.id)}`}`}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => void openPlanPreview()}
+                disabled={saving || deleting}
                 className="brand-btn-secondary w-full sm:w-auto"
                 title={plan.status === "active" ? "Imprime a versão ativa no portal." : "Abre uma prévia explícita deste rascunho; o portal continua usando o plano ativo."}
               >
                 <Printer className="h-4 w-4" />
                 {plan.status === "active" ? "Imprimir ativo" : "Prévia do rascunho"}
-              </a>
+              </button>
               <button type="button" onClick={() => void duplicateCurrentPlan()} disabled={saving || deleting || creating || plan.meals.length === 0} className="brand-btn-secondary w-full sm:w-auto">
                 <Copy className="h-4 w-4" />
                 {plan.status === "active" ? "Editar como rascunho" : "Duplicar este plano"}

@@ -234,6 +234,44 @@ function ProgressBar({ label, percent, valueLabel }: { label: string; percent: n
   );
 }
 
+/** Distribuição energética visual dos macros; deriva exclusivamente dos totais já calculados pela Nutrition Engine. */
+function MacroDonut({ proteinG, carbohydrateG, fatG }: { proteinG: number | null; carbohydrateG: number | null; fatG: number | null }) {
+  const protein = Math.max(0, proteinG ?? 0) * 4;
+  const carbohydrate = Math.max(0, carbohydrateG ?? 0) * 4;
+  const fat = Math.max(0, fatG ?? 0) * 9;
+  const total = protein + carbohydrate + fat;
+  if (!total) return null;
+  const proteinEnd = (protein / total) * 100;
+  const carbohydrateEnd = proteinEnd + (carbohydrate / total) * 100;
+  const entries = [
+    { label: "Proteína", value: proteinG, color: "bg-[#7DB3F6]" },
+    { label: "Carboidrato", value: carbohydrateG, color: "bg-[#F6CD59]" },
+    { label: "Gordura", value: fatG, color: "bg-[#E99B72]" },
+  ];
+  return (
+    <div className="rounded-lg border border-[#EDE1D6] bg-[#FAF7F2]/70 p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">Distribuição energética</p>
+      <div className="mt-3 flex items-center gap-3">
+        <div className="relative h-20 w-20 shrink-0 rounded-full" role="img" aria-label="Gráfico circular da distribuição de proteína, carboidrato e gordura" style={{ background: `conic-gradient(#7DB3F6 0 ${proteinEnd}%, #F6CD59 ${proteinEnd}% ${carbohydrateEnd}%, #E99B72 ${carbohydrateEnd}% 100%)` }}>
+          <span className="absolute inset-3 rounded-full bg-[#FFFDFC]" />
+        </div>
+        <div className="min-w-0 space-y-1.5 text-xs">{entries.map((entry) => <div key={entry.label} className="flex items-center justify-between gap-3"><span className="flex items-center gap-1.5 text-[#75675E]"><i className={`h-2 w-2 rounded-full ${entry.color}`} />{entry.label}</span><strong className="text-[#3A3028]">{entry.value === null ? "—" : `${entry.value} g`}</strong></div>)}</div>
+      </div>
+    </div>
+  );
+}
+
+function MealMacroDonut({ name, proteinG, carbohydrateG, fatG }: { name: string; proteinG: number | null; carbohydrateG: number | null; fatG: number | null }) {
+  const protein = Math.max(0, proteinG ?? 0) * 4;
+  const carbohydrate = Math.max(0, carbohydrateG ?? 0) * 4;
+  const fat = Math.max(0, fatG ?? 0) * 9;
+  const total = protein + carbohydrate + fat;
+  if (!total) return null;
+  const proteinEnd = (protein / total) * 100;
+  const carbohydrateEnd = proteinEnd + (carbohydrate / total) * 100;
+  return <div className="min-w-16 text-center"><div className="relative mx-auto h-11 w-11 rounded-full" role="img" aria-label={`Composição nutricional de ${name}`} style={{ background: `conic-gradient(#7DB3F6 0 ${proteinEnd}%, #F6CD59 ${proteinEnd}% ${carbohydrateEnd}%, #E99B72 ${carbohydrateEnd}% 100%)` }}><span className="absolute inset-2 rounded-full bg-[#FFFDFC]" /></div><p className="mt-1 truncate text-[10px] font-medium text-[#75675E]" title={name}>{name}</p></div>;
+}
+
 export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: SummaryMeal[]; target: NutrientTarget }) {
   const { flexibleResult, totalItems } = useMealPlanNutritionData({ meals, target });
   const min = roundedNutrients(flexibleResult.total.min);
@@ -303,6 +341,10 @@ export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: Summ
               {flexibleResult.quality.unresolved > 0 && <span> · {flexibleResult.quality.unresolved} não calculado{flexibleResult.quality.unresolved > 1 ? "s" : ""}</span>}
             </p>
           )}
+
+          <MacroDonut proteinG={min.proteinG} carbohydrateG={min.carbohydrateG} fatG={min.fatG} />
+
+          {flexibleResult.perMeal.length > 1 && <div className="rounded-lg border border-[#EDE1D6] bg-white p-3"><p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#8C6E52]">Por refeição</p><div className="mt-2 flex gap-3 overflow-x-auto pb-1">{flexibleResult.perMeal.map((meal, index) => <MealMacroDonut key={`${meal.mealId ?? index}-${meal.name}`} name={meal.name || `Refeição ${index + 1}`} proteinG={meal.min.proteinG} carbohydrateG={meal.min.carbohydrateG} fatG={meal.min.fatG} />)}</div></div>}
 
           {/* R6.5 (seções 21-22) — 1 barra de progresso por macro vs. a meta (quando houver meta); leitura rápida P/C/G ao lado. */}
           <div className="space-y-2.5 rounded-lg border border-[#EDE1D6] bg-[#FAF7F2]/70 p-3">

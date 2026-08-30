@@ -54,7 +54,7 @@ function friendlyFoodName(technicalName: string): string {
 }
 
 function alternativeLookupKey(foodName: string): string {
-  return friendlyFoodName(foodName)
+  return foodName
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
@@ -293,7 +293,14 @@ export default async function ClientPrintPage({
     : [];
 
   const approvedAlternativeGroups = activeMealPlan ? await getApprovedMealPlanAlternatives(activeMealPlan) : [];
-  const alternativesByBase = new Map(approvedAlternativeGroups.map((group) => [alternativeLookupKey(group.primaryFoodName), group.alternatives]));
+  // Um alimento pode chegar do catálogo com vírgulas e do editor sem elas.
+  // Indexamos as duas apresentações para a prévia nunca esconder uma troca
+  // válida apenas por diferença de formatação no nome.
+  const alternativesByBase = new Map<string, (typeof approvedAlternativeGroups)[number]["alternatives"]>();
+  for (const group of approvedAlternativeGroups) {
+    alternativesByBase.set(alternativeLookupKey(group.primaryFoodName), group.alternatives);
+    alternativesByBase.set(alternativeLookupKey(friendlyFoodName(group.primaryFoodName)), group.alternatives);
+  }
 
   const heightDisplay = formatHeightDisplay(nutritionRecord?.height_cm ?? null);
 
@@ -591,7 +598,9 @@ export default async function ClientPrintPage({
                     <div className="meal-body">
                       {isPatientFacingNote(meal.notes) && <p style={{ color: "#8C6E52", marginBottom: "6px", whiteSpace: "pre-wrap" }}>{meal.notes}</p>}
                       {meal.items.map((item, itemIndex) => {
-                        const alternatives = alternativesByBase.get(alternativeLookupKey(item.food)) ?? [];
+                        const alternatives = alternativesByBase.get(alternativeLookupKey(item.food))
+                          ?? alternativesByBase.get(alternativeLookupKey(friendlyFoodName(item.food)))
+                          ?? [];
                         return (
                           <div key={`${item.food}-${itemIndex}`} style={{ borderBottom: "1px solid #F0E4D8", padding: "5px 0" }}>
                             <div className="meal-item" style={{ borderBottom: 0, padding: 0 }}>

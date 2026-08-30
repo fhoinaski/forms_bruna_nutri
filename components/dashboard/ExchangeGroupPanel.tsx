@@ -96,6 +96,10 @@ function gramsLabel(value: number) {
   return `${Math.round(value * 10) / 10} g`;
 }
 
+function exchangeQualityLabel(value: string) {
+  return ({ EXCELLENT: "equivalência alta", GOOD: "boa equivalência", REVIEW: "revisar", UNSUITABLE: "revisar" } as Record<string, string>)[value] ?? value;
+}
+
 function clinicalErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (/NEEDS_FOOD_CONFIRMATION|confirme/i.test(message)) return "Confirme este alimento antes de gerar trocas.";
@@ -1070,16 +1074,16 @@ function ExchangeListSection({
       {alternatives.length ? (
         <ul className="mt-2 space-y-1.5">
           {alternatives.map((alt) => (
-            <li key={alt.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg bg-[#FAF7F2]/70 px-3 py-2">
+            <li key={alt.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg bg-[#FAF7F2]/70 px-3 py-2.5">
               {mode === "suggested" ? (
                 <label className="flex min-w-0 items-center gap-2">
                   <input type="checkbox" checked={selected.has(alt.id)} onChange={() => onToggle(alt.id)} className="h-4 w-4 shrink-0" />
-                  <span className="min-w-0 truncate text-sm font-semibold text-[#3A3028]">{friendlyFoodName(alt.food_name)}</span>
+                  <span className="min-w-0"><span className="block truncate text-sm font-semibold text-[#3A3028]">{friendlyFoodName(alt.food_name)}</span><span className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-medium text-[#75675E]"><span>{alt.energy_kcal === null ? "Energia —" : `${Math.round(alt.energy_kcal)} kcal`}</span><span>{alt.protein_g === null ? "Proteína —" : `${Math.round(alt.protein_g * 10) / 10} g proteína`}</span>{alt.quality && <span className="rounded-full bg-[#EAF0E4] px-1.5 py-0.5 font-semibold text-[#4F7D45]">{exchangeQualityLabel(alt.quality)}</span>}</span></span>
                 </label>
               ) : (
                 <span className="flex min-w-0 items-center gap-2">
                   <Check className="h-4 w-4 shrink-0 text-[#607A56]" aria-hidden="true" />
-                  <span className="min-w-0 truncate text-sm font-semibold text-[#3A3028]">{friendlyFoodName(alt.food_name)}</span>
+                  <span className="min-w-0"><span className="block truncate text-sm font-semibold text-[#3A3028]">{friendlyFoodName(alt.food_name)}</span><span className="mt-1 block text-[10px] text-[#75675E]">{alt.energy_kcal === null ? "Energia não disponível" : `${Math.round(alt.energy_kcal)} kcal`} · {alt.protein_g === null ? "proteína —" : `${Math.round(alt.protein_g * 10) / 10} g proteína`}</span></span>
                 </span>
               )}
               <span className="flex shrink-0 items-center gap-2 text-sm font-semibold text-[#3A3028]">

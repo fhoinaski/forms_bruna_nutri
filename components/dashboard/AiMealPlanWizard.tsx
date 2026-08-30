@@ -84,6 +84,7 @@ interface DraftContext {
   goals: string | null;
   allergies: string | null;
   restrictions: string | null;
+  eatingRoutine: string | null;
   clinicalMarkers: { type: string; label: string; severity: string; status: string }[];
   activePlan: { title: string; targetEnergyKcal: number | null } | null;
 }
@@ -372,6 +373,13 @@ export function AiMealPlanWizard({
   const [contextError, setContextError] = useState("");
   const [generationReadiness, setGenerationReadiness] = useState<DraftGenerationReadiness | null>(null);
   const [readinessBlockingLabels, setReadinessBlockingLabels] = useState<string[]>([]);
+  const [quickObjective, setQuickObjective] = useState("");
+  const [quickRoutine, setQuickRoutine] = useState("");
+  const [quickAllergies, setQuickAllergies] = useState("");
+  const [quickWeight, setQuickWeight] = useState("");
+  const [quickHeight, setQuickHeight] = useState("");
+  const [savingQuickFacts, setSavingQuickFacts] = useState(false);
+  const [quickFactsError, setQuickFactsError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -398,6 +406,44 @@ export function AiMealPlanWizard({
       .catch(() => { if (!cancelled) setGenerationReadiness("NOT_READY"); });
     return () => { cancelled = true; };
   }, [clientId]);
+
+  const requiresQuickFact = (label: string) => readinessBlockingLabels.includes(label);
+  const canSaveQuickFacts = (!requiresQuickFact("Objetivo") || Boolean(quickObjective.trim()))
+    && (!requiresQuickFact("Rotina") || Boolean(quickRoutine.trim()))
+    && (!requiresQuickFact("Alergias") || Boolean(quickAllergies.trim()))
+    && (!requiresQuickFact("Peso atual") || Boolean(quickWeight.trim()))
+    && (!requiresQuickFact("Altura") || Boolean(quickHeight.trim()));
+
+  async function saveQuickFacts() {
+    if (!canSaveQuickFacts) return;
+    setSavingQuickFacts(true);
+    setQuickFactsError("");
+    try {
+      const recordResponse = await fetch(`/api/admin/clients/${clientId}/nutrition-record`, { cache: "no-store" });
+      const record = await recordResponse.json();
+      if (!recordResponse.ok) throw new Error(record.message ?? "Não foi possível abrir o prontuário.");
+      const patch: Record<string, unknown> = { expectedVersion: record.version, reason: "Informações essenciais preenchidas no assistente de plano alimentar" };
+      if (requiresQuickFact("Objetivo")) patch.goals = quickObjective.trim();
+      if (requiresQuickFact("Rotina")) patch.eating_routine = quickRoutine.trim();
+      if (requiresQuickFact("Alergias")) patch.allergies = quickAllergies.trim();
+      if (requiresQuickFact("Peso atual")) patch.current_weight_kg = quickWeight.trim();
+      if (requiresQuickFact("Altura")) patch.height_cm = quickHeight.trim();
+      const response = await fetch(`/api/admin/clients/${clientId}/nutrition-record`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? "Não foi possível salvar as informações.");
+      const [nextContextResponse, readinessResponse] = await Promise.all([fetch(`/api/admin/clients/${clientId}/meal-plans/draft/context`, { cache: "no-store" }), fetch(`/api/admin/clients/${clientId}/meal-plans/clinical-copilot`, { cache: "no-store" })]);
+      if (nextContextResponse.ok) setContext(await nextContextResponse.json());
+      if (readinessResponse.ok) {
+        const readiness = await readinessResponse.json();
+        setGenerationReadiness(readiness.generationReadiness ?? "NOT_READY");
+        setReadinessBlockingLabels((readiness.blockingFacts ?? []).map((fact: { label?: string }) => fact.label).filter((label: unknown): label is string => typeof label === "string"));
+      }
+    } catch (cause) {
+      setQuickFactsError(cause instanceof Error ? cause.message : "Não foi possível salvar as informações.");
+    } finally {
+      setSavingQuickFacts(false);
+    }
+  }
 
   const [objectiveGroup, setObjectiveGroup] = useState<ProtocolTemplateTargetGroup>(defaultTargetGroup);
   const [targetEnergyKcal, setTargetEnergyKcal] = useState("");
@@ -1263,6 +1309,18 @@ export function AiMealPlanWizard({
                   {readinessBlockingLabels.length > 0 && <p className="mt-1 text-xs">Pendências: {readinessBlockingLabels.join(", ")}.</p>}
                 </div>
               )}
+              {generationReadiness === "NOT_READY" && (
+                <section className="rounded-xl border border-[#EAD8C2] bg-[#FFFDFC] p-4">
+                  <div><p className="brand-kicker">Completar agora</p><h3 className="mt-1 font-semibold text-[#3A3028]">Dados mínimos para uma proposta segura</h3><p className="mt-1 text-xs leading-5 text-[#75675E]">Essas informações serão registradas no prontuário e usadas somente depois da sua confirmação.</p></div>
+                  <div className="mt-4 space-y-3">
+                    {(requiresQuickFact("Peso atual") || requiresQuickFact("Altura")) && <div className="grid gap-3 sm:grid-cols-2">{requiresQuickFact("Peso atual") && <label className="block text-xs font-semibold text-[#75675E]">Peso atual (kg)<input value={quickWeight} onChange={(event) => setQuickWeight(event.target.value)} inputMode="decimal" className="brand-input mt-1" placeholder="Ex.: 68,5" /></label>}{requiresQuickFact("Altura") && <label className="block text-xs font-semibold text-[#75675E]">Altura (cm)<input value={quickHeight} onChange={(event) => setQuickHeight(event.target.value)} inputMode="decimal" className="brand-input mt-1" placeholder="Ex.: 165" /></label>}</div>}
+                    {requiresQuickFact("Objetivo") && <label className="block text-xs font-semibold text-[#75675E]">Objetivo principal<textarea value={quickObjective} onChange={(event) => setQuickObjective(event.target.value)} className="brand-input mt-1 min-h-20 resize-y" placeholder="Ex.: reduzir gordura corporal, melhorar disposição e organizar a rotina alimentar." /></label>}
+                    {requiresQuickFact("Rotina") && <label className="block text-xs font-semibold text-[#75675E]">Rotina alimentar e horários<textarea value={quickRoutine} onChange={(event) => setQuickRoutine(event.target.value)} className="brand-input mt-1 min-h-20 resize-y" placeholder="Ex.: acorda às 7h, almoça às 12h, treina no fim da tarde..." /></label>}
+                    {requiresQuickFact("Alergias") && <div><label className="block text-xs font-semibold text-[#75675E]" htmlFor="wizard-quick-allergies">Alergias alimentares</label><div className="mt-1 flex flex-col gap-2 sm:flex-row"><input id="wizard-quick-allergies" value={quickAllergies} onChange={(event) => setQuickAllergies(event.target.value)} className="brand-input" placeholder="Descreva as alergias conhecidas" /><button type="button" onClick={() => setQuickAllergies("Sem alergias alimentares conhecidas.")} className="brand-btn-secondary w-full shrink-0 sm:w-auto">Sem alergias</button></div></div>}
+                  </div>
+                  {quickFactsError && <p className="mt-3 text-xs font-semibold text-red-700">{quickFactsError}</p>}
+                </section>
+              )}
               {generationReadiness === "READY_WITH_REVIEW" && (
                 <div className="rounded-xl border border-[#F0D4C7] bg-[#FFF7F3] p-3 text-sm text-[#8C5F50]">Há dados conflitantes para revisar. O rascunho será uma proposta e exigirá revisão humana.</div>
               )}
@@ -1838,11 +1896,11 @@ export function AiMealPlanWizard({
             {step !== "review" && step !== "generating" && (
               <button
                 type="button"
-                onClick={() => step === "preferences" ? void generateDraft() : setStep(activeStepOrder[stepIndex + 1])}
-                disabled={(step === "meals" && !canProceedFromMeals) || (step === "preferences" && !canGenerate)}
+                onClick={() => step === "preferences" ? generationReadiness === "NOT_READY" ? void saveQuickFacts() : void generateDraft() : setStep(activeStepOrder[stepIndex + 1])}
+                disabled={(step === "meals" && !canProceedFromMeals) || (step === "preferences" && (generationReadiness === "NOT_READY" ? savingQuickFacts || !canSaveQuickFacts : !canGenerate))}
                 className="brand-btn-primary w-full sm:w-auto"
               >
-                {step === "preferences" ? generationReadiness === "NOT_READY" ? "Completar informações" : generationReadiness === "READY_WITH_REVIEW" ? "Gerar pré-plano — revisar dados" : "Gerar pré-plano" : "Continuar"}
+                {step === "preferences" ? generationReadiness === "NOT_READY" ? savingQuickFacts ? "Salvando informações..." : "Salvar e continuar" : generationReadiness === "READY_WITH_REVIEW" ? "Gerar pré-plano — revisar dados" : "Gerar pré-plano" : "Continuar"}
               </button>
             )}
             {step === "review" && draft && draft.meals.length > 0 && (
