@@ -243,16 +243,32 @@ test.describe("Meal Plan Substitution R3 — Equivalent Quantity Engine", () => 
   test("medida caseira: mostra a aproximação quando uma porção real cadastrada é compatível", async ({ page, request }) => {
     const patient = await createTestPatient(request);
     await createTemplatePlan(request, patient.id, "R3 household portion");
+    // The portion catalogue is shared by parallel browser projects. This
+    // test-owned fixture is idempotent: any worker may create it, then every
+    // worker verifies the same persisted 105g record before exercising UI.
+    const portionDescription = "porção padrão E2E R3";
+    const listPortions = async () => {
+      const response = await request.get("/api/admin/foods/portions?source=TACO&refId=129");
+      expect(response.ok(), await response.text()).toBeTruthy();
+      return (await response.json()) as { items: Array<{ description: string; gram_equivalent: number }> };
+    };
+    const existing = await listPortions();
+    const fixtureExists = existing.items.some((portion) => portion.description === portionDescription && portion.gram_equivalent === 105);
 
-    // Cadastra uma porção real (nunca inventada pela UI) pro candidato de
+    // Cadastra uma porção real (nunca inventada pela UI) para o candidato de
     // busca, compatível com a quantidade prática esperada em ENERGY —
     // Mandioca cozida tem 125.36 kcal/100g; alvo (arroz 100g = 130 kcal)
     // -> bruto ~= 103.7g -> prático 105g. Uma "porção" de 105g cai em 0%
     // de distância, bem dentro da tolerância de 15%.
-    const portionResponse = await request.post("/api/admin/foods/portions", {
-      data: { food_source: "TACO", food_ref_id: "129", description: "porção padrão", gram_equivalent: 105, confidence: "high" },
-    });
-    expect(portionResponse.ok(), await portionResponse.text()).toBeTruthy();
+    if (!fixtureExists) {
+      const portionResponse = await request.post("/api/admin/foods/portions", {
+        data: { food_source: "TACO", food_ref_id: "129", description: portionDescription, gram_equivalent: 105, confidence: "high" },
+      });
+      // A concurrent worker can legitimately win the insert race. Verify the
+      // shared record below instead of treating that as a product failure.
+      expect([201, 409]).toContain(portionResponse.status());
+    }
+    await expect.poll(async () => (await listPortions()).items.some((portion) => portion.description === portionDescription && portion.gram_equivalent === 105)).toBe(true);
 
     await page.goto(`/dashboard/clients/${patient.id}`);
     await page.getByRole("tab", { name: "Plano alimentar" }).click();
