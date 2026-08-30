@@ -246,6 +246,24 @@ body {
 }
 .brand-btn-secondary:hover { background: var(--sand-dark); }
 
+/* Interactive controls should consistently communicate that they can be used. */
+button:not(:disabled),
+a[href],
+[role="button"],
+select:not(:disabled),
+summary,
+input[type="file"]:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled {
+  cursor: not-allowed;
+}
+
 .brand-badge {
   display: inline-flex;
   align-items: center;
