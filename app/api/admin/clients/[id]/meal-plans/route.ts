@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PROTOCOL_TEMPLATE_TARGET_GROUPS } from "@/lib/protocol-templates/constants";
 import { getAdminFromRequest } from "@/lib/auth/session";
 import { getClientById } from "@/lib/repositories/clients";
-import { AmbiguousTemplateForTargetGroupError, createMealPlanFromTemplates, getClientMealPlans, MealTemplateIntegrityError, NoTemplateForTargetGroupError, previewMealPlanTemplateImport } from "@/lib/repositories/meal-plans";
+import { AmbiguousTemplateForTargetGroupError, createMealPlan, createMealPlanFromTemplates, getClientMealPlans, MealTemplateIntegrityError, NoTemplateForTargetGroupError, previewMealPlanTemplateImport } from "@/lib/repositories/meal-plans";
 import { addTimelineEvent } from "@/lib/repositories/client-timeline";
 import { writeAuditLog } from "@/lib/security/audit";
 import { getRequestFingerprint } from "@/lib/security/request";
@@ -16,6 +16,8 @@ const CreateFromTemplateSchema = z.object({
   title: z.string().max(200).optional().nullable(),
   previewOnly: z.boolean().optional(),
   confirmed: z.boolean().optional(),
+  manual: z.boolean().optional(),
+  fallbackToManual: z.boolean().optional(),
 }).strict();
 
 export async function GET(
@@ -51,17 +53,38 @@ export async function POST(
   let plan;
   try {
     if (parsed.data.previewOnly) {
-      return NextResponse.json(await previewMealPlanTemplateImport({
+      try {
+        return NextResponse.json(await previewMealPlanTemplateImport({
+          clientId: id,
+          targetGroup: parsed.data.targetGroup,
+        }));
+      } catch (error) {
+        if (parsed.data.fallbackToManual && error instanceof NoTemplateForTargetGroupError) {
+          return NextResponse.json({ fallback_to_manual: true });
+        }
+        throw error;
+      }
+    }
+    if (parsed.data.manual) {
+      plan = await createMealPlan({
+        clientId: id,
+        title: parsed.data.title?.trim() || `Plano alimentar - ${parsed.data.targetGroup.replaceAll("_", " ").toLowerCase()}`,
+        targetGroup: parsed.data.targetGroup,
+        status: "draft",
+        notes: "Plano criado manualmente. Adicione as refeições e personalize antes de ativar no portal.",
+        meals: [],
+        weekly_slots: [],
+        substitutions: [],
+        supplements: [],
+      });
+    } else {
+      plan = await createMealPlanFromTemplates({
         clientId: id,
         targetGroup: parsed.data.targetGroup,
-      }));
+        title: parsed.data.title,
+        confirmed: parsed.data.confirmed,
+      });
     }
-    plan = await createMealPlanFromTemplates({
-      clientId: id,
-      targetGroup: parsed.data.targetGroup,
-      title: parsed.data.title,
-      confirmed: parsed.data.confirmed,
-    });
   } catch (error) {
     if (error instanceof NoTemplateForTargetGroupError) {
       return NextResponse.json({ message: "Ainda não existe um modelo cadastrado para este grupo. Crie o plano manualmente ou cadastre um modelo em Modelos profissionais." }, { status: 422 });
@@ -92,8 +115,8 @@ export async function POST(
     client_id: id,
     type: "meal_plan_created",
     title: "Plano alimentar criado",
-    description: `Plano individual criado a partir do grupo ${parsed.data.targetGroup}.`,
-    metadata: { planId: plan.id, targetGroup: parsed.data.targetGroup },
+    description: parsed.data.manual ? `Plano manual criado para o grupo ${parsed.data.targetGroup}.` : `Plano individual criado a partir do grupo ${parsed.data.targetGroup}.`,
+    metadata: { planId: plan.id, targetGroup: parsed.data.targetGroup, source: parsed.data.manual ? "manual" : "template" },
   });
   await writeAuditLog({
     action: "meal_plan_created",

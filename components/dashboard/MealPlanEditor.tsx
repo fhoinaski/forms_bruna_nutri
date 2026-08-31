@@ -199,10 +199,23 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
       const previewResponse = await fetch(`/api/admin/clients/${clientId}/meal-plans`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetGroup, previewOnly: true }),
+        body: JSON.stringify({ targetGroup, previewOnly: true, fallbackToManual: true }),
       });
-      const preview = await previewResponse.json() as TemplateImportPreview & { message?: string };
+      const preview = await previewResponse.json() as TemplateImportPreview & { message?: string; fallback_to_manual?: boolean };
       if (!previewResponse.ok) throw new Error(preview.message ?? "Nao foi possivel validar o modelo.");
+      if (preview.fallback_to_manual) {
+        const response = await fetch(`/api/admin/clients/${clientId}/meal-plans`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetGroup, manual: true }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Não foi possível criar o plano manual.");
+        await loadPlans(data.id);
+        setMessage("Nenhum modelo estava disponível para este perfil. Criamos um rascunho manual para você adicionar as refeições.");
+        onSaved?.();
+        return;
+      }
       if (preview.hasConflicts) {
         setError(`Este modelo contém ${preview.conflicts.length} item(ns) que precisam ser revisados antes de importar: ${preview.conflicts.slice(0, 3).map((item) => `${item.mealName}: ${item.food}`).join("; ")}.`);
         return;
@@ -350,6 +363,11 @@ export function MealPlanEditor({ clientId, onSaved }: { clientId: string; onSave
   // "Salvar rascunho"/"Ativar" normal, versionado, pra valer de verdade.
   async function optimizePlanQuantities() {
     if (!plan || !plan.target_energy_kcal) return;
+    const hasFoodsToAdjust = plan.meals.some((meal) => meal.items.some((item) => item.food.trim()));
+    if (!hasFoodsToAdjust) {
+      setOptimizeSummary("Adicione alimentos antes de ajustar as quantidades. Este recurso recalibra porções existentes; ele não cria refeições automaticamente.");
+      return;
+    }
     setOptimizingPlan(true);
     setOptimizeSummary("");
     setError("");

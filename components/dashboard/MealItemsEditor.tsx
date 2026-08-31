@@ -6,7 +6,7 @@ import { AlertTriangle, Beef, Check, ChevronDown, ChevronUp, Copy, Flame, Lock, 
 import { resolveFoodItemMacros, roundedMacros, sumMacros, type MacroFoodReferenceFallback, type MacroReferenceFood, type MacroTotals } from "@/lib/nutrition/macros";
 import { scaleRecipeIngredientsToPortions, normalizeIngredientForRead, type RecipeIngredient } from "@/lib/nutrition/recipes";
 import { resolveQuantity, type HouseholdMeasureOption } from "@/lib/nutrition/quantity-resolution";
-import type { FoodSearchResultViewModel } from "@/lib/nutrition/food-search-view-model";
+import type { FoodSearchPortion, FoodSearchResultViewModel } from "@/lib/nutrition/food-search-view-model";
 import { RECIPE_MEAL_GROUP_LABELS, RECIPE_MEAL_GROUPS, type RecipeMealGroup } from "@/lib/nutrition/recipe-constants";
 import { AiInstructionsModal } from "@/components/dashboard/AiInstructionsModal";
 import { ItemSubstitutionsPanel, type ItemSubstitution } from "@/components/dashboard/ItemSubstitutionsPanel";
@@ -174,6 +174,57 @@ export const emptyMeal = (): Meal => ({
   items: [{ food: "", quantity: "", unit: "", notes: "" }],
 });
 
+const MEAL_PRESETS = [
+  { name: "Café da manhã", time: "07:00" },
+  { name: "Lanche da manhã", time: "10:00" },
+  { name: "Almoço", time: "12:00" },
+  { name: "Lanche da tarde", time: "16:00" },
+  { name: "Jantar", time: "19:00" },
+  { name: "Ceia", time: "21:30" },
+] as const;
+
+function formatSearchNutrientForPortion(value: number | null, unit: "kcal" | "g", gramWeight: number | null): string {
+  if (value === null) return "—";
+  const scaled = gramWeight && gramWeight > 0 ? value * (gramWeight / 100) : value;
+  const formatted = unit === "kcal" ? Math.round(scaled).toLocaleString("pt-BR") : (Math.round(scaled * 10) / 10).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  return `${formatted} ${unit}`;
+}
+
+function isSingleGramPortion(portion: FoodSearchPortion): boolean {
+  return /^1\s+(grama|g)\b/i.test(portion.label.trim()) && portion.gramWeight === 1;
+}
+
+function isSingleKilogramPortion(portion: FoodSearchPortion): boolean {
+  return /^1\s+(quilo|kg)\b/i.test(portion.label.trim()) && portion.gramWeight === 1000;
+}
+
+/** Mantém a tabela de origem intacta, mas remove da escolha clínica o "1 kg"
+ * quando o próprio alimento já tem uma medida caseira ou gramas. */
+export function portionsForFoodSelection(portions: FoodSearchPortion[]): FoodSearchPortion[] {
+  const withoutKilogram = portions.filter((portion) => !isSingleKilogramPortion(portion));
+  const candidates = withoutKilogram.length ? withoutKilogram : portions;
+  return [...candidates].sort((left, right) => {
+    const priority = (portion: FoodSearchPortion) => isSingleGramPortion(portion) ? 1 : 0;
+    return priority(left) - priority(right) || left.label.localeCompare(right.label, "pt-BR");
+  });
+}
+
+export function foodSelectionPortionLabel(portion: FoodSearchPortion): string {
+  return isSingleGramPortion(portion) ? "Gramas (g)" : portion.label;
+}
+
+/** Ao trocar para gramas, parte do equivalente da medida clínica principal
+ * daquele mesmo alimento. Evita o erro de sugerir "1 g" para um ovo, pão ou
+ * qualquer outro alimento que possua uma medida caseira na tabela. */
+export function suggestedGramsQuantity(result: FoodSearchResultViewModel, portions: FoodSearchPortion[]): string {
+  const mainPortion = !isSingleGramPortion(result.defaultPortion) && !isSingleKilogramPortion(result.defaultPortion)
+    ? result.defaultPortion
+    : portions.find((portion) => !isSingleGramPortion(portion) && !isSingleKilogramPortion(portion) && (portion.gramWeight ?? 0) > 1) ?? null;
+  const grams = mainPortion?.gramWeight;
+  if (!grams || grams <= 1) return "100";
+  return String(Math.round(grams * 10) / 10);
+}
+
 export function mealPlanItemDisplayQuantity(item: Pick<MealItem, "quantity" | "unit" | "household_measure_id">): string {
   const quantity = String(item.quantity ?? "").trim();
   const unit = String(item.unit ?? "").trim();
@@ -191,6 +242,34 @@ function snapshotForMeasure(quantity: string | null | undefined, measure: MealMe
     resolved_grams_snapshot: resolution.grams,
     quantity_resolution_snapshot: JSON.stringify({ grams: resolution.grams, method: resolution.method, confidence: resolution.confidence, source: resolution.source ?? null, measureId: resolution.measureId ?? null, warning: resolution.warning ?? null }),
   };
+}
+
+function snapshotForEstimatedPortion(quantity: string | null | undefined, gramWeight: number, label: string): Pick<MealItem, "resolved_grams_snapshot" | "quantity_resolution_snapshot"> {
+  const amount = Number(String(quantity ?? "").replace(",", "."));
+  if (!Number.isFinite(amount) || amount <= 0) return { resolved_grams_snapshot: null, quantity_resolution_snapshot: null };
+  const grams = amount * gramWeight;
+  return {
+    resolved_grams_snapshot: grams,
+    quantity_resolution_snapshot: JSON.stringify({
+      grams,
+      method: "estimated",
+      confidence: "low",
+      source: "Medida prática estimada",
+      warning: `${label} usa um peso de referência estimado (${gramWeight} g). Cadastre uma medida específica para maior precisão.`,
+    }),
+  };
+}
+
+function estimatedPortionFromItem(item: MealItem): { label: string; unit: string; gramWeight: number } | null {
+  if (!item.resolved_grams_snapshot || !item.quantity_resolution_snapshot || !item.unit) return null;
+  try {
+    const snapshot = JSON.parse(item.quantity_resolution_snapshot) as { method?: string; source?: string };
+    const quantity = Number(String(item.quantity ?? "").replace(",", "."));
+    if (snapshot.method !== "estimated" || snapshot.source !== "Medida prática estimada" || !Number.isFinite(quantity) || quantity <= 0) return null;
+    return { label: item.unit, unit: item.unit, gramWeight: item.resolved_grams_snapshot / quantity };
+  } catch {
+    return null;
+  }
 }
 
 export function mealPlanItemAlternativeSummary(approvedCount: number, pendingCount: number): string {
@@ -438,6 +517,7 @@ export function MealItemsEditor({
   const [foodSearch, setFoodSearch] = useState<{ key: string; query: string }>({ key: "", query: "" });
   const [foodSuggestions, setFoodSuggestions] = useState<Record<string, FoodSuggestion[]>>({});
   const [multiSourceResults, setMultiSourceResults] = useState<Record<string, FoodSearchResultViewModel[]>>({});
+  const [searchResultChoices, setSearchResultChoices] = useState<Record<string, { quantity: string; portionIndex: number }>>({});
   const [searchTelemetrySessions, setSearchTelemetrySessions] = useState<Record<string, string>>({});
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [searchLoadingKey, setSearchLoadingKey] = useState("");
@@ -465,6 +545,7 @@ export function MealItemsEditor({
   const [openMealMenu, setOpenMealMenu] = useState<number | null>(null);
   const [openItemMenu, setOpenItemMenu] = useState("");
   const mealMenuTriggerRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const addMealMenuRef = useRef<HTMLDetailsElement | null>(null);
 
   useEffect(() => {
     setPortalReady(true);
@@ -728,6 +809,27 @@ export function MealItemsEditor({
     const mealIndex = meals.length;
     onChange([...meals, emptyMeal()]);
     setEditingItemKey(`${mealIndex}:0`);
+    addMealMenuRef.current?.removeAttribute("open");
+  }
+
+  function addMealPreset(preset: { name: string; time: string }) {
+    const mealIndex = meals.length;
+    onChange([...meals, { ...emptyMeal(), name: preset.name, suggested_time: preset.time }]);
+    setEditingItemKey(`${mealIndex}:0`);
+    addMealMenuRef.current?.removeAttribute("open");
+    onMessage?.(`${preset.name} adicionada. Escolha o primeiro alimento para iniciar o cálculo nutricional.`);
+  }
+
+  function addSuggestedMealStructure() {
+    const firstMealIndex = meals.length;
+    onChange([
+      ...meals,
+      { ...emptyMeal(), name: "Café da manhã", suggested_time: "07:00" },
+      { ...emptyMeal(), name: "Almoço", suggested_time: "12:00" },
+      { ...emptyMeal(), name: "Jantar", suggested_time: "19:00" },
+    ]);
+    setEditingItemKey(`${firstMealIndex}:0`);
+    onMessage?.("Estrutura inicial adicionada. Escolha os alimentos de cada refeição; calorias e macros serão atualizados automaticamente.");
   }
 
   function addItemForEditing(mealIndex: number) {
@@ -831,12 +933,17 @@ export function MealItemsEditor({
     recordFoodUsageForReuse(toMealPlanFoodSource(suggestion), suggestion.ref?.sourceId ?? String(suggestion.numero));
   }
 
-  function selectMultiSourceResult(mealIndex: number, itemIndex: number, result: FoodSearchResultViewModel) {
+  function selectMultiSourceResult(
+    mealIndex: number,
+    itemIndex: number,
+    result: FoodSearchResultViewModel,
+    choice?: { quantity: string; portion: FoodSearchResultViewModel["availablePortions"][number] }
+  ) {
     const key = `${mealIndex}:${itemIndex}`;
-    const portion = result.defaultPortion;
+    const portion = choice?.portion ?? result.defaultPortion;
     const source = result.sourceCode === "COMPLEMENTARY" ? "TACO" : result.sourceCode;
     recordFoodUsageForReuse(source, result.sourceFoodId);
-    const quantity = meals[mealIndex]?.items[itemIndex]?.quantity?.trim() || "1";
+    const quantity = choice?.quantity.trim() || meals[mealIndex]?.items[itemIndex]?.quantity?.trim() || "1";
     const measure: MealMeasure | null = portion.id && portion.gramWeight ? { id: portion.id, food_source: source, food_ref_id: result.sourceFoodId, description: portion.label, gram_equivalent: portion.gramWeight, source: result.sourceName, confidence: "high" } : null;
     updateMealItem(mealIndex, itemIndex, {
       food: result.displayName,
@@ -844,10 +951,12 @@ export function MealItemsEditor({
       food_source: source,
       food_ref_id: result.sourceFoodId,
       canonical_food_id: result.canonicalFoodId,
-      household_measure_id: portion.isFallback ? null : portion.id,
+      household_measure_id: portion.isFallback || portion.isEstimated ? null : portion.id,
       quantity,
-      unit: portion.isFallback ? "g" : null,
-      ...snapshotForMeasure(quantity, measure),
+      unit: portion.isFallback ? "g" : portion.isEstimated ? portion.unit ?? "unidade" : null,
+      ...(portion.isEstimated && portion.gramWeight
+        ? snapshotForEstimatedPortion(quantity, portion.gramWeight, portion.label)
+        : snapshotForMeasure(quantity, measure)),
     });
     const sessionSearchId = searchTelemetrySessions[key];
     const selectedRank = (multiSourceResults[key] ?? []).findIndex((candidate) => candidate.sourceCode === result.sourceCode && candidate.sourceFoodId === result.sourceFoodId) + 1;
@@ -1088,36 +1197,49 @@ export function MealItemsEditor({
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="font-serif text-xl font-semibold text-[#3A3028]">Refeicoes</h3>
-        {/* R6.5.2 (regressão encontrada no fechamento) — a coluna central ficou mais estreita
-            com a navegação de refeições nova; sem flex-wrap, esses botões extrapolavam a
-            coluna e ficavam por baixo da sidebar de nutrição (clique interceptado). */}
-        <div className="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
-          {clientId && mealPlanId && !readOnly && (
-            <button type="button" onClick={() => void generateAlternativesForAll()} disabled={bulkGeneratingAlternatives} className="brand-btn-secondary w-full sm:w-auto">
-              <Sparkles className="h-4 w-4" />
-              {bulkGeneratingAlternatives ? "Gerando..." : "Gerar trocas para todos"}
-            </button>
-          )}
-          {!readOnly && (
-            <>
-              <button type="button" onClick={addMealForEditing} className="brand-btn-secondary w-full sm:w-auto">
+        {!readOnly && (
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <details ref={addMealMenuRef} className="group relative">
+              <summary className="brand-btn-primary min-h-10 cursor-pointer list-none px-4 py-2 text-xs">
                 <Plus className="h-4 w-4" />
                 Adicionar refeição
-              </button>
-              <button type="button" onClick={() => setRecipeSelectorOpen(true)} className="brand-btn-secondary w-full sm:w-auto">
-                <Utensils className="h-4 w-4" />
-                Inserir receita
-              </button>
-              {clientId && (
-                <button ref={reuseLibraryTriggerRef} type="button" onClick={() => setReuseLibraryOpen(true)} className="brand-btn-secondary w-full sm:w-auto">
-                  <Save className="h-4 w-4" />
-                  Usar modelo
-                </button>
-              )}
-            </>
-          )}
-        </div>
+              </summary>
+              <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-[#EAD8C2] bg-white p-3 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
+                <p className="px-1 text-xs font-semibold text-[#3A3028]">Escolha um momento do dia</p>
+                <p className="mt-1 px-1 text-[11px] leading-4 text-[#75675E]">A refeição já abre pronta para você selecionar os alimentos.</p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {MEAL_PRESETS.map((preset) => (
+                    <button key={preset.name} type="button" onClick={() => addMealPreset(preset)} className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] px-3 py-2 text-left text-xs font-semibold text-[#607A56] transition hover:border-[#B9C9B2] hover:bg-[#F7FBF4]">
+                      <span className="block text-[#3A3028]">{preset.name}</span>
+                      <span className="mt-0.5 block text-[10px] font-normal text-[#8C6E52]">{preset.time}</span>
+                    </button>
+                  ))}
+                </div>
+                <button type="button" onClick={addMealForEditing} className="mt-3 w-full rounded-lg px-3 py-2 text-xs font-semibold text-[#75675E] hover:bg-[#FAF7F2]">Criar refeição em branco</button>
+              </div>
+            </details>
+            <details className="group relative">
+              <summary className="brand-btn-secondary min-h-10 cursor-pointer list-none px-3 py-2 text-xs">Mais opções</summary>
+              <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-60 rounded-xl border border-[#EAD8C2] bg-white p-2 shadow-[0_18px_44px_rgba(58,48,40,0.16)]">
+                <button type="button" onClick={() => setRecipeSelectorOpen(true)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#F7FBF4]"><Utensils className="h-4 w-4" /> Inserir receita</button>
+                {clientId && <button ref={reuseLibraryTriggerRef} type="button" onClick={() => setReuseLibraryOpen(true)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#F7FBF4]"><Save className="h-4 w-4" /> Usar modelo</button>}
+                {clientId && mealPlanId && <button type="button" onClick={() => void generateAlternativesForAll()} disabled={bulkGeneratingAlternatives} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#607A56] hover:bg-[#F7FBF4] disabled:opacity-50"><Sparkles className="h-4 w-4" /> {bulkGeneratingAlternatives ? "Gerando..." : "Gerar trocas"}</button>}
+              </div>
+            </details>
+          </div>
+        )}
       </div>
+
+      {!readOnly && meals.length === 0 && (
+        <div className="rounded-xl border border-[#D9E4D3] bg-[#F7FBF4] p-4">
+          <p className="text-sm font-semibold text-[#3A3028]">Comece com uma estrutura sugerida</p>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[#607A56]">Adicionamos Café da manhã, Almoço e Jantar com horários iniciais. Depois, escolha os alimentos de cada refeição e acompanhe o total nutricional em tempo real.</p>
+          <button type="button" onClick={addSuggestedMealStructure} className="brand-btn-primary mt-3 min-h-10 px-4 py-2 text-xs">
+            <Sparkles className="h-4 w-4" />
+            Sugerir café, almoço e jantar
+          </button>
+        </div>
+      )}
 
       {meals.map((meal, mealIndex) => (
         <article key={mealIndex} id={`meal-card-${mealIndex}`} className="rounded-lg border border-[#EDE1D6] bg-[#FFFDFC] shadow-[0_8px_24px_rgba(58,48,40,0.035)] scroll-mt-24">
@@ -1214,7 +1336,9 @@ export function MealItemsEditor({
             </div>}
           </div>
           {!readOnly && (
-            <div className="border-b border-[#EDE1D6] bg-white px-3 py-3">
+            <details className="border-b border-[#EDE1D6] bg-white px-3 py-2">
+              <summary className="cursor-pointer text-xs font-semibold text-[#75675E]">Configurações da refeição <span className="font-normal text-[#9A978A]">· tipo, opções e instrução</span></summary>
+              <div className="pt-3">
               <div className="grid gap-2 md:grid-cols-[180px_minmax(0,1fr)]">
                 <label className="text-xs font-semibold text-[#75675E]">Tipo da refeição
                   <select
@@ -1286,7 +1410,8 @@ export function MealItemsEditor({
                 </div>)}
                 <button type="button" onClick={() => updateMeal(mealIndex, { choice_groups: [...(meal.choice_groups ?? []), { title: `Grupo ${(meal.choice_groups?.length ?? 0) + 1}`, min_selections: 1, max_selections: 1, items: [{ food: "", quantity: "", unit: "", notes: "" }] }] })} className="brand-btn-secondary">Adicionar grupo de escolha</button>
               </div>}
-            </div>
+              </div>
+            </details>
           )}
           <div className="p-3">
             {readOnly ? (
@@ -1316,8 +1441,6 @@ export function MealItemsEditor({
               {meal.items.map((item, itemIndex) => {
                 const key = `${mealIndex}:${itemIndex}`;
                 const foodInputId = `meal-food-${mealIndex}-${itemIndex}`;
-                const quantityInputId = `meal-quantity-${mealIndex}-${itemIndex}`;
-                const measureInputId = `meal-measure-${mealIndex}-${itemIndex}`;
                 const grams = itemResolutions[key]?.quantity.grams;
                 const rawSuggestions = foodSuggestions[key] ?? [];
                 const searchResults = multiSourceResults[key] ?? [];
@@ -1455,7 +1578,7 @@ export function MealItemsEditor({
                   );
                 }
                 return (
-                <div key={itemIndex} className="relative grid min-w-0 gap-1.5 rounded-lg border border-transparent bg-white/70 p-1.5 md:grid-cols-[minmax(240px,1fr)_190px] md:items-start 2xl:grid-cols-[minmax(260px,1fr)_190px_180px_auto]">
+                <div key={itemIndex} className="relative grid min-w-0 gap-1.5 rounded-lg border border-transparent bg-white/70 p-1.5 md:grid-cols-[minmax(240px,1fr)_180px_auto] md:items-start">
                   <div className="relative min-w-0">
                     {slotGroupLabel && (
                       <span className="mb-1 block w-fit rounded-full bg-[#EEF3EA] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#607A56]">
@@ -1483,7 +1606,16 @@ export function MealItemsEditor({
                         setHighlightedIndex(0);
                         setFoodSearch({ key, query: event.target.value });
                       }}
-                      onBlur={() => window.setTimeout(() => setActiveFoodField(""), 140)}
+                      onBlur={(event) => {
+                        // Quantidade e medida agora ficam dentro do painel de resultados.
+                        // Trocar o foco para um desses controles não pode fechar a busca.
+                        const nextFocusedElement = event.relatedTarget;
+                        if (nextFocusedElement && event.currentTarget.parentElement?.contains(nextFocusedElement)) return;
+                        window.setTimeout(() => {
+                          const panel = document.getElementById(listboxId);
+                          if (!panel?.contains(document.activeElement)) setActiveFoodField("");
+                        }, 140);
+                      }}
                       onKeyDown={(event) => {
                         if (activeFoodField !== key || !searchResults.length) return;
                         if (event.key === "ArrowDown") {
@@ -1549,31 +1681,87 @@ export function MealItemsEditor({
                       );
                     })()}
                     {dropdownOpen && (
-                      <div id={listboxId} role="listbox" aria-label="Sugestoes de alimentos" className="absolute left-0 top-[calc(100%+6px)] z-30 max-h-64 w-full min-w-[280px] max-w-[min(92vw,480px)] overflow-y-auto rounded-xl border border-[#EAD8C2] bg-white p-1 shadow-[0_18px_44px_rgba(58,48,40,0.16)] sm:min-w-[340px]">
-                        {searchResults.map((result, suggestionIndex) => (
-                          <button
-                            key={`${result.sourceCode}:${result.sourceFoodId}`}
-                            type="button"
-                            id={`${listboxId}-option-${suggestionIndex}`}
-                            role="option"
-                            aria-selected={suggestionIndex === highlightedIndex}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onMouseEnter={() => setHighlightedIndex(suggestionIndex)}
-                            onClick={() => selectMultiSourceResult(mealIndex, itemIndex, result)}
-                            className={`block w-full rounded-lg px-3 py-2 text-left transition-colors ${suggestionIndex === highlightedIndex ? "bg-[#FAF7F2]" : "hover:bg-[#FAF7F2]"}`}
-                          >
-                            {/* R6.5.5 (seção 12) — busca é pra escolher IDENTIDADE, não fazer análise
-                                nutricional; a linha de preview com kcal/P/C/G foi removida, mantendo só
-                                nome + preparo/fonte + porção padrão. Nenhum dado deixou de existir no
-                                objeto (result.nutrientsPreview continua intacto), só não é mais exibido aqui. */}
-                            <span className="flex items-baseline justify-between gap-2">
-                              <span className="min-w-0 truncate text-sm font-medium text-[#3A3028]">{result.displayName}</span>
-                              <span className="shrink-0 text-[11px] font-semibold text-[#607A56]">Adicionar</span>
-                            </span>
-                            <span className="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-[#8C6E52]">{result.preparation ?? result.group ?? "Alimento"} · {result.sourceName}</span>
-                            <span className="mt-1 block text-xs text-[#75675E]">{result.defaultPortion.label}{result.defaultPortion.gramWeight ? ` · ${result.defaultPortion.gramWeight} g` : ""}</span>
-                          </button>
-                        ))}
+                      <div id={listboxId} role="listbox" aria-label="Sugestoes de alimentos" className="relative left-auto top-auto z-30 mt-2 max-h-[430px] w-[min(760px,calc(100vw-2rem))] overflow-x-auto overflow-y-auto rounded-xl border border-[#EAD8C2] bg-[#FAF7F2] p-2 shadow-[0_18px_44px_rgba(58,48,40,0.10)]">
+                        <div className="hidden min-w-[610px] gap-1.5 border-b border-[#EDE1D6] px-2 py-1.5 text-[9px] font-semibold uppercase tracking-[0.07em] text-[#8C6E52] sm:grid sm:grid-cols-[58px_142px_42px_minmax(120px,1fr)_44px_44px_52px_44px_32px] sm:items-center">
+                          <span className="col-span-4">Escolha a porção e o alimento</span>
+                          <span className="text-center">Energia</span>
+                          <span className="text-center">Proteína</span>
+                          <span className="text-center">Carbo.</span>
+                          <span className="text-center">Gordura</span>
+                          <span className="text-right">Ação</span>
+                        </div>
+                        {searchResults.map((result, suggestionIndex) => {
+                          const choiceKey = `${key}:${result.sourceCode}:${result.sourceFoodId}`;
+                          const selectablePortions = portionsForFoodSelection(result.availablePortions);
+                          const defaultPortionIndex = Math.max(0, selectablePortions.findIndex((portion) => portion.id === result.defaultPortion.id && portion.label === result.defaultPortion.label));
+                          const choice = searchResultChoices[choiceKey] ?? { quantity: result.defaultPortion.isFallback ? String(result.defaultPortion.gramWeight ?? 100) : "1", portionIndex: defaultPortionIndex };
+                          const portion = selectablePortions[choice.portionIndex] ?? result.defaultPortion;
+                          const portionGrams = portion.isFallback ? Number(choice.quantity || 0) : (portion.gramWeight ? portion.gramWeight * Number(choice.quantity || 0) : null);
+                          return (
+                            <div
+                              key={`${result.sourceCode}:${result.sourceFoodId}`}
+                              id={`${listboxId}-option-${suggestionIndex}`}
+                              role="option"
+                              aria-selected={suggestionIndex === highlightedIndex}
+                              onMouseEnter={() => setHighlightedIndex(suggestionIndex)}
+                              className={`border-b border-[#EDE1D6] px-2 py-1.5 text-left transition-colors last:border-b-0 ${suggestionIndex === highlightedIndex ? "bg-[#F7FBF4]" : "hover:bg-white/80"}`}
+                            >
+                              <div className="min-w-[610px] grid gap-1.5 sm:grid-cols-[58px_142px_42px_minmax(120px,1fr)_44px_44px_52px_44px_32px] sm:items-center">
+                                <input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.1"
+                                  aria-label={`Quantidade de ${result.displayName}`}
+                                  value={choice.quantity}
+                                  onChange={(event) => setSearchResultChoices((current) => ({ ...current, [choiceKey]: { ...choice, quantity: event.target.value } }))}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="brand-input h-8 px-2 text-xs"
+                                />
+                                <select
+                                  aria-label={`Medida de ${result.displayName}`}
+                                  value={String(choice.portionIndex)}
+                                  onChange={(event) => {
+                                    const portionIndex = Number(event.target.value);
+                                    const nextPortion = selectablePortions[portionIndex] ?? result.defaultPortion;
+                                    setSearchResultChoices((current) => ({
+                                      ...current,
+                                      [choiceKey]: {
+                                        ...choice,
+                                        portionIndex,
+                                        quantity: isSingleGramPortion(nextPortion) ? suggestedGramsQuantity(result, selectablePortions) : choice.quantity,
+                                      },
+                                    }));
+                                  }}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="brand-input h-8 px-2 text-xs"
+                                  title={foodSelectionPortionLabel(portion)}
+                                >
+                                  {selectablePortions.map((availablePortion, portionIndex) => (
+                                    <option key={`${availablePortion.id ?? "estimated"}-${portionIndex}`} value={portionIndex}>{foodSelectionPortionLabel(availablePortion)}</option>
+                                  ))}
+                                </select>
+                                <span className="text-center text-[10px] font-semibold text-[#75675E]" title="Peso total calculado para a porção escolhida">
+                                  {portionGrams && Number.isFinite(portionGrams) ? `${Math.round(portionGrams * 10) / 10} g` : "—"}
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block truncate text-xs font-semibold text-[#3A3028]">{result.displayName}</span>
+                                  <span className="block truncate text-[9px] uppercase tracking-[0.07em] text-[#8C6E52]">{result.preparation ?? result.group ?? "Alimento"} · {result.sourceName}</span>
+                                </span>
+                                {([
+                                  ["Energia", result.nutrientsPreview.energyKcal, "kcal"],
+                                  ["Proteína", result.nutrientsPreview.proteinG, "g"],
+                                  ["Carboidrato", result.nutrientsPreview.carbohydrateG, "g"],
+                                  ["Gordura", result.nutrientsPreview.fatG, "g"],
+                                ] as const).map(([label, value, unit]) => (
+                                  <span key={label} className="text-center text-xs font-semibold text-[#3A3028]" aria-label={label}>{formatSearchNutrientForPortion(value, unit, portionGrams)}</span>
+                                ))}
+                                <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => selectMultiSourceResult(mealIndex, itemIndex, result, { quantity: choice.quantity, portion })} className="inline-flex h-7 w-7 items-center justify-center justify-self-end rounded-md border border-[#B9C9B2] bg-white text-[#607A56] hover:bg-[#EAF0E4]" title={`Adicionar ${result.displayName}`} aria-label={`Adicionar ${result.displayName}`}>
+                                  <Plus className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     {showLoading && (
@@ -1592,47 +1780,6 @@ export function MealItemsEditor({
                         <p className="text-sm text-[#8C6E52]">Nenhum alimento encontrado.</p>
                         <p className="mt-0.5 text-xs text-[#9A978A]">Tente outro nome ou preparação.</p>
                       </div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="grid grid-cols-[82px_minmax(0,1fr)] gap-1.5">
-                      <label className="sr-only" htmlFor={quantityInputId}>Quantidade</label>
-                      <input id={quantityInputId} aria-label="Quantidade" value={item.quantity ?? ""} onChange={(event) => {
-                        const measure = (item.food_source === "TBCA" || item.food_source === "IBGE_POF") ? measureOptionsFor(item).find((candidate) => candidate.id === item.household_measure_id) ?? null : null;
-                        updateMealItem(mealIndex, itemIndex, { quantity: event.target.value, ...snapshotForMeasure(event.target.value, measure) });
-                      }} className="brand-input h-10" placeholder="Qtd." />
-                      {item.food_ref_id ? (
-                        <>
-                          <label className="sr-only" htmlFor={measureInputId}>Medida</label>
-                          <select
-                            id={measureInputId}
-                            aria-label="Medida"
-                            value={item.household_measure_id ?? "__grams__"}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              const measure = measureOptionsFor(item).find((candidate) => candidate.id === value) ?? null;
-                              updateMealItem(mealIndex, itemIndex, value === "__grams__"
-                                ? { household_measure_id: null, unit: "g", resolved_grams_snapshot: null, quantity_resolution_snapshot: null }
-                                : { household_measure_id: value, unit: null, ...snapshotForMeasure(item.quantity, measure) });
-                            }}
-                            className="brand-input h-10"
-                            title="Medida especifica do alimento — quando disponivel, o calculo usa o peso exato cadastrado em vez de uma aproximacao generica."
-                          >
-                            <option value="__grams__">Gramas (g)</option>
-                            {measureOptionsFor(item).map((measure) => (
-                              <option key={measure.id} value={measure.id}>{measure.description}</option>
-                            ))}
-                          </select>
-                        </>
-                      ) : (
-                        <>
-                          <label className="sr-only" htmlFor={measureInputId}>Unidade</label>
-                          <input id={measureInputId} aria-label="Unidade" value={item.unit ?? ""} onChange={(event) => updateMealItem(mealIndex, itemIndex, { unit: event.target.value, resolved_grams_snapshot: null, quantity_resolution_snapshot: null })} className="brand-input h-10" placeholder="Un." />
-                        </>
-                      )}
-                    </div>
-                    {typeof grams === "number" && Number.isFinite(grams) && grams > 0 && (
-                      <p className="mt-1 text-[10px] font-medium text-[#9A8B80]">≈ {Math.round(grams * 10) / 10} g</p>
                     )}
                   </div>
                   <div className="flex min-w-0 items-center justify-between gap-2 md:col-span-2 2xl:col-span-1 2xl:justify-end">

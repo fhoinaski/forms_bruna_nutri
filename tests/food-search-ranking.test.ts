@@ -45,6 +45,16 @@ describe("F5 deterministic food search ranking", () => {
     expect(ranked[0].sourceFoodId).toBe("generic");
   });
 
+  it("puts concise base foods before very specific preparations for a generic query", () => {
+    const ranked = rankFoodSearchResults("pão", [
+      item({ displayName: "Pão bisnaguinha com farinha de trigo refinada", sourceFoodId: "specific" }),
+      item({ displayName: "Pão integral", sourceFoodId: "integral" }),
+      item({ displayName: "Pão", sourceFoodId: "base" }),
+    ]);
+    expect(ranked.map((value) => value.sourceFoodId)).toEqual(["base", "integral", "specific"]);
+    expect(ranked[0].rankingFeatures).toContain("CONCISE_BASE_FOOD");
+  });
+
   it("keeps an exact branded query relevant when the user explicitly asks for it", () => {
     const ranked = rankFoodSearchResults("iogurte marca exemplo", [item({ displayName: "Iogurte", sourceCode: "TACO", sourceFoodId: "generic" }), item({ displayName: "Iogurte Marca Exemplo", sourceCode: "MANUFACTURER", sourceName: "Marca", sourceFoodId: "brand" })]);
     expect(ranked[0].sourceFoodId).toBe("brand");

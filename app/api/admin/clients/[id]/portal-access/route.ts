@@ -25,7 +25,12 @@ export const dynamic = "force-dynamic";
 const PatchSchema = z.object({
   active: z.boolean(),
 }).strict();
-const PostSchema = z.object({ action: z.enum(["invite", "temporary_password"]).optional() }).strict();
+const PostSchema = z.object({
+  action: z.enum(["invite", "temporary_password"]).optional(),
+  // A nutricionista pode entregar uma senha de acesso já definitiva. O
+  // padrão continua seguro: pede troca no primeiro acesso, se não informado.
+  require_password_change: z.boolean().optional().default(true),
+}).strict();
 
 function portalLoginUrl() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://brunanutri.com.br";
@@ -109,10 +114,16 @@ export async function POST(
       revokePatientPortalTokens(access.id),
       revokePatientPortalSessions(access.id),
     ]);
-    await setPatientPortalPassword({ accessId: access.id, passwordHash: await hashPatientPortalPassword(temporaryPassword), mustChangePassword: true, passwordExpiresAt: expiresAt });
-    await writeAuditLog({ action: "PATIENT_TEMP_PASSWORD_CREATED", adminId: admin.sub, entityType: "client", entityId: id, ipHash: getRequestFingerprint(req).ipHash });
+    const mustChangePassword = parsed.data.require_password_change;
+    await setPatientPortalPassword({
+      accessId: access.id,
+      passwordHash: await hashPatientPortalPassword(temporaryPassword),
+      mustChangePassword,
+      passwordExpiresAt: mustChangePassword ? expiresAt : null,
+    });
+    await writeAuditLog({ action: "PATIENT_TEMP_PASSWORD_CREATED", adminId: admin.sub, entityType: "client", entityId: id, ipHash: getRequestFingerprint(req).ipHash, metadata: { mustChangePassword } });
     // Plaintext only exists in this immediate response; it is neither logged nor persisted.
-    return NextResponse.json({ temporary_password: temporaryPassword, expires_at: expiresAt });
+    return NextResponse.json({ temporary_password: temporaryPassword, expires_at: mustChangePassword ? expiresAt : null, must_change_password: mustChangePassword });
   }
   const result = await issuePatientPortalToken({ clientId: id, purpose: "invite", expiresInMs: 48 * 60 * 60 * 1000 });
   let emailSent = false;

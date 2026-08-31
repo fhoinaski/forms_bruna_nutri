@@ -299,7 +299,9 @@ export function MealPlanNutritionWorkspacePanel({ meals, target }: { meals: Summ
     return (
       <div className="rounded-xl border border-[#EDE1D6] bg-[#FFFDFC] p-4">
         <p className="brand-kicker mb-1">Resumo nutricional</p>
-        <p className="text-sm text-[#75675E]">Adicione alimentos para acompanhar macros e micronutrientes.</p>
+        {typeof target.energyKcal === "number" && <p className="font-serif text-xl font-semibold text-[#3A3028]">Meta: {target.energyKcal} kcal</p>}
+        <p className="mt-1 text-sm leading-6 text-[#75675E]">Adicione alimentos para acompanhar calorias, macros e micronutrientes em tempo real.</p>
+        <p className="mt-2 text-xs leading-5 text-[#607A56]">As substituições são alternativas: não são somadas ao total do plano.</p>
       </div>
     );
   }

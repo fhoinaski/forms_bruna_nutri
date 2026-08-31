@@ -9,7 +9,8 @@ export type FoodSearchRankingFeature =
   | "CONTAINS_MATCH"
   | "PREPARATION_MATCH"
   | "PREPARATION_MISMATCH"
-  | "HAS_COMMON_PORTION";
+  | "HAS_COMMON_PORTION"
+  | "CONCISE_BASE_FOOD";
 
 export type RankedFoodSearchResult = FoodSearchResultViewModel & {
   rankingScore: number;
@@ -75,6 +76,17 @@ export function rankFoodSearchResults(query: string, candidates: FoodSearchResul
     } else if (normalizedName.includes(normalizedQuery)) {
       score += 25;
       features.push("CONTAINS_MATCH");
+    }
+    // Para buscas curtas e amplas (ex.: "pão", "arroz", "leite"), uma
+    // opção-base é mais útil para começar o cardápio do que uma preparação
+    // muito específica. A preferência é só de ordenação: nada é ocultado.
+    if (queryTokens.length === 1 && (normalizedName === normalizedQuery || normalizedName.startsWith(`${normalizedQuery} `))) {
+      const extraWords = Math.max(0, itemTokens.length - queryTokens.length);
+      const conciseBonus = Math.max(0, 18 - extraWords * 3);
+      if (conciseBonus > 0) {
+        score += conciseBonus;
+        features.push("CONCISE_BASE_FOOD");
+      }
     }
     if (requestedPreparation) {
       const target = PREPARATION_STEMS[requestedPreparation] ?? "";

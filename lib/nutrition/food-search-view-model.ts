@@ -3,6 +3,7 @@ import { canonicalFoodSearch, type CanonicalFoodSearchResult, type CanonicalPort
 import { getSearchPreviews, type CanonicalNutrientValue } from "@/lib/repositories/canonical-foods";
 import type { LegacyFoodSearchResponseItem } from "@/lib/nutrition/food-catalog";
 import { rankFoodSearchResults } from "@/lib/nutrition/food-search-ranking";
+import { practicalPortionsForFood } from "@/lib/nutrition/practical-portions";
 
 export type FoodSearchSourceCode = "TACO" | "TBCA" | "IBGE_POF" | "USDA" | "CUSTOM" | "MANUFACTURER" | "COMPLEMENTARY";
 
@@ -11,6 +12,9 @@ export type FoodSearchPortion = {
   label: string;
   gramWeight: number | null;
   isFallback: boolean;
+  /** Medida pratica mostrada apenas quando a fonte nao possui medida oficial. */
+  isEstimated?: boolean;
+  unit?: string;
 };
 
 export type FoodSearchNutrientsPreview = {
@@ -48,6 +52,18 @@ function fallbackPortion(): FoodSearchPortion {
   return { id: null, label: "100 g", gramWeight: 100, isFallback: true };
 }
 
+function fallbackPortionsForFood(foodName: string): FoodSearchPortion[] {
+  const practical = practicalPortionsForFood(foodName).map((value) => ({
+    id: null,
+    label: value.label,
+    gramWeight: value.gramWeight,
+    isFallback: false,
+    isEstimated: true,
+    unit: value.unit,
+  }));
+  return practical.length ? practical : [fallbackPortion()];
+}
+
 function toPortion(portion: CanonicalPortionSummary): FoodSearchPortion {
   return { id: portion.id, label: portion.label, gramWeight: portion.gramWeight ?? portion.parsedLabelGrams, isFallback: false };
 }
@@ -71,17 +87,19 @@ function legacySource(item: LegacyFoodSearchResponseItem): FoodSearchSourceCode 
 function legacyViewModel(item: LegacyFoodSearchResponseItem): FoodSearchResultViewModel {
   const sourceCode = legacySource(item);
   const sourceFoodId = item.ref?.sourceId ?? String(item.numero);
-  const portion = fallbackPortion();
+  const displayName = item.displayName ?? item.name ?? item.descricao;
+  const portions = fallbackPortionsForFood(displayName);
+  const portion = chooseDefaultPortion(portions);
   return {
     canonicalFoodId: item.ref?.canonicalId ?? null,
-    displayName: item.displayName ?? item.name ?? item.descricao,
+    displayName,
     sourceName: item.sourceLabel ?? SOURCE_NAMES[sourceCode],
     sourceCode,
     sourceFoodId,
     preparation: null,
     group: item.group ?? item.grupo ?? null,
     defaultPortion: portion,
-    availablePortions: [portion],
+    availablePortions: portions,
     nutrientsPreview: { energyKcal: item.energyKcal ?? null, proteinG: item.proteinG ?? null, carbohydrateG: item.carbohydrateG ?? null, fatG: item.fatG ?? null },
     matchInfo: { rank: 5, method: "LEGACY" },
   };
@@ -94,6 +112,7 @@ function nutrientValue(rows: CanonicalNutrientValue[], code: string): number | n
 
 function canonicalViewModel(result: CanonicalFoodSearchResult, portionRows: CanonicalPortionSummary[], nutrientRows: CanonicalNutrientValue[]): FoodSearchResultViewModel {
   const portions = portionRows.map(toPortion);
+  const availablePortions = portions.length ? portions : fallbackPortionsForFood(result.name);
   const sourceCode = canonicalSource(result.source);
   return {
     canonicalFoodId: result.foodId,
@@ -103,8 +122,8 @@ function canonicalViewModel(result: CanonicalFoodSearchResult, portionRows: Cano
     sourceFoodId: result.sourceFoodId,
     preparation: result.preparation?.name ?? result.preparation?.method ?? null,
     group: result.classification?.group ?? null,
-    defaultPortion: chooseDefaultPortion(portions),
-    availablePortions: portions.length ? portions : [fallbackPortion()],
+    defaultPortion: chooseDefaultPortion(availablePortions),
+    availablePortions,
     nutrientsPreview: {
       energyKcal: nutrientValue(nutrientRows, "ENERGY_KCAL"),
       proteinG: nutrientValue(nutrientRows, "PROTEIN"),
